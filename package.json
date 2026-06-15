@@ -1,0 +1,18 @@
+{
+  "name": "witcher-ttrpg-death-march",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:packs": "node tools/build-packs.mjs",
+    "check:source": "node tools/check-source.mjs",
+    "test:source": "node --test tools/check-source.test.mjs",
+    "test:effects": "node tools/test-effects.mjs",
+    "test:farkle": "node --test module/minigames/farkle/engine/",
+    "check:compliance": "node tools/check-compliance.mjs",
+    "test:compliance": "node --test tools/check-compliance.test.mjs"
+  },
+  "devDependencies": {
+    "classic-level": "^1.4.1"
+  }
+}

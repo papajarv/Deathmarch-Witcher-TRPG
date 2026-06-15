@@ -1,0 +1,226 @@
+/* =============================================================================
+   GM PANEL — GM-only tabbed popover above the dock identity medallion.
+   Owned by module/chrome/chrome/gm-panel.js
+   ============================================================================= */
+
+/* ─── GM trigger button (independent fixed FAB at far left of bottom bar) ─── */
+body.witcher-ttrpg-death-march #wou-gm-fab {
+  position: fixed; left: 10px; bottom: 16px;   /* bottom is a fallback; JS sets top */
+  width: 34px; height: 34px; z-index: 9060;     /* above dock (9050), below panel (9070) */
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--wdm-amber, #a88450); border-radius: 50%;
+  background: rgba(10,9,8,0.99); color: var(--wdm-amber-bright, #c8a878);
+  cursor: pointer; transition: background .15s, box-shadow .15s, color .15s;
+}
+body.witcher-ttrpg-death-march #wou-gm-fab:hover {
+  background: rgba(40,30,20,0.95); color: var(--wdm-ink-bright, #e8cfa0);
+  box-shadow: 0 0 8px rgba(200,168,120,0.45);
+}
+
+/* ─── popover shell ─── */
+body.witcher-ttrpg-death-march #wou-gm-panel {
+  position: fixed;
+  /* `left` + `bottom` set by JS each open */
+  width: 460px;
+  /* Above the dock (9050), below the skills popover (9080) + sidebar (9100). */
+  z-index: 9070;
+  display: none;                                  /* JS toggles .is-open → flex */
+  flex-direction: column;
+  /* Fixed height so the tab strip never shifts when switching tabs (a
+     bottom-pinned, content-sized panel would move the strip up/down per tab,
+     making leftward tab clicks miss). Body scrolls for taller tabs. */
+  height: min(70vh, 560px);
+  max-height: 70vh;
+  background:
+    radial-gradient(ellipse 360px 200px at 50% 0%, rgba(168,132,80,0.06), transparent 70%),
+    linear-gradient(180deg, rgba(10,9,8,0.97) 0%, rgba(10,9,8,0.94) 100%);
+  border: 1px solid rgba(140,133,121,0.22);
+  border-top: 1px solid rgba(110,82,36,0.55);
+  box-shadow: 0 12px 36px rgba(0,0,0,0.85);
+  font-family: var(--wdm-font-display);
+  font-size: 12px;
+  color: var(--wdm-ink);
+  pointer-events: auto;
+}
+body.witcher-ttrpg-death-march #wou-gm-panel.is-open { display: flex; }
+
+/* top hairline (mirrors skills-pop) */
+body.witcher-ttrpg-death-march #wou-gm-panel::before {
+  content: '';
+  position: absolute; left: 0; right: 0; top: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent 5%, var(--wdm-amber-dim) 20%, transparent 45%, var(--wdm-amber) 60%, transparent 78%, var(--wdm-amber-dim) 90%, transparent 96%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* ─── tab strip ─── */
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: rgba(8,7,6,0.5);
+  border-bottom: 1px dotted rgba(140,133,121,0.16);
+  flex: 0 0 auto;
+}
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-tab {
+  position: relative;
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 9px 0 8px 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  width: auto !important;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  color: var(--wdm-ink-dim) !important;
+  font-family: var(--wdm-font-display) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+  line-height: 1;
+  transition: color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-tab i { font-size: 14px; line-height: 1; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-tab:hover { color: var(--wdm-ink-bright) !important; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-tab.is-active { color: var(--wdm-amber-bright) !important; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-tab.is-active::after {
+  content: '';
+  position: absolute; left: 18%; right: 18%; bottom: -1px;
+  height: 1px;
+  background: var(--wdm-amber);
+  box-shadow: 0 0 6px var(--wdm-amber);
+}
+
+/* ─── body ─── */
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+}
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-body::-webkit-scrollbar { width: 4px; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-body::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); }
+
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-empty {
+  padding: 38px 18px;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-faint);
+}
+
+/* ─── party tab ─── */
+body.witcher-ttrpg-death-march .wou-gm-chips { display: flex; gap: 6px; margin: 8px; }
+body.witcher-ttrpg-death-march .wou-gm-chip {
+  padding: 3px 10px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--wdm-amber-dim, #6e5224);
+  background: transparent; color: var(--wdm-ink, #b0a994); font-size: 11px;
+}
+body.witcher-ttrpg-death-march .wou-gm-chip.is-on {
+  background: rgba(168,132,80,0.22);
+  color: var(--wdm-amber-bright, #c8a878);
+  border-color: var(--wdm-amber-bright, #c8a878);
+}
+body.witcher-ttrpg-death-march .wou-gm-roster { display: flex; flex-direction: column; gap: 6px; margin: 0 8px 8px; }
+body.witcher-ttrpg-death-march .wou-gm-row {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  grid-template-rows: auto auto auto;
+  gap: 2px 8px; align-items: center; padding: 6px;
+  border: 1px solid rgba(168,132,80,0.20); border-radius: 6px;
+}
+body.witcher-ttrpg-death-march .wou-gm-row .port {
+  grid-row: 1 / span 2; width: 34px; height: 34px; border-radius: 4px; object-fit: cover;
+}
+body.witcher-ttrpg-death-march .wou-gm-row .who { min-width: 0; }
+body.witcher-ttrpg-death-march .wou-gm-row .who .nm {
+  font-weight: 600; color: var(--wdm-ink-bright, #e0dac4);
+  display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+body.witcher-ttrpg-death-march .wou-gm-row .vitals {
+  grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0;
+}
+body.witcher-ttrpg-death-march .wou-gm-vital { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; }
+body.witcher-ttrpg-death-march .wou-gm-vital .lbl { color: var(--wdm-ink, #b0a994); }
+body.witcher-ttrpg-death-march .wou-gm-vital .val {
+  width: 42px; background: rgba(0,0,0,0.35);
+  border: 1px solid var(--wdm-amber-dim, #6e5224);
+  color: var(--wdm-ink-bright, #e0dac4); border-radius: 4px;
+  padding: 1px 3px; text-align: right;
+}
+body.witcher-ttrpg-death-march .wou-gm-vital .mx { color: var(--wdm-ink-dim, #8a857a); }
+body.witcher-ttrpg-death-march .wou-gm-statuses {
+  grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px;
+}
+body.witcher-ttrpg-death-march .wou-gm-status {
+  width: 22px; height: 22px; padding: 0; border-radius: 4px;
+  border: 1px solid transparent; background: rgba(0,0,0,0.25);
+  cursor: pointer; opacity: 0.45;
+}
+body.witcher-ttrpg-death-march .wou-gm-status img {
+  width: 100%; height: 100%; object-fit: contain; display: block; border: none;
+}
+body.witcher-ttrpg-death-march .wou-gm-status.is-on {
+  opacity: 1; border-color: var(--wdm-amber-bright, #c8a878);
+  box-shadow: 0 0 6px rgba(168,132,80,0.5);
+}
+
+/* ─── reference tab ─── */
+body.witcher-ttrpg-death-march .wou-gm-ref { margin-bottom:8px; border:1px solid rgba(200,168,120,.2); border-radius:6px; }
+body.witcher-ttrpg-death-march .wou-gm-ref > summary { cursor:pointer; padding:6px 8px; color:var(--wdm-amber-bright, #e8cfa0); font-weight:600; }
+body.witcher-ttrpg-death-march .wou-gm-ref table { width:100%; border-collapse:collapse; border-radius:inherit; overflow:hidden; }
+body.witcher-ttrpg-death-march .wou-gm-ref th { text-align:left; padding:3px 8px; color:var(--wdm-amber-bright, #c8a878); width:42%; vertical-align:top; font-weight:500; }
+body.witcher-ttrpg-death-march .wou-gm-ref td { padding:3px 8px; color:var(--wdm-ink-bright, #d8d2c4); }
+body.witcher-ttrpg-death-march .wou-gm-ref th, body.witcher-ttrpg-death-march .wou-gm-ref td { font-size:12px; }
+body.witcher-ttrpg-death-march .wou-gm-ref tr + tr th, body.witcher-ttrpg-death-march .wou-gm-ref tr + tr td { border-top:1px solid rgba(255,255,255,.05); }
+
+/* ─── reference tab: edit mode ─── */
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-bar { display:flex; justify-content:flex-end; margin:8px 8px 4px; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-edit { padding:3px 10px; border:1px solid var(--wdm-amber-dim,#6e5224); border-radius:6px; background:rgba(20,16,12,.6); color:var(--wdm-amber-bright,#c8a878); cursor:pointer; font-size:11px; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-edit-cat { margin:0 8px 10px; border:1px solid rgba(200,168,120,.2); border-radius:6px; padding:6px; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-cathead { display:flex; gap:6px; margin-bottom:4px; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-cat-title { flex:1 1 auto; min-width:0; background:rgba(0,0,0,.35); border:1px solid rgba(200,168,120,.3); color:var(--wdm-amber-bright,#e8cfa0); border-radius:4px; padding:2px 6px; font-weight:600; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-editrow { display:flex; gap:4px; margin:2px 0; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-editrow .term { flex:0 0 40%; min-width:0; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-editrow .val { flex:1 1 auto; min-width:0; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-editrow input { background:rgba(0,0,0,.35); border:1px solid rgba(200,168,120,.25); color:var(--wdm-ink-bright,#e8e2d4); border-radius:4px; padding:2px 6px; font-size:11px; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-editrow .rm, body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-cathead .rm { flex:0 0 auto; width:20px; border:none; border-radius:4px; background:rgba(0,0,0,.5); color:#fff; cursor:pointer; line-height:1; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-addrow, body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-addcat { margin:4px 0 0; background:none; border:1px dashed rgba(200,168,120,.35); border-radius:6px; color:var(--wdm-ink,#b0a994); cursor:pointer; font-size:11px; padding:3px 8px; }
+body.witcher-ttrpg-death-march #wou-gm-panel .wou-gm-ref-addcat { display:block; width:calc(100% - 16px); margin:0 8px 10px; }
+
+/* ─────────── pinboard tab ─────────── */
+body.witcher-ttrpg-death-march .wou-gm-pin-actions { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+body.witcher-ttrpg-death-march .wou-gm-pin-addimg { padding:4px 10px; border:1px solid rgba(200,168,120,.35); border-radius:6px; background:rgba(20,16,12,.6); color:var(--wdm-amber-bright, #c8a878); cursor:pointer; }
+body.witcher-ttrpg-death-march .wou-gm-pin-actions .hint { font-size:11px; color:#8a8478; }
+body.witcher-ttrpg-death-march .wou-gm-pin-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:8px; }
+body.witcher-ttrpg-death-march .wou-gm-pin-img { position:relative; }
+body.witcher-ttrpg-death-march .wou-gm-pin-img img { width:100%; height:84px; object-fit:cover; border-radius:6px; }
+body.witcher-ttrpg-death-march .wou-gm-pin-img .rm, body.witcher-ttrpg-death-march .wou-gm-pin-link .rm { position:absolute; top:2px; right:2px; width:18px; height:18px; border:none; border-radius:50%; background:rgba(0,0,0,.7); color:#fff; cursor:pointer; line-height:1; }
+body.witcher-ttrpg-death-march .wou-gm-pin-link { position:relative; padding:4px 8px; border:1px solid rgba(200,168,120,.2); border-radius:6px; margin-bottom:4px; }
+body.witcher-ttrpg-death-march .wou-gm-pin-link a { color:var(--wdm-amber-bright, #c8a878); cursor:pointer; }
+body.witcher-ttrpg-death-march .wou-gm-pin-link .rm { position:static; float:right; }
+body.witcher-ttrpg-death-march .wou-gm-pin-notes { width:100%; min-height:120px; margin-top:8px; resize:vertical; background:rgba(0,0,0,.35); border:1px solid rgba(200,168,120,.3); border-radius:6px; color:var(--wdm-ink-bright, #e8e2d4); padding:6px; }
+
+/* ─── Session controls tab ─── */
+body.witcher-ttrpg-death-march .wou-gm-sess { margin-bottom:14px; }
+body.witcher-ttrpg-death-march .wou-gm-sess h4 { margin:0 0 6px; color:var(--wdm-amber-bright,#e8cfa0); font-size:13px; }
+body.witcher-ttrpg-death-march .wou-gm-sess button { padding:5px 12px; border:1px solid rgba(200,168,120,.35); border-radius:6px; background:rgba(20,16,12,.6); color:var(--wdm-amber-bright,#c8a878); cursor:pointer; }
+body.witcher-ttrpg-death-march .wou-gm-sess button:hover { background:rgba(40,30,20,.85); }
+body.witcher-ttrpg-death-march .wou-gm-sess select, body.witcher-ttrpg-death-march .wou-gm-sess input[type=number] { background:rgba(0,0,0,.35); border:1px solid rgba(200,168,120,.3); color:var(--wdm-ink-bright,#e8e2d4); border-radius:4px; padding:2px 4px; margin:2px; }
+/* Native <option> popups ignore the select's background on most platforms and
+   render on the OS default (light) → light-on-light. Force a dark option list. */
+body.witcher-ttrpg-death-march #wou-gm-panel select option { background:#14110d; color:var(--wdm-ink-bright,#e8e2d4); }
+body.witcher-ttrpg-death-march .wou-gm-sess .row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+body.witcher-ttrpg-death-march .wou-gm-sess .row .lbl { display:flex; align-items:center; gap:4px; color:var(--wdm-ink-bright,#e8e2d4); font-size:12px; }
+body.witcher-ttrpg-death-march .wou-gm-sess .row .lbl input[type=number] { width:64px; }
+
+/* ─── pinboard image lightbox (appended to <body>; above the panel at 9200) ─── */
+body.witcher-ttrpg-death-march #wou-gm-lightbox { position:fixed; inset:0; z-index:9200; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.85); cursor:zoom-out; }
+body.witcher-ttrpg-death-march #wou-gm-lightbox.is-open { display:flex; }
+body.witcher-ttrpg-death-march #wou-gm-lightbox img { max-width:90vw; max-height:90vh; box-shadow:0 8px 40px rgba(0,0,0,0.8); border:1px solid rgba(200,168,120,0.3); }

@@ -1,0 +1,126 @@
+{{!-- Race item sheet — two-layer:
+        DISPLAY → reads the race: four quality boxes + the transferring
+                  Active Effects it grants.
+        CONFIG  → edit the four boxes + manage effects (cog toggle).
+      A race item is dropped on a character; its effects transfer to the
+      actor (transfer:true, the sheet default). --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-race" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure race{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view">
+    <div class="wdm-race">
+
+      <header class="wdm-race-head">
+        <img class="wdm-race-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-race-head-titles">
+          <div class="wdm-race-eyebrow">Race</div>
+          <h1 class="wdm-race-title">{{item.name}}</h1>
+        </div>
+      </header>
+
+      {{#if source.description}}
+        <div class="wdm-race-flavor">{{{source.description}}}</div>
+      {{/if}}
+
+      {{#if filledQualities.length}}
+        <div class="wdm-race-quals">
+          {{#each filledQualities}}
+            <section class="wdm-race-qual">
+              {{#if name}}<header class="wdm-race-qual-name">{{name}}</header>{{/if}}
+              {{#if description}}<div class="wdm-race-qual-desc">{{{description}}}</div>{{/if}}
+            </section>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if effects.length}}
+        <div class="wdm-prof-section-label">Granted Effects</div>
+        <ul class="wdm-race-effects">
+          {{#each effects}}
+            <li class="wdm-race-effect {{#if this.disabled}}is-disabled{{/if}}">
+              <img class="wdm-race-effect-img" src="{{this.img}}" alt="" />
+              <span class="wdm-race-effect-name">{{this.name}}</span>
+              {{#if this.duration.label}}<span class="wdm-race-effect-dur">{{this.duration.label}}</span>{{/if}}
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Race (e.g. Witcher, Elf, Dwarf)" />
+      </div>
+
+      <div class="wdm-cfg-section">Race Qualities</div>
+      <div class="wdm-race-qual-grid">
+        {{#each qualityBoxes}}
+          <div class="wdm-race-qual-box">
+            <input type="text" class="wdm-race-qual-input" name="system.qualities.{{key}}.name"
+                   value="{{name}}" placeholder="Quality {{n}}" />
+            <textarea class="wdm-cfg-textarea" name="system.qualities.{{key}}.description"
+                      placeholder="What this quality does…">{{description}}</textarea>
+          </div>
+        {{/each}}
+      </div>
+
+      <label class="wdm-race-vp-toggle">
+        <input type="checkbox" name="system.variablePortrait" {{#if source.variablePortrait}}checked{{/if}} />
+        <span>Variable portrait <span class="wdm-cfg-sub">(adds a toxicity-portrait button to the character chrome)</span></span>
+      </label>
+
+      <div class="wdm-cfg-section">Effects <span class="wdm-cfg-sub">(transfer to the actor when the race is added)</span></div>
+      <div class="wdm-cfg-effects">
+        {{#if effects.length}}
+          <ul class="wdm-effect-list">
+            {{#each effects}}
+              <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                <div class="wdm-effect-head">
+                  <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                  <span class="wdm-effect-name">{{this.name}}</span>
+                  {{#if this.duration.label}}<span class="wdm-effect-duration">{{this.duration.label}}</span>{{/if}}
+                  <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                    <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                  </a>
+                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                </div>
+              </li>
+            {{/each}}
+          </ul>
+        {{else}}
+          <p class="wdm-empty">No effects configured.</p>
+        {{/if}}
+        <button type="button" class="wdm-add-effect" data-action="createEffect">
+          <i class="fa-solid fa-plus"></i> Add Effect
+        </button>
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Description</div>
+      <textarea class="wdm-cfg-textarea is-tall" name="system.description"
+                placeholder="Lore, appearance, lineage…">{{source.description}}</textarea>
+
+    </div>
+  </div>
+
+</div>

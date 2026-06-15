@@ -1,0 +1,18 @@
+{{!-- Friendly "changes" tab for the custom ActiveEffect editor. Each row
+      is a Target / How / Amount card (see change.hbs) instead of the raw
+      key/mode/value table. --}}
+<section class="tab changes wdm-changes-tab{{#if tab.active}} active{{/if}}"
+         data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+  <p class="wdm-changes-hint">{{localize "WITCHER.Effect.ChangesHint"}}</p>
+
+  <ol class="wdm-changes scrollable" data-changes>
+    {{#each changes as |change|}}
+      {{{change}}}
+    {{/each}}
+  </ol>
+
+  <button type="button" class="wdm-add-change" data-action="addChange">
+    <i class="fa-solid fa-plus"></i> {{localize "WITCHER.Effect.AddChange"}}
+  </button>
+</section>

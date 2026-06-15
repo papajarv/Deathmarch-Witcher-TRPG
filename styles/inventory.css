@@ -1,0 +1,2091 @@
+/* When the inventory overlay is open, mark the Inventory tab as active —
+   amber-bright applies to both the icon (own rule below) and the inherited
+   color on the <span> label. */
+body.witcher-ttrpg-death-march.wou-inventory-open #wou-top-bar [data-tab="inventory"] {
+  color: var(--wdm-amber-bright);
+}
+body.witcher-ttrpg-death-march.wou-inventory-open #wou-top-bar [data-tab="inventory"] i {
+  color: var(--wdm-amber-bright);
+}
+
+/* While the inventory is open:
+   - LEFT and TOP edge triggers/glows are suppressed so reaching for items
+     near those edges doesn't re-summon the chrome.
+   - RIGHT trigger/glow stays active — the inventory is intentionally
+     painted UNDER the right chrome so the user can still summon the
+     sidebar/chat with the right edge hover.
+*/
+body.witcher-ttrpg-death-march.wou-inventory-open #wou-left-trigger,
+body.witcher-ttrpg-death-march.wou-inventory-open #wou-left-glow,
+body.witcher-ttrpg-death-march.wou-inventory-open #wou-top-trigger,
+body.witcher-ttrpg-death-march.wou-inventory-open #wou-top-glow {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* =========================================================================
+   INVENTORY OVERLAY
+   ---------------------------------------------------------------------------
+   Drops from the top bar to fill the available space between the four chrome
+   panels (top bar / left rails / right sidebar / bottom dock).  Bounds are
+   set inline by scripts/chrome/inventory.js at open time.
+
+   Visual vocabulary lifted from /home/coder/shared/vladimir_mockup/inventory.html,
+   adapted to the wou-* token palette and rewired to vertical-scroll containers.
+   ========================================================================= */
+
+body.witcher-ttrpg-death-march #wou-inventory {
+  position: fixed;
+  /* defaults; JS overrides with measured chrome edges */
+  top: 50px; left: 180px; right: 280px; bottom: 140px;
+  /* 9060 puts the panel above the witcher-parchments host (z 50) so
+   * parchments don't paint through our chrome.  Below side panels
+   * (9100) and Foundry dialogs (9200). */
+  z-index: 9060;
+  /* Matches the character panel — a faint warm radial wash over a slightly
+     transparent vertical gradient so the canvas reads through. */
+  background:
+    radial-gradient(ellipse 1100px 700px at 50% 25%, rgba(184,148,100,0.05), transparent 70%),
+    linear-gradient(180deg, rgba(10,9,8,0.93), rgba(5,4,2,0.97));
+  backdrop-filter: blur(3px);
+  border-top: var(--wdm-rule-2);
+  border-bottom: var(--wdm-rule-2);
+  display: grid;
+  /* Cols: inventory grid+inspection · vertical containers · stats/equip.
+   * Containers column = one 50px slot + a ~50px weapon lane to its right
+   * (carried weapons render in that lane, never over the container icon).
+   * The extra width is taken from the flexible 1fr grid column. */
+  grid-template-columns: 1fr 116px 320px;
+  grid-template-rows: auto 1fr;
+  gap: 0 14px;
+  padding: 10px 22px 14px 22px;
+  /* overflow:visible so Foundry's ContextMenu (rendered as a descendant)
+     isn't clipped at the inventory edge.  The inner grid/scroll regions
+     handle their own clipping. */
+  overflow: visible;
+  color: var(--wdm-ink);
+  font-family: var(--wdm-font-display);
+
+  /* Drop-from-above animation */
+  transform: translateY(-12px);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .22s ease-out, opacity .18s ease-out;
+}
+body.witcher-ttrpg-death-march #wou-inventory.is-open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ---- Close arrow (chevron-only, pinned under the Inventory tab) ---------- */
+body.witcher-ttrpg-death-march #wou-inventory #wou-inv-close {
+  position: absolute;
+  top: 2px;
+  left: var(--inv-close-x, 50%);
+  transform: translateX(-50%);
+  z-index: 2;
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  color: var(--wdm-amber-hi);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: color .12s, transform .12s;
+}
+body.witcher-ttrpg-death-march #wou-inventory #wou-inv-close:hover {
+  color: var(--wdm-amber-bright);
+  transform: translateX(-50%) translateY(-1px);
+}
+
+/* ---- Header --------------------------------------------------------------- */
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-header {
+  grid-column: 1 / -1;
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 0 0 8px 0;
+  position: relative;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-header::after {
+  content: '';
+  position: absolute; left: 40px; right: 40px; bottom: 0;
+  height: 1px;
+  background:
+    linear-gradient(90deg,
+      transparent 5%, var(--wdm-amber-dim) 15%, transparent 30%,
+      var(--wdm-amber) 50%, transparent 70%,
+      var(--wdm-amber-dim) 85%, transparent 95%);
+  opacity: 0.4;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-title {
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.38em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-bright);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-title::before,
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-title::after {
+  content: '·';
+  color: var(--wdm-amber-dim);
+  margin: 0 10px;
+}
+/* ---- Section labels (small caps with hairline trim flanks) --------------- */
+body.witcher-ttrpg-death-march #wou-inventory .wou-section-label {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+  color: var(--wdm-amber);
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-section-label::before,
+body.witcher-ttrpg-death-march #wou-inventory .wou-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background:
+    linear-gradient(90deg, transparent, var(--wdm-amber-dim) 30%, var(--wdm-amber-dim) 70%, transparent);
+  opacity: 0.5;
+}
+
+/* ---- Switch-hands toggle (sits in the Weapons section label) ------------- */
+body.witcher-ttrpg-death-march #wou-inventory .wou-switch-hands {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0;
+  background: transparent; border: 1px solid var(--wdm-amber-dim);
+  border-radius: 3px; color: var(--wdm-amber);
+  font-size: 10px; cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-switch-hands:hover {
+  background: var(--wdm-amber); color: var(--wdm-ink-ash);
+}
+
+/* =========================================================================
+   LEFT COLUMN — Tabs · Item grid · Inspection panel
+   ========================================================================= */
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-left {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 14px;
+  min-height: 0;
+  padding-top: 8px;
+}
+
+/* ---- Middle column — vertical container stack --------------------------- */
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-containers {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* Just top breathing room — the player vs mount split lives in the
+   * stacks below.  The bottom of this section is the inventory's bottom
+   * edge; the mount stack pins itself there. */
+  padding-top: 110px;
+}
+
+/* ---- Item inspection panel (under the grid) ------------------------------ */
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-inspection {
+  min-height: 96px;
+  max-height: 30vh;
+  overflow-y: auto;
+  padding: 8px 12px;
+  border: 1px solid rgba(140,133,121,0.18);
+  background:
+    radial-gradient(ellipse 500px 200px at 50% 0%, rgba(184,148,100,0.05), transparent 70%),
+    linear-gradient(180deg, rgba(14,11,8,0.7), rgba(5,4,2,0.7));
+  font-size: 14px;
+  color: var(--wdm-ink);
+  scrollbar-width: thin;
+  scrollbar-color: var(--wdm-amber-dim) var(--wdm-void);
+}
+/* Rarity wash on the inspect panel — color only (no grain), applied to the
+   content card so it sits ON the tooltip, not behind it. Light touch so the
+   description text stays readable. Everywhere/na keep the plain background. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-inspection[data-rarity="common"]  { --wdm-rar: var(--wdm-rarity-common); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-inspection[data-rarity="poor"]    { --wdm-rar: var(--wdm-rarity-poor); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-inspection[data-rarity="rare"]    { --wdm-rar: var(--wdm-rarity-rare); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-inspection[data-rarity="witcher"] { --wdm-rar: var(--wdm-rarity-witcher); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-inspection:is(
+    [data-rarity="common"], [data-rarity="poor"],
+    [data-rarity="rare"],   [data-rarity="witcher"]) .wdm-w3-inspect {
+  /* W3 full-width vertical fade — color only, transparent through the top,
+     a light tier color pooling toward the bottom edge. */
+  background:
+    linear-gradient(180deg,
+      transparent 55%,
+      color-mix(in srgb, var(--wdm-rar) 16%, transparent) 100%),
+    radial-gradient(ellipse 700px 400px at 50% 0%, rgba(184,148,100,0.06), transparent 70%),
+    linear-gradient(180deg, rgba(15,12,9,0.95), rgba(8,6,4,0.98));
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-inspection::-webkit-scrollbar { width: 5px; }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-inspection::-webkit-scrollbar-track { background: var(--wdm-void); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-inspection::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-empty {
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-faint);
+  padding: 20px 0;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .chat-item-description {
+  display: grid;
+  gap: 6px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .chat-item-header {
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(140,133,121,0.18);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .chat-item-header img {
+  width: 32px; height: 32px; object-fit: cover; border-radius: 4px;
+  border: 1px solid var(--wdm-amber-dim);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .chat-item-header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--wdm-amber-bright);
+}
+
+/* Quality tags (parsed from weapon/armor/enhancement description) */
+body.witcher-ttrpg-death-march #wou-inventory .wou-quality-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: auto;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-quality-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  background: rgba(184,148,100,0.06);
+  color: var(--wdm-amber-hi);
+  border: 1px solid var(--wdm-amber-dim);
+  border-radius: 3px;
+  cursor: help;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-quality-tag.wou-quality-unknown {
+  background: transparent;
+  color: var(--wdm-ink-faint);
+  border-color: var(--wdm-ink-faint);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-quality-tag:hover {
+  background: rgba(184,148,100,0.14);
+  border-color: var(--wdm-amber);
+  color: var(--wdm-amber-bright);
+}
+
+/* =========================================================================
+   Themed tooltip for quality tags (data-tooltip-class="wou-quality-tip"
+   adds this class to Foundry's <aside id="tooltip"> while the tag is
+   hovered). Mirrors the wou-status-tip pattern in statuses.css.
+   ========================================================================= */
+body.witcher-ttrpg-death-march aside#tooltip.wou-quality-tip {
+  max-width: 340px !important;
+  min-width: 220px;
+  padding: 10px 14px 12px !important;
+  text-align: left !important;
+
+  background:
+    radial-gradient(ellipse 280px 140px at 50% 0%, rgba(184,148,100,0.12), transparent 75%),
+    linear-gradient(180deg, rgba(22,18,13,0.98) 0%, rgba(10,9,8,0.98) 100%) !important;
+  background-color: rgba(10,9,8,0.98) !important;
+  border: 1px solid var(--wdm-amber-dim) !important;
+  border-radius: 2px !important;
+  box-shadow:
+    0 8px 24px rgba(0,0,0,0.8),
+    0 0 0 1px rgba(0,0,0,0.6),
+    inset 0 0 0 1px rgba(184,148,100,0.10) !important;
+
+  color: var(--wdm-ink) !important;
+  font-family: var(--wdm-font-body) !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+  letter-spacing: 0.02em !important;
+}
+
+/* Headings / strong inside tooltips → gilt display type. */
+body.witcher-ttrpg-death-march aside#tooltip.wou-quality-tip h1,
+body.witcher-ttrpg-death-march aside#tooltip.wou-quality-tip h2,
+body.witcher-ttrpg-death-march aside#tooltip.wou-quality-tip h3,
+body.witcher-ttrpg-death-march aside#tooltip.wou-quality-tip h4,
+body.witcher-ttrpg-death-march aside#tooltip.wou-quality-tip strong {
+  font-family: var(--wdm-font-display) !important;
+  color: var(--wdm-amber-bright) !important;
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+}
+body.witcher-ttrpg-death-march aside#tooltip.wou-quality-tip h1,
+body.witcher-ttrpg-death-march aside#tooltip.wou-quality-tip h2 {
+  font-size: 13px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.20em;
+  margin: 0 0 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--wdm-amber-dim);
+}
+
+/* Body copy. */
+body.witcher-ttrpg-death-march aside#tooltip.wou-quality-tip p,
+body.witcher-ttrpg-death-march aside#tooltip.wou-quality-tip span,
+body.witcher-ttrpg-death-march aside#tooltip.wou-quality-tip li {
+  color: var(--wdm-ink) !important;
+  opacity: 1 !important;
+}
+body.witcher-ttrpg-death-march aside#tooltip.wou-quality-tip a,
+body.witcher-ttrpg-death-march aside#tooltip.wou-quality-tip .content-link {
+  color: var(--wdm-amber-bright) !important;
+  border-bottom: 1px dotted var(--wdm-amber-dim);
+  text-decoration: none;
+}
+
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .list-item-description h4 {
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--wdm-amber);
+  margin: 4px 0 2px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .list-item-description span,
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .list-item-description p {
+  font-size: 14px;
+  color: var(--wdm-ink);
+  line-height: 1.4;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .item-tags {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(140,133,121,0.10);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .item-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--wdm-amber-dim);
+  border-radius: 3px;
+  font-size: 13px;
+  background: rgba(184,148,100,0.05);
+  color: var(--wdm-ink-hi);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .item-tag i { color: var(--wdm-amber-hi); }
+
+/* Diagram crafting components — the system renders each ingredient as a
+   <details class="stored-item">.  <details> defaults to display:block which
+   stacks them vertically; reflow as horizontal chips that wrap. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .stored-item {
+  display: inline-flex;
+  align-items: center;
+  margin: 2px 6px 2px 0;
+  padding: 2px 8px;
+  border: 1px solid var(--wdm-amber-dim);
+  background: rgba(184,148,100,0.05);
+  border-radius: 3px;
+  vertical-align: middle;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .stored-item > summary {
+  list-style: none;
+  cursor: default;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--wdm-ink-hi);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .stored-item > summary::-webkit-details-marker { display: none; }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .stored-item-label { display: contents; }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .stored-item-img {
+  width: 18px; height: 18px;
+  object-fit: contain;
+  border-radius: 2px;
+  border: 1px solid var(--wdm-amber-dim);
+}
+
+/* ---- Container popup ----------------------------------------------------- */
+/* Matches the skills popover / dock / top-bar look: squared corners, muted
+ * cool border, faint warm halo at the top, and a deep near-black backdrop. */
+body.witcher-ttrpg-death-march .wou-container-popup {
+  position: absolute;
+  z-index: 20;
+  width: 280px;
+  max-height: 380px;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(ellipse 320px 200px at 50% 0%, rgba(168,132,80,0.06), transparent 70%),
+    linear-gradient(180deg, rgba(10,9,8,0.97) 0%, rgba(10,9,8,0.94) 100%);
+  border: 1px solid rgba(140,133,121,0.22);
+  border-top: 1px solid rgba(110,82,36,0.55);
+  box-shadow: 0 12px 36px rgba(0,0,0,0.85);
+  border-radius: 0;
+  font-family: var(--wdm-font-display);
+  /* visible so the right-click ContextMenu (positioned outside) isn't
+     clipped by us; the inner body wrapper handles content scrolling. */
+  overflow: visible;
+}
+/* top hairline — matches the skills popover */
+body.witcher-ttrpg-death-march .wou-container-popup::before {
+  content: '';
+  position: absolute; left: 0; right: 0; top: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent 5%, var(--wdm-amber-dim) 20%, transparent 45%, var(--wdm-amber) 60%, transparent 78%, var(--wdm-amber-dim) 90%, transparent 96%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march .wou-container-popup.is-drop-target {
+  border-color: var(--wdm-amber-dim);
+  box-shadow: 0 0 0 1px rgba(184,148,100,0.35), 0 12px 36px rgba(0,0,0,0.85), 0 0 14px rgba(184,148,100,0.25);
+}
+body.witcher-ttrpg-death-march .wou-popup-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 10px 6px;
+  background: rgba(8,7,6,0.5);
+  border-bottom: 1px dotted rgba(140,133,121,0.16);
+}
+body.witcher-ttrpg-death-march .wou-popup-title {
+  font-family: var(--wdm-font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+}
+body.witcher-ttrpg-death-march .wou-popup-close {
+  background: none; border: none;
+  color: var(--wdm-ink-dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+body.witcher-ttrpg-death-march .wou-popup-close:hover { color: var(--wdm-amber-hi); }
+body.witcher-ttrpg-death-march .wou-popup-body {
+  /* Flex child of popup; constrains to the popup's max-height minus the
+     header.  min-height:0 is critical — without it the body grows to
+     content size, defeating the scrollbar. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wdm-amber-dim) var(--wdm-void);
+}
+body.witcher-ttrpg-death-march .wou-popup-body::-webkit-scrollbar { width: 5px; }
+body.witcher-ttrpg-death-march .wou-popup-body::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); }
+body.witcher-ttrpg-death-march .wou-popup-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 50px);
+  grid-auto-rows: 50px;
+  gap: 4px;
+  justify-content: center;
+}
+body.witcher-ttrpg-death-march .wou-container-popup .wou-empty-state {
+  padding: 30px 20px;
+}
+body.witcher-ttrpg-death-march .wou-popup-section-label {
+  margin: 2px 0 4px;
+  padding-bottom: 2px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-dim);
+  border-bottom: 1px solid var(--wdm-amber-dim);
+}
+body.witcher-ttrpg-death-march .wou-popup-section-label + .wou-popup-grid {
+  margin-bottom: 8px;
+}
+
+/* Equipment-Carry popup body: same grid, but empty slots render as faded
+ * category-icon drop targets so the user can see what each slot accepts
+ * before dragging anything in. */
+body.witcher-ttrpg-death-march .wou-popup-grid .wou-slot.is-equip-empty {
+  cursor: default;
+  opacity: 0.35;
+  border-style: dashed;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(184,148,100,0.06), transparent 70%),
+    linear-gradient(180deg, var(--wdm-bg-lifted), var(--wdm-bg-deep));
+}
+body.witcher-ttrpg-death-march .wou-popup-grid .wou-slot.is-equip-empty .icon {
+  font-size: 24px;
+  color: var(--wdm-amber-dim);
+}
+
+/* ---- Containers column (vertical, single 50px column) -------------------
+ * Two independent stacks share the column.  BOTH stacks are absolutely
+ * positioned within `.wou-containers` so the player stack's baseline
+ * never shifts when the mount stack appears / disappears — the bottoms
+ * are pinned to fixed offsets from the column bottom, not flex-shared.
+ *
+ *   - Player stack: bottom: 200px (the yellow-line baseline)
+ *   - Mount stack:  bottom: 0     (column bottom, where the horse bags
+ *                                   sat originally)
+ *
+ * Each stack still bottom-anchors its slots via `align-content: end`. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-stack {
+  position: absolute;
+  left: 0; right: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+/* Player stack — top: 0 anchors the upper edge to the column top (clipped
+ * by the section's padding-top); bottom holds the LOWEST player slot
+ * fixed regardless of the mount stack's presence.  194px reserves a
+ * tight band for the mount stack + mount-attach widget — one slot's
+ * worth less than the historical 250 so the player rail can grow one
+ * extra square downward before the scrollbar kicks in. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-player {
+  top: 0;
+  bottom: 194px;
+}
+/* Mount stack — pinned to the column bottom, capped to its own lane so
+ * it can't grow upward into the player stack.  Lane height matches the
+ * player stack's reserved bottom (194px). */
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-mount {
+  top: calc(100% - 194px);
+  bottom: 0;
+}
+
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track {
+  display: grid;
+  grid-template-columns: 50px;
+  grid-auto-rows: 50px;
+  /* Slots centered in the rail column; the carried-weapon rail clips paint
+   * into the free lane to their right (see .wou-container-weapons). */
+  justify-content: center;
+  /* Always top-anchored — containers grow DOWNWARD from the top of the
+   * rail.  Excess containers go into the scrollbar below instead of
+   * climbing past the inventory top edge (which #wou-inventory's
+   * `overflow: visible` would otherwise let them render outside of). */
+  align-content: start;
+  gap: 6px;
+  /* Shrink-wrap the slots so the combat-reach help below hugs the rail instead
+   * of being pushed to the bottom of the lane (where it collided with the mount
+   * saddlebag rail). Shrinks + scrolls when the rail is full. */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Hard-clip the rail's vertical extent so no slot ever escapes upward
+   * past the player-stack's top edge.  Belt + suspenders for the
+   * `overflow-y: auto` above, which has historically been sidestepped
+   * when the abs-positioned parent stack auto-sized to its content. */
+  contain: paint;
+  padding: 4px 2px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wdm-amber-dim) var(--wdm-void);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track::-webkit-scrollbar { width: 5px; }
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track::-webkit-scrollbar-track { background: var(--wdm-void); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); }
+
+/* Combat-reach hover help directly under the rail slots (themed #tooltip).
+ * flex:0 0 auto so it never grows, and the shrink-wrapped track above keeps it
+ * tucked against the slots, clear of the mount saddlebag lane below. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-help {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-dim);
+  opacity: 0.8;
+  cursor: help;
+  user-select: none;
+  white-space: nowrap;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-help:hover { opacity: 1; color: var(--wdm-amber-bright); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-help i { margin-right: 3px; }
+
+/* Drag-reorder visual states for container rail slots --------------------
+ * - is-reorder-source: the slot being picked up (faded, dashed border)
+ * - is-reorder-target-before: insertion line above the hovered slot
+ * - is-reorder-target-after:  insertion line below the hovered slot */
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track .wou-slot.is-reorder-source {
+  opacity: 0.45;
+  outline: 1px dashed var(--wdm-amber-dim);
+  outline-offset: -2px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track .wou-slot.is-reorder-target-before,
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track .wou-slot.is-reorder-target-after {
+  position: relative;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track .wou-slot.is-reorder-target-before::before,
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track .wou-slot.is-reorder-target-after::after {
+  content: '';
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  height: 2px;
+  background: var(--wdm-amber-bright);
+  box-shadow: 0 0 6px var(--wdm-amber);
+  pointer-events: none;
+  border-radius: 1px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track .wou-slot.is-reorder-target-before::before { top: -4px; }
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track .wou-slot.is-reorder-target-after::after  { bottom: -4px; }
+
+/* Empty equip slot: dashed amber outline, faded centered icon, drop-target glow. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track .wou-slot.wou-rail-empty {
+  border-style: dashed;
+  border-color: var(--wdm-amber-dim);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(184,148,100,0.04), transparent 70%),
+    linear-gradient(180deg, var(--wdm-bg-lifted), var(--wdm-bg-deep));
+  cursor: default;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track .wou-slot.wou-rail-empty .icon {
+  /* Drop the shared `.wou-slot .icon { width: 70% }` rule so the FA
+   * glyph isn't left-aligned inside a 35px-wide box.  Inline-block +
+   * text-align centers the character glyph within the slot. */
+  width: auto;
+  max-height: none;
+  display: inline-block;
+  text-align: center;
+  font-size: 22px;
+  color: var(--wdm-amber-dim);
+  opacity: 0.55;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track .wou-slot.wou-rail-empty.is-drop-target {
+  border-color: var(--wdm-amber-bright);
+  box-shadow: inset 0 0 6px var(--wdm-amber);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track .wou-slot.wou-rail-empty.is-drop-target .icon {
+  color: var(--wdm-amber-bright);
+  opacity: 1;
+}
+
+/* +/− expander ABOVE the container rail.  Small bottom-margin so it
+ * sits cleanly over the top-anchored track without crowding it. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-controls {
+  margin-bottom: 4px;
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+}
+
+
+/* Mount-attach row: mount containers (when present) + the dashed mounting
+ * circle, bottom-aligned. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+}
+
+
+/* ---- Square slot (inventory / containers) -------------------------------- */
+body.witcher-ttrpg-death-march .wou-slot {
+  position: relative;
+  background:
+    radial-gradient(circle at 50% 25%, rgba(184,148,100,0.04), transparent 65%),
+    linear-gradient(180deg, var(--wdm-bg-lifted), var(--wdm-bg-deep));
+  border: 1px solid rgba(140,133,121,0.22);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s, transform .12s;
+  aspect-ratio: 1;
+}
+
+/* Container rail slots — overflow visible so the weapon rail clips can paint
+ * into the lane to the RIGHT of the slot. The track itself (contain: paint)
+ * is the outer guard that keeps the clips within the rail column. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-track .wou-slot {
+  overflow: visible;
+}
+body.witcher-ttrpg-death-march .wou-slot::before {
+  content: '';
+  position: absolute; inset: 2px;
+  border: 1px solid rgba(140,133,121,0.08);
+  pointer-events: none;
+}
+
+/* Weapons carried inside a container — each weapon renders as a thin teal
+ * "rail clip" bracket (⊐, open toward the slot) branching off the slot's RIGHT
+ * edge, with a tiny art thumbnail at the clip's mouth. The clips DIVIDE the
+ * slot's full height (flex: 1) so the more weapons there are, the shorter each
+ * clip — the stack always exactly fills the slot's vertical extent. The track's
+ * `contain: paint` is the outer guard. Pointer-events none so it never blocks
+ * the slot's drag/click. */
+body.witcher-ttrpg-death-march .wou-slot .wou-container-weapons {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 100%;                   /* bracket stubs touch the slot's right edge    */
+  width: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+  z-index: 3;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.85));
+}
+body.witcher-ttrpg-death-march .wou-slot .wou-cw-clip {
+  position: relative;
+  flex: 1 1 0;                  /* clips evenly divide the slot height          */
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;      /* center the art within the clip box           */
+  padding: 2px 0;               /* leave the bracket top/bottom strokes visible */
+  /* ⊐ bracket: top + right + bottom strokes, open toward the slot (no left).  */
+  border: 1px solid var(--wdm-teal, #3a8a78);
+  border-left: 0;
+  border-radius: 0 3px 3px 0;
+}
+body.witcher-ttrpg-death-march .wou-slot .wou-cw-art {
+  height: 100%;                 /* art fills the clip height; width stays narrow */
+  width: 9px;
+  object-fit: cover;
+  border-radius: 2px;
+  background: var(--wdm-bg-deep, #050402);
+}
+body.witcher-ttrpg-death-march .wou-slot i.wou-cw-art {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  color: var(--wdm-teal, #3a8a78);
+  border: 1px solid var(--wdm-teal-dim, #2c6258);
+}
+/* Availability tint — mirrors the inventory slot's data-rarity wash, scaled
+ * to the clip: the bracket border takes the tier color and the same vertical
+ * gradient ramps in toward the bottom. */
+body.witcher-ttrpg-death-march .wou-slot .wou-cw-clip[data-rarity="common"]  { --wdm-rar: var(--wdm-rarity-common); }
+body.witcher-ttrpg-death-march .wou-slot .wou-cw-clip[data-rarity="poor"]    { --wdm-rar: var(--wdm-rarity-poor); }
+body.witcher-ttrpg-death-march .wou-slot .wou-cw-clip[data-rarity="rare"]    { --wdm-rar: var(--wdm-rarity-rare); }
+body.witcher-ttrpg-death-march .wou-slot .wou-cw-clip[data-rarity="witcher"] { --wdm-rar: var(--wdm-rarity-witcher); }
+body.witcher-ttrpg-death-march .wou-slot .wou-cw-clip:is(
+    [data-rarity="common"], [data-rarity="poor"],
+    [data-rarity="rare"],   [data-rarity="witcher"]) {
+  border-color: color-mix(in srgb, var(--wdm-rar) 70%, var(--wdm-teal));
+  background:
+    var(--wdm-rarity-tex),
+    linear-gradient(180deg,
+      transparent 30%,
+      color-mix(in srgb, var(--wdm-rar) 30%, transparent) 62%,
+      color-mix(in srgb, var(--wdm-rar) 85%, transparent) 100%),
+    linear-gradient(180deg, var(--wdm-bg-lifted), var(--wdm-bg-deep));
+  background-blend-mode: overlay, normal, normal;
+}
+body.witcher-ttrpg-death-march .wou-slot::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  /* Dark vignette only. (The element/substance inner glow was removed —
+     substance now reads purely off the frame line color; see [data-element]
+     below. Rarity reads off the slot background; see [data-rarity].) */
+  box-shadow: inset 0 0 12px rgba(0,0,0,0.55);
+}
+/* Rarity tiers — a color wash keyed by data-rarity: the top ~37.5% is
+   transparent (plain slot bg) and a dark tier color fades IN gently toward
+   the bottom (ramp runs past the tile edge for a soft gradient), overlaid
+   with a scratchy grain for texture. Everywhere keeps the plain slot
+   background (no tier color). Witcher is a homebrew tier above Rare. */
+body.witcher-ttrpg-death-march .wou-slot[data-rarity="common"]    { --wdm-rar: var(--wdm-rarity-common); }
+body.witcher-ttrpg-death-march .wou-slot[data-rarity="poor"]      { --wdm-rar: var(--wdm-rarity-poor); }
+body.witcher-ttrpg-death-march .wou-slot[data-rarity="rare"]      { --wdm-rar: var(--wdm-rarity-rare); }
+body.witcher-ttrpg-death-march .wou-slot[data-rarity="witcher"]   { --wdm-rar: var(--wdm-rarity-witcher); }
+body.witcher-ttrpg-death-march .wou-slot:is(
+    [data-rarity="common"], [data-rarity="poor"],
+    [data-rarity="rare"],   [data-rarity="witcher"]) {
+  /* Witcher-3 style: a full-width vertical gradient — transparent through the
+     top, ramping to strong tier color at the bottom edge. The slot's border +
+     inset-shadow vignette frame it like the W3 cell. */
+  background:
+    var(--wdm-rarity-tex),
+    linear-gradient(180deg,
+      transparent 30%,
+      color-mix(in srgb, var(--wdm-rar) 30%, transparent) 62%,
+      color-mix(in srgb, var(--wdm-rar) 85%, transparent) 100%),
+    linear-gradient(180deg, var(--wdm-bg-lifted), var(--wdm-bg-deep));
+  background-blend-mode: overlay, normal, normal;
+}
+body.witcher-ttrpg-death-march .wou-slot:hover {
+  border-color: var(--wdm-amber-hi);
+  transform: translateY(-1px);
+}
+body.witcher-ttrpg-death-march .wou-slot.is-active {
+  border-color: var(--wdm-amber-bright);
+  box-shadow:
+    0 0 0 1px var(--wdm-amber-dim),
+    0 0 14px rgba(184,148,100,0.30);
+}
+body.witcher-ttrpg-death-march .wou-slot .icon,
+body.witcher-ttrpg-death-march .wou-slot img.icon {
+  font-size: 28px;
+  width: 92%;
+  max-height: 92%;
+  object-fit: contain;
+  color: var(--wdm-amber-hi);
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.85));
+  position: relative;
+  z-index: 1;
+}
+body.witcher-ttrpg-death-march .wou-slot.rarity-rare .icon  { color: var(--wdm-frost); }
+body.witcher-ttrpg-death-march .wou-slot.rarity-epic .icon  {
+  color: var(--wdm-amber-bright);
+  filter: drop-shadow(0 0 6px rgba(200,168,120,0.55));
+}
+
+/* Substance elements — pick up the element color via --wdm-elem and apply it
+   to the frame line color ONLY. (No bg tint, no inner glow — rarity owns the
+   background.) Hover/active still bump the border to amber. */
+body.witcher-ttrpg-death-march .wou-slot[data-element="vitriol"]    { --wdm-elem: var(--wdm-sub-vitriol); }
+body.witcher-ttrpg-death-march .wou-slot[data-element="rebis"]      { --wdm-elem: var(--wdm-sub-rebis); }
+body.witcher-ttrpg-death-march .wou-slot[data-element="aether"]     { --wdm-elem: var(--wdm-sub-aether); }
+body.witcher-ttrpg-death-march .wou-slot[data-element="quebrith"]   { --wdm-elem: var(--wdm-sub-quebrith); }
+body.witcher-ttrpg-death-march .wou-slot[data-element="hydragenum"] { --wdm-elem: var(--wdm-sub-hydragenum); }
+body.witcher-ttrpg-death-march .wou-slot[data-element="vermilion"]  { --wdm-elem: var(--wdm-sub-vermilion); }
+body.witcher-ttrpg-death-march .wou-slot[data-element="sol"]        { --wdm-elem: var(--wdm-sub-sol); }
+body.witcher-ttrpg-death-march .wou-slot[data-element="caelum"]     { --wdm-elem: var(--wdm-sub-caelum); }
+body.witcher-ttrpg-death-march .wou-slot[data-element="fulgur"]     { --wdm-elem: var(--wdm-sub-fulgur); }
+body.witcher-ttrpg-death-march .wou-slot[data-element] {
+  border-color: color-mix(in srgb, var(--wdm-elem) 70%, rgba(140,133,121,0.22));
+  /* Thicken the element frame 1px inward (outer edge/size unchanged). */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wdm-elem) 70%, rgba(140,133,121,0.22));
+}
+/* Corner substance symbol — pinned bottom-right so the element is legible even
+   at tiny slot sizes (frame line colour alone is hard to read when small). */
+body.witcher-ttrpg-death-march .wou-slot .wou-slot-sub {
+  position: absolute;
+  bottom: 2px; right: 2px;
+  width: 11px; height: 11px;
+  z-index: 3;
+  pointer-events: none;
+  filter: drop-shadow(0 0 1px rgba(0,0,0,0.95)) drop-shadow(0 1px 1px rgba(0,0,0,0.8));
+}
+/* Shift the quantity count to the opposite corner so it never sits under the
+   substance badge (components stack, so both can be present). */
+body.witcher-ttrpg-death-march .wou-slot[data-element] .count {
+  right: auto; left: 5px;
+}
+body.witcher-ttrpg-death-march .wou-slot.rarity-quest .icon { color: var(--wdm-gilt-hi); }
+body.witcher-ttrpg-death-march .wou-slot .count {
+  position: absolute;
+  bottom: 3px; right: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--wdm-amber-hi);
+  letter-spacing: 0.04em;
+  /* Sits over the strongest part of the rarity gradient (bottom edge), so a
+     layered dark halo keeps the digits readable on any tier color. */
+  text-shadow:
+    0 0 2px rgba(0,0,0,1),
+    0 0 4px rgba(0,0,0,0.95),
+    0 0 7px rgba(0,0,0,0.85),
+    0 1px 2px rgba(0,0,0,1);
+  z-index: 2;
+}
+/* witcher-food-and-drink charges (current/max) — slightly tinted so they
+   read distinctly from plain quantity counts. */
+body.witcher-ttrpg-death-march .wou-slot .count.charges {
+  font-size: 9px;
+  font-weight: 700;
+  background: rgba(10, 9, 8, 0.85);
+  border: 1px solid var(--wdm-amber-dim);
+  border-radius: 2px;
+  padding: 0 3px;
+  text-shadow: none;
+  bottom: 2px; right: 2px;
+}
+body.witcher-ttrpg-death-march .wou-slot .count.charges.is-drink   { color: var(--wdm-frost); }
+body.witcher-ttrpg-death-march .wou-slot .count.charges.is-food    { color: var(--wdm-poison); }
+body.witcher-ttrpg-death-march .wou-slot .count.charges.is-remains { color: var(--wdm-red-bright); }
+
+/* Applied-oil badge — top-left so it doesn't fight the quantity/charges
+   badge in the bottom-right. Droplet + remaining minutes for coated weapons. */
+body.witcher-ttrpg-death-march .wou-slot .oil-badge,
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip .oil-badge {
+  position: absolute;
+  top: 2px; left: 2px;
+  font-size: 8px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 3px;
+  background: rgba(10,9,8,0.85);
+  border: 1px solid var(--wdm-poison);
+  border-radius: 2px;
+  color: var(--wdm-poison);
+  z-index: 2;
+  text-shadow: none;
+  letter-spacing: 0;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip .oil-badge {
+  top: -2px; left: -2px;
+  font-size: 7px;
+  padding: 0 2px;
+}
+body.witcher-ttrpg-death-march .wou-slot .oil-badge i,
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip .oil-badge i {
+  font-size: 7px;
+}
+
+/* Valuable subtype glyph — top-left corner cue for book / map valuables that
+   share the single Valuables tab. Valuables carry no oil badge, so the
+   top-left corner is free. */
+body.witcher-ttrpg-death-march .wou-slot .wou-slot-subtype {
+  position: absolute;
+  top: 2px; left: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px; height: 13px;
+  background: rgba(10, 9, 8, 0.85);
+  border: 1px solid var(--wdm-amber-dim);
+  border-radius: 2px;
+  color: var(--wdm-amber-hi);
+  z-index: 3;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march .wou-slot .wou-slot-subtype i {
+  font-size: 8px;
+}
+
+/* Quick-item glyph — bottom-left corner so it never collides with the
+   top-left oil badge a coated weapon may carry. */
+body.witcher-ttrpg-death-march .wou-slot .wou-slot-quick {
+  position: absolute;
+  bottom: 2px; left: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px; height: 13px;
+  background: rgba(10, 9, 8, 0.85);
+  border: 1px solid var(--wdm-amber-dim);
+  border-radius: 2px;
+  color: var(--wdm-amber-hi);
+  z-index: 3;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march .wou-slot .wou-slot-quick i {
+  font-size: 8px;
+}
+
+/* Applied-oil section in the inspection panel */
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(110, 138, 74, 0.30);
+  background:
+    radial-gradient(ellipse 200px 80px at 30% 0%, rgba(110,138,74,0.10), transparent 70%),
+    rgba(10, 9, 8, 0.6);
+  border-radius: 3px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil-img {
+  width: 28px; height: 28px;
+  object-fit: cover;
+  border: 1px solid var(--wdm-poison);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil-meta {
+  flex: 1;
+  display: flex; flex-direction: column;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil-label {
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--wdm-poison);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--wdm-ink-hi);
+  letter-spacing: 0.04em;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil-charges {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--wdm-poison);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil-charges .sep {
+  color: var(--wdm-ink-faint);
+  margin: 0 2px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil-bar {
+  height: 8px;
+  background: var(--wdm-bg-deep);
+  border: 1px solid rgba(110, 138, 74, 0.30);
+  overflow: hidden;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil-bar > .fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--wdm-poison), #8da866);
+  transition: width .15s ease-out;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil-effect {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--wdm-ink);
+  line-height: 1.4;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil-cleanse {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 5px 12px;
+  background: rgba(10,9,8,0.55);
+  border: 1px solid var(--wdm-amber-dim);
+  border-radius: 2px;
+  color: var(--wdm-ink-dim);
+  font-family: var(--wdm-font-display);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color .12s, border-color .12s, background .12s;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil-cleanse:hover {
+  color: var(--wdm-amber-bright);
+  border-color: var(--wdm-amber);
+  background: rgba(184,148,100,0.10);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-applied-oil-cleanse i {
+  font-size: 10px;
+  color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march .wou-slot.empty .icon { color: var(--wdm-ink-faint); opacity: 0.35; }
+
+/* Foundry's right-click ContextMenu — bump z-index so it stacks above
+   the items and equip slots inside the overlay. */
+body.witcher-ttrpg-death-march #wou-inventory #context-menu,
+body.witcher-ttrpg-death-march #wou-inventory nav#context-menu,
+body.witcher-ttrpg-death-march #wou-inventory .context-menu {
+  z-index: 9999 !important;
+}
+
+/* Drag visual feedback */
+body.witcher-ttrpg-death-march .wou-slot.is-dragging { opacity: 0.4; }
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip.is-drop-target {
+  border-color: var(--wdm-amber-bright);
+  box-shadow:
+    0 0 0 1px var(--wdm-amber),
+    0 0 12px rgba(184,148,100,0.45);
+  transform: scale(1.1);
+}
+
+/* Dashed "attach mount" placeholder slot */
+body.witcher-ttrpg-death-march .wou-slot.is-placeholder {
+  background: transparent;
+  border: 1px dashed rgba(140,133,121,0.30);
+}
+body.witcher-ttrpg-death-march .wou-slot.is-placeholder:hover {
+  border-color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march .wou-slot.is-placeholder .icon {
+  color: var(--wdm-ink-faint);
+  opacity: 0.55;
+}
+
+/* ---- Tabs (torn-parchment active state) ---------------------------------- */
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-tabs {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  align-items: center;
+  position: relative;
+  padding: 0 0 8px 0;
+}
+/* Sort dropdown sits at the right end of the tabs row.  Wraps to its own
+   line on narrow widths along with the tabs.
+   `transform: scale(.8)` shrinks just the visible chip 20% without
+   affecting the native option-list popup (browsers paint that at the OS
+   layer, ignoring the select's CSS transform). Origin pinned right so the
+   chip stays anchored to the right edge of the tabs row. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-sort {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--wdm-amber-dim);
+  background: rgba(10,9,8,0.6);
+  color: var(--wdm-amber-hi);
+  font-family: var(--wdm-font-display);
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transform: scale(0.8);
+  transform-origin: 100% 50%;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-sort i { font-size: 13px; color: var(--wdm-amber-hi); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-sort select {
+  background: transparent; border: none; outline: none;
+  color: var(--wdm-ink-hi);
+  font: inherit; letter-spacing: inherit; text-transform: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-sort select option {
+  background: var(--wdm-bg);
+  color: var(--wdm-ink-hi);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-sort:hover {
+  border-color: var(--wdm-amber);
+  color: var(--wdm-amber-bright);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-tabs::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background:
+    linear-gradient(90deg, transparent, var(--wdm-amber-dim) 30%, var(--wdm-amber) 50%, var(--wdm-amber-dim) 70%, transparent);
+  opacity: 0.4;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-tab {
+  position: relative;
+  background: none; border: none; cursor: pointer;
+  padding: 6px 14px;
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--wdm-font-display);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-dim);
+  transition: color .15s;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-tab i {
+  font-size: 12px; color: var(--wdm-ink-dim);
+  transition: color .15s;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-tab:hover { color: var(--wdm-ink-bright); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-tab:hover i { color: var(--wdm-amber-hi); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-tab.is-active { color: var(--wdm-ink-ash); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-tab.is-active i { color: var(--wdm-ink-ash); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-tab.is-active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse at 30% 25%, rgba(228,210,168,0.28), transparent 55%),
+    linear-gradient(165deg, var(--wdm-amber-bright), var(--wdm-amber-hi) 60%, var(--wdm-amber-dim));
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 28' preserveAspectRatio='none'><path d='M2 4 L8 2 L16 4 L24 2 L32 4 L40 2 L48 4 L56 2 L64 4 L72 2 L80 4 L88 2 L96 4 L104 2 L112 4 L118 6 L118 22 L112 25 L104 23 L96 26 L88 23 L80 26 L72 23 L64 26 L56 23 L48 26 L40 23 L32 26 L24 23 L16 26 L8 23 L2 25 L4 18 L4 8 Z' fill='black'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 28' preserveAspectRatio='none'><path d='M2 4 L8 2 L16 4 L24 2 L32 4 L40 2 L48 4 L56 2 L64 4 L72 2 L80 4 L88 2 L96 4 L104 2 L112 4 L118 6 L118 22 L112 25 L104 23 L96 26 L88 23 L80 26 L72 23 L64 26 L56 23 L48 26 L40 23 L32 26 L24 23 L16 26 L8 23 L2 25 L4 18 L4 8 Z' fill='black'/></svg>");
+  -webkit-mask-size: 100% 100%;
+          mask-size: 100% 100%;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.7);
+}
+
+/* ---- Item grid ----------------------------------------------------------- */
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-grid-wrap {
+  position: relative;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wdm-amber-dim) var(--wdm-void);
+  padding: 4px 4px 4px 0;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-grid-wrap::-webkit-scrollbar { width: 5px; }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-grid-wrap::-webkit-scrollbar-track { background: var(--wdm-void); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-grid-wrap::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); }
+
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 5px;
+}
+
+body.witcher-ttrpg-death-march .wou-empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-faint);
+}
+
+/* =========================================================================
+   RIGHT COLUMN — stats · weapons + portrait · armor
+   ========================================================================= */
+body.witcher-ttrpg-death-march #wou-inventory .wou-inv-right {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 12px;
+  padding-top: 8px;
+  min-height: 0;
+}
+
+/* ---- Stats row ----------------------------------------------------------- */
+body.witcher-ttrpg-death-march #wou-inventory .wou-stats-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 6px 4px 10px 4px;
+  border-bottom: 1px dotted rgba(140,133,121,0.18);
+  position: relative;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-stats-row::before {
+  content: '';
+  position: absolute;
+  left: 50%; bottom: -3px;
+  width: 4px; height: 4px;
+  transform: translateX(-50%) rotate(45deg);
+  background: var(--wdm-amber);
+  box-shadow: 0 0 6px rgba(214,160,80,0.5);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-stat-block {
+  display: flex; flex-direction: column; gap: 4px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-stat-key {
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-faint);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-stat-val {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--wdm-amber-bright);
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-stat-val .max {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--wdm-ink-faint);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-stat-val i {
+  color: var(--wdm-amber);
+  font-size: 14px;
+}
+
+/* Sawtooth encumbrance bar */
+body.witcher-ttrpg-death-march #wou-inventory .wou-enc-bar {
+  height: 10px;
+  position: relative;
+  margin-top: 4px;
+  background: var(--wdm-bg-deep);
+  border: 1px solid rgba(140,133,121,0.18);
+  overflow: hidden;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-enc-bar > .fill {
+  height: 100%;
+  width: 0%;
+  background:
+    linear-gradient(90deg, var(--wdm-amber-dim) 0%, var(--wdm-amber) 60%, var(--wdm-amber-bright) 100%);
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 10' preserveAspectRatio='none'><path d='M0 10 L5 2 L10 10 L15 2 L20 10 L25 2 L30 10 L35 2 L40 10 L45 2 L50 10 L55 2 L60 10 L65 2 L70 10 L75 2 L80 10 L85 2 L90 10 L95 2 L100 10 L105 2 L110 10 L115 2 L120 10 L125 2 L130 10 L135 2 L140 10 L145 2 L150 10 L155 2 L160 10 L165 2 L170 10 L175 2 L180 10 L185 2 L190 10 L195 2 L200 10 L200 0 L0 0 Z' fill='black'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 10' preserveAspectRatio='none'><path d='M0 10 L5 2 L10 10 L15 2 L20 10 L25 2 L30 10 L35 2 L40 10 L45 2 L50 10 L55 2 L60 10 L65 2 L70 10 L75 2 L80 10 L85 2 L90 10 L95 2 L100 10 L105 2 L110 10 L115 2 L120 10 L125 2 L130 10 L135 2 L140 10 L145 2 L150 10 L155 2 L160 10 L165 2 L170 10 L175 2 L180 10 L185 2 L190 10 L195 2 L200 10 L200 0 L0 0 Z' fill='black'/></svg>");
+  -webkit-mask-size: 100% 100%;
+          mask-size: 100% 100%;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-stat-block.is-over .wou-enc-bar > .fill {
+  background: linear-gradient(90deg, var(--wdm-red) 0%, var(--wdm-red-bright) 100%);
+}
+
+/* 7-currency chips, each editable */
+body.witcher-ttrpg-death-march #wou-inventory .wou-currency-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  column-gap: 8px;
+  row-gap: 4px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-cur-cell {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-cur-cell .cur-key {
+  color: var(--wdm-amber-dim);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-align: right;
+}
+
+/* Gold coin disc — replaces the abstract letter chip so the section
+   visibly reads as money.  Currency letters sit on a radial-gilt disc
+   with a soft bevel; the row is preceded by a "Coins" section label. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-cur-cell .cur-coin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, #f0c870 0%, var(--wdm-gilt-hi) 38%, var(--wdm-gilt) 70%, var(--wdm-gilt-dk) 100%);
+  border: 1px solid var(--wdm-gilt-dk);
+  color: rgba(50, 32, 8, 0.95);
+  font-size: 11px;
+  font-weight: 800;
+  font-family: 'Times New Roman', serif;
+  line-height: 1;
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.7),
+    inset 0 1px 1px rgba(255,235,180,0.45);
+  text-shadow: 0 1px 0 rgba(255,235,180,0.6);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-currency .wou-section-label {
+  margin-bottom: 4px;
+  font-size: 9px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-currency .wou-section-label i {
+  color: var(--wdm-gilt-hi);
+  font-size: 11px;
+}
+
+/* Container popup weight indicator */
+body.witcher-ttrpg-death-march .wou-popup-weight {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--wdm-ink-hi);
+  font-weight: 600;
+}
+body.witcher-ttrpg-death-march .wou-popup-weight i {
+  color: var(--wdm-amber-hi);
+  font-size: 11px;
+}
+body.witcher-ttrpg-death-march .wou-popup-weight .sep { color: var(--wdm-ink-faint); margin: 0 1px; }
+body.witcher-ttrpg-death-march .wou-popup-weight .max-w { color: var(--wdm-ink-faint); }
+body.witcher-ttrpg-death-march .wou-popup-weight .unit { color: var(--wdm-ink-faint); margin-left: 2px; font-weight: 400; }
+body.witcher-ttrpg-death-march .wou-popup-weight.is-over .cur-w { color: var(--wdm-red-bright); }
+body.witcher-ttrpg-death-march .wou-popup-weight.is-over i      { color: var(--wdm-red-bright); }
+/* Container popup header — wrap the chip group together (separated by
+ * a real gap from title + close), then let it flow onto a second line
+ * if the popup is narrow.  The chip group itself wraps internally so
+ * three chips can stack 2+1 when there's no horizontal room. */
+body.witcher-ttrpg-death-march .wou-popup-header {
+  flex-wrap: wrap;
+  column-gap: 10px;
+  row-gap: 4px;
+}
+body.witcher-ttrpg-death-march .wou-popup-caps {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  /* Take available width so the group can wrap internally, but stop
+   * before pushing the close button off-screen. */
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-cur-cell input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px dotted var(--wdm-amber-dim);
+  color: var(--wdm-ink-hi);
+  font: inherit;
+  letter-spacing: 0.02em;
+  text-align: left;
+  width: 100%;
+  padding: 1px 2px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-cur-cell input:focus {
+  outline: none;
+  color: var(--wdm-amber-bright);
+  border-bottom-color: var(--wdm-amber-hi);
+}
+
+/* ---- Weapons + portrait + mount + armor (2x2 mini-grid) ----------------- */
+body.witcher-ttrpg-death-march #wou-inventory .wou-weap-port {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  grid-template-rows: auto auto;
+  gap: 14px 14px;
+  align-items: start;
+  min-height: 0;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-weapons     { grid-column: 1; grid-row: 1; }
+body.witcher-ttrpg-death-march #wou-inventory .wou-portrait    { grid-column: 2; grid-row: 1; }
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach{ grid-column: 1; grid-row: 2; }
+body.witcher-ttrpg-death-march #wou-inventory .wou-armor       { grid-column: 2; grid-row: 2; }
+
+body.witcher-ttrpg-death-march #wou-inventory .wou-weapons {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 8px 0;
+}
+
+/* Mount-attach: single dashed circular slot, bottom-left of portrait area */
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 4px 0;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-label {
+  font-size: 9px; letter-spacing: 0.26em;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-equip-add {
+  width: 44px; height: 44px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-equip-add i {
+  font-size: 18px;
+  color: var(--wdm-amber-dim);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-equip-add:hover i {
+  color: var(--wdm-amber-hi);
+}
+/* Linked mount portrait — sized like the empty slot but with portrait img. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-linked {
+  width: 44px; height: 44px;
+  border: 1px solid var(--wdm-amber);
+  background: var(--wdm-bg);
+  box-shadow:
+    inset 0 0 6px rgba(0,0,0,0.6),
+    0 0 8px rgba(184,148,100,0.25);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-linked img.icon {
+  width: 90%; height: 90%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-linked:hover {
+  border-color: var(--wdm-amber-bright);
+}
+/* Unlink × button — pinned to the top-right of the linked portrait, hidden
+ * until hover so it doesn't compete with the portrait visually. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-unlink {
+  position: absolute;
+  top: -6px; right: -6px;
+  width: 16px; height: 16px;
+  min-height: 0;
+  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8,7,6,0.92);
+  border: 1px solid rgba(140,133,121,0.4);
+  border-radius: 50%;
+  color: var(--wdm-ink-dim);
+  cursor: pointer;
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity .12s, transform .12s, color .12s, border-color .12s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  z-index: 2;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-linked:hover .wou-mount-unlink,
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-unlink:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-unlink:hover {
+  color: var(--wdm-red-bright, #d65a4a);
+  border-color: var(--wdm-red-bright, #d65a4a);
+}
+/* Drop target highlight while dragging an actor onto the slot. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-equip.is-drop-target {
+  border-color: var(--wdm-amber-bright);
+  box-shadow: 0 0 0 1px rgba(184,148,100,0.45), 0 0 14px rgba(184,148,100,0.35);
+}
+
+/* Mount container rail slots — subtle amber pip to distinguish from
+ * character containers. */
+body.witcher-ttrpg-death-march .wou-slot.is-mount::after {
+  content: '';
+  position: absolute;
+  right: 2px; top: 2px;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--wdm-amber);
+  box-shadow: 0 0 4px var(--wdm-amber);
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-rail-label {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dotted rgba(140,133,121,0.25);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-align: center;
+  color: var(--wdm-amber-hi);
+}
+
+/* Mount-owned container popup — slightly distinct amber accent so it's
+ * clear those items belong to a different actor. */
+body.witcher-ttrpg-death-march .wou-container-popup.is-mount {
+  border-top-color: var(--wdm-amber);
+}
+body.witcher-ttrpg-death-march .wou-container-popup.is-mount .wou-popup-title {
+  color: var(--wdm-amber-bright);
+}
+/* Intake hint — quiet footer line stating what the mount will accept. */
+body.witcher-ttrpg-death-march .wou-mount-popup .wou-popup-hint {
+  flex: 0 0 auto;
+  padding: 5px 10px 6px;
+  border-top: 1px dotted rgba(140,133,121,0.16);
+  font-family: var(--wdm-font-display);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-dim);
+}
+body.witcher-ttrpg-death-march .wou-mount-popup .wou-popup-hint i {
+  margin-right: 4px;
+  color: var(--wdm-amber-dim);
+}
+/* Refusing an item that a mount can't carry. */
+body.witcher-ttrpg-death-march .wou-mount-popup.is-drop-reject {
+  border-color: var(--wdm-red);
+  box-shadow: 0 0 0 1px rgba(140,60,60,0.45), 0 12px 36px rgba(0,0,0,0.85), 0 0 14px rgba(140,60,60,0.30);
+}
+body.witcher-ttrpg-death-march .wou-mount-popup.is-drop-reject .wou-popup-hint {
+  color: var(--wdm-red-bright);
+}
+body.witcher-ttrpg-death-march .wou-mount-popup.is-drop-reject .wou-popup-hint i {
+  color: var(--wdm-red-bright);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-weapons-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 38px);
+  gap: 10px;
+  justify-content: center;
+}
+/* Unarmed (Punch / Kick) damage — quiet readout under the weapon slots. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-unarmed {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-unarmed-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--wdm-font-display);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--wdm-ink-dim);
+  white-space: nowrap;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-unarmed-cell i {
+  color: var(--wdm-amber-dim);
+  font-size: 10px;
+}
+
+/* Circular equip slot */
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip {
+  position: relative;
+  width: 38px; height: 38px;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,235,180,0.06), transparent 55%),
+    radial-gradient(circle, var(--wdm-bg-lifted), var(--wdm-bg));
+  border: 1px solid rgba(140,133,121,0.30);
+  border-radius: 50%;
+  color: var(--wdm-ink-dim);
+  cursor: pointer;
+  font-size: 15px;
+  transition: color .15s, border-color .15s, transform .12s;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip::before {
+  content: '';
+  position: absolute; inset: -4px;
+  border-radius: 50%;
+  border: 1px solid rgba(200,154,74,0.10);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip:hover {
+  color: var(--wdm-ink-bright);
+  border-color: var(--wdm-ink-dim);
+  transform: scale(1.05);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip.has-item {
+  color: var(--wdm-amber-bright);
+  border-color: var(--wdm-amber);
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,235,180,0.10), transparent 55%),
+    radial-gradient(circle, var(--wdm-bg-lifted), var(--wdm-bg));
+  box-shadow:
+    inset 0 0 4px rgba(0,0,0,0.5),
+    0 0 6px rgba(184,148,100,0.18);
+}
+/* Rarity tint on equipped weapon/armor bubbles — a radial fade that reads
+   the same --wdm-rar token as the grid slots, shaped for the circular disc
+   (transparent core → rarity colour pooling at the rim). */
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip[data-rarity="common"]    { --wdm-rar: var(--wdm-rarity-common); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip[data-rarity="poor"]      { --wdm-rar: var(--wdm-rarity-poor); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip[data-rarity="rare"]      { --wdm-rar: var(--wdm-rarity-rare); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip[data-rarity="witcher"]   { --wdm-rar: var(--wdm-rarity-witcher); }
+
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip.has-item:is([data-rarity="common"],[data-rarity="poor"],[data-rarity="rare"],[data-rarity="witcher"]) {
+  background:
+    radial-gradient(circle at 50% 50%,
+      transparent 35%,
+      color-mix(in srgb, var(--wdm-rar) 30%, transparent) 80%,
+      color-mix(in srgb, var(--wdm-rar) 70%, transparent) 100%),
+    radial-gradient(circle at 30% 25%, rgba(255,235,180,0.10), transparent 55%),
+    radial-gradient(circle, var(--wdm-bg-lifted), var(--wdm-bg));
+  border-color: color-mix(in srgb, var(--wdm-rar) 60%, var(--wdm-amber));
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip img.icon {
+  /* Cover the inside of the slot and round to a circle so square item
+     icons crop instead of clipping at the corners of the disc. */
+  width: 86%; height: 86%;
+  object-fit: cover;
+  border-radius: 50%;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.85));
+}
+
+/* Sheath badge — top-right chip on equipped weapon slots. Click to return
+ * the weapon to its origin container (or any container, or unequip). */
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip .wou-sheath-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--wdm-bg-deep, #050402);
+  border: 1px solid var(--wdm-amber-dim, #6e5224);
+  border-radius: 50%;
+  color: var(--wdm-amber-bright, #c8a878);
+  cursor: pointer;
+  z-index: 2;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip .wou-sheath-badge i {
+  font-size: 9px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip .wou-sheath-badge:hover {
+  background: var(--wdm-bg-lifted, #14110d);
+  border-color: var(--wdm-amber, #a88450);
+  color: var(--wdm-ink-bright, #e0dac4);
+}
+
+/* Hand-occupancy tag on an EQUIPPED weapon slot (R / L / 2H / Q) — a small
+   bubble in the bottom-left corner so it doesn't cover the weapon icon. The
+   empty-slot label keeps its default centered layout (it IS the slot label). */
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip-hand.has-item .wou-slot-tag {
+  position: absolute;
+  left: -2px; bottom: -2px;
+  min-width: 14px; height: 14px;
+  padding: 0 3px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--wdm-bg-deep, #050402);
+  border: 1px solid var(--wdm-amber-dim, #6e5224);
+  border-radius: 9px;
+  color: var(--wdm-amber-bright, #c8a878);
+  font-family: var(--wdm-font-display, sans-serif);
+  font-size: 8px; line-height: 1; letter-spacing: 0.04em;
+  z-index: 3; pointer-events: none;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+}
+
+/* Drawn-hand badge — bottom-left chip on weapon slots. Click to cycle. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip .wou-hand-badge {
+  position: absolute;
+  left: -2px;
+  bottom: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--wdm-bg-deep, #050402);
+  border: 1px solid var(--wdm-amber-dim, #6e5224);
+  border-radius: 10px;
+  color: var(--wdm-amber-bright, #c8a878);
+  font-family: var(--wdm-font-display, sans-serif);
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+  user-select: none;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip .wou-hand-badge:hover {
+  background: var(--wdm-bg-lifted, #14110d);
+  border-color: var(--wdm-amber, #a88450);
+  color: var(--wdm-ink-bright, #e0dac4);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip .wou-hand-badge[data-hand="both"] {
+  border-color: var(--wdm-amber, #a88450);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip .wou-hand-badge[data-hand="none"] {
+  color: var(--wdm-ink-faint, #5a574e);
+  border-color: var(--wdm-ink-faint, #5a574e);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip-add {
+  position: relative;
+  width: 38px; height: 38px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: 1px dashed rgba(140,133,121,0.30);
+  border-radius: 50%;
+  color: var(--wdm-ink-faint);
+  cursor: pointer;
+  font-size: 16px;
+  transition: color .15s, border-color .15s;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip-add:hover {
+  color: var(--wdm-amber-hi);
+  border-color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip-controls {
+  display: flex; gap: 4px;
+  margin-top: 6px;
+  justify-content: center;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip-controls button {
+  background: transparent;
+  border: 1px solid rgba(140,133,121,0.30);
+  color: var(--wdm-ink-dim);
+  width: 22px; height: 18px;
+  cursor: pointer;
+  font-family: inherit; font-size: 12px;
+  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  letter-spacing: 0;
+  transition: color .15s, border-color .15s;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-equip-controls button:hover {
+  color: var(--wdm-amber-hi);
+  border-color: var(--wdm-amber-hi);
+}
+
+/* ---- Portrait ------------------------------------------------------------ */
+body.witcher-ttrpg-death-march #wou-inventory .wou-portrait {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  background:
+    radial-gradient(ellipse 200px 280px at 50% 40%, rgba(60,40,20,0.55), transparent 75%),
+    linear-gradient(180deg, #1a140e, var(--wdm-bg-deep));
+  border: 1px solid var(--wdm-amber-dim);
+  overflow: hidden;
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 14px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-portrait::before {
+  content: '';
+  position: absolute; inset: 4px;
+  border: 1px solid rgba(184,148,100,0.18);
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-portrait::after {
+  content: '';
+  position: absolute; inset: -2px;
+  border: 1px solid rgba(140,133,121,0.10);
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-portrait .portrait-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  opacity: 0.95;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-portrait .nameplate {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.65) 60%);
+  padding: 14px 8px 4px;
+  width: 100%;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-portrait .nameplate .name {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-bright);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.95);
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-portrait .nameplate .epithet {
+  font-style: italic;
+  font-size: 10px;
+  color: var(--wdm-ink);
+  margin-top: 3px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-portrait .nameplate .epithet:not(:empty)::before,
+body.witcher-ttrpg-death-march #wou-inventory .wou-portrait .nameplate .epithet:not(:empty)::after {
+  content: '⟢';
+  color: var(--wdm-amber-dim);
+  margin: 0 4px;
+  font-style: normal;
+  font-size: 9px;
+}
+
+/* ---- Armor (below portrait, wraps) -------------------------------------- */
+body.witcher-ttrpg-death-march #wou-inventory .wou-armor {
+  position: relative;
+  padding: 8px 6px 6px 6px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-armor-grid {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  justify-content: center;
+  align-items: center;
+  padding: 4px 0;
+}
+
+/* =========================================================================
+   Linked-mount stats panel — appears in .wou-mount-attach beneath the
+   mount slot once an actor is linked.  Four cells side-by-side:
+   Dex+Ath / SPD / Ctrl Mod / HP.  HP cell shows current/max plus a thin
+   progress bar.  See renderMountStatsHTML in inventory.js + the riding-skill
+   AE sync in sheets/character-mount.js.
+   ========================================================================= */
+/* Mount stats — typography-only.  No card frame, no dividers, no bg.  Each
+ * stat is just LABEL (top, tiny caps, dim) over VALUE (bold display gold).
+ * minmax(0,1fr) so the column shrinks instead of overflowing into the
+ * neighbor when the rail is narrow. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 6px;
+  margin-top: 6px;
+  padding: 2px 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  min-width: 0;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-stats .wms-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+  border: none;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-stats .wms-label {
+  font-family: var(--wdm-font-display);
+  font-size: 7.5px;
+  font-weight: 500;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-dim);
+  line-height: 1.1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-stats .wms-value {
+  font-family: var(--wdm-font-display);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--wdm-amber-bright);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-stats .wms-value.is-neg { color: var(--wdm-red-bright); }
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-stats .wms-value .wms-sep {
+  color: var(--wdm-ink-faint);
+  font-weight: 400;
+  margin: 0 2px;
+}
+/* No HP bar — it was reading as a "weird yellow line" rather than a fuel
+ * gauge at this size.  The cur/max readout is enough on its own. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-mount-attach .wou-mount-stats .wms-hp-bar { display: none; }
+
+/* =========================================================================
+   Mount container rail — the linked mount's containers dock as their own
+   track in the middle container column, below the player's normal rail
+   (.wou-containers-player).  See renderContainersHTML / wireContainerRail;
+   the mount's full inventory lives on its actor sheet's Inventory tab,
+   opened by clicking the linked-mount circle.
+   ========================================================================= */
+body.witcher-ttrpg-death-march #wou-inventory .wou-containers-mount-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  margin-bottom: 3px;
+  color: var(--wdm-amber-dim);
+  font-size: 9px;
+  border-top: 1px solid rgba(140,133,121,0.18);
+  padding-top: 3px;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-rail-empty-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  font-family: var(--wdm-font-display);
+  font-size: 7px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-faint);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ── Remains charge badge + configure button (inventory rows) ─────────────── */
+.wou-remains-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--wdm-font-display, monospace);
+  letter-spacing: 0.06em;
+  color: var(--wdm-amber-bright, #b89464);
+  background: rgba(184,148,100,0.12);
+  border: 1px solid var(--wdm-amber-dim, #6b5a40);
+  border-radius: 2px;
+  line-height: 1.5;
+  vertical-align: middle;
+  white-space: nowrap;
+  margin-right: 4px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.wou-remains-cfg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+  color: var(--wdm-amber-hi, #a07840);
+  cursor: pointer;
+  opacity: 0.65;
+  font-size: 0.85em;
+  vertical-align: middle;
+  transition: opacity 0.15s, color 0.15s;
+}
+.wou-remains-cfg-btn:hover {
+  opacity: 1;
+  color: var(--wdm-amber-bright, #b89464);
+}
+
+
+/* =============================================================================
+   INSPECTION CARD — compact mode for the Witcher-3 visual layer rendered into
+   the chrome's inventory inspection panel. Matches the chrome's existing
+   selector specificity (`#wou-inventory .wou-inspection-body …`) and uses
+   `!important` on the size-critical declarations so layout-affecting numbers
+   can't be cascaded over by later rules or browser defaults.
+   ============================================================================= */
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3 {
+  gap: 6px !important;
+  padding: 8px 10px 10px !important;
+  min-height: 0 !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-head {
+  grid-template-columns: 44px 1fr !important;
+  gap: 10px !important;
+  padding-bottom: 5px !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-portrait {
+  width: 44px !important;
+  height: 44px !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-title {
+  font-size: 14px !important;
+  letter-spacing: 0.08em !important;
+  line-height: 1.1 !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-subtitle {
+  font-size: 9px !important;
+  letter-spacing: 0.16em !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-hero {
+  padding: 3px 0 2px !important;
+  gap: 7px !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-hero-value {
+  font-size: 21px !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-hero-label {
+  font-size: 10px !important;
+  letter-spacing: 0.18em !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-hero-sub {
+  font-size: 10px !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-hero-value.is-substance {
+  font-size: 16px !important;
+  gap: 7px !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-hero-value.is-substance .wdm-sub-icon {
+  width: 13px !important;
+  height: 13px !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-stats {
+  gap: 2px !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-stat {
+  grid-template-columns: 42px 1fr !important;
+  gap: 8px !important;
+  font-size: 10px !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-stat .val {
+  font-size: 11px !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-stat-slots {
+  grid-template-columns: 42px auto 1fr !important;
+  column-gap: 8px !important;
+  align-items: center !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-slots {
+  gap: 4px !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-slot {
+  width: 18px !important;
+  height: 18px !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-tags {
+  gap: 3px 4px !important;
+  padding: 4px 0 0 !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-tag {
+  padding: 2px 7px 3px !important;
+  font-size: 9px !important;
+  letter-spacing: 0.08em !important;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-description,
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-effects {
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+  padding: 4px 0 0 !important;
+  max-height: 140px;
+  overflow-y: auto;
+}
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-footer {
+  padding-top: 5px !important;
+  margin-top: 3px !important;
+  gap: 9px !important;
+  font-size: 10px !important;
+}
+
+/* Larger quality tag chips in the inspect pane — 9px was too small to
+ * read. Bumped for legibility while still keeping the chip layout tight. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-tag {
+  padding: 3px 10px 4px !important;
+  font-size: 13px !important;
+  letter-spacing: 0.10em !important;
+}
+
+/* Compact inspect pane: drop the description's default border-top
+ * (set in sheets-item.css) so it doesn't stack a grey line under the
+ * preceding tags block. */
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-description,
+body.witcher-ttrpg-death-march #wou-inventory .wou-inspection-body .wdm-w3-effects {
+  border-top: none !important;
+}

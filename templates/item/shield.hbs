@@ -1,0 +1,239 @@
+{{!-- Shield item sheet — two layers:
+        DISPLAY  → Witcher 3 tooltip aesthetic (player view)
+        CONFIG   → compact spec-sheet form (GM cog toggle)
+      A shield is wielded like a weapon (it holds a hand slot) but its
+      profile is defensive: Reliability blocks, EV, AE, optional Full Cover. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-shield" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure item{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view" data-rarity="{{source.availability}}">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">
+            {{#if source.category}}{{localize (lookup WITCHER.shield.categories source.category)}}{{/if}}
+            {{#if source.hands}} · {{localize (lookup WITCHER.shield.hands source.hands)}}{{/if}}
+          </div>
+        </div>
+      </header>
+
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value">{{blocks}}{{#if blocksMax}}/{{blocksMax}}{{/if}}</div>
+        <div class="wdm-w3-hero-label">BLOCKS</div>
+        <div class="wdm-w3-hero-sub">Reliability</div>
+      </div>
+
+      <ul class="wdm-w3-stats">
+        <li class="wdm-w3-stat" data-tooltip="Shield bash (Core p.164): a Melee attack dealing bludgeoning, lethal damage equal to your Punch{{#if (eq source.category 'medium')}}, as if two Body levels higher{{/if}}{{#if (eq source.category 'heavy')}}, as if four Body levels higher{{/if}}." data-tooltip-direction="UP">
+          <span class="val"><i class="fa-solid fa-hand-fist"></i></span>
+          <span class="lbl">Bash · Melee · Bludgeoning{{#if (eq source.category 'medium')}} (Punch +2 lvl){{/if}}{{#if (eq source.category 'heavy')}} (Punch +4 lvl){{/if}}</span>
+        </li>
+        {{#if source.fullCover}}
+          <li class="wdm-w3-stat is-positive">
+            <span class="val"><i class="fa-solid fa-check"></i></span>
+            <span class="lbl">Full Cover</span>
+          </li>
+        {{/if}}
+        {{#unless (eq source.encumbranceValue 0)}}
+          <li class="wdm-w3-stat is-negative">
+            <span class="val">−{{source.encumbranceValue}}</span>
+            <span class="lbl">Encumbrance Penalty</span>
+          </li>
+        {{/unless}}
+        {{#if enhancementSlots.length}}
+          <li class="wdm-w3-stat wdm-w3-stat-slots">
+            <span class="val">{{enhancementSlots.length}}</span>
+            <span class="lbl">Enhancement Slots</span>
+            <span class="wdm-w3-slots" data-enh-slots>
+              {{#each enhancementSlots}}
+                {{#if this.filled}}
+                  <span class="wdm-w3-slot is-filled" data-enh-index="{{this.index}}"
+                        data-tooltip="{{this.name}}" data-tooltip-direction="UP">
+                    <img src="{{this.img}}" alt="" />
+                    {{#if ../canEdit}}
+                      <button type="button" class="wdm-slot-detach" data-action="detachEnhancement" title="Remove enhancement">
+                        <i class="fa-solid fa-xmark"></i>
+                      </button>
+                    {{/if}}
+                  </span>
+                {{else}}
+                  <span class="wdm-w3-slot" data-slot-index="{{this.index}}"
+                        data-tooltip="Empty slot — drag a Glyph or armor-mod enhancement to fill"
+                        data-tooltip-direction="UP"></span>
+                {{/if}}
+              {{/each}}
+            </span>
+          </li>
+        {{/if}}
+      </ul>
+
+      {{#if shieldQualityList.length}}
+        <div class="wdm-w3-tags">
+          {{#each shieldQualityList}}
+            <span class="wdm-w3-tag" data-tooltip="{{this.description}}" data-tooltip-direction="UP">{{this.label}}</span>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if source.effect}}
+        <div class="wdm-w3-description">{{{source.effect}}}</div>
+      {{/if}}
+
+      {{#if source.description}}
+        <div class="wdm-w3-description">{{{source.description}}}</div>
+      {{/if}}
+
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        {{#unless (eq source.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+        {{/unless}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — compact spec form
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Shield name" />
+      </div>
+
+      <div class="wdm-cfg-section">Defense</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Category</span>
+          <select name="system.category">
+            {{#each WITCHER.shield.categories}}
+              <option value="{{@key}}" {{#if (eq @key ../source.category)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row wdm-cfg-row-pair"><span>Reliability</span>
+          <span class="wdm-cfg-pair">
+            <input type="number" min="0" name="system.reliability.value"
+                   value="{{source.reliability.value}}" title="Blocks remaining" />
+            <span class="wdm-cfg-slash">/</span>
+            <input type="number" min="0" name="system.reliability.max"
+                   value="{{source.reliability.max}}" title="Total blocks before breaking" />
+          </span>
+        </label>
+        <label class="wdm-cfg-row"><span>EV (Encumbrance)</span>
+          <input type="number" min="0" name="system.encumbranceValue" value="{{source.encumbranceValue}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Enhancement Slots</span>
+          <input type="number" min="0" name="system.armorEnhancement" value="{{source.armorEnhancement}}" />
+        </label>
+        <label class="wdm-cfg-row is-checkbox" title="Pavise-style; can be crouched behind for full cover.">
+          <span>Full Cover</span>
+          <input type="checkbox" name="system.fullCover" {{#if source.fullCover}}checked{{/if}} />
+        </label>
+      </div>
+
+      {{!-- Bash damage is wielder-derived (Punch + size shift), not stored — show
+           the live formula on an actor, the size-relative scale otherwise. --}}
+      <div class="wdm-cfg-derived" title="Shield bash (Core p.164) — a Melee attack dealing bludgeoning, lethal damage equal to your Punch shifted up by shield size (medium +2 Body levels, heavy +4). Capped at 1d6+8.">
+        <i class="fa-solid fa-hand-fist"></i>
+        {{#if bash.onActor}}
+          <span>Bash {{bash.formula}} · Melee · bludgeoning, lethal{{#if bash.levels}} · Punch +{{bash.levels}} lvl{{/if}}.</span>
+        {{else}}
+          <span>Bash = wielder's Punch{{#if bash.levels}} +{{bash.levels}} Body levels{{else}} (bare){{/if}} · Melee · bludgeoning, lethal · capped 1d6+8.</span>
+        {{/if}}
+      </div>
+
+      <div class="wdm-cfg-section">Wielding</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Hands</span>
+          <select name="system.hands">
+            {{#each WITCHER.shield.hands}}
+              <option value="{{@key}}" {{#if (eq @key ../source.hands)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">Qualities <span class="wdm-cfg-sub">(edit catalog in system settings)</span></div>
+      <div class="wdm-cfg-checkgrid">
+        {{#each shieldQualitiesCatalog}}
+          {{#if this.param}}
+            <div class="wdm-cfg-check is-parameterized" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+              <label class="wdm-cfg-check-label">
+                <input type="checkbox" name="system.qualities" value="{{@key}}"
+                       data-dtype="String"
+                       {{#if (includes ../source.qualities @key)}}checked{{/if}} />
+                <span>{{this.label}}</span>
+              </label>
+              <input type="{{this.param.type}}" class="wdm-cfg-param"
+                     name="system.qualityValues.{{@key}}"
+                     value="{{lookup ../source.qualityValues @key}}"
+                     placeholder="{{this.param.placeholder}}"
+                     title="Parameter for {{this.label}}" />
+              {{#if this.param.suffix}}<span class="wdm-cfg-param-suffix">{{this.param.suffix}}</span>{{/if}}
+            </div>
+          {{else}}
+            <label class="wdm-cfg-check" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+              <input type="checkbox" name="system.qualities" value="{{@key}}"
+                     data-dtype="String"
+                     {{#if (includes ../source.qualities @key)}}checked{{/if}} />
+              <span>{{this.label}}</span>
+            </label>
+          {{/if}}
+        {{/each}}
+      </div>
+
+      <div class="wdm-cfg-section">Procurement</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Availability</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Weight (kg)</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Cost</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Quantity</span>
+          <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+        <label class="wdm-cfg-row is-checkbox">
+          <span>Equipped</span>
+          <input type="checkbox" name="system.equipped" {{#if source.equipped}}checked{{/if}} />
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">Effect <span class="wdm-cfg-sub">(special rules)</span></div>
+      <textarea class="wdm-cfg-textarea" name="system.effect" placeholder="Special rules, e.g. Full Cover behaviour…">{{source.effect}}</textarea>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Description</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="Shield lore, appearance, provenance…">{{source.description}}</textarea>
+
+    </div>
+  </div>
+
+</div>

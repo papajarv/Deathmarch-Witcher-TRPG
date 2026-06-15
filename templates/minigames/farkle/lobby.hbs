@@ -1,0 +1,78 @@
+<div class="wdm-fk-lobby">
+
+    <header class="wdm-fk-lobby-head">
+        <h2>{{localize "WITCHER.Farkle.lobby.title"}}</h2>
+        {{#if myActorName}}
+            <p class="wdm-fk-lobby-me">{{localize "WITCHER.Farkle.lobby.playingAs"}}
+                <strong>{{myActorName}}</strong> — {{myPurse}} {{localize (concat "WITCHER.Currency." denom)}}</p>
+        {{else}}
+            <p class="wdm-fk-lobby-warn">{{localize "WITCHER.Farkle.lobby.noCharacter"}}</p>
+        {{/if}}
+    </header>
+
+    <section class="wdm-fk-seats">
+        {{#each seats as |seat|}}
+            <div class="wdm-fk-seat {{#if seat.occupied}}is-taken{{/if}} {{#if seat.mine}}is-mine{{/if}}">
+                <div class="wdm-fk-seat-label">{{localize "WITCHER.Farkle.lobby.seat"}} {{seat.id}}</div>
+
+                {{#if seat.occupied}}
+                    <div class="wdm-fk-seat-occupant">
+                        <span class="wdm-fk-seat-name">{{seat.name}}</span>
+                        {{#if seat.isAI}}<span class="wdm-fk-seat-tag">{{localize "WITCHER.Farkle.lobby.aiTag"}} ({{seat.skill}})</span>{{/if}}
+                        {{#unless seat.isAI}}{{#if seat.purse}}<span class="wdm-fk-seat-purse">{{seat.purse}}</span>{{/if}}{{/unless}}
+                    </div>
+                    {{#if seat.canManageDice}}
+                        <button type="button" class="wdm-fk-seat-btn" data-action="chooseDice" data-seat="{{seat.id}}">
+                            {{localize "WITCHER.Farkle.lobby.dice"}}: {{seat.diceCount}}
+                        </button>
+                    {{/if}}
+                    {{#if seat.canClear}}
+                        <button type="button" class="wdm-fk-seat-btn" data-action="leave" data-seat="{{seat.id}}">
+                            {{localize "WITCHER.Farkle.lobby.leave"}}
+                        </button>
+                    {{/if}}
+                {{else}}
+                    <button type="button" class="wdm-fk-seat-btn" data-action="claim" data-seat="{{seat.id}}">
+                        {{localize "WITCHER.Farkle.lobby.sit"}}
+                    </button>
+                    {{#if ../isGM}}
+                        <button type="button" class="wdm-fk-seat-btn" data-action="seatAI" data-seat="{{seat.id}}">
+                            {{localize "WITCHER.Farkle.lobby.seatAI"}}
+                        </button>
+                        <select class="wdm-fk-seat-aiactor" data-ai-actor="{{seat.id}}">
+                            <option value="">{{localize "WITCHER.Farkle.lobby.asActor"}}…</option>
+                            {{#each ../gmActors as |a|}}<option value="{{a.id}}">{{a.name}}</option>{{/each}}
+                        </select>
+                    {{/if}}
+                {{/if}}
+            </div>
+        {{/each}}
+    </section>
+
+    {{#if isGM}}
+        <section class="wdm-fk-lobby-config">
+            <label>{{localize "WITCHER.Farkle.lobby.target"}}
+                <input type="number" min="500" step="500" data-config="target" value="{{config.target}}"/></label>
+            <label>{{localize "WITCHER.Farkle.lobby.ante"}}
+                <input type="number" min="0" step="10" data-config="ante" value="{{config.ante}}"/></label>
+            <label>{{localize "WITCHER.Farkle.lobby.denom"}}
+                <select data-config="denom">
+                    {{#each denoms as |d|}}<option value="{{d.key}}" {{#if d.selected}}selected{{/if}}>{{localize d.label}}</option>{{/each}}
+                </select>
+            </label>
+        </section>
+    {{else}}
+        <section class="wdm-fk-lobby-stake">
+            {{localize "WITCHER.Farkle.lobby.stake"}}: <strong>{{ante}} {{localize (concat "WITCHER.Currency." denom)}}</strong>
+            · {{localize "WITCHER.Farkle.lobby.target"}} {{config.target}}
+        </section>
+    {{/if}}
+
+    {{#if isGM}}
+        <footer class="wdm-fk-lobby-foot">
+            <button type="button" class="wdm-fk-lobby-start" data-action="start">{{localize "WITCHER.Farkle.lobby.start"}}</button>
+            <button type="button" class="wdm-fk-lobby-close" data-action="closeTable">{{localize "WITCHER.Farkle.lobby.endTable"}}</button>
+        </footer>
+    {{/if}}
+
+</div>

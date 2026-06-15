@@ -1,0 +1,199 @@
+{{!-- Ritual item sheet — two-layer (RAW Core p.116-119):
+        DISPLAY  → Witcher 3 in-game tooltip aesthetic (player reads)
+        CONFIG   → editable form (GM / owner with cog toggle)
+      Indigo accent (.is-ritual). Fields are structured for the cast flow:
+      STA + DC are numbers, prep time / duration are {value,unit} enums,
+      tier / school are enums, and components are links to real items.
+      The DC is the hero — rituals stand or fall on the Ritual Crafting check. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-ritual" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure item{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip layout
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">Ritual · {{tierLabel}}{{#if schoolLabel}} · {{schoolLabel}}{{/if}}</div>
+        </div>
+      </header>
+
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value">{{dcLabel}}</div>
+        <div class="wdm-w3-hero-label">DIFFICULTY</div>
+        <div class="wdm-w3-hero-sub">Ritual Crafting check</div>
+      </div>
+
+      <ul class="wdm-w3-stats">
+        <li class="wdm-w3-stat">
+          <span class="val">{{source.staminaCost}}</span>
+          <span class="lbl">Stamina Cost</span>
+        </li>
+        <li class="wdm-w3-stat">
+          <span class="val">{{castingTimeLabel}}</span>
+          <span class="lbl">Preparation</span>
+        </li>
+        {{#if source.range}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{source.range}}</span>
+            <span class="lbl">Range</span>
+          </li>
+        {{/if}}
+        <li class="wdm-w3-stat">
+          <span class="val">{{durationLabel}}</span>
+          <span class="lbl">Duration</span>
+        </li>
+      </ul>
+
+      {{#if source.effect}}
+        <div class="wdm-w3-section-label">Effect</div>
+        <div class="wdm-w3-effects">{{{source.effect}}}</div>
+      {{/if}}
+
+      {{#if componentLinks.length}}
+        <div class="wdm-w3-section-label">Components</div>
+        <ul class="wdm-w3-ingredients">
+          {{#each componentLinks}}
+            <li class="wdm-w3-ingredient" data-component-index="{{this.index}}" data-uuid="{{this.uuid}}" data-action="openComponent">
+              <img src="{{this.img}}" alt="" />
+              <span class="nm">{{this.name}}</span>
+              {{#if (gte this.qty 2)}}<span class="qt">×{{this.qty}}</span>{{/if}}
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — compact tech form.
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Ritual name" />
+      </div>
+
+      <div class="wdm-cfg-section">Casting</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span title="Stamina spent to perform the ritual">STA Cost</span>
+          <input type="number" min="0" name="system.staminaCost" value="{{source.staminaCost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="Ritual Crafting check DC (a default when the DC is variable)">Difficulty (DC)</span>
+          <input type="number" min="0" name="system.difficulty" value="{{source.difficulty}}" />
+        </label>
+        <label class="wdm-cfg-row is-checkbox"><span title="The DC scales with the task — the cast flow prompts for it">Variable DC</span>
+          <input type="checkbox" name="system.variableDC" {{#if source.variableDC}}checked{{/if}} />
+        </label>
+        <label class="wdm-cfg-row"><span>Tier</span>
+          <select name="system.tier">
+            {{#each WITCHER.ritual.tiers}}
+              <option value="{{@key}}" {{#if (eq @key ../source.tier)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>School</span>
+          <select name="system.school">
+            {{#each WITCHER.ritual.schools}}
+              <option value="{{@key}}" {{#if (eq @key ../source.school)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Range</span>
+          <input type="text" name="system.range" value="{{source.range}}" placeholder="Touch, 10m, Sight…" />
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">Preparation Time</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Amount</span>
+          <input type="number" min="0" name="system.castingTime.value" value="{{source.castingTime.value}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Unit</span>
+          <select name="system.castingTime.unit">
+            {{#each WITCHER.ritual.timeUnits}}
+              <option value="{{@key}}" {{#if (eq @key ../source.castingTime.unit)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">Duration</div>
+      <div class="wdm-cfg-grid">
+        {{#unless (or (eq source.duration.unit "instant") (eq source.duration.unit "permanent"))}}
+          <label class="wdm-cfg-row"><span>Amount</span>
+            <input type="number" min="0" name="system.duration.value" value="{{source.duration.value}}" />
+          </label>
+        {{/unless}}
+        <label class="wdm-cfg-row"><span>Unit</span>
+          <select name="system.duration.unit">
+            {{#each WITCHER.ritual.durationUnits}}
+              <option value="{{@key}}" {{#if (eq @key ../source.duration.unit)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Effect</div>
+      <textarea class="wdm-cfg-textarea" name="system.effect" placeholder="Mechanical effect of a successful ritual…">{{source.effect}}</textarea>
+
+      <div class="wdm-cfg-section">Components</div>
+      <div class="wdm-drop-zone is-list" data-component-drop>
+        {{#each componentLinks}}
+          <div class="wdm-link-row" data-component-index="{{this.index}}" data-uuid="{{this.uuid}}">
+            <img src="{{this.img}}" alt="" />
+            <span class="wdm-link-name">{{this.name}}</span>
+            <input type="number" class="wdm-link-qty" data-component-qty min="1" value="{{this.qty}}" title="Quantity" />
+            <button type="button" class="wdm-link-remove" data-action="removeComponent" title="Remove"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        {{/each}}
+        <div class="wdm-drop-hint"><i class="fa-solid fa-plus"></i> Drop any item here as a component</div>
+      </div>
+
+      <div class="wdm-cfg-section">Effects <span class="wdm-cfg-sub">(applied on a successful cast — not the caster)</span></div>
+      <div class="wdm-cfg-effects">
+        {{#if effects.length}}
+          <ul class="wdm-effect-list">
+            {{#each effects}}
+              <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                <div class="wdm-effect-head">
+                  <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                  <span class="wdm-effect-name">{{this.name}}</span>
+                  {{#if this.duration.label}}<span class="wdm-effect-duration">{{this.duration.label}}</span>{{/if}}
+                  <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                    <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                  </a>
+                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                </div>
+              </li>
+            {{/each}}
+          </ul>
+        {{else}}
+          <p class="wdm-empty">No effects configured.</p>
+        {{/if}}
+        <button type="button" class="wdm-add-effect" data-action="createEffect">
+          <i class="fa-solid fa-plus"></i> Add Effect
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</div>

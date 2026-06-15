@@ -1,0 +1,2508 @@
+/* Merchant sheet — GM shop configuration + player buy/sell.
+   Tabs are CSS-driven: [data-active-tab] on the root, [data-tab] on panels. */
+
+.witcher-ttrpg-death-march.merchant .window-content {
+    background: var(--wdm-bg);
+    color: var(--wdm-ink);
+}
+
+.wdm-merchant {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: 100%;
+    font-family: var(--wdm-font-body);
+}
+
+/* ── Tab nav ───────────────────────────────────────────────── */
+.wdm-merchant-tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--wdm-rule-1);
+}
+.wdm-merchant-tabs .wdm-tab {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 6px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--wdm-ink-dim);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.wdm-merchant-tabs .wdm-tab i { opacity: 0.8; }
+.wdm-merchant-tabs .wdm-tab:hover { color: var(--wdm-ink-bright); }
+.wdm-merchant-tabs .wdm-tab.is-active {
+    color: var(--wdm-amber-hi);
+    border-bottom-color: var(--wdm-amber);
+}
+
+/* ── Panels: show only the active tab ──────────────────────── */
+.wdm-merchant-panels { flex: 1 1 auto; overflow-y: auto; padding: 2px; }
+.wdm-merchant .wdm-panel { display: none; flex-direction: column; gap: 12px; }
+.wdm-merchant[data-active-tab="general"]       .wdm-panel[data-tab="general"],
+.wdm-merchant[data-active-tab="pricing"]       .wdm-panel[data-tab="pricing"],
+.wdm-merchant[data-active-tab="inventory"]     .wdm-panel[data-tab="inventory"],
+.wdm-merchant[data-active-tab="relationships"] .wdm-panel[data-tab="relationships"],
+.wdm-merchant[data-active-tab="stocking"]      .wdm-panel[data-tab="stocking"] { display: flex; }
+
+/* ── Forms ─────────────────────────────────────────────────── */
+.wdm-merchant input[type="text"],
+.wdm-merchant input[type="number"],
+.wdm-merchant select,
+.wdm-merchant textarea {
+    background: var(--wdm-bg-deep);
+    border: 1px solid var(--wdm-rule-1);
+    border-radius: var(--wdm-radius-xs);
+    color: var(--wdm-ink-bright);
+    padding: 4px 6px;
+}
+.wdm-merchant textarea { min-height: 90px; resize: vertical; }
+
+/* ── Negotiation dialogs (shared by net.mjs) ───────────────── */
+.wdm-neg { display: flex; flex-direction: column; gap: 10px; }
+.wdm-neg-header { display: flex; align-items: center; gap: 10px; }
+.wdm-neg-header img { width: 40px; height: 40px; object-fit: cover; border-radius: var(--wdm-radius-xs); }
+.wdm-neg-item { font-family: var(--wdm-font-display); color: var(--wdm-ink-bright); }
+.wdm-neg-meta { font-size: 0.78rem; color: var(--wdm-ink-faint); }
+.wdm-neg-warn { color: var(--wdm-red-bright); font-size: 0.82rem; }
+.wdm-neg-history { border-top: 1px solid var(--wdm-rule-1); padding-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+.wdm-neg-row { font-size: 0.82rem; color: var(--wdm-ink-dim); }
+.wdm-neg-from { color: var(--wdm-gilt-hi); }
+.wdm-neg-round { color: var(--wdm-ink-faint); font-size: 0.72rem; }
+
+/* ── Player buy/sell sheet (ported from witcher-merchant-system) ───── */
+.witcher-ttrpg-death-march.merchant-buy .window-content {
+    padding: 0;
+    background: linear-gradient(135deg, #1a1208, #2a1d10);
+    color: #ddd;
+}
+
+.buy-sheet-root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.buy-sheet-error {
+    padding: 2rem;
+    text-align: center;
+    color: #e57373;
+}
+
+/* Buy sheet header */
+.bs-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.8rem 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 2px solid rgba(184, 134, 11, 0.3);
+}
+.bs-portrait {
+    width: 64px;
+    height: 64px;
+    border-radius: 4px;
+    border: 2px solid rgba(184, 134, 11, 0.5);
+    object-fit: cover;
+}
+.bs-title-block { flex: 1; min-width: 0; }
+.bs-shop-name { font-size: 1.15rem; font-weight: bold; color: #d4a847; }
+.bs-merchant-name { font-size: 0.8rem; opacity: 0.6; font-style: italic; }
+.bs-personality { font-size: 0.75rem; opacity: 0.55; margin-top: 0.2rem; text-transform: capitalize; }
+.bs-buyer-info { text-align: right; }
+.bs-buyer-label { font-size: 0.7rem; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.5px; }
+.bs-buyer-name { font-size: 0.85rem; font-weight: bold; color: #aed581; }
+.bs-buyer-warn { font-size: 0.78rem; color: #ffb74d; }
+
+/* Tabs */
+.bs-tabs {
+    display: flex;
+    background: rgba(0, 0, 0, 0.4);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.bs-tab {
+    flex: 1;
+    padding: 0.6rem;
+    background: transparent;
+    border: none;
+    color: #999;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 0.85rem;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+}
+.bs-tab:hover { color: #ddd; background: rgba(255, 255, 255, 0.04); }
+.bs-tab.active { color: #d4a847; border-bottom-color: #d4a847; background: rgba(184, 134, 11, 0.08); }
+.bs-tab-refresh {
+    padding: 0.6rem 0.9rem;
+    background: transparent;
+    border: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    color: #888;
+    cursor: pointer;
+}
+.bs-tab-refresh:hover { color: #d4a847; }
+
+/* Content area */
+.bs-content { flex: 1; overflow-y: auto; padding: 0.6rem; }
+
+/* Item groups (collapsible by item type) */
+.bs-group-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.bs-group {
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.bs-group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.7rem;
+    background: rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    user-select: none;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.bs-group-header:hover { background: rgba(184, 134, 11, 0.12); }
+.bs-group-chevron { transition: transform 0.18s ease; color: #d4a847; font-size: 0.8rem; }
+.bs-group.is-collapsed .bs-group-chevron { transform: rotate(-90deg); }
+.bs-group-label { flex: 1; }
+.bs-group-count { opacity: 0.6; font-weight: 400; }
+.bs-group.is-collapsed .bs-item-list { display: none; }
+.bs-group .bs-item-list { padding: 0.4rem; }
+
+/* Item list */
+.bs-item-list { display: flex; flex-direction: column; gap: 0.4rem; }
+
+/* Sell-tab specifics */
+.bs-sell-blurb { margin: 0 0 0.5rem 0; font-size: 0.85rem; opacity: 0.8; line-height: 1.4; }
+.bs-item-basecost { opacity: 0.6; font-size: 0.78rem; font-style: italic; }
+.bs-sell-hint { font-size: 0.7rem; opacity: 0.55; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.1rem; }
+
+.bs-item {
+    display: flex;
+    flex-direction: column;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 4px;
+    transition: background 0.15s, border-color 0.15s;
+}
+.bs-item-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem; }
+.bs-item:hover { background: rgba(255, 255, 255, 0.04); border-color: rgba(184, 134, 11, 0.3); }
+.bs-item.is-pinned { border-left: 3px solid #d4a847; }
+
+/* The clickable name/img area that toggles description expansion */
+.bs-item-clickable { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0.6rem; cursor: pointer; user-select: none; }
+.bs-item-chevron {
+    font-size: 0.7rem;
+    color: #d4a847;
+    width: 12px;
+    text-align: center;
+    transition: transform 0.18s ease;
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+.bs-item.is-expanded .bs-item-chevron { transform: rotate(90deg); }
+.bs-item-clickable:hover .bs-item-chevron { opacity: 1; }
+
+.bs-item-description {
+    padding: 0.5rem 0.7rem 0.6rem 2.6rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.78);
+    display: none;
+}
+.bs-item.is-expanded .bs-item-description { display: block; }
+.bs-item-description :first-child { margin-top: 0; }
+.bs-item-description :last-child { margin-bottom: 0; }
+
+/* Inventory-compliant item slot — square box, availability wash, 92% contain
+   icon. Mirrors the inventory .wou-slot recipe (inventory.css) using the shared
+   --wdm tokens so merchant thumbnails read identically to the inventory grid.
+   Used by the buy/sell list thumbnails and the GM inventory table image cell. */
+.bs-item-slot {
+    position: relative;
+    width: 40px; height: 40px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(140, 133, 121, 0.22);
+    border-radius: var(--wdm-radius-sm, 3px);
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 50% 25%, rgba(184, 148, 100, 0.04), transparent 65%),
+        linear-gradient(180deg, var(--wdm-bg-lifted, #14110d), var(--wdm-bg-deep, #050402));
+}
+.bs-item-slot::before {
+    content: ''; position: absolute; inset: 2px;
+    border: 1px solid rgba(140, 133, 121, 0.08);
+    pointer-events: none;
+}
+.bs-item-slot::after {
+    content: ''; position: absolute; inset: 0;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.55);
+    pointer-events: none;
+}
+.bs-item-slot img {
+    width: 92%; max-height: 92%;
+    object-fit: contain;
+    border-radius: 0;
+    position: relative; z-index: 1;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.85));
+}
+/* Availability tiers — mirror of .wou-slot[data-rarity] using --wdm-rarity-*.
+   "everywhere"/"na" carry no tier and keep the plain slot background. */
+.bs-item-slot[data-rarity="common"]  { --wdm-rar: var(--wdm-rarity-common); }
+.bs-item-slot[data-rarity="poor"]    { --wdm-rar: var(--wdm-rarity-poor); }
+.bs-item-slot[data-rarity="rare"]    { --wdm-rar: var(--wdm-rarity-rare); }
+.bs-item-slot[data-rarity="witcher"] { --wdm-rar: var(--wdm-rarity-witcher); }
+.bs-item-slot:is([data-rarity="common"], [data-rarity="poor"], [data-rarity="rare"], [data-rarity="witcher"]) {
+    background:
+        var(--wdm-rarity-tex),
+        linear-gradient(180deg,
+            transparent 30%,
+            color-mix(in srgb, var(--wdm-rar) 30%, transparent) 62%,
+            color-mix(in srgb, var(--wdm-rar) 85%, transparent) 100%),
+        linear-gradient(180deg, var(--wdm-bg-lifted, #14110d), var(--wdm-bg-deep, #050402));
+    background-blend-mode: overlay, normal, normal;
+}
+.bs-item-body { flex: 1; min-width: 0; }
+.bs-item-name { font-weight: bold; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bs-item-meta { display: flex; gap: 0.6rem; font-size: 0.72rem; opacity: 0.65; margin-top: 0.15rem; align-items: center; }
+
+.bs-rarity {
+    padding: 0.05rem 0.4rem;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.bs-rarity[class*="rarity-"] {
+    --wdm-rar: var(--wdm-ink, #b0a994);
+    background: color-mix(in srgb, var(--wdm-rar) 20%, transparent);
+    color: color-mix(in srgb, var(--wdm-rar) 80%, var(--wdm-ink-hi, #cac4b0));
+}
+.bs-rarity.rarity-common  { --wdm-rar: var(--wdm-rarity-common); }
+.bs-rarity.rarity-poor    { --wdm-rar: var(--wdm-rarity-poor); }
+.bs-rarity.rarity-rare    { --wdm-rar: var(--wdm-rarity-rare); }
+.bs-rarity.rarity-witcher { --wdm-rar: var(--wdm-rarity-witcher); }
+
+.bs-item-price { text-align: right; min-width: 80px; }
+.bs-price-display { font-size: 1.05rem; font-weight: bold; }
+.bs-price-amount { color: #d4a847; }
+.bs-price-currency { font-size: 0.72rem; opacity: 0.6; font-weight: normal; margin-left: 0.2rem; }
+.bs-fair-price { font-size: 0.72rem; color: #aed581; margin-top: 0.15rem; font-style: italic; }
+
+.bs-item-actions { display: flex; gap: 0.3rem; flex-shrink: 0; }
+.bs-action-btn {
+    padding: 0.35rem 0.6rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ddd;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    transition: all 0.15s;
+}
+.bs-action-btn:hover { background: rgba(255, 255, 255, 0.15); }
+.bs-action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.bs-action-btn.buy {
+    background: rgba(184, 134, 11, 0.25);
+    border-color: rgba(184, 134, 11, 0.5);
+    color: #d4a847;
+    font-weight: bold;
+}
+.bs-action-btn.buy:hover { background: rgba(184, 134, 11, 0.4); }
+.bs-action-btn.reveal { color: #aed581; }
+.bs-action-btn.pin { color: #888; }
+.bs-action-btn.pin.active { background: rgba(212, 168, 71, 0.25); border-color: rgba(212, 168, 71, 0.6); color: #d4a847; }
+
+.bs-empty { text-align: center; padding: 3rem 1rem; opacity: 0.4; }
+.bs-empty i { font-size: 3rem; display: block; margin-bottom: 0.5rem; }
+
+/* ── Scene card interaction overlay ────────────────────────── */
+/* Host clips overlays to the canvas viewport; pointer-events pass through
+   except on the actual hit areas (drag strip, Browse button, GM controls). */
+#wdm-merchant-cards-host {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 60;
+}
+.wdm-card-overlay {
+    position: absolute;
+    transform-origin: top left;
+    pointer-events: none;
+}
+/* Drag strip covers the portrait region (framed plate: 8px..220px in PIXI coords). */
+.wdm-card-drag {
+    position: absolute; left: 0; top: 0; right: 0;
+    height: calc(216px * var(--card-scale, 1));
+    pointer-events: auto;
+    cursor: move;
+}
+.wdm-card-overlay.is-dragging .wdm-card-drag { cursor: grabbing; }
+
+/* Browse — discreet transparent hit area over the PIXI browse band (BROWSE_Y=220,
+   band height 22). The visible "BROWSE SHOP" band/text is PIXI; this is the target. */
+.wdm-card-browse {
+    position: absolute; left: 50%;
+    top: calc(218px * var(--card-scale, 1));
+    transform: translateX(-50%);
+    width: calc(160px * var(--card-scale, 1));
+    height: calc(28px * var(--card-scale, 1));
+    background: transparent;
+    border: none;
+    color: transparent;
+    font-size: 0;
+    padding: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background 0.15s;
+}
+.wdm-card-browse:hover {
+    background: rgba(184, 148, 100, 0.18);
+    border-radius: calc(3px * var(--card-scale, 1));
+}
+
+/* GM controls — stacked, revealed on hover. */
+.wdm-card-gm {
+    position: absolute;
+    top: calc(8px * var(--card-scale, 1));
+    right: calc(8px * var(--card-scale, 1));
+    display: flex; flex-direction: column;
+    gap: calc(2px * var(--card-scale, 1));
+    opacity: 0;
+    transition: opacity 0.15s;
+    pointer-events: auto;
+}
+.wdm-card-overlay:hover .wdm-card-gm { opacity: 1; }
+.wdm-card-gm-btn {
+    width: calc(22px * var(--card-scale, 1));
+    height: calc(22px * var(--card-scale, 1));
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(5, 4, 2, 0.8);
+    border: 1px solid var(--wdm-amber-dim, #6e5224);
+    border-radius: var(--wdm-radius-xs, 2px);
+    color: var(--wdm-ink, #b0a994);
+    font-size: calc(0.9rem * var(--card-scale, 1));
+    line-height: 1; padding: 0; cursor: pointer;
+    transition: background var(--wdm-dur-fast, 0.12s), color var(--wdm-dur-fast, 0.12s);
+}
+.wdm-card-gm-btn:hover {
+    background: rgba(168, 132, 80, 0.85);
+    border-color: var(--wdm-amber-hi, #b89464);
+    color: var(--wdm-ink-bright, #e0dac4);
+}
+
+/* ════ GM merchant-sheet (faithful port of witcher-merchant-system) ════ */
+
+:root {
+  /* Vladimir-aligned palette: deep void backgrounds, antique amber accents */
+  --merchant-bg:      rgba(10, 9, 8, 0.97);
+  --merchant-border:  rgba(110, 82, 36, 0.75);
+  --merchant-text:    #b6afa1;
+  --merchant-accent:  #b89464;
+  --merchant-hover:   rgba(184, 148, 100, 0.30);
+
+  /* Extended Vladimir tokens used by the theme overlay at the bottom */
+  --v-void:        #050402;
+  --v-bg:          #0a0908;
+  --v-bg-lifted:   #14110d;
+  --v-ink-faint:   #5e574b;
+  --v-ink-dim:     #8c8579;
+  --v-ink:         #b6afa1;
+  --v-ink-hi:      #d4cdbf;
+  --v-ink-bright:  #ece4d4;
+  --v-amber:       #a88450;
+  --v-amber-hi:    #b89464;
+  --v-amber-bright:#c8a878;
+  --v-amber-dim:   #6e5224;
+  --v-red:         #8c3c3c;
+  --v-red-bright:  #a25050;
+  --v-poison:      #6e8a4a;
+  --v-frost:       #6a8aa2;
+  --v-violet:      #8870a8;
+}
+
+/* ==================== COMPACT HEADER ==================== */
+
+.merchant-sheet .merchant-header {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid var(--merchant-border, #555);
+  align-items: flex-start;
+}
+
+.merchant-sheet .header-left .profile-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 4px;
+  border: 2px solid var(--merchant-accent, #b8860b);
+  object-fit: cover;
+  cursor: pointer;
+}
+
+.merchant-sheet .header-center {
+  flex: 1;
+  min-width: 0;
+}
+
+.merchant-sheet .merchant-name-input {
+  font-size: 1.3rem;
+  font-weight: bold;
+  border: none;
+  background: transparent;
+  color: var(--merchant-accent, #b8860b);
+  width: 100%;
+  padding: 0;
+  margin: 0 0 0.4rem 0;
+  line-height: 1.2;
+}
+
+.merchant-sheet .header-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.35rem 0.75rem;
+}
+
+.merchant-sheet .header-fields .quirk-field {
+  grid-column: 1 / -1;
+}
+
+.merchant-sheet .header-fields .field {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.merchant-sheet .header-fields label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.6;
+  white-space: nowrap;
+  min-width: fit-content;
+}
+
+.merchant-sheet .header-fields input,
+.merchant-sheet .header-fields select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.85rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: inherit;
+  border-radius: 2px;
+}
+
+/* ==================== TAB CONTENT SHARED ==================== */
+
+.merchant-tab-content {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.merchant-tab-content h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.35rem;
+}
+
+.merchant-tab-content h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.9rem;
+}
+
+/* ==================== GENERAL TAB ==================== */
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+.summary-card {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 0.6rem;
+  text-align: center;
+}
+
+.card-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.5;
+  margin-bottom: 0.25rem;
+}
+
+.card-value {
+  font-size: 1.15rem;
+  font-weight: bold;
+  color: var(--merchant-accent, #b8860b);
+}
+
+.card-sub {
+  font-size: 0.75rem;
+  opacity: 0.5;
+  margin-top: 0.15rem;
+}
+
+.card-sub.quirk {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.coin-input {
+  width: 80px;
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: bold;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--merchant-accent, #b8860b);
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+}
+
+.description-section label,
+.specializations-display label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.5;
+  margin-bottom: 0.3rem;
+}
+
+.description-section textarea {
+  width: 100%;
+  min-height: 80px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: inherit;
+  padding: 0.5rem;
+  border-radius: 3px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.merchant-scene-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.6rem;
+  border-left: 2px solid var(--wdm-amber-dim, rgba(184, 148, 100, 0.4));
+  background: rgba(184, 148, 100, 0.05);
+  font-size: 0.78rem;
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.merchant-scene-hint i {
+  opacity: 0.85;
+}
+
+.spec-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.spec-badge {
+  background: rgba(184, 134, 11, 0.2);
+  border: 1px solid var(--merchant-accent, #b8860b);
+  color: var(--merchant-accent, #b8860b);
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+}
+
+/* ==================== PRICING TAB ==================== */
+
+.pricing-block {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 0.75rem;
+}
+
+.pricing-hint {
+  font-size: 0.8rem;
+  opacity: 0.5;
+  margin: 0 0 0.75rem 0;
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.slider-row input[type='range'] {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  outline: none;
+}
+
+.slider-row input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--merchant-accent, #b8860b);
+  cursor: pointer;
+}
+
+.slider-readout {
+  min-width: 65px;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: bold;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.markup-positive { color: #e57373; }
+.markup-negative { color: #81c784; }
+.markup-zero { color: rgba(255, 255, 255, 0.6); }
+
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  opacity: 0.35;
+  margin-top: 0.2rem;
+}
+
+.bulk-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.bulk-field label {
+  display: block;
+  font-size: 0.8rem;
+  margin-bottom: 0.3rem;
+  opacity: 0.7;
+}
+
+.threshold-input {
+  width: 60px;
+  padding: 0.3rem 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: inherit;
+  border-radius: 3px;
+  text-align: center;
+  font-size: 1rem;
+}
+
+.bulk-example {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.pricing-note {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-size: 0.8rem;
+  opacity: 0.5;
+}
+
+.pricing-note i {
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+
+/* ==================== INVENTORY TAB ==================== */
+
+.merchant-inventory {
+  gap: 0.5rem;
+}
+
+.inventory-topbar {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.inv-stats {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.inv-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.inv-stat i {
+  opacity: 0.4;
+  font-size: 0.75rem;
+}
+
+.coin-display {
+  font-weight: bold;
+  color: var(--merchant-accent, #b8860b);
+}
+
+.currency-label {
+  opacity: 0.5;
+  font-size: 0.8rem;
+}
+
+.inv-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.inv-btn {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.78rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: inherit;
+  border-radius: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: all 0.15s;
+}
+
+.inv-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.inv-btn-wip {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.inv-btn-wip:hover {
+  opacity: 0.7;
+}
+
+.inv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.inv-table thead th {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.4;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  user-select: none;
+}
+
+.inv-table thead th.sortable {
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.inv-table thead th.sortable:hover {
+  opacity: 0.8;
+  color: var(--merchant-accent, #b8860b);
+}
+
+.inv-table thead th.sortable i {
+  margin-left: 0.2rem;
+  font-size: 0.65rem;
+}
+
+.inv-table .col-expand { width: 28px; text-align: center; }
+.inv-table .col-img { width: 40px; }
+.inv-table .col-type { width: 70px; }
+.inv-table .col-price { width: 55px; text-align: right; }
+.inv-table .col-qty { width: 50px; text-align: center; }
+
+.inv-table .qty-edit {
+  width: 42px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  color: inherit;
+  padding: 0.15rem 0.2rem;
+  font-size: 0.82rem;
+  -moz-appearance: textfield;
+}
+.inv-table .qty-edit::-webkit-inner-spin-button,
+.inv-table .qty-edit::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.inv-table .qty-edit:focus {
+  border-color: var(--merchant-accent, #b8860b);
+  outline: none;
+}
+.inv-table .col-weight { width: 45px; text-align: right; }
+.inv-table .col-actions { width: 30px; text-align: center; }
+
+.inv-row td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: middle;
+}
+
+.inv-row:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.inv-row .col-img .bs-item-slot {
+  width: 34px;
+  height: 34px;
+}
+
+.inv-row .col-expand a,
+.inv-row .col-actions a {
+  cursor: pointer;
+  opacity: 0.3;
+  transition: opacity 0.15s;
+}
+
+.inv-row:hover .col-expand a,
+.inv-row:hover .col-actions a {
+  opacity: 0.7;
+}
+
+.inv-row .col-expand a:hover,
+.inv-row .col-actions a:hover {
+  opacity: 1;
+  color: var(--merchant-accent, #b8860b);
+}
+
+.type-badge {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.5;
+}
+
+.inv-row-detail td {
+  padding: 0.4rem 0.5rem 0.6rem 4.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.item-description {
+  font-size: 0.82rem;
+  opacity: 0.7;
+  line-height: 1.5;
+}
+
+.item-description p {
+  margin: 0 0 0.3rem 0;
+}
+
+.item-description p:last-child {
+  margin-bottom: 0;
+}
+
+.empty-inv {
+  text-align: center;
+  padding: 3rem 1rem;
+  opacity: 0.4;
+}
+
+.empty-inv i {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.empty-inv .hint {
+  font-size: 0.8rem;
+  margin-top: 0.3rem;
+}
+
+/* ==================== RELATIONSHIPS & STOCKING ==================== */
+
+.theorycraft-banner {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  background: rgba(184, 134, 11, 0.08);
+  border: 1px solid rgba(184, 134, 11, 0.2);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.theorycraft-banner i {
+  color: var(--merchant-accent, #b8860b);
+  flex-shrink: 0;
+}
+
+.vision-block {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  padding: 0.65rem 0.75rem;
+}
+
+.vision-block h4 i {
+  margin-right: 0.35rem;
+  opacity: 0.5;
+}
+
+.vision-block p {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.6;
+  line-height: 1.5;
+}
+
+.existing-relations {
+  margin-top: 0.5rem;
+}
+
+.relation-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+  margin-bottom: 0.3rem;
+}
+
+.relation-name {
+  flex: 1;
+  font-weight: bold;
+}
+
+.relation-score {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: var(--merchant-accent, #b8860b);
+}
+
+.relation-label {
+  font-size: 0.8rem;
+  opacity: 0.5;
+  min-width: 90px;
+  text-align: right;
+}
+
+/* ==================== COIN STAT WITH BUTTONS ==================== */
+
+.coin-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.coin-buttons {
+  display: flex;
+  gap: 0.2rem;
+  margin-left: 0.3rem;
+}
+
+.coin-btn {
+  padding: 0.15rem 0.35rem !important;
+  font-size: 0.7rem !important;
+}
+
+.coin-readonly {
+  user-select: none;
+  cursor: default;
+}
+
+.inv-btn.primary {
+  background: rgba(184, 134, 11, 0.25);
+  border-color: var(--merchant-accent, #b8860b);
+  color: var(--merchant-accent, #b8860b);
+  font-weight: bold;
+}
+
+.inv-btn.primary:hover {
+  background: rgba(184, 134, 11, 0.4);
+}
+
+.inv-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.inv-btn.small {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* ==================== PRECISION SLIDER STYLING ==================== */
+
+.precision-slider {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.08) 100%);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.precision-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--merchant-accent, #b8860b);
+  border: 2px solid rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.precision-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.precision-slider::-webkit-slider-thumb:active {
+  transform: scale(1.3);
+}
+
+.precision-slider:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ==================== RELATIONSHIPS TAB ==================== */
+
+.relations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.relation-card {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.relation-card.relation-good { border-left-color: #81c784; }
+.relation-card.relation-okay { border-left-color: #aed581; }
+.relation-card.relation-neutral { border-left-color: #ccc; }
+.relation-card.relation-bad { border-left-color: #ffb74d; }
+.relation-card.relation-terrible { border-left-color: #e57373; }
+
+.relation-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.relation-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.relation-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.relation-name {
+  font-weight: bold;
+  font-size: 0.95rem;
+}
+
+.relation-status {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.78rem;
+  opacity: 0.7;
+  margin-top: 0.1rem;
+}
+
+.relation-label {
+  font-weight: bold;
+}
+
+.relation-score {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.05rem 0.4rem;
+  border-radius: 10px;
+  color: var(--merchant-accent, #b8860b);
+  font-weight: bold;
+}
+
+.relation-modifier {
+  margin-left: auto;
+  font-style: italic;
+}
+
+.relation-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.relation-slider {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, #e57373 0%, #ccc 50%, #81c784 100%);
+  border-radius: 3px;
+  outline: none;
+}
+
+.relation-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  border: 2px solid var(--merchant-accent, #b8860b);
+  cursor: pointer;
+}
+
+.relation-buttons {
+  display: flex;
+  gap: 0.3rem;
+  justify-content: center;
+}
+
+.relation-btn {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: inherit;
+  border-radius: 3px;
+  cursor: pointer;
+  min-width: 32px;
+}
+
+.relation-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.relation-btn.reset {
+  background: rgba(184, 134, 11, 0.1);
+  border-color: rgba(184, 134, 11, 0.3);
+}
+
+.relation-notes {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: inherit;
+  padding: 0.4rem;
+  border-radius: 3px;
+  resize: vertical;
+  min-height: 40px;
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
+/* ==================== STOCKING TAB ==================== */
+
+.stocking-content {
+  gap: 0.75rem;
+}
+
+.stocking-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(184, 134, 11, 0.08);
+  border: 1px solid rgba(184, 134, 11, 0.25);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.stocking-summary {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.stocking-summary i {
+  color: var(--merchant-accent, #b8860b);
+}
+
+.stocking-summary .separator {
+  opacity: 0.4;
+}
+
+.stocking-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.stocking-section {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  padding: 0.75rem;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.section-head h3 {
+  margin: 0;
+  border: none;
+  padding: 0;
+}
+
+.empty-sub {
+  text-align: center;
+  padding: 1rem;
+  opacity: 0.5;
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+.hint-text {
+  font-size: 0.8rem;
+  opacity: 0.55;
+  margin: 0 0 0.5rem 0;
+}
+
+.hint-inline {
+  font-size: 0.75rem;
+  opacity: 0.5;
+  font-style: italic;
+  margin-left: 0.5rem;
+}
+
+/* Sources */
+
+.sources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.source-row {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 3px solid rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  padding: 0.5rem 0.6rem;
+}
+
+.source-mode-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.item-pool-info {
+  margin-top: 0.5rem;
+}
+
+.item-pool-status {
+  font-size: 0.85rem;
+  margin-bottom: 0.4rem;
+}
+
+.item-pool-status i {
+  margin-right: 0.3rem;
+  opacity: 0.6;
+}
+
+.item-pool-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.compendium-sources-block {
+  margin-top: 0;
+}
+
+.source-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.3rem;
+}
+
+.source-name {
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.source-name i {
+  margin-right: 0.3rem;
+  opacity: 0.6;
+}
+
+.source-folder {
+  opacity: 0.5;
+  font-weight: normal;
+  font-size: 0.78rem;
+}
+
+.source-controls {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.icon-btn {
+  padding: 0.2rem 0.4rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: inherit;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.icon-btn.delete:hover {
+  background: rgba(229, 115, 115, 0.2);
+  color: #e57373;
+}
+
+.source-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.source-readout {
+  min-width: 50px;
+  text-align: right;
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: var(--merchant-accent, #b8860b);
+}
+
+.pool-status {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  opacity: 0.6;
+  text-align: center;
+}
+
+/* Quantity */
+
+.qty-mode-toggle {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.qty-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+  flex-wrap: wrap;
+}
+
+.qty-input-row label {
+  font-size: 0.85rem;
+}
+
+.qty-input-row input[type='number'] {
+  width: 70px;
+  padding: 0.25rem 0.4rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: inherit;
+  border-radius: 3px;
+  text-align: center;
+}
+
+.subdivider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 0.6rem 0;
+}
+
+.inline-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.stack-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  padding-left: 1rem;
+}
+
+.stack-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.stack-field label {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.stack-field input[type='number'] {
+  width: 60px;
+  padding: 0.2rem 0.4rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: inherit;
+  border-radius: 3px;
+}
+
+/* Rarity */
+
+.rarity-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.rarity-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+
+.rarity-toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.rarity-badge {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rarity-badge.everywhere { background: rgba(150, 150, 150, 0.2); color: #aaa; }
+.rarity-badge.common { background: rgba(129, 199, 132, 0.2); color: #81c784; }
+.rarity-badge.poor { background: rgba(255, 183, 77, 0.2); color: #ffb74d; }
+.rarity-badge.rare { background: rgba(100, 181, 246, 0.2); color: #64b5f6; }
+.rarity-badge.witcher { background: rgba(186, 104, 200, 0.2); color: #ba68c8; }
+
+.rarity-weights {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  padding-left: 1rem;
+}
+
+.rarity-weight-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rarity-weight-row .rarity-badge {
+  min-width: 80px;
+  text-align: center;
+}
+
+/* Presets */
+
+.presets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.preset-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+}
+
+.preset-info {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.preset-info i {
+  color: var(--merchant-accent, #b8860b);
+  opacity: 0.7;
+}
+
+.preset-name {
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.preset-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+/* ==================== ABSOLUTE-POSITIONED MARKUP LABELS ==================== */
+
+.markup-labels {
+  position: relative;
+  height: 16px;
+  margin-top: 0.3rem;
+}
+
+.markup-labels span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  opacity: 0.35;
+  white-space: nowrap;
+}
+
+.markup-labels span:first-child {
+  transform: translateX(0);
+}
+
+.markup-labels span:last-child {
+  transform: translateX(-100%);
+}
+
+.slider-numeric {
+  width: 50px;
+  padding: 0.2rem 0.3rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: inherit;
+  border-radius: 3px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.stack-explanation {
+  background: rgba(184, 134, 11, 0.06);
+  border: 1px solid rgba(184, 134, 11, 0.2);
+  border-radius: 3px;
+  padding: 0.6rem 0.75rem;
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.stack-explanation p {
+  margin: 0 0 0.4rem 0;
+  opacity: 0.85;
+}
+
+.stack-explanation p:last-child {
+  margin-bottom: 0;
+}
+
+.stack-explanation strong {
+  color: var(--merchant-accent, #b8860b);
+}
+
+.stack-explanation em {
+  font-style: italic;
+  opacity: 0.9;
+}
+
+.section-sub {
+  font-size: 0.7rem;
+  font-weight: normal;
+  opacity: 0.5;
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 0.4rem;
+}
+
+.preset-author {
+  font-size: 0.7rem;
+  opacity: 0.4;
+  margin-left: 0.4rem;
+  font-style: italic;
+}
+
+/* Override flex layout for absolute-positioned markup labels */
+.slider-labels.markup-labels {
+  display: block !important;
+  position: relative;
+  height: 16px;
+  margin-top: 0.3rem;
+}
+
+.slider-labels.markup-labels span {
+  position: absolute;
+  font-size: 0.7rem;
+  opacity: 0.35;
+  white-space: nowrap;
+}
+
+.source-filters {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin: 0.3rem 0;
+}
+
+.filter-badge {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.filter-badge.include {
+  background: rgba(129, 199, 132, 0.15);
+  color: #81c784;
+  border: 1px solid rgba(129, 199, 132, 0.3);
+}
+
+.filter-badge.exclude {
+  background: rgba(229, 115, 115, 0.15);
+  color: #e57373;
+  border: 1px solid rgba(229, 115, 115, 0.3);
+}
+
+.dialog-hint {
+  font-size: 0.75rem;
+  opacity: 0.5;
+  margin: 0.2rem 0 0 0;
+  font-style: italic;
+}
+
+.source-dialog .form-group {
+  margin-bottom: 0.6rem;
+}
+
+.source-dialog label {
+  display: block;
+  font-size: 0.8rem;
+  margin-bottom: 0.2rem;
+  opacity: 0.8;
+}
+
+.source-dialog select,
+.source-dialog input[type='text'] {
+  width: 100%;
+  padding: 0.25rem 0.4rem;
+}
+
+/* ==================== PER-ITEM MARKUP DISPLAY ==================== */
+
+.price-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.05rem;
+  line-height: 1.1;
+}
+
+.base-price-strike {
+  font-size: 0.7rem;
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.effective-price {
+  color: var(--merchant-accent, #b8860b);
+  font-weight: bold;
+}
+
+.item-markup-pct {
+  font-size: 0.65rem;
+  font-weight: bold;
+  padding: 0 0.3rem;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.item-markup-pct.up {
+  background: rgba(229, 115, 115, 0.2);
+  color: #e57373;
+}
+
+.item-markup-pct.down {
+  background: rgba(129, 199, 132, 0.2);
+  color: #81c784;
+}
+
+.col-actions {
+  width: 50px !important;
+  text-align: right !important;
+}
+
+.col-actions a {
+  margin-left: 0.4rem;
+}
+
+.markup-dialog .form-group {
+  margin: 0.4rem 0;
+}
+
+.markup-dialog label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.3rem;
+}
+
+/* ==================== FOLDER CHECKBOX TREE ==================== */
+
+.folder-picker {
+  max-height: 250px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  padding: 0.3rem;
+}
+
+.folder-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.folder-row {
+  padding: 0.15rem 0.3rem;
+  border-radius: 2px;
+}
+
+.folder-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.folder-row label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.folder-row label i {
+  opacity: 0.4;
+  font-size: 0.75rem;
+}
+
+.folder-row.folder-all {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.3rem;
+  margin-bottom: 0.2rem;
+}
+
+.folder-row.folder-all em {
+  opacity: 0.6;
+}
+
+.folder-empty {
+  padding: 0.5rem;
+  text-align: center;
+  opacity: 0.4;
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+/* ==================== FOLDER CHIPS ON SOURCE ROW ==================== */
+
+.source-folders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.3rem 0;
+}
+
+.folder-chip {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  background: rgba(100, 181, 246, 0.12);
+  color: #90caf9;
+  border: 1px solid rgba(100, 181, 246, 0.25);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.folder-chip i {
+  opacity: 0.7;
+  font-size: 0.7rem;
+}
+
+/* ============================================================================
+   VLADIMIR THEME OVERLAY
+   ----------------------------------------------------------------------------
+   Visual-only layer applied on top of the working layout above. Touches:
+   colors, borders, typography, shadows, decorative pseudo-elements.
+   Deliberately does NOT touch: display, flex/grid, width/height,
+   padding/margin/positioning — that's the layout layer above.
+   ============================================================================ */
+
+/* Body backdrop + window chrome -------------------------------------------- */
+.witcher-ttrpg-death-march.merchant,
+.witcher-ttrpg-death-march.merchant,
+.merchant-sheet {
+  font-family: 'PF DIN Text Cond Pro', 'Barlow Condensed', 'Trebuchet MS', sans-serif;
+  color: var(--v-ink);
+}
+.witcher-ttrpg-death-march.merchant .window-content,
+.witcher-ttrpg-death-march.merchant .window-content {
+  background:
+    radial-gradient(ellipse 900px 600px at 50% 50%, rgba(26,22,18,0.55), transparent 70%),
+    radial-gradient(ellipse 1400px 900px at 50% 50%, transparent 40%, rgba(0,0,0,0.85) 92%),
+    var(--v-bg);
+  border: 1px solid var(--v-amber-dim);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.85),
+              inset 0 1px 0 rgba(184,148,100,0.08);
+  position: relative;
+}
+.witcher-ttrpg-death-march.merchant .window-content::before,
+.witcher-ttrpg-death-march.merchant .window-content::after,
+.witcher-ttrpg-death-march.merchant .window-content::before,
+.witcher-ttrpg-death-march.merchant .window-content::after {
+  content: ''; position: absolute; pointer-events: none;
+  font-family: 'Noto Sans Runic', serif; color: var(--v-amber-dim); opacity: 0.7;
+  font-size: 14px; letter-spacing: 0.6em;
+}
+.witcher-ttrpg-death-march.merchant .window-content::before,
+.witcher-ttrpg-death-march.merchant .window-content::before {
+  content: 'ᚦ ᚷ'; top: 6px; left: 12px;
+}
+.witcher-ttrpg-death-march.merchant .window-content::after,
+.witcher-ttrpg-death-march.merchant .window-content::after {
+  content: 'ᛗ ᚹ'; bottom: 6px; right: 12px;
+}
+.witcher-ttrpg-death-march.merchant .window-header,
+.witcher-ttrpg-death-march.merchant .window-header {
+  background: transparent;
+  border-bottom: 1px solid rgba(110, 82, 36, 0.45);
+}
+.witcher-ttrpg-death-march.merchant .window-header .window-title,
+.witcher-ttrpg-death-march.merchant .window-header .window-title {
+  font-weight: 700; font-size: 12px;
+  letter-spacing: 0.4em; text-transform: uppercase;
+  color: var(--v-amber-hi);
+}
+
+/* Scrollbars */
+.merchant-sheet *::-webkit-scrollbar { width: 6px; height: 6px; }
+.merchant-sheet *::-webkit-scrollbar-thumb { background: var(--v-amber-dim); }
+.merchant-sheet *::-webkit-scrollbar-track { background: var(--v-void); }
+.merchant-sheet * { scrollbar-width: thin; scrollbar-color: var(--v-amber-dim) var(--v-void); }
+
+/* Header --------------------------------------------------------------------*/
+.merchant-sheet .merchant-header {
+  border-bottom: 1px dashed rgba(110, 82, 36, 0.45);
+  background: linear-gradient(180deg, rgba(20,17,13,0.40), transparent);
+}
+.merchant-sheet .header-left .profile-img {
+  border-radius: 0;
+  border: 1px solid var(--v-amber-dim);
+  box-shadow: inset 0 0 0 3px rgba(0,0,0,0.6),
+              inset 0 0 0 4px rgba(184,148,100,0.18);
+  transition: border-color .15s;
+}
+.merchant-sheet .header-left .profile-img:hover { border-color: var(--v-amber-bright); }
+
+.merchant-sheet .merchant-name-input {
+  color: var(--v-amber-bright);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+  border-bottom: 1px solid rgba(110, 82, 36, 0.25);
+}
+.merchant-sheet .merchant-name-input:focus {
+  outline: none;
+  border-bottom-color: var(--v-amber-bright);
+}
+.merchant-sheet .merchant-name-input::placeholder {
+  color: var(--v-ink-faint); font-style: italic;
+  letter-spacing: 0.06em; text-transform: none;
+}
+
+.merchant-sheet .header-fields label {
+  color: var(--v-amber);
+  font-weight: 600;
+  letter-spacing: 0.20em;
+  opacity: 1;
+}
+.merchant-sheet .header-fields input,
+.merchant-sheet .header-fields select {
+  background: rgba(8,7,6,0.6);
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+  color: var(--v-ink-hi);
+}
+.merchant-sheet .header-fields input:focus,
+.merchant-sheet .header-fields select:focus {
+  outline: none; border-color: var(--v-amber-bright);
+}
+
+/* Tab content / shared headers ---------------------------------------------*/
+.merchant-tab-content h3,
+.merchant-tab-content h4 {
+  color: var(--v-amber-bright);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  border-bottom: 1px dotted rgba(140,133,121,0.20);
+}
+.merchant-tab-content h3 i,
+.merchant-tab-content h4 i { color: var(--v-amber); }
+
+/* Form primitives -----------------------------------------------------------*/
+.merchant-sheet input[type="text"],
+.merchant-sheet input[type="number"],
+.merchant-sheet select,
+.merchant-sheet textarea {
+  background: rgba(8,7,6,0.55);
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+  color: var(--v-ink-hi);
+}
+.merchant-sheet input[type="text"]:focus,
+.merchant-sheet input[type="number"]:focus,
+.merchant-sheet select:focus,
+.merchant-sheet textarea:focus {
+  outline: none; border-color: var(--v-amber-bright);
+}
+.merchant-sheet input[type="checkbox"] { accent-color: var(--v-amber-bright); }
+.merchant-sheet input[type="range"] {
+  background: var(--v-void);
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+}
+
+/* General tab cards ---------------------------------------------------------*/
+.merchant-sheet .summary-card {
+  background: linear-gradient(180deg, rgba(20,17,13,0.55), rgba(10,9,8,0.75));
+  border: 1px solid var(--v-amber-dim);
+  border-left: 3px solid var(--v-amber);
+  border-radius: 0;
+}
+.merchant-sheet .summary-card .card-label {
+  color: var(--v-amber);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.merchant-sheet .summary-card .card-value {
+  color: var(--v-amber-bright);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+}
+.merchant-sheet .summary-card .card-sub {
+  color: var(--v-ink-dim);
+  font-family: 'Barlow Condensed', sans-serif;
+}
+.merchant-sheet .summary-card .card-sub.quirk {
+  color: var(--v-ink-hi);
+}
+
+.merchant-sheet .description-section {
+  background: linear-gradient(180deg, rgba(20,17,13,0.55), rgba(10,9,8,0.75));
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+}
+.merchant-sheet .description-section label,
+.merchant-sheet .specializations-display label {
+  color: var(--v-amber-bright);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  border-bottom: 1px dotted rgba(140,133,121,0.20);
+}
+.merchant-sheet .description-section textarea {
+  background: rgba(0,0,0,0.40);
+  border: 1px dashed rgba(140,133,121,0.20);
+  font-family: 'Barlow Condensed', sans-serif;
+}
+.merchant-sheet .spec-badge {
+  background: rgba(184,148,100,0.10);
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+  color: var(--v-amber-hi);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Pricing tab ---------------------------------------------------------------*/
+.merchant-sheet .pricing-block {
+  background: linear-gradient(180deg, rgba(20,17,13,0.55), rgba(10,9,8,0.75));
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+}
+.merchant-sheet .pricing-hint,
+.merchant-sheet .hint-text {
+  color: var(--v-ink-dim);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-style: italic;
+}
+.merchant-sheet .slider-readout {
+  background: var(--v-void);
+  border: 1px solid var(--v-amber);
+  border-radius: 0;
+  color: var(--v-amber-bright);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+}
+.merchant-sheet .markup-positive { color: var(--v-amber-bright); }
+.merchant-sheet .markup-negative { color: var(--v-poison); }
+.merchant-sheet .markup-zero     { color: var(--v-ink-hi); }
+.merchant-sheet .slider-labels span {
+  color: var(--v-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.merchant-sheet .bulk-field label {
+  color: var(--v-amber);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.merchant-sheet .threshold-input,
+.merchant-sheet .slider-numeric {
+  text-align: center;
+  font-weight: 700;
+  color: var(--v-amber-bright);
+}
+.merchant-sheet .bulk-example {
+  background: rgba(0,0,0,0.30);
+  border: 1px dashed rgba(140,133,121,0.20);
+  border-radius: 0;
+  color: var(--v-ink-hi);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-style: italic;
+}
+.merchant-sheet .pricing-note {
+  background: rgba(0,0,0,0.30);
+  border-left: 2px solid var(--v-amber);
+  border-radius: 0;
+  color: var(--v-ink-dim);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-style: italic;
+}
+.merchant-sheet .pricing-note i { color: var(--v-amber); }
+
+/* Inventory tab -------------------------------------------------------------*/
+.merchant-sheet .inventory-topbar {
+  background: linear-gradient(180deg, rgba(20,17,13,0.55), rgba(10,9,8,0.75));
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+}
+.merchant-sheet .inv-stat i,
+.merchant-sheet .stocking-summary i { color: var(--v-amber); }
+.merchant-sheet .coin-display {
+  color: var(--v-amber-bright);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+}
+.merchant-sheet .currency-label {
+  color: var(--v-amber);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.merchant-sheet .inv-btn {
+  background: linear-gradient(180deg, rgba(40,30,18,0.65), rgba(20,17,13,0.85));
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+  color: var(--v-amber-hi);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.merchant-sheet .inv-btn:hover {
+  color: var(--v-amber-bright);
+  border-color: var(--v-amber-bright);
+  background: linear-gradient(180deg, rgba(60,42,22,0.75), rgba(30,22,16,0.85));
+}
+.merchant-sheet .inv-btn.primary {
+  color: var(--v-amber-bright);
+  border-color: var(--v-amber);
+}
+.merchant-sheet .inv-table {
+  background: rgba(8,7,6,0.30);
+  border: 1px solid var(--v-amber-dim);
+}
+.merchant-sheet .inv-table thead {
+  background: linear-gradient(180deg, rgba(40,30,18,0.45), rgba(20,17,13,0.65));
+}
+.merchant-sheet .inv-table thead th {
+  color: var(--v-amber);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--v-amber-dim);
+}
+.merchant-sheet .inv-table thead th.sortable:hover { color: var(--v-amber-bright); }
+.merchant-sheet .inv-table thead th.sortable i { color: var(--v-amber-bright); }
+.merchant-sheet .inv-table td {
+  color: var(--v-ink-hi);
+  border-bottom: 1px solid rgba(140,133,121,0.10);
+}
+.merchant-sheet .inv-row:hover td { background: rgba(14,11,8,0.45); }
+.merchant-sheet .inv-row .col-name,
+.merchant-sheet .inv-table .col-name {
+  color: var(--v-amber-hi);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.merchant-sheet .type-badge {
+  background: rgba(184,148,100,0.08);
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+  color: var(--v-amber-hi);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.merchant-sheet .price-cell { font-variant-numeric: tabular-nums; }
+.merchant-sheet .base-price-strike { color: var(--v-ink-faint); }
+.merchant-sheet .effective-price { color: var(--v-amber-bright); font-weight: 700; }
+.merchant-sheet .item-markup-pct { font-weight: 700; border-radius: 0; }
+.merchant-sheet .item-markup-pct.up   { color: var(--v-red-bright); background: rgba(140,60,60,0.20); }
+.merchant-sheet .item-markup-pct.down { color: var(--v-poison);     background: rgba(110,138,74,0.20); }
+.merchant-sheet .inv-row .col-expand a,
+.merchant-sheet .inv-row .col-actions a {
+  color: var(--v-amber-dim);
+  border-radius: 0;
+  transition: color .12s, border-color .12s;
+}
+.merchant-sheet .inv-row .col-expand a:hover,
+.merchant-sheet .inv-row .col-actions a:hover { color: var(--v-amber-bright); }
+.merchant-sheet .item-description {
+  background: rgba(0,0,0,0.30);
+  border-left: 2px solid var(--v-amber-dim);
+  border-radius: 0;
+  color: var(--v-ink-hi);
+  font-family: 'Barlow Condensed', sans-serif;
+}
+.merchant-sheet .empty-inv {
+  color: var(--v-ink-dim);
+  font-family: 'Barlow Condensed', sans-serif;
+}
+.merchant-sheet .empty-inv i { color: var(--v-amber-dim); }
+.merchant-sheet .empty-inv .hint { color: var(--v-ink-faint); font-style: italic; }
+
+/* Stocking tab --------------------------------------------------------------*/
+.merchant-sheet .stocking-topbar {
+  background: linear-gradient(180deg, rgba(40,30,18,0.45), rgba(20,17,13,0.65));
+  border: 1px solid var(--v-amber);
+  border-radius: 0;
+}
+.merchant-sheet .stocking-summary strong { color: var(--v-amber-bright); }
+.merchant-sheet .stocking-summary .separator { color: var(--v-amber-dim); }
+.merchant-sheet .stocking-section {
+  background: linear-gradient(180deg, rgba(20,17,13,0.55), rgba(10,9,8,0.75));
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+}
+.merchant-sheet .stocking-section h3 { color: var(--v-amber-bright); }
+.merchant-sheet .stocking-section h4 { color: var(--v-amber); }
+.merchant-sheet .section-sub {
+  color: var(--v-ink-faint);
+  letter-spacing: 0.08em;
+  text-transform: none;
+  font-weight: 400;
+}
+.merchant-sheet .source-mode-toggle,
+.merchant-sheet .qty-mode-toggle {
+  background: rgba(0,0,0,0.30);
+  border: 1px dashed rgba(140,133,121,0.20);
+  border-radius: 0;
+}
+.merchant-sheet .radio-label i { color: var(--v-amber); }
+.merchant-sheet .radio-label input[type="radio"] { accent-color: var(--v-amber-bright); }
+.merchant-sheet .source-row {
+  background: rgba(8,7,6,0.35);
+  border: 1px solid rgba(140,133,121,0.15);
+  border-radius: 0;
+}
+.merchant-sheet .source-name i { color: var(--v-amber); }
+.merchant-sheet .icon-btn {
+  background: rgba(0,0,0,0.40);
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+  color: var(--v-amber-hi);
+  transition: color .12s, border-color .12s;
+}
+.merchant-sheet .icon-btn:hover { color: var(--v-amber-bright); border-color: var(--v-amber-bright); }
+.merchant-sheet .icon-btn.delete { color: rgba(140,60,60,0.65); border-color: rgba(140,60,60,0.35); }
+.merchant-sheet .icon-btn.delete:hover { color: #d27676; border-color: var(--v-red); }
+.merchant-sheet .folder-chip {
+  background: rgba(184,148,100,0.08);
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+  color: var(--v-amber-hi);
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+.merchant-sheet .filter-badge {
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+  letter-spacing: 0.08em;
+}
+.merchant-sheet .filter-badge.include { color: var(--v-poison); border-color: var(--v-poison); background: rgba(110,138,74,0.10); }
+.merchant-sheet .filter-badge.exclude { color: var(--v-red-bright); border-color: var(--v-red); background: rgba(140,60,60,0.10); }
+.merchant-sheet .source-readout {
+  background: var(--v-void);
+  border: 1px solid var(--v-amber);
+  border-radius: 0;
+  color: var(--v-amber-bright);
+  font-variant-numeric: tabular-nums;
+}
+.merchant-sheet .pool-status,
+.merchant-sheet .empty-sub {
+  background: rgba(0,0,0,0.30);
+  border: 1px dashed rgba(140,133,121,0.20);
+  border-radius: 0;
+  color: var(--v-ink-dim);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-style: italic;
+}
+.merchant-sheet .pool-total { color: var(--v-amber-bright); }
+.merchant-sheet .item-pool-info {
+  background: rgba(8,7,6,0.35);
+  border: 1px solid rgba(140,133,121,0.15);
+  border-radius: 0;
+}
+.merchant-sheet .item-pool-status i { color: var(--v-amber); }
+.merchant-sheet .item-pool-status strong { color: var(--v-amber-bright); font-weight: 700; }
+.merchant-sheet .qty-input-row label,
+.merchant-sheet .stack-field label {
+  color: var(--v-amber);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.merchant-sheet .qty-input-row input[type="number"],
+.merchant-sheet .stack-field input[type="number"] {
+  text-align: center;
+  font-weight: 700;
+  color: var(--v-amber-bright);
+}
+.merchant-sheet .subdivider {
+  border: none;
+  background: linear-gradient(90deg, transparent, var(--v-amber-dim) 30%, var(--v-amber-dim) 70%, transparent);
+  opacity: 0.5;
+}
+.merchant-sheet .stack-explanation {
+  background: rgba(0,0,0,0.30);
+  border-left: 2px solid var(--v-amber-dim);
+  border-radius: 0;
+  color: var(--v-ink-dim);
+  font-family: 'Barlow Condensed', sans-serif;
+}
+.merchant-sheet .stack-explanation strong { color: var(--v-amber-hi); font-weight: 700; }
+
+/* Rarity badges (swap to Vladimir tones) -----------------------------------*/
+.merchant-sheet .rarity-badge {
+  background: rgba(0,0,0,0.40);
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+  color: var(--v-ink-hi);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.merchant-sheet .rarity-badge.everywhere { color: var(--v-ink-dim); border-color: var(--v-ink-dim); background: rgba(40,38,34,0.30); }
+.merchant-sheet .rarity-badge.common     { color: var(--v-poison); border-color: var(--v-poison); background: rgba(110,138,74,0.15); }
+.merchant-sheet .rarity-badge.poor       { color: var(--v-amber-hi); border-color: var(--v-amber-hi); background: rgba(184,148,100,0.10); }
+.merchant-sheet .rarity-badge.rare       { color: var(--v-frost); border-color: var(--v-frost); background: rgba(106,138,162,0.15); }
+.merchant-sheet .rarity-badge.witcher    { color: var(--v-violet); border-color: var(--v-violet); background: rgba(136,112,168,0.15); box-shadow: 0 0 6px rgba(136,112,168,0.30); }
+
+.merchant-sheet .rarity-weights {
+  background: rgba(0,0,0,0.30);
+  border: 1px dashed rgba(140,133,121,0.20);
+  border-radius: 0;
+}
+.merchant-sheet .preset-row {
+  background: rgba(8,7,6,0.35);
+  border: 1px solid rgba(140,133,121,0.15);
+  border-radius: 0;
+}
+.merchant-sheet .preset-info i { color: var(--v-amber); }
+.merchant-sheet .preset-name {
+  color: var(--v-amber-hi);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.merchant-sheet .preset-author { color: var(--v-ink-dim); font-style: italic; }
+
+/* Relationships tab ---------------------------------------------------------*/
+.merchant-sheet .theorycraft-banner {
+  background: rgba(0,0,0,0.30);
+  border: 1px dashed rgba(140,133,121,0.20);
+  border-left: 2px solid var(--v-amber);
+  border-radius: 0;
+  color: var(--v-ink-dim);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-style: italic;
+}
+.merchant-sheet .theorycraft-banner i { color: var(--v-amber); }
+.merchant-sheet .relation-card {
+  background: linear-gradient(180deg, rgba(20,17,13,0.55), rgba(10,9,8,0.75));
+  border: 1px solid var(--v-amber-dim);
+  border-left: 3px solid var(--v-ink-dim);
+  border-radius: 0;
+}
+.merchant-sheet .relation-card.relation-good     { border-left-color: var(--v-amber); }
+.merchant-sheet .relation-card.relation-okay     { border-left-color: var(--v-poison); }
+.merchant-sheet .relation-card.relation-neutral  { border-left-color: var(--v-ink-dim); }
+.merchant-sheet .relation-card.relation-bad      { border-left-color: var(--v-red-bright); }
+.merchant-sheet .relation-card.relation-terrible { border-left-color: var(--v-red); }
+.merchant-sheet .relation-avatar {
+  border: 1px solid var(--v-amber-dim);
+  background: linear-gradient(180deg, #1a140e, #050402);
+}
+.merchant-sheet .relation-name {
+  color: var(--v-amber-bright);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+}
+.merchant-sheet .relation-status { color: var(--v-ink-dim); }
+.merchant-sheet .relation-label {
+  color: var(--v-ink-hi);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.merchant-sheet .relation-score {
+  color: var(--v-amber-bright);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.merchant-sheet .relation-modifier {
+  color: var(--v-ink-dim);
+  font-style: italic;
+  font-family: 'Barlow Condensed', sans-serif;
+}
+.merchant-sheet .relation-btn {
+  background: rgba(0,0,0,0.40);
+  border: 1px solid var(--v-amber-dim);
+  border-radius: 0;
+  color: var(--v-ink-hi);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.merchant-sheet .relation-btn:hover {
+  background: rgba(184,148,100,0.10);
+  color: var(--v-amber-bright);
+  border-color: var(--v-amber-bright);
+}
+.merchant-sheet .relation-btn.reset { color: var(--v-amber); }
+.merchant-sheet .relation-notes {
+  background: rgba(0,0,0,0.30);
+  border: 1px dashed rgba(140,133,121,0.20);
+  border-radius: 0;
+  color: var(--v-ink-hi);
+  font-family: 'Barlow Condensed', sans-serif;
+}
+.merchant-sheet .vision-block {
+  background: linear-gradient(180deg, rgba(20,17,13,0.55), rgba(10,9,8,0.75));
+  border: 1px dashed var(--v-amber-dim);
+  border-radius: 0;
+  font-family: 'Barlow Condensed', sans-serif;
+  color: var(--v-ink-dim);
+}
+.merchant-sheet .vision-block h4 { color: var(--v-amber); }
+.merchant-sheet .vision-block h4 i { color: var(--v-amber); }
+.merchant-sheet .vision-block p {
+  color: var(--v-ink-dim);
+  font-style: italic;
+}

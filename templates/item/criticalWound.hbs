@@ -1,0 +1,197 @@
+{{!-- Critical wound item sheet — Core p.158-161, p.174. Two-layer:
+        DISPLAY → reads the wound: severity, location, variant, its current
+                  STATE (unstabilized / stabilized / treated) and that state's
+                  on-going effect, the RAW bonus damage / treatment DCs, and
+                  (once treated) the natural-healing clock.
+        CONFIG  → edit those fields (cog toggle, owners only).
+      Crimson accent (is-weapon) — both are about damage. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-weapon" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure wound{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">
+            Critical Wound · {{levelLabel}} · {{locationLabel}} · {{stateLabel}}
+          </div>
+        </div>
+      </header>
+
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value">+{{crit.bonusDmg}}</div>
+        <div class="wdm-w3-hero-label">Bonus Damage</div>
+        <div class="wdm-w3-hero-sub">Only this bonus ignored armor · dealt on the original strike</div>
+      </div>
+
+      <ul class="wdm-w3-stats">
+        <li class="wdm-w3-stat">
+          <span class="val">{{locationLabel}}</span>
+          <span class="lbl">Location</span>
+        </li>
+        <li class="wdm-w3-stat">
+          <span class="val">{{variantLabel}}</span>
+          <span class="lbl">Variant</span>
+        </li>
+        <li class="wdm-w3-stat {{#if isTreated}}is-positive{{else}}{{#if isStabilized}}{{else}}is-negative{{/if}}{{/if}}">
+          <span class="val">{{stateLabel}}</span>
+          <span class="lbl">State</span>
+        </li>
+      </ul>
+
+      {{!-- Current-state effect — penalty lessens as the wound is cared for.
+            The display stops here: everything up to the current state's effect.
+            Healing progress and treatment DCs live in the character wound card. --}}
+      {{#if activeEffect}}
+        <div class="wdm-w3-section-label">Effect — {{stateLabel}}</div>
+        <div class="wdm-w3-description">{{{activeEffect}}}</div>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — editable form
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Wound name (e.g. Cracked Ribs)" />
+      </div>
+
+      <div class="wdm-cfg-section">Classification</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Severity</span>
+          <select name="system.criticalLevel">
+            {{#each levelOptions}}
+              <option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Location</span>
+          <select name="system.location">
+            {{#each locationOptions}}
+              <option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span title="11 = lesser variant (1d6 1-4), 12 = greater (5-6)">Variant</span>
+          <select name="system.lesserEffect" data-dtype="Boolean">
+            <option value="false" {{#unless source.lesserEffect}}selected{{/unless}}>Greater</option>
+            <option value="true"  {{#if source.lesserEffect}}selected{{/if}}>Lesser</option>
+          </select>
+        </label>
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Status</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span title="Treating starts the natural-healing clock automatically.">State</span>
+          <select name="system.state">
+            {{#each stateOptions}}
+              <option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+            {{/each}}
+          </select>
+        </label>
+      </div>
+
+      {{!-- Status effects this wound inflicts while UNSTABILIZED. Reconciled
+            onto the bearer (policy/wound-statuses.mjs): applied while untreated,
+            suppressed by immunity, resumed when it lapses, cleared on stabilize.
+            Each wound is its own instance, so multiples stack. --}}
+      <div class="wdm-cfg-statuses">
+        <span class="wdm-cfg-statuses-label"
+              title="Status effects inflicted while this wound is unstabilized. Each wound is its own instance, so two bleeding wounds stack (not one doubled bleed).">
+          Applies status effects
+        </span>
+        <div class="wdm-status-chips">
+          {{#each woundStatusOptions}}
+          <button type="button" class="wdm-status-chip{{#if active}} is-active{{/if}}"
+                  data-action="toggleWoundStatus" data-status="{{value}}">{{label}}</button>
+          {{/each}}
+        </div>
+      </div>
+      {{!-- Healing time is derived from the bearer's BODY (Critical Healing
+           table) — not editable, and undefined in the compendium where there's
+           no bearer. Show the live value on an actor; the BODY scale otherwise. --}}
+      <div class="wdm-cfg-derived" title="Critical Healing table, p.175 — days to clear the Treated penalty.">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        {{#if heal.isDeadly}}
+          <span>Deadly — does not heal naturally. Removed only by a prosthesis or magic.</span>
+        {{else}}{{#if heal.onActor}}
+          <span>Heals in ~{{heal.time}} day{{#unless (eq heal.time 1)}}s{{/unless}} once treated · {{levelLabel}} · BODY {{heal.body}}.</span>
+        {{else}}
+          <span>Heal time scales with the bearer's BODY · {{levelLabel}}: {{heal.scaleHi}} d (BODY 3) → 1 d (BODY {{heal.scaleLoBody}}).</span>
+        {{/if}}{{/if}}
+      </div>
+
+      <div class="wdm-cfg-section">Effect — Unstabilized <span class="wdm-cfg-sub">(full effect; while bleeding / dying)</span></div>
+      <textarea class="wdm-cfg-textarea is-tall" name="system.description"
+                placeholder="The full on-going effect from the Critical Wound table's Effect column.">{{source.description}}</textarea>
+
+      <div class="wdm-cfg-section">Effect — Stabilized <span class="wdm-cfg-sub">(reduced effect once stabilized)</span></div>
+      <textarea class="wdm-cfg-textarea" name="system.effectStabilized"
+                placeholder="The reduced effect from the Stabilized column.">{{source.effectStabilized}}</textarea>
+
+      <div class="wdm-cfg-section">Effect — Treated <span class="wdm-cfg-sub">(lingering penalty until fully healed)</span></div>
+      <textarea class="wdm-cfg-textarea" name="system.effectTreated"
+                placeholder="The lingering penalty from the Treated column.">{{source.effectTreated}}</textarea>
+
+      {{!-- Stat penalties live as standard Foundry Active Effects (same native
+            editor as alchemical items), grouped by the care state they apply
+            in. An effect only transfers to the bearer while the wound is in its
+            state (WitcherActiveEffect.isSuppressed gates it), so the penalty
+            swaps automatically as the wound is stabilized / treated — mirroring
+            the per-state effect text. Recurring saves / halved Recovery belong
+            in the effect text above. --}}
+      <div class="wdm-cfg-section">Effects <span class="wdm-cfg-sub">(Active Effects · apply only in their state)</span></div>
+
+      {{#each effectGroups}}
+        <div class="wdm-cfg-effects" data-state="{{state}}">
+          <div class="wdm-cfg-effect-state">{{label}}</div>
+          {{#if effects.length}}
+            <ul class="wdm-effect-list">
+              {{#each effects}}
+                <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                  <div class="wdm-effect-head">
+                    <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                    <span class="wdm-effect-name">{{this.name}}</span>
+                    {{#if this.duration.label}}<span class="wdm-effect-duration">{{this.duration.label}}</span>{{/if}}
+                    <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                      <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                    </a>
+                    <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
+                    <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                  </div>
+                </li>
+              {{/each}}
+            </ul>
+          {{else}}
+            <p class="wdm-empty">No effects in this state.</p>
+          {{/if}}
+          <button type="button" class="wdm-add-effect" data-action="createStateEffect" data-state="{{state}}">
+            <i class="fa-solid fa-plus"></i> Add {{label}} Effect
+          </button>
+        </div>
+      {{/each}}
+
+    </div>
+  </div>
+
+</div>

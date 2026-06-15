@@ -1,0 +1,209 @@
+{{!-- Status Effects Editor — GM-only world settings form.
+      One card per status, every clause mechanic exposed as a friendly
+      control. Field names are `s.<index>.<field>`; the app reads them back
+      with FormDataExtended + expandObject. Saving diffs each card against the
+      RAW default and writes only the changes to `statusEffectsOverride`. --}}
+
+<div class="wdm-se">
+
+  <header class="wdm-se-head">
+    <h2>Status Effects</h2>
+    <p class="wdm-se-blurb">
+      Customize the combat statuses. Each card edits one status: its name, icon,
+      description and the full RAW clause — stat &amp; roll modifiers, damage over
+      time, action/defense locks, the auto-hit DC, the ending check, auto-clear,
+      and periodic saves. Untouched statuses keep the built-in defaults. Saving
+      reloads the world to apply.
+    </p>
+    <div class="wdm-se-toolbar">
+      <button type="button" class="wdm-se-btn" data-action="addStatus">
+        <i class="fa-solid fa-plus"></i> Add status
+      </button>
+      <button type="button" class="wdm-se-btn wdm-se-btn-danger" data-action="resetAll">
+        <i class="fa-solid fa-arrow-rotate-left"></i> Restore RAW defaults
+      </button>
+    </div>
+  </header>
+
+  <div class="wdm-se-list">
+    {{#each statuses as |s|}}
+    <details class="wdm-se-card">
+      <summary class="wdm-se-card-summary">
+        <img class="wdm-se-sum-icon" src="{{s.img}}" alt="" />
+        <span class="wdm-se-sum-name">{{s.name}}</span>
+        <code class="wdm-se-sum-id">{{s.id}}</code>
+      </summary>
+      <div class="wdm-se-card-body">
+
+      <input type="hidden" name="s.{{s.index}}.isDefault" value="{{s.isDefault}}" />
+
+      <div class="wdm-se-card-head">
+        <button type="button" class="wdm-se-icon" data-action="pickIcon" data-index="{{s.index}}"
+                title="Choose an icon">
+          <img data-preview="{{s.index}}" src="{{s.img}}" alt="" />
+        </button>
+        <input type="hidden" name="s.{{s.index}}.img" value="{{s.img}}" />
+
+        <div class="wdm-se-id-name">
+          <label class="wdm-se-field">
+            <span class="wdm-se-label">Name</span>
+            <input type="text" name="s.{{s.index}}.name" value="{{s.name}}" />
+          </label>
+          <label class="wdm-se-field">
+            <span class="wdm-se-label">ID
+              {{#if s.isDefault}}<span class="wdm-se-tag">built-in</span>{{/if}}
+            </span>
+            <input type="text" name="s.{{s.index}}.id" value="{{s.id}}"
+                   {{#if s.isDefault}}readonly{{/if}}
+                   placeholder="lowercase-id" />
+          </label>
+        </div>
+
+        <button type="button" class="wdm-se-remove" data-action="removeStatus" data-index="{{s.index}}"
+                title="Remove this status">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+
+      <label class="wdm-se-field">
+        <span class="wdm-se-label">Description</span>
+        <textarea name="s.{{s.index}}.description" rows="2" spellcheck="false">{{s.description}}</textarea>
+      </label>
+
+      <details class="wdm-se-group">
+        <summary>Stat modifiers</summary>
+        <div class="wdm-se-grid">
+          {{#each s.statRows as |stat|}}
+          <label class="wdm-se-mini">
+            <span>{{stat.label}}</span>
+            <input type="number" step="1" name="s.{{s.index}}.stats.{{stat.key}}" value="{{stat.value}}" />
+          </label>
+          {{/each}}
+        </div>
+      </details>
+
+      <details class="wdm-se-group">
+        <summary>Roll modifiers</summary>
+        <div class="wdm-se-grid">
+          {{#each s.rollRows as |r|}}
+          <label class="wdm-se-mini">
+            <span>{{r.label}}</span>
+            <input type="number" step="1" name="s.{{s.index}}.roll.{{r.key}}" value="{{r.value}}" />
+          </label>
+          {{/each}}
+        </div>
+      </details>
+
+      <details class="wdm-se-group">
+        <summary>Damage over time</summary>
+        <div class="wdm-se-row">
+          <label class="wdm-se-mini">
+            <span>Amount / turn</span>
+            <input type="number" step="1" min="0" name="s.{{s.index}}.dotAmount" value="{{s.dotAmount}}" />
+          </label>
+          <label class="wdm-se-mini" title="Erode this much Stopping Power off the armor at each struck location, every turn (fire/acid). 0 = none.">
+            <span>Ablate armor / turn</span>
+            <input type="number" step="1" min="0" name="s.{{s.index}}.dotAblateArmor" value="{{s.dotAblateArmor}}" />
+          </label>
+        </div>
+        <div class="wdm-se-checks">
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.dotBypassArmor" {{#if s.dotBypassArmor}}checked{{/if}} />
+            <span>Bypasses armor</span>
+          </label>
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.dotEveryLocation" {{#if s.dotEveryLocation}}checked{{/if}} />
+            <span>Hits every location</span>
+          </label>
+        </div>
+      </details>
+
+      <details class="wdm-se-group">
+        <summary>Locks &amp; auto-hit</summary>
+        <div class="wdm-se-checks">
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.restrictAct" {{#if s.restrictAct}}checked{{/if}} />
+            <span>Cannot act</span>
+          </label>
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.restrictDefend" {{#if s.restrictDefend}}checked{{/if}} />
+            <span>Cannot defend</span>
+          </label>
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.restrictHard" {{#if s.restrictHard}}checked{{/if}} />
+            <span>Hard incapacitation</span>
+          </label>
+        </div>
+        <label class="wdm-se-mini">
+          <span>Incoming attacks auto-hit under DC</span>
+          <input type="number" step="1" min="0" name="s.{{s.index}}.incomingDC" value="{{s.incomingDC}}"
+                 placeholder="(none)" />
+        </label>
+      </details>
+
+      <details class="wdm-se-group">
+        <summary>Ending check</summary>
+        <div class="wdm-se-row">
+          <label class="wdm-se-mini">
+            <span>Kind</span>
+            <select name="s.{{s.index}}.endKind">
+              {{#each s.endKindOptions as |o|}}
+              <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
+              {{/each}}
+            </select>
+          </label>
+          <label class="wdm-se-mini">
+            <span>Skill (when kind = skill)</span>
+            <select name="s.{{s.index}}.endSkill">
+              <option value="">—</option>
+              {{#each s.skillOptions as |o|}}
+              <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
+              {{/each}}
+            </select>
+          </label>
+          <label class="wdm-se-mini">
+            <span>DC</span>
+            <input type="number" step="1" min="0" name="s.{{s.index}}.endDC" value="{{s.endDC}}" />
+          </label>
+          <label class="wdm-se-mini">
+            <span>Action cost (in combat)</span>
+            <input type="number" step="1" min="0" name="s.{{s.index}}.endActionCost" value="{{s.endActionCost}}" />
+          </label>
+        </div>
+      </details>
+
+      <details class="wdm-se-group">
+        <summary>Auto-clear &amp; periodic</summary>
+        <div class="wdm-se-checks">
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.clearsAtOwnTurn" {{#if s.clearsAtOwnTurn}}checked{{/if}} />
+            <span>Clears at own turn start</span>
+          </label>
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.clearOnHit" {{#if s.clearOnHit}}checked{{/if}} />
+            <span>Clears when hit</span>
+          </label>
+        </div>
+        <div class="wdm-se-row">
+          <label class="wdm-se-mini">
+            <span>Periodic save every (rounds)</span>
+            <input type="number" step="1" min="0" name="s.{{s.index}}.periodicEvery" value="{{s.periodicEvery}}"
+                   placeholder="(none)" />
+          </label>
+          <label class="wdm-se-mini">
+            <span>Roll under stat</span>
+            <select name="s.{{s.index}}.periodicRollUnder">
+              {{#each s.rollUnderOptions as |o|}}
+              <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
+              {{/each}}
+            </select>
+          </label>
+        </div>
+      </details>
+
+      </div>
+    </details>
+    {{/each}}
+  </div>
+
+</div>

@@ -1,0 +1,67 @@
+{{!-- "Logic" tab for the custom ActiveEffect editor. Binds to the
+      per-turn tick flags read by module/chrome/policy/tick-effects.js:
+      flags.<systemId>.tickOnTurn / tickHeal / tickDamage / tickLocation /
+      tickGoesThroughArmor. Input names use the flattened flag path so the
+      normal form submit round-trips them. --}}
+<section class="tab logic wdm-logic-tab{{#if tab.active}} active{{/if}}"
+         data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+  <p class="wdm-logic-hint">{{localize "WITCHER.Effect.LogicHint"}}</p>
+
+  <label class="wdm-logic-toggle">
+    <input type="checkbox" name="flags.{{systemId}}.tickOnTurn" {{#if tick.onTurn}}checked{{/if}} />
+    <span>{{localize "WITCHER.Effect.TickOnTurn"}}</span>
+  </label>
+
+  <div class="wdm-logic-fields">
+    <div class="wdm-logic-field">
+      <label>{{localize "WITCHER.Effect.TickHeal"}}</label>
+      <input type="text" name="flags.{{systemId}}.tickHeal" value="{{tick.heal}}"
+             placeholder="3 / 1d6+2" title="{{localize 'WITCHER.Effect.TickHealHint'}}" />
+    </div>
+
+    <div class="wdm-logic-field">
+      <label>{{localize "WITCHER.Effect.TickHealCondition"}}</label>
+      <select name="flags.{{systemId}}.tickHealCondition">
+        {{#each healConditionOptions as |opt|}}
+          <option value="{{opt.value}}" {{#if (eq opt.value ../tick.healCondition)}}selected{{/if}}>{{opt.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    <div class="wdm-logic-field">
+      <label>{{localize "WITCHER.Effect.TickDamage"}}</label>
+      <input type="text" name="flags.{{systemId}}.tickDamage" value="{{tick.damage}}"
+             placeholder="5 / 2d6" title="{{localize 'WITCHER.Effect.TickDamageHint'}}" />
+    </div>
+
+    <div class="wdm-logic-field wdm-logic-field-multi">
+      <label>{{localize "WITCHER.Effect.TickLocation"}}</label>
+      <select name="flags.{{systemId}}.tickLocation" multiple size="6">
+        {{#each locationOptions as |opt|}}
+          <option value="{{opt.value}}" {{#if opt.selected}}selected{{/if}}>{{opt.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+    <p class="wdm-logic-subhint">{{localize "WITCHER.Effect.TickLocationHint"}}</p>
+
+    <label class="wdm-logic-toggle wdm-logic-through">
+      <input type="checkbox" name="flags.{{systemId}}.tickGoesThroughArmor" {{#if tick.throughArmor}}checked{{/if}} />
+      <span>{{localize "WITCHER.Effect.TickThroughArmor"}}</span>
+    </label>
+    <p class="wdm-logic-subhint">{{localize "WITCHER.Effect.TickThroughArmorHint"}}</p>
+  </div>
+
+  <h3 class="wdm-logic-section">{{localize "WITCHER.Effect.SuppressHead"}}</h3>
+  <p class="wdm-logic-hint">{{localize "WITCHER.Effect.SuppressHint"}}</p>
+  <div class="wdm-logic-fields">
+    <label class="wdm-logic-toggle">
+      <input type="checkbox" name="flags.{{systemId}}.suppressDeathPenalty" {{#if suppress.death}}checked{{/if}} />
+      <span>{{localize "WITCHER.Effect.SuppressDeath"}}</span>
+    </label>
+    <label class="wdm-logic-toggle">
+      <input type="checkbox" name="flags.{{systemId}}.suppressWoundPenalty" {{#if suppress.wound}}checked{{/if}} />
+      <span>{{localize "WITCHER.Effect.SuppressWound"}}</span>
+    </label>
+  </div>
+</section>

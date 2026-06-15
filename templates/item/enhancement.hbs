@@ -1,0 +1,235 @@
+{{!-- Enhancement item sheet — two-layer (Core p.78-79, gear & craftsman):
+        DISPLAY → Witcher 3 in-game tooltip (player reads the rune/glyph)
+        CONFIG  → editable form (GM / owner with cog toggle)
+      `type` decides the target: rune/weapon → weapon, glyph/armor → armor.
+      The config form shows only the matching side's modifier fields. The
+      parent item recomputes its effective stats from this in
+      prepareDerivedData — nothing here mutates the weapon/armor directly. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-enhancement" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure item{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view" data-rarity="{{source.availability}}">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">
+            {{localize (lookup WITCHER.enhancement.types source.type)}}
+            {{#if attachedName}} · socketed in {{attachedName}}{{/if}}
+          </div>
+        </div>
+      </header>
+
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value">{{heroValue}}</div>
+        <div class="wdm-w3-hero-label">{{heroLabel}}</div>
+      </div>
+
+      {{#if modRows.length}}
+        <ul class="wdm-w3-stats">
+          {{#each modRows}}
+            <li class="wdm-w3-stat {{#if this.positive}}is-positive{{else}}is-negative{{/if}}">
+              <span class="val">{{this.val}}</span>
+              <span class="lbl">{{this.lbl}}</span>
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+      {{#if addedTypeTags.length}}
+        <div class="wdm-w3-section-label">Adds Damage Type</div>
+        <div class="wdm-w3-tags">
+          {{#each addedTypeTags}}<span class="wdm-w3-tag">{{this}}</span>{{/each}}
+        </div>
+      {{/if}}
+
+      {{#if resistTags.length}}
+        <div class="wdm-w3-section-label">Grants Resistance</div>
+        <div class="wdm-w3-tags">
+          {{#each resistTags}}<span class="wdm-w3-tag">{{this}}</span>{{/each}}
+        </div>
+      {{/if}}
+
+      {{#if grantedQualityList.length}}
+        <div class="wdm-w3-section-label">Grants Qualities</div>
+        <div class="wdm-w3-tags">
+          {{#each grantedQualityList}}
+            <span class="wdm-w3-tag" data-tooltip="{{this.description}}" data-tooltip-direction="UP">{{this.label}}</span>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if source.effects}}
+        <div class="wdm-w3-effects">{{{source.effects}}}</div>
+      {{/if}}
+
+      {{#if source.description}}
+        <div class="wdm-w3-description">{{{source.description}}}</div>
+      {{/if}}
+
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        {{#unless (eq source.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+        {{/unless}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — editable form
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Enhancement name" />
+      </div>
+
+      <div class="wdm-cfg-section">Classification</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row" title="Decides what this attaches to: runes & weapon mods modify weapons; glyphs & armor mods modify armor.">
+          <span>Kind</span>
+          <select name="system.type">
+            {{#each WITCHER.enhancement.types}}
+              <option value="{{@key}}" {{#if (eq @key ../source.type)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+      </div>
+
+      {{#if isWeaponSide}}
+        <div class="wdm-cfg-section">Weapon Modifiers</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span>Damage Bonus</span>
+            <input type="text" name="system.damageBonus" value="{{source.damageBonus}}" placeholder="+2 or 1d6"
+                   title="Formula fragment folded into the weapon's damage." />
+          </label>
+          <label class="wdm-cfg-row"><span>Accuracy (WA)</span>
+            <input type="number" name="system.accuracyBonus" value="{{source.accuracyBonus}}" />
+          </label>
+          <label class="wdm-cfg-row"><span>Reliability +</span>
+            <input type="number" name="system.reliabilityBonus" value="{{source.reliabilityBonus}}"
+                   title="Added to the weapon's maximum reliability." />
+          </label>
+        </div>
+
+        <div class="wdm-cfg-section">Adds Damage Types</div>
+        <div class="wdm-cfg-checkgrid">
+          {{#each damageTypes}}
+            <label class="wdm-cfg-check">
+              <input type="checkbox" name="system.addedDamageTypes" value="{{@key}}"
+                     data-dtype="String"
+                     {{#if (includes ../source.addedDamageTypes @key)}}checked{{/if}} />
+              <span>{{localize this}}</span>
+            </label>
+          {{/each}}
+        </div>
+      {{else}}
+        <div class="wdm-cfg-section">Armor Modifiers</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span>Stopping +</span>
+            <input type="number" min="0" name="system.stopping" value="{{source.stopping}}"
+                   title="Bonus SP added to every covered location." />
+          </label>
+          <label class="wdm-cfg-row"><span>Encumbrance</span>
+            <input type="number" name="system.encumbranceMod" value="{{source.encumbranceMod}}"
+                   title="EV change. Negative makes the armor lighter." />
+          </label>
+        </div>
+
+        <div class="wdm-cfg-section">Grants Resistance</div>
+        <div class="wdm-cfg-checkgrid">
+          <label class="wdm-cfg-check">
+            <input type="checkbox" name="system.slashing" {{#if source.slashing}}checked{{/if}} />
+            <span>Slashing</span>
+          </label>
+          <label class="wdm-cfg-check">
+            <input type="checkbox" name="system.piercing" {{#if source.piercing}}checked{{/if}} />
+            <span>Piercing</span>
+          </label>
+          <label class="wdm-cfg-check">
+            <input type="checkbox" name="system.bludgeoning" {{#if source.bludgeoning}}checked{{/if}} />
+            <span>Bludgeoning</span>
+          </label>
+        </div>
+      {{/if}}
+
+      <div class="wdm-cfg-section">Grants Qualities <span class="wdm-cfg-sub">(edit catalog in system settings)</span></div>
+      <div class="wdm-cfg-checkgrid">
+        {{#each qualitiesCatalog}}
+          {{#if this.param}}
+            <div class="wdm-cfg-check is-parameterized" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+              <label class="wdm-cfg-check-label">
+                <input type="checkbox" name="system.grantedQualities" value="{{@key}}"
+                       data-dtype="String"
+                       {{#if (includes ../source.grantedQualities @key)}}checked{{/if}} />
+                <span>{{this.label}}</span>
+              </label>
+              <input type="{{this.param.type}}" class="wdm-cfg-param"
+                     name="system.qualityValues.{{@key}}"
+                     value="{{lookup ../source.qualityValues @key}}"
+                     placeholder="{{this.param.placeholder}}"
+                     title="Parameter for {{this.label}}" />
+              {{#if this.param.suffix}}<span class="wdm-cfg-param-suffix">{{this.param.suffix}}</span>{{/if}}
+            </div>
+          {{else}}
+            <label class="wdm-cfg-check" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+              <input type="checkbox" name="system.grantedQualities" value="{{@key}}"
+                     data-dtype="String"
+                     {{#if (includes ../source.grantedQualities @key)}}checked{{/if}} />
+              <span>{{this.label}}</span>
+            </label>
+          {{/if}}
+        {{/each}}
+      </div>
+
+      <div class="wdm-cfg-section">Effect</div>
+      <textarea class="wdm-cfg-textarea" name="system.effects" placeholder="Mechanical effect text shown on the enhancement…">{{source.effects}}</textarea>
+
+      <div class="wdm-cfg-section">Procurement</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Availability</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Weight (kg)</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Cost</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Quantity</span>
+          <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Description</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="Flavor, where it was found…">{{source.description}}</textarea>
+
+    </div>
+  </div>
+
+</div>

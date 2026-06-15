@@ -1,0 +1,97 @@
+{{!-- Homeland item sheet — two-layer (RAW Core p.43-44):
+        DISPLAY  → Witcher 3 in-game tooltip aesthetic (player reads)
+        CONFIG   → editable form (cog toggle, owners only)
+      Teal accent (.is-homeland). A homeland's mechanical payload is a small
+      fixed bonus (RAW: +1 by region) carried as transferred ActiveEffects;
+      the display lists those bonuses, the config view manages them. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-homeland" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure item{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip layout
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">Homeland</div>
+        </div>
+      </header>
+
+      {{#if modifiers.length}}
+        <div class="wdm-w3-section-label">Bonus</div>
+        <ul class="wdm-w3-stats">
+          {{#each modifiers}}
+            <li class="wdm-w3-stat">
+              <span class="val">{{this.value}}</span>
+              <span class="lbl">{{this.label}}</span>
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+      {{#if source.description}}
+        <div class="wdm-w3-section-label">Description</div>
+        <div class="wdm-w3-effects">{{{source.description}}}</div>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — compact tech form.
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Homeland (e.g. Temeria)" />
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Description</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="Where the character hails from, and what that means…">{{source.description}}</textarea>
+
+      <div class="wdm-cfg-section">Bonus <span class="wdm-cfg-sub">(applied to the character — RAW: +1 to a stat or skill)</span></div>
+      <div class="wdm-cfg-effects">
+        {{#if effects.length}}
+          <ul class="wdm-effect-list">
+            {{#each effects}}
+              <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                <div class="wdm-effect-head">
+                  <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                  <span class="wdm-effect-name">{{this.name}}</span>
+                  {{#if this.duration.label}}<span class="wdm-effect-duration">{{this.duration.label}}</span>{{/if}}
+                  <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                    <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                  </a>
+                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                </div>
+              </li>
+            {{/each}}
+          </ul>
+        {{else}}
+          <p class="wdm-empty">No bonus configured.</p>
+        {{/if}}
+        <button type="button" class="wdm-add-effect" data-action="createEffect">
+          <i class="fa-solid fa-plus"></i> Add Bonus
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</div>

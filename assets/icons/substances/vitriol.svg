@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Vitriol">
+  <mask id="vitriol-cut">
+    <circle cx="50" cy="50" r="48" fill="#fff"/>
+    <polyline points="90,0 40,50 90,100" fill="none" stroke="#000" stroke-width="10" stroke-linecap="butt" stroke-linejoin="miter"/>
+  </mask>
+  <circle cx="50" cy="50" r="48" fill="#8a4f80" mask="url(#vitriol-cut)"/>
+</svg>

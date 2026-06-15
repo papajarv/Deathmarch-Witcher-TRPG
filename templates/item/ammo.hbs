@@ -1,0 +1,166 @@
+{{!-- Ammunition item sheet — two-layer (display tooltip / config form).
+        Ammo carries only what travels with the shot: damage type(s) and
+        on-hit qualities. The firing weapon owns damage / WA / skill. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-ammo" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure item{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ── DISPLAY VIEW ──────────────────────────────────────────── --}}
+  <div class="wdm-display-view" data-rarity="{{source.availability}}">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">{{localize (lookup WITCHER.weapon.ammoTypes source.ammoType)}} · {{localize "TYPES.Item.ammo"}}</div>
+        </div>
+      </header>
+
+      {{#if source.damageTypes.length}}
+        <div class="wdm-w3-hero">
+          <div class="wdm-w3-hero-value">
+            {{#each source.damageTypes}}{{#unless @first}} · {{/unless}}{{localize (lookup ../WITCHER.damageTypes this)}}{{/each}}
+          </div>
+          <div class="wdm-w3-hero-label">DAMAGE TYPE</div>
+        </div>
+      {{/if}}
+
+      {{#if weaponQualityList.length}}
+        <div class="wdm-w3-tags">
+          {{#each weaponQualityList}}
+            <span class="wdm-w3-tag" data-tooltip="{{this.description}}" data-tooltip-direction="UP">{{this.label}}</span>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if source.effects}}
+        <div class="wdm-w3-effects">{{{source.effects}}}</div>
+      {{/if}}
+
+      {{#if source.description}}
+        <div class="wdm-w3-description">{{{source.description}}}</div>
+      {{/if}}
+
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        {{#unless (eq source.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+        {{/unless}}
+        {{#if source.conceal}}
+          {{#unless (eq source.conceal "N/A")}}
+            <span class="wdm-w3-foot-cell" title="Concealability"><i class="fa-solid fa-eye-slash"></i>{{localize (lookup WITCHER.concealment source.conceal)}}</span>
+          {{/unless}}
+        {{/if}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ── CONFIG VIEW ───────────────────────────────────────────── --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Ammunition name" />
+      </div>
+
+      <div class="wdm-cfg-section">Damage Types</div>
+      <div class="wdm-cfg-checkgrid">
+        {{#each WITCHER.damageTypes}}
+          <label class="wdm-cfg-check">
+            <input type="checkbox" name="system.damageTypes" value="{{@key}}"
+                   data-dtype="String"
+                   {{#if (includes ../source.damageTypes @key)}}checked{{/if}} />
+            <span>{{localize this}}</span>
+          </label>
+        {{/each}}
+      </div>
+
+      <div class="wdm-cfg-section">Qualities <span class="wdm-cfg-sub">(edit catalog in system settings)</span></div>
+      <div class="wdm-cfg-checkgrid">
+        {{#each weaponQualitiesCatalog}}
+          {{#if this.param}}
+            <div class="wdm-cfg-check is-parameterized" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+              <label class="wdm-cfg-check-label">
+                <input type="checkbox" name="system.qualities" value="{{@key}}"
+                       data-dtype="String"
+                       {{#if (includes ../source.qualities @key)}}checked{{/if}} />
+                <span>{{this.label}}</span>
+              </label>
+              <input type="{{this.param.type}}" class="wdm-cfg-param"
+                     name="system.qualityValues.{{@key}}"
+                     value="{{lookup ../source.qualityValues @key}}"
+                     placeholder="{{this.param.placeholder}}"
+                     title="Parameter for {{this.label}}" />
+              {{#if this.param.suffix}}<span class="wdm-cfg-param-suffix">{{this.param.suffix}}</span>{{/if}}
+            </div>
+          {{else}}
+            <label class="wdm-cfg-check" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+              <input type="checkbox" name="system.qualities" value="{{@key}}"
+                     data-dtype="String"
+                     {{#if (includes ../source.qualities @key)}}checked{{/if}} />
+              <span>{{this.label}}</span>
+            </label>
+          {{/if}}
+        {{/each}}
+      </div>
+
+      <div class="wdm-cfg-section">Procurement</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row" title="Whether this is an arrow (for bows) or a bolt (for crossbows). A weapon only loads ammo matching its own ammo type.">
+          <span>Ammo Type</span>
+          <select name="system.ammoType">
+            {{#each WITCHER.weapon.ammoTypes}}
+              <option value="{{@key}}" {{#if (eq @key ../source.ammoType)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Availability</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Conceal</span>
+          <select name="system.conceal">
+            {{#each WITCHER.concealment}}
+              <option value="{{@key}}" {{#if (eq @key ../source.conceal)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Weight (kg)</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Cost</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Quantity</span>
+          <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+        <label class="wdm-cfg-row is-checkbox">
+          <span>Equipped</span>
+          <input type="checkbox" name="system.equipped" {{#if source.equipped}}checked{{/if}} />
+        </label>
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Description</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="Ammunition lore, appearance, narrative notes…">{{source.description}}</textarea>
+
+    </div>
+  </div>
+
+</div>

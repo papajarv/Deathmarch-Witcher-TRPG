@@ -1,0 +1,209 @@
+{
+    "id": "witcher-ttrpg-death-march",
+    "title": "Death March — an unofficial system for The Witcher TRPG",
+    "description": "Death March is a unified, stand-alone Foundry VTT game system for tabletop play in the world of The Witcher. Death March is unofficial content provided under the Homebrew Content Policy of R. Talsorian Games and is not approved or endorsed by RTG. This content references materials that are the property of R. Talsorian Games and its licensees.",
+    "version": "1.0.0",
+    "compatibility": {
+        "minimum": "14",
+        "verified": "14.363"
+    },
+    "esmodules": [
+        "module/main.mjs"
+    ],
+    "styles": [
+        "styles/tokens.css",
+        "styles/base.css",
+        "styles/chrome.css",
+        "styles/leftbar.css",
+        "styles/sidebar.css",
+        "styles/context-menu.css",
+        "styles/skills-panel.css",
+        "styles/gm-panel.css",
+        "styles/weather.css",
+        "styles/sheets.css",
+        "styles/sheets-actor.css",
+        "styles/sheets-item.css",
+        "styles/monster-sheet.css",
+        "styles/compendium.css",
+        "styles/inventory.css",
+        "styles/statuses.css",
+        "styles/journal.css",
+        "styles/crafting.css",
+        "styles/character.css",
+        "styles/map.css",
+        "styles/bestiary.css",
+        "styles/active-effect.css",
+        "styles/character-sheet.css",
+        "styles/farkle.css",
+        "styles/dicepoker.css",
+        "styles/merchant.css"
+    ],
+    "languages": [
+        {
+            "lang": "en",
+            "name": "English",
+            "path": "lang/en.json"
+        }
+    ],
+    "packs": [
+        {
+            "name": "equipment",
+            "label": "Equipment",
+            "path": "packs/equipment",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "Core gear: weapons, armor, armor enhancements, ammunition (incl. Elderfolk). Transcribed from the Core Rulebook. Rebuild via `npm run build:packs` after editing packs-src/equipment/."
+                }
+            }
+        },
+        {
+            "name": "generalGear",
+            "label": "General Gear",
+            "path": "packs/generalGear",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "Mount gear (saddles, barding), tool kits, general gear, containers, food & drink, and clothing. Transcribed from the Core Rulebook (pp.91-97). Rebuild via `npm run build:packs` after editing packs-src/generalGear/."
+                }
+            }
+        },
+        {
+            "name": "alchemy",
+            "label": "Alchemy",
+            "path": "packs/alchemy",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "Everything alchemy: the nine substances' forageable ingredients (component items), the general alchemical items, and their formulae (diagrams). Formulae link to the item they produce (associatedItem.uuid) and to their substance requirements (alchemyComponents). Witcher gear (potions/oils/decoctions) is intentionally excluded. Transcribed from the Core Rulebook (pp.87-89, 143-147). Rebuild via `npm run build:packs` after editing packs-src/alchemy/."
+                }
+            }
+        },
+        {
+            "name": "crafting",
+            "label": "Crafting",
+            "path": "packs/crafting",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "Everything non-alchemy crafting: the crafting components (materials, hides, alchemical treatments, ingots & minerals) and all crafting diagrams (weapon/armor/elderfolk/ammunition/armor-enhancement gear plus ingredient diagrams that refine components). Diagrams link to the item they produce (associatedItem.uuid — gear → equipment pack, ingredient diagrams → this pack's components) and to their required components (craftingComponents[]). Alchemy is intentionally excluded. Transcribed from the Core Rulebook (pp.124-141). Rebuild via `npm run build:packs` after editing packs-src/crafting/."
+                }
+            }
+        },
+        {
+            "name": "experimentalTech",
+            "label": "Experimental Tech",
+            "path": "packs/experimentalTech",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "Experimental Technology (Core pp.254-255): bombs (`weapon`), traps (`weapon`), and ammunition (`ammo`), plus their crafting recipes (`diagrams`, isFormulae:false — physical Craft-DC component lists). Recipes link to the item they produce (associatedItem.uuid → this pack) and to required components (craftingComponents[] → alchemy/crafting packs). Effect text paraphrased; dice/DCs/costs verbatim. Folders: Bombs, Traps, Ammunition, Recipes (Bomb Formulae / Trap Diagrams / Ammunition Diagrams). Rebuild via `npm run build:packs` after editing packs-src/experimentalTech/."
+                }
+            }
+        },
+        {
+            "name": "witcherGear",
+            "label": "Witcher Gear",
+            "path": "packs/witcherGear",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "Witcher-only gear: witcher potions, blade oils, decoctions (all `alchemical` items) and the red/green/blue `mutagen` items. Descriptions are paraphrased from the Core Rulebook (pp.247-252). Effects that map cleanly to a stat carry functional Active Effects (authored as flags.<sys>.actions[]); conditional/edge effects stay text-only. Rebuild via `npm run build:packs` after editing packs-src/witcherGear/."
+                }
+            }
+        },
+        {
+            "name": "magic",
+            "label": "Magic and Runes",
+            "path": "packs/magic",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "All castable magic: mage spells (novice/journeyman/master), witcher signs, priest/druid/preacher invocations (`spell` items), rituals (`ritual`), and hexes (`hex`). Structured castable fields (numeric staminaCost/castingTime, enum defense/school/form/tier, {value,unit} duration). Also the Runes & Glyphs (`enhancement` items, type rune/glyph): the ten deity runestones (weapon) and five elemental glyphs (armor). Descriptions are paraphrased from the Core Rulebook (pp.99-122, 256-257). Rebuild via `npm run build:packs` after editing packs-src/magic/."
+                }
+            }
+        },
+        {
+            "name": "character",
+            "label": "Character Options",
+            "path": "packs/character",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "Character build options: professions (`profession`), races (`race`), and homelands (`homeland`). Professions carry defining skill, three skill-tree paths, and the granted skill package. Races/homelands carry quality boxes plus transferring ActiveEffects for their stat bonuses. Descriptions paraphrased from the Core Rulebook (pp.21-24, 37, 43-44, 62-70). Rebuild via `npm run build:packs` after editing packs-src/character/."
+                }
+            }
+        },
+        {
+            "name": "criticalWounds",
+            "label": "Critical Wounds",
+            "path": "packs/criticalWounds",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "The critical wound tables (`criticalWound` items) — simple/complex/difficult/deadly by hit location, with Effect / Stabilized / Treated column text and transferring ActiveEffects for flat stat penalties. Paraphrased from the Core Rulebook (pp.158-161, 174-175). Rebuild via `npm run build:packs` after editing packs-src/criticalWounds/."
+                }
+            }
+        },
+        {
+            "name": "dice",
+            "label": "Dice",
+            "path": "packs/dice",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "Custom gaming dice (`die` items) used as Farkle stakes/skins — 14 face-art designs reskinning the 3D dice with per-pip art from assets/farkle/dice/, plus a `Dice Box` (`container`). Item icons use assets/farkle/dice_icons/. Organised into two folders: `Dice` (honest, all weights equal) and `Loaded Dice` (biased face weights across distinct Farkle strategies — singles, each triple, three-pairs, twin-triplets — with descriptions hinting at the favoured outcome). Loaded twins carry salted _ids (`loaded:<name>`) so they don't collide with the fair dice's name-hash. Rebuild via `npm run build:packs` after editing packs-src/dice/."
+                }
+            }
+        },
+        {
+            "name": "bestiary",
+            "label": "Bestiary",
+            "path": "packs/bestiary",
+            "type": "Actor",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "The bestiary: monster/NPC stat-blocks (`monster` Actors) with stats, skills, threat rating, bounty, armor, inline attacks, damage profile, knowledge tiers (skill+DC gated lore), vulnerabilities, special abilities, signature mutagen and loot. Paraphrased from the Core Rulebook bestiary (pp.268-313). Rebuild via `npm run build:packs` after editing packs-src/bestiary/."
+                }
+            }
+        }
+    ],
+    "packFolders": [],
+    "relationships": {
+        "requires": [],
+        "recommends": []
+    },
+    "socket": true,
+    "initiative": "1d10",
+    "grid": {
+        "distance": 2,
+        "units": "m"
+    },
+    "primaryTokenAttribute": "derivedStats.hp",
+    "secondaryTokenAttribute": "derivedStats.sta",
+    "url": "",
+    "manifest": "",
+    "download": ""
+}

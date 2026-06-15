@@ -1,0 +1,20 @@
+{{!-- One configurable field: a plain number-with-unit, or a word-scale slider
+      whose readout is a plain word (Dry / Average / Wet …) instead of a number.
+      Fed a field-row object built by WeatherConfigApp#fieldRow. --}}
+<div class="wdm-cfg-field {{#if (eq this.type "scale")}}is-scale{{else}}is-number{{/if}}">
+    <span class="wdm-cfg-flabel">{{this.label}}</span>
+    {{#if (eq this.type "scale")}}
+    <span class="wdm-cfg-slider">
+        <input type="range" class="wdm-cfg-scale" data-kind="{{this.kind}}"
+               name="{{this.name}}" value="{{this.value}}"
+               min="{{this.min}}" max="{{this.max}}" step="{{this.step}}">
+        <span class="wdm-cfg-word">{{this.word}}</span>
+    </span>
+    {{else}}
+    <span class="wdm-cfg-num">
+        <input type="number" name="{{this.name}}" value="{{this.value}}" step="{{this.step}}">
+        {{#if this.unit}}<span class="wdm-cfg-unit">{{this.unit}}</span>{{/if}}
+    </span>
+    {{/if}}
+    {{#if this.hint}}<span class="wdm-cfg-fhint">{{this.hint}}</span>{{/if}}
+</div>

@@ -1,0 +1,364 @@
+/* =============================================================================
+   WITCHER OVERHAUL UI · sheets  (Phase 5)
+   Lightweight palette + typography wash over Foundry windows. Low
+   specificity on purpose — anything our chrome layouts touch will win
+   automatically. No layout fights, no per-actor-type DOM targeting.
+   Just paint the colours and fonts; let the system's own structure ride.
+
+   Scope: paired selectors for both Foundry sheet generations.
+     · body.witcher-ttrpg-death-march .application — ApplicationV2 (character, loot, item sheets)
+     · body.witcher-ttrpg-death-march .window-app  — ApplicationV1  (monster sheet, journals,
+                                                      any legacy dialogs)
+   Every rule pairs both so the wash applies uniformly. The wash hooks only
+   into generic elements (.window-header, h1, input, progress) so it carries
+   across both DOM shapes despite their minor differences.
+   ============================================================================= */
+
+/* ---- Window chrome ----------------------------------------------------- */
+body.witcher-ttrpg-death-march .application,
+body.witcher-ttrpg-death-march .window-app {
+    background: var(--wdm-bg);
+    color: var(--wdm-ink);
+    border: 1px solid rgba(140, 133, 121, 0.18);
+}
+body.witcher-ttrpg-death-march .application .window-header,
+body.witcher-ttrpg-death-march .window-app .window-header {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.55));
+    border-bottom: 1px solid var(--wdm-amber-dim);
+}
+body.witcher-ttrpg-death-march .application .window-header .window-title,
+body.witcher-ttrpg-death-march .window-app .window-header .window-title {
+    font-family: var(--wdm-font-display);
+    font-weight: 600;
+    letter-spacing: var(--wdm-track);
+    text-transform: uppercase;
+    color: var(--wdm-amber-bright);
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.9);
+}
+body.witcher-ttrpg-death-march .application .window-content,
+body.witcher-ttrpg-death-march .window-app .window-content {
+    background: transparent;
+    color: var(--wdm-ink);
+}
+
+/* ---- Typography -------------------------------------------------------- */
+body.witcher-ttrpg-death-march .application,
+body.witcher-ttrpg-death-march .window-app {
+    font-family: var(--wdm-font-body);
+}
+body.witcher-ttrpg-death-march .application h1,
+body.witcher-ttrpg-death-march .application h2,
+body.witcher-ttrpg-death-march .application h3,
+body.witcher-ttrpg-death-march .application h4,
+body.witcher-ttrpg-death-march .window-app h1,
+body.witcher-ttrpg-death-march .window-app h2,
+body.witcher-ttrpg-death-march .window-app h3,
+body.witcher-ttrpg-death-march .window-app h4 {
+    font-family: var(--wdm-font-display);
+    letter-spacing: var(--wdm-track);
+    text-transform: uppercase;
+    color: var(--wdm-ink-bright);
+}
+/* Headers force a display font + uppercase; FA icons inside need to keep
+   their own font-family (Foundry v14 ships FA7, family "Font Awesome 7 Pro"
+   / "Font Awesome 7 Brands") or the glyphs render as empty boxes. Selector
+   matches both modern `i.fa-solid` and legacy `i.fas` forms. */
+body.witcher-ttrpg-death-march .application :is(h1,h2,h3,h4) :is(.fa-solid, .fas, .fa-regular, .far, .fa-brands, .fab),
+body.witcher-ttrpg-death-march .window-app  :is(h1,h2,h3,h4) :is(.fa-solid, .fas, .fa-regular, .far, .fa-brands, .fab) {
+    font-family: "Font Awesome 7 Pro", "Font Awesome 7 Brands", "FontAwesome" !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+}
+body.witcher-ttrpg-death-march .application label,
+body.witcher-ttrpg-death-march .window-app label {
+    color: var(--wdm-ink-dim);
+}
+
+/* ---- Form controls ----------------------------------------------------- */
+body.witcher-ttrpg-death-march .application input[type="text"],
+body.witcher-ttrpg-death-march .application input[type="number"],
+body.witcher-ttrpg-death-march .application input[type="search"],
+body.witcher-ttrpg-death-march .application textarea,
+body.witcher-ttrpg-death-march .application select,
+body.witcher-ttrpg-death-march .window-app input[type="text"],
+body.witcher-ttrpg-death-march .window-app input[type="number"],
+body.witcher-ttrpg-death-march .window-app input[type="search"],
+body.witcher-ttrpg-death-march .window-app textarea,
+body.witcher-ttrpg-death-march .window-app select {
+    background: var(--wdm-bg-deep);
+    border: 1px solid var(--wdm-amber-dim);
+    color: var(--wdm-ink-hi);
+}
+/* Option children of select.  Browser defaults render the dropdown list with
+   light-on-light text under our dark chrome — opt-bg has to be set explicitly
+   or the popup picks system colors. */
+body.witcher-ttrpg-death-march .application select option,
+body.witcher-ttrpg-death-march .window-app select option {
+    background: var(--wdm-bg-deep);
+    color: var(--wdm-ink-hi);
+}
+body.witcher-ttrpg-death-march .application select option:disabled,
+body.witcher-ttrpg-death-march .window-app select option:disabled {
+    color: var(--wdm-ink-faint);
+}
+body.witcher-ttrpg-death-march .application input[type="text"]:focus,
+body.witcher-ttrpg-death-march .application input[type="number"]:focus,
+body.witcher-ttrpg-death-march .application input[type="search"]:focus,
+body.witcher-ttrpg-death-march .application textarea:focus,
+body.witcher-ttrpg-death-march .application select:focus,
+body.witcher-ttrpg-death-march .window-app input[type="text"]:focus,
+body.witcher-ttrpg-death-march .window-app input[type="number"]:focus,
+body.witcher-ttrpg-death-march .window-app input[type="search"]:focus,
+body.witcher-ttrpg-death-march .window-app textarea:focus,
+body.witcher-ttrpg-death-march .window-app select:focus {
+    border-color: var(--wdm-amber-hi);
+    box-shadow: 0 0 0 1px var(--wdm-amber-hi);
+    outline: none;
+}
+body.witcher-ttrpg-death-march .application input[type="checkbox"],
+body.witcher-ttrpg-death-march .window-app input[type="checkbox"] {
+    accent-color: var(--wdm-amber);
+}
+
+/* ---- Buttons (dialogs + sheets) ---------------------------------------
+   Foundry's DialogV2 footer buttons + any in-sheet buttons.  Default
+   Foundry styling renders them with light backgrounds + dark text, which
+   is unreadable under the witcher-ou dark theme. */
+body.witcher-ttrpg-death-march .application button,
+body.witcher-ttrpg-death-march .application .form-footer button,
+body.witcher-ttrpg-death-march .window-app button {
+    background: var(--wdm-bg-deep);
+    border: 1px solid var(--wdm-amber-dim);
+    color: var(--wdm-ink-hi);
+    font-family: var(--wdm-font-display);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.20em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 2px;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    cursor: pointer;
+}
+body.witcher-ttrpg-death-march .application button:hover,
+body.witcher-ttrpg-death-march .application .form-footer button:hover,
+body.witcher-ttrpg-death-march .window-app button:hover {
+    border-color: var(--wdm-amber);
+    color: var(--wdm-amber-bright);
+    background: rgba(184, 148, 100, 0.06);
+}
+/* Default / primary action (Foundry tags it with class="default") */
+body.witcher-ttrpg-death-march .application button.default,
+body.witcher-ttrpg-death-march .application .form-footer button.default,
+body.witcher-ttrpg-death-march .window-app button.default {
+    background: linear-gradient(180deg, rgba(184, 148, 100, 0.18), rgba(184, 148, 100, 0.06));
+    border-color: var(--wdm-amber);
+    color: var(--wdm-amber-bright);
+}
+body.witcher-ttrpg-death-march .application button.default:hover,
+body.witcher-ttrpg-death-march .application .form-footer button.default:hover,
+body.witcher-ttrpg-death-march .window-app button.default:hover {
+    background: linear-gradient(180deg, rgba(184, 148, 100, 0.28), rgba(184, 148, 100, 0.10));
+    color: var(--wdm-ink-bright);
+}
+/* Foundry sometimes uses <button data-action="..."> as plain icon strips
+   (no padding, no chrome) — leave those alone by un-painting buttons that
+   have only an <i> child or carry the `.plain` class. */
+body.witcher-ttrpg-death-march .application button.plain,
+body.witcher-ttrpg-death-march .window-app button.plain,
+body.witcher-ttrpg-death-march .application button.inline-control,
+body.witcher-ttrpg-death-march .window-app button.inline-control {
+    background: none;
+    border: none;
+    padding: 0;
+    letter-spacing: normal;
+    text-transform: none;
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+}
+
+/* Restore Font Awesome on header controls + any element carrying FA classes.
+   The .application button rule above overrides font-family on every button
+   in a sheet/window, which would otherwise nuke FA glyphs on V14 header
+   controls (close, popout, configure — they're <button class="header-control
+   fa-solid fa-…">). FA-classed elements must keep their icon font.
+
+   Foundry v14.363 ships Font Awesome 7 (family name "Font Awesome 7 Pro"
+   for solid/regular/light/thin/duotone, "Font Awesome 7 Brands" for brands;
+   verified via resources/app/public/fonts/fontawesome/css/all.min.css).
+   FA6 family names ("Font Awesome 6 Pro/Free") are NOT loaded — referencing
+   them here would force a fallback to the inherited display font, which is
+   why the previous FA6 values rendered as empty glyph boxes on the window
+   title bar. Keep the variable-driven primary so a Foundry upgrade that
+   re-styles FA picks up the right family automatically. */
+body.witcher-ttrpg-death-march .application .fa,
+body.witcher-ttrpg-death-march .application .fas,
+body.witcher-ttrpg-death-march .application .far,
+body.witcher-ttrpg-death-march .application .fab,
+body.witcher-ttrpg-death-march .application .fa-solid,
+body.witcher-ttrpg-death-march .application .fa-regular,
+body.witcher-ttrpg-death-march .application .fa-brands,
+body.witcher-ttrpg-death-march .application .fa-light,
+body.witcher-ttrpg-death-march .application .fa-thin,
+body.witcher-ttrpg-death-march .application .fa-duotone,
+body.witcher-ttrpg-death-march .window-app .fa,
+body.witcher-ttrpg-death-march .window-app .fas,
+body.witcher-ttrpg-death-march .window-app .far,
+body.witcher-ttrpg-death-march .window-app .fab,
+body.witcher-ttrpg-death-march .window-app .fa-solid,
+body.witcher-ttrpg-death-march .window-app .fa-regular,
+body.witcher-ttrpg-death-march .window-app .fa-brands,
+body.witcher-ttrpg-death-march .window-app .fa-light,
+body.witcher-ttrpg-death-march .window-app .fa-thin,
+body.witcher-ttrpg-death-march .window-app .fa-duotone {
+    font-family: var(--_fa-family, var(--fa-family, var(--fa-style-family, "Font Awesome 7 Pro"))), "Font Awesome 6 Free", "FontAwesome" !important;
+}
+body.witcher-ttrpg-death-march .application .fab,
+body.witcher-ttrpg-death-march .window-app .fab,
+body.witcher-ttrpg-death-march .application .fa-brands,
+body.witcher-ttrpg-death-march .window-app .fa-brands {
+    font-family: "Font Awesome 7 Brands", "Font Awesome 6 Brands" !important;
+}
+
+/* ---- Anchors / rollable links ----------------------------------------- */
+body.witcher-ttrpg-death-march .application a,
+body.witcher-ttrpg-death-march .window-app a {
+    color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march .application a:hover,
+body.witcher-ttrpg-death-march .window-app a:hover {
+    color: var(--wdm-amber-bright);
+    text-shadow: 0 0 6px rgba(184, 148, 100, 0.4);
+}
+
+/* ---- Scrollbars -------------------------------------------------------- */
+body.witcher-ttrpg-death-march .application ::-webkit-scrollbar,
+body.witcher-ttrpg-death-march .window-app ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+body.witcher-ttrpg-death-march .application ::-webkit-scrollbar-track,
+body.witcher-ttrpg-death-march .window-app ::-webkit-scrollbar-track {
+    background: var(--wdm-bg-deep);
+}
+body.witcher-ttrpg-death-march .application ::-webkit-scrollbar-thumb,
+body.witcher-ttrpg-death-march .window-app ::-webkit-scrollbar-thumb {
+    background: var(--wdm-amber-dim);
+    border-radius: 3px;
+}
+body.witcher-ttrpg-death-march .application ::-webkit-scrollbar-thumb:hover,
+body.witcher-ttrpg-death-march .window-app ::-webkit-scrollbar-thumb:hover {
+    background: var(--wdm-amber-hi);
+}
+
+/* ---- Heal/Rest dialog --------------------------------------------------
+   DialogV2 content area for the rest flow (healSheetMixin). Plain
+   semantic markup; the wash above handles colours/fonts. */
+body.witcher-ttrpg-death-march .wdm-heal-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 2px;
+    color: var(--wdm-ink);
+    font-family: var(--wdm-font-body);
+}
+body.witcher-ttrpg-death-march .wdm-heal-dialog .wdm-heal-desc {
+    margin: 0;
+    color: var(--wdm-ink-dim);
+    font-size: 12px;
+}
+body.witcher-ttrpg-death-march .wdm-heal-dialog .wdm-heal-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+body.witcher-ttrpg-death-march .wdm-heal-dialog .wdm-heal-options label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--wdm-ink-hi);
+    cursor: pointer;
+}
+body.witcher-ttrpg-death-march .wdm-heal-dialog .wdm-heal-warning {
+    margin: 0;
+    padding: 6px 10px;
+    background: rgba(140, 60, 60, 0.12);
+    border: 1px solid rgba(140, 60, 60, 0.4);
+    color: var(--wdm-red-bright);
+    border-radius: var(--wdm-radius-sm);
+    font-size: 12px;
+}
+body.witcher-ttrpg-death-march .wdm-heal-dialog .wdm-heal-readout {
+    margin: 0;
+    padding: 6px 10px;
+    font-family: var(--wdm-font-display);
+    font-weight: 700;
+    letter-spacing: var(--wdm-track);
+    text-transform: uppercase;
+    color: var(--wdm-amber-bright);
+    background: var(--wdm-bg-deep);
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: var(--wdm-radius-sm);
+    text-align: center;
+}
+body.witcher-ttrpg-death-march .wdm-heal-dialog .wdm-heal-sub {
+    margin: 0;
+    color: var(--wdm-ink-dim);
+    font-size: 11px;
+    text-align: center;
+}
+body.witcher-ttrpg-death-march .wdm-heal-dialog .invisible {
+    visibility: hidden;
+}
+
+/* ---- Native <progress> bars -------------------------------------------
+   Plain solid-fill amber gradient. No sawtooth mask. Per-stat tints below
+   tint the fill itself; the system's <progress class='hp-bar'> etc. drive
+   which colour shows. */
+body.witcher-ttrpg-death-march .application progress,
+body.witcher-ttrpg-death-march .window-app progress {
+    -webkit-appearance: none;
+       -moz-appearance: none;
+            appearance: none;
+    background: var(--wdm-bg-deep);
+    border: 1px solid rgba(140, 133, 121, 0.18);
+    border-radius: 0;
+    overflow: hidden;
+}
+body.witcher-ttrpg-death-march .application progress::-webkit-progress-bar,
+body.witcher-ttrpg-death-march .window-app progress::-webkit-progress-bar {
+    background: var(--wdm-bg-deep);
+}
+body.witcher-ttrpg-death-march .application progress::-webkit-progress-value,
+body.witcher-ttrpg-death-march .window-app progress::-webkit-progress-value {
+    background: linear-gradient(90deg, var(--wdm-amber-dim), var(--wdm-amber-bright));
+}
+body.witcher-ttrpg-death-march .application progress::-moz-progress-bar,
+body.witcher-ttrpg-death-march .window-app progress::-moz-progress-bar {
+    background: linear-gradient(90deg, var(--wdm-amber-dim), var(--wdm-amber-bright));
+}
+
+/* Per-stat tints (the system tags each bar with its stat name) */
+body.witcher-ttrpg-death-march .application progress.hp-bar::-webkit-progress-value,
+body.witcher-ttrpg-death-march .window-app progress.hp-bar::-webkit-progress-value          { background: linear-gradient(90deg, rgba(140, 60, 60, 0.55), var(--wdm-red-bright)); }
+body.witcher-ttrpg-death-march .application progress.sta-bar::-webkit-progress-value,
+body.witcher-ttrpg-death-march .window-app progress.sta-bar::-webkit-progress-value         { background: linear-gradient(90deg, rgba(60, 100, 140, 0.55), var(--wdm-frost)); }
+body.witcher-ttrpg-death-march .application progress.toxicity-bar::-webkit-progress-value,
+body.witcher-ttrpg-death-march .window-app progress.toxicity-bar::-webkit-progress-value    { background: linear-gradient(90deg, rgba(110, 138, 74, 0.55), var(--wdm-poison)); }
+body.witcher-ttrpg-death-march .application progress.focus-bar::-webkit-progress-value,
+body.witcher-ttrpg-death-march .application progress.resolve-bar::-webkit-progress-value,
+body.witcher-ttrpg-death-march .window-app progress.focus-bar::-webkit-progress-value,
+body.witcher-ttrpg-death-march .window-app progress.resolve-bar::-webkit-progress-value     { background: linear-gradient(90deg, rgba(60, 100, 140, 0.55), var(--wdm-frost)); }
+
+body.witcher-ttrpg-death-march .application progress.hp-bar::-moz-progress-bar,
+body.witcher-ttrpg-death-march .window-app progress.hp-bar::-moz-progress-bar               { background: linear-gradient(90deg, rgba(140, 60, 60, 0.55), var(--wdm-red-bright)); }
+body.witcher-ttrpg-death-march .application progress.sta-bar::-moz-progress-bar,
+body.witcher-ttrpg-death-march .window-app progress.sta-bar::-moz-progress-bar              { background: linear-gradient(90deg, rgba(60, 100, 140, 0.55), var(--wdm-frost)); }
+body.witcher-ttrpg-death-march .application progress.toxicity-bar::-moz-progress-bar,
+body.witcher-ttrpg-death-march .window-app progress.toxicity-bar::-moz-progress-bar         { background: linear-gradient(90deg, rgba(110, 138, 74, 0.55), var(--wdm-poison)); }
+body.witcher-ttrpg-death-march .application progress.focus-bar::-moz-progress-bar,
+body.witcher-ttrpg-death-march .application progress.resolve-bar::-moz-progress-bar,
+body.witcher-ttrpg-death-march .window-app progress.focus-bar::-moz-progress-bar,
+body.witcher-ttrpg-death-march .window-app progress.resolve-bar::-moz-progress-bar          { background: linear-gradient(90deg, rgba(60, 100, 140, 0.55), var(--wdm-frost)); }
+

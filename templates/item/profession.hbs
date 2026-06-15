@@ -1,0 +1,256 @@
+{{!-- Profession item sheet — Core p.62-70. Two-layer:
+        DISPLAY → reads the profession: defining skill, three trees, and
+                  the package of regular skills it grants (with stats).
+        CONFIG  → edit those (cog toggle, owners only).
+      A profession item is dropped on a character to populate its
+      profession pane; field shape matches what the chrome pane reads
+      (definingSkill / skillPath1-3 / professionSkills). --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-profession" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure profession{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view">
+    <div class="wdm-prof">
+
+      <header class="wdm-prof-head">
+        <img class="wdm-prof-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-prof-head-titles">
+          <div class="wdm-prof-eyebrow">Profession</div>
+          <h1 class="wdm-prof-title">{{item.name}}</h1>
+        </div>
+      </header>
+
+      {{#if source.description}}
+        <div class="wdm-prof-flavor">{{{source.description}}}</div>
+      {{/if}}
+
+      {{#if source.definingSkill.skillName}}
+        <section class="wdm-prof-defining-card">
+          <div class="wdm-prof-card-eyebrow">Defining Skill</div>
+          <div class="wdm-prof-defining-row">
+            <span class="wdm-prof-defining-name">{{source.definingSkill.skillName}}</span>
+            <span class="wdm-prof-stat-badge{{#unless source.definingSkill.stat}} is-na{{/unless}}">{{lookup statLabels source.definingSkill.stat}}</span>
+          </div>
+          {{#if source.definingSkill.definition}}
+            <div class="wdm-prof-skill-def">{{{source.definingSkill.definition}}}</div>
+          {{/if}}
+        </section>
+      {{/if}}
+
+      {{#if treesDisplay.length}}
+        <div class="wdm-prof-section-label">Skill Trees</div>
+        <div class="wdm-prof-trees">
+          {{#each treesDisplay}}
+            <section class="wdm-prof-tree is-{{tone}}">
+              <header class="wdm-prof-tree-head">{{name}}</header>
+              {{#each skills}}
+                <article class="wdm-prof-tree-skill">
+                  <div class="wdm-prof-tree-skill-top">
+                    <span class="wdm-prof-tree-skill-name">{{skillName}}</span>
+                    <span class="wdm-prof-stat-badge{{#if statNA}} is-na{{/if}}">{{statLabel}}</span>
+                  </div>
+                  {{#if definition}}<div class="wdm-prof-tree-skill-def">{{{definition}}}</div>{{/if}}
+                </article>
+              {{/each}}
+            </section>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if packageGroups.length}}
+        <div class="wdm-prof-section-label">Profession Skills</div>
+        <div class="wdm-prof-package">
+          {{#each packageGroups}}
+            <div class="wdm-prof-pkg-group">
+              <div class="wdm-prof-pkg-stat-head">{{statLabel}}</div>
+              <div class="wdm-prof-pkg-chips">
+                {{#each skills}}
+                  <span class="wdm-prof-chip">{{label}}</span>
+                {{/each}}
+              </div>
+            </div>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if skillPackagesDisplay.length}}
+        <div class="wdm-prof-section-label">Skill Packages</div>
+        <div class="wdm-prof-package">
+          {{#each skillPackagesDisplay}}
+            <div class="wdm-prof-pkg-group">
+              <div class="wdm-prof-pkg-stat-head">Choose {{choose}} of</div>
+              <div class="wdm-prof-pkg-chips">
+                {{#each options}}
+                  <span class="wdm-prof-chip">{{label}}</span>
+                {{/each}}
+              </div>
+            </div>
+          {{/each}}
+        </div>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Profession (e.g. Witcher)" />
+      </div>
+
+      <div class="wdm-cfg-section">Medallion Icon <span class="wdm-cfg-sub">(SVG shown in the dock medallion)</span></div>
+      <label class="wdm-cfg-row"><span>Icon path</span>
+        <input type="text" name="system.medallionIcon" value="{{source.medallionIcon}}"
+               placeholder="icons/skills/trades/academics-book-study-purple.webp"
+               data-action="editImage" data-edit="system.medallionIcon"
+               title="Click to pick an SVG/image" readonly />
+      </label>
+
+      <div class="wdm-cfg-section">Vigor <span class="wdm-cfg-sub">(starting allowance — Core p.38; a floor the character can't lose)</span></div>
+      <label class="wdm-cfg-row"><span>Baseline vigor</span>
+        <input type="number" name="system.vigor" value="{{source.vigor}}" min="0" step="1"
+               title="Per-round Vigor threshold this profession grants. 0 for non-casters." />
+      </label>
+
+      <div class="wdm-cfg-section">Defining Skill</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Skill name</span>
+          <input type="text" name="system.definingSkill.skillName" value="{{source.definingSkill.skillName}}" placeholder="e.g. Witcher Training" />
+        </label>
+        <label class="wdm-cfg-row"><span>Governing stat</span>
+          <select name="system.definingSkill.stat">
+            {{#each definingStatOptions}}
+              <option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+            {{/each}}
+          </select>
+        </label>
+      </div>
+      <textarea class="wdm-cfg-textarea" name="system.definingSkill.definition"
+                placeholder="What the defining skill does…">{{source.definingSkill.definition}}</textarea>
+
+      {{#each treesConfig}}
+        <div class="wdm-cfg-section">{{label}}</div>
+        <label class="wdm-cfg-row"><span>Path name</span>
+          <input type="text" name="system.{{prefix}}.pathName" value="{{pathName}}" placeholder="Tree name" />
+        </label>
+        {{#each skills}}
+          <div class="wdm-prof-cfg-slot">
+            <label class="wdm-cfg-row"><span>Skill {{n}}</span>
+              <input type="text" name="system.{{prefix}}.{{slot}}.skillName" value="{{skillName}}" placeholder="Skill name" />
+            </label>
+            <label class="wdm-cfg-row"><span>Stat</span>
+              <select name="system.{{prefix}}.{{slot}}.stat">
+                {{#each statOptions}}
+                  <option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                {{/each}}
+              </select>
+            </label>
+            <textarea class="wdm-cfg-textarea" name="system.{{prefix}}.{{slot}}.definition"
+                      placeholder="What this skill does…">{{definition}}</textarea>
+          </div>
+        {{/each}}
+      {{/each}}
+
+      <div class="wdm-cfg-section">Profession Skills <span class="wdm-cfg-sub">(the regular skills this profession grants)</span></div>
+      {{#each skillGroups}}
+        <div class="wdm-prof-pick-group">
+          <div class="wdm-prof-pick-stat">{{statLabel}}</div>
+          <div class="wdm-cfg-checkgrid">
+            {{#each skills}}
+              <label class="wdm-cfg-check">
+                <input type="checkbox" name="system.professionSkills" value="{{key}}"
+                       data-dtype="String" {{#if selected}}checked{{/if}} />
+                <span>{{label}}</span>
+              </label>
+            {{/each}}
+          </div>
+        </div>
+      {{/each}}
+
+      <div class="wdm-cfg-section">Skill Packages
+        <span class="wdm-cfg-sub">(choose X of Y — the player picks when the profession is dropped)</span>
+      </div>
+      {{#each skillPackages}}
+        <div class="wdm-prof-pkg" data-package="{{index}}">
+          <div class="wdm-prof-pkg-head">
+            <span class="wdm-prof-pkg-word">Choose</span>
+            <button type="button" class="wdm-prof-pkg-step" data-action="stepPackageChoose"
+                    data-index="{{index}}" data-delta="-1" title="Fewer">&minus;</button>
+            <span class="wdm-prof-pkg-num">{{choose}}</span>
+            <button type="button" class="wdm-prof-pkg-step" data-action="stepPackageChoose"
+                    data-index="{{index}}" data-delta="1" title="More">+</button>
+            <span class="wdm-prof-pkg-word">of:</span>
+            <button type="button" class="wdm-prof-pkg-remove" data-action="removeSkillPackage"
+                    data-index="{{index}}" title="Remove this package"><i class="fa-solid fa-trash"></i></button>
+          </div>
+          <div class="wdm-prof-pkg-opts">
+            {{#each options}}
+              <span class="wdm-prof-pkg-chip">{{label}}<button type="button"
+                    class="wdm-prof-pkg-chip-x" data-action="removePackageOption"
+                    data-index="{{../index}}" data-skill="{{key}}" title="Remove">&times;</button></span>
+            {{/each}}
+            {{#if addable.length}}
+              <select class="wdm-prof-pkg-add" data-index="{{index}}">
+                <option value="">+ add skill…</option>
+                {{#each addable}}<option value="{{key}}">{{label}}</option>{{/each}}
+              </select>
+            {{/if}}
+          </div>
+        </div>
+      {{/each}}
+      <button type="button" class="wdm-cfg-add" data-action="addSkillPackage">
+        <i class="fa-solid fa-plus"></i> Add package
+      </button>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Description</div>
+      <textarea class="wdm-cfg-textarea is-tall" name="system.description"
+                placeholder="The profession's flavour and role…">{{source.description}}</textarea>
+
+      {{!-- School passives: transfer Active Effects applied to whoever has this
+            profession (target Combat passives via the AE editor). --}}
+      <div class="wdm-cfg-section">Passives <span class="wdm-cfg-sub">(Active Effects — applied to the character)</span></div>
+      <div class="wdm-cfg-effects">
+        {{#if effects.length}}
+          <ul class="wdm-effect-list">
+            {{#each effects}}
+              <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                <div class="wdm-effect-head">
+                  <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                  <span class="wdm-effect-name">{{this.name}}</span>
+                  <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                    <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                  </a>
+                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                </div>
+              </li>
+            {{/each}}
+          </ul>
+        {{else}}
+          <p class="wdm-empty">No passives configured.</p>
+        {{/if}}
+        <button type="button" class="wdm-add-effect" data-action="createEffect">
+          <i class="fa-solid fa-plus"></i> Add Passive
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</div>

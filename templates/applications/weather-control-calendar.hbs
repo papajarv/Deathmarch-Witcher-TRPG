@@ -1,0 +1,123 @@
+{{!-- Calendar tab of the WeatherControlApp. A month grid where each day shows
+      its deterministic weather icon and moon phase. Click a day for a detail
+      panel; the GM can travel the world clock there explicitly. --}}
+<section class="tab wdm-wc-tab {{tab.cssClass}}" data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+    {{#if calUnavailable}}
+    <p class="wdm-wc-cal-empty">{{localize "WITCHER.Weather.CalUnavailable"}}</p>
+    {{else}}
+
+    <div class="wdm-wc-cal-nav">
+        <span class="wdm-wc-cal-navside">
+            <button type="button" class="wdm-wc-cal-regen" data-action="calRegenMonth"
+                    data-tooltip="{{localize 'WITCHER.Weather.RegenMonth'}}">
+                <i class="fa-solid fa-dice"></i>
+            </button>
+            {{#if calMonthHasSeed}}
+            <button type="button" class="wdm-wc-cal-reset" data-action="calResetMonth"
+                    data-tooltip="{{localize 'WITCHER.Weather.ResetMonth'}}">
+                <i class="fa-solid fa-rotate-left"></i>
+            </button>
+            {{/if}}
+        </span>
+        <div class="wdm-wc-cal-navc">
+            <button type="button" class="wdm-wc-cal-step" data-action="calPrev"
+                    data-tooltip="{{localize 'WITCHER.Weather.CalPrev'}}">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <div class="wdm-wc-cal-title">
+                <span class="wdm-wc-cal-month">
+                    {{calMonthName}}{{#if calMonthAnalogue}} <span class="wdm-wc-cal-analogue">({{calMonthAnalogue}})</span>{{/if}}
+                    <input class="wdm-wc-cal-year" type="number" step="1"
+                           value="{{calYear}}" data-bind="cal-year"
+                           data-tooltip="{{localize 'WITCHER.Weather.CalYearHint'}}"/>
+                </span>
+                <span class="wdm-wc-cal-biome">{{calBiome}}</span>
+            </div>
+            <button type="button" class="wdm-wc-cal-step" data-action="calNext"
+                    data-tooltip="{{localize 'WITCHER.Weather.CalNext'}}">
+                <i class="fa-solid fa-chevron-right"></i>
+            </button>
+        </div>
+        <span class="wdm-wc-cal-navside wdm-wc-cal-navside--end">
+            <button type="button" class="wdm-wc-cal-today" data-action="calToday">
+                {{localize "WITCHER.Weather.Today"}}
+            </button>
+        </span>
+    </div>
+
+    <div class="wdm-wc-cal-grid">
+        {{#each calWeekdays}}
+        <div class="wdm-wc-cal-wd" data-tooltip="{{this.full}}">{{this.abbr}}</div>
+        {{/each}}
+
+        {{#each calLead}}
+        <div class="wdm-wc-cal-cell is-blank"></div>
+        {{/each}}
+
+        {{#each calDays}}
+        <button type="button"
+                class="wdm-wc-cal-cell {{#if this.isToday}}is-today{{/if}} {{#if this.selected}}is-selected{{/if}}"
+                data-action="calSelect" data-day="{{this.idx}}"
+                data-tooltip="{{this.cond}}{{#if this.badge}} {{this.badge}}{{/if}} · {{this.temp}} · {{this.moonName}}">
+            <span class="wdm-wc-cal-top">
+                <span class="wdm-wc-cal-num">{{this.day}}</span>
+                {{#if this.moonIcon}}<i class="wdm-wc-cal-moon {{this.moonIcon}}"></i>{{/if}}
+            </span>
+            <i class="wdm-wc-cal-wx {{this.weatherIcon}}"></i>
+            <span class="wdm-wc-cal-temp">{{this.temp}}</span>
+        </button>
+        {{/each}}
+    </div>
+
+    {{#if calDetail}}
+    <div class="wdm-wc-cal-detail">
+        <div class="wdm-wc-cal-dhead">
+            <span class="wdm-wc-cal-dtitle">{{calDetail.title}}</span>
+            <span class="wdm-wc-cal-dsub">
+                {{calDetail.weekday}} · {{calDetail.season}}
+                {{#if calDetail.moonIcon}}<i class="wdm-wc-cal-dmoon {{calDetail.moonIcon}}"></i> {{calDetail.moonName}}{{/if}}
+            </span>
+        </div>
+
+        <ul class="wdm-wc-cal-parts">
+            {{#each calDetail.dayparts}}
+            <li class="wdm-wc-cal-part">
+                <span class="wdm-wc-cal-pname">{{this.label}}</span>
+                <i class="wdm-wc-cal-picon {{this.icon}}"></i>
+                <span class="wdm-wc-cal-pcond">{{this.cond}}{{#if this.badge}} <span class="wdm-wc-badge">{{this.badge}}</span>{{/if}}</span>
+                <span class="wdm-wc-cal-ptemp">{{this.temp}}</span>
+            </li>
+            {{/each}}
+        </ul>
+
+        <div class="wdm-wc-cal-dsun">
+            <span data-tooltip="{{localize 'WITCHER.Weather.Dawn'}}"><i class="fa-solid fa-arrow-up-from-line"></i> {{calDetail.dawn}}</span>
+            <span data-tooltip="{{localize 'WITCHER.Weather.Dusk'}}"><i class="fa-solid fa-arrow-down-to-line"></i> {{calDetail.dusk}}</span>
+        </div>
+
+        {{#if calDetail.tags.length}}
+        <div class="wdm-wc-cal-dtags">
+            {{#each calDetail.tags}}<span class="wdm-wc-cal-dtag">{{this}}</span>{{/each}}
+        </div>
+        {{/if}}
+        <div class="wdm-wc-cal-dactions">
+            <button type="button" class="wdm-wc-cal-goto" data-action="calGoto">
+                <i class="fa-solid fa-clock-rotate-left"></i> {{localize "WITCHER.Weather.GoToDay"}}
+            </button>
+            <button type="button" class="wdm-wc-cal-regen" data-action="calRegenDay"
+                    data-tooltip="{{localize 'WITCHER.Weather.RegenDay'}}">
+                <i class="fa-solid fa-dice"></i>
+            </button>
+            {{#if calDetail.hasSeed}}
+            <button type="button" class="wdm-wc-cal-reset" data-action="calResetDay"
+                    data-tooltip="{{localize 'WITCHER.Weather.ResetDay'}}">
+                <i class="fa-solid fa-rotate-left"></i>
+            </button>
+            {{/if}}
+        </div>
+    </div>
+    {{/if}}
+
+    {{/if}}
+</section>

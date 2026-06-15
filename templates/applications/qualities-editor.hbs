@@ -1,0 +1,93 @@
+{{!-- Qualities Editor — GM-only world settings form.
+      Two catalogs (weapon, armor), one card per quality, every entry
+      field exposed as a friendly control. Field names are
+      `<prefix>.<index>.<field>` (w = weapon, a = armor); the app reads
+      them back with FormDataExtended + expandObject and diffs each card
+      against the seed default on save. No JSON. --}}
+
+<div class="wdm-qe">
+
+  <header class="wdm-qe-head">
+    <h2>Weapon &amp; Armor Qualities</h2>
+    <p class="wdm-qe-blurb">
+      Edit the runtime catalog of weapon and armor qualities. Each card is one
+      quality: its display name, description, and an optional parameter — the
+      inline value a player fills in (Bleeding's <code>%</code>, Silver's dice
+      formula, Focus's number). Untouched qualities keep the built-in defaults.
+    </p>
+  </header>
+
+  {{#each catalogs as |cat|}}
+  <section class="wdm-qe-section">
+    <div class="wdm-qe-section-head">
+      <h3>{{cat.label}}</h3>
+      <button type="button" class="wdm-se-btn" data-action="addQuality" data-catalog="{{cat.name}}">
+        <i class="fa-solid fa-plus"></i> Add
+      </button>
+      <button type="button" class="wdm-qe-reset" data-action="resetCatalog" data-catalog="{{cat.name}}"
+              title="Discard your override; revert to system defaults">
+        <i class="fa-solid fa-arrow-rotate-left"></i> Reset to defaults
+      </button>
+    </div>
+
+    <div class="wdm-qe-list">
+      {{#each cat.rows as |q|}}
+      <details class="wdm-qe-card">
+        <summary class="wdm-qe-card-summary">
+          <span class="wdm-qe-sum-name">{{q.label}}</span>
+          <code class="wdm-qe-sum-key">{{q.key}}</code>
+        </summary>
+        <div class="wdm-qe-card-body">
+        <input type="hidden" name="{{cat.prefix}}.{{q.index}}.isDefault" value="{{q.isDefault}}" />
+
+        <div class="wdm-qe-card-head">
+          <label class="wdm-se-field wdm-qe-name">
+            <span class="wdm-se-label">Name</span>
+            <input type="text" name="{{cat.prefix}}.{{q.index}}.label" value="{{q.label}}" />
+          </label>
+          <label class="wdm-se-field wdm-qe-key">
+            <span class="wdm-se-label">Key
+              {{#if q.isDefault}}<span class="wdm-se-tag">built-in</span>{{/if}}
+            </span>
+            <input type="text" name="{{cat.prefix}}.{{q.index}}.key" value="{{q.key}}"
+                   {{#if q.isDefault}}readonly{{/if}} placeholder="camelCaseKey" />
+          </label>
+          <button type="button" class="wdm-se-remove" data-action="removeQuality"
+                  data-catalog="{{cat.name}}" data-index="{{q.index}}" title="Remove this quality">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+
+        <label class="wdm-se-field">
+          <span class="wdm-se-label">Description</span>
+          <textarea name="{{cat.prefix}}.{{q.index}}.description" rows="2" spellcheck="false">{{q.description}}</textarea>
+        </label>
+
+        <div class="wdm-qe-param">
+          <label class="wdm-se-mini">
+            <span>Parameter</span>
+            <select name="{{cat.prefix}}.{{q.index}}.paramType">
+              {{#each q.paramTypeOptions as |o|}}
+              <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
+              {{/each}}
+            </select>
+          </label>
+          <label class="wdm-se-mini">
+            <span>Placeholder</span>
+            <input type="text" name="{{cat.prefix}}.{{q.index}}.paramPlaceholder" value="{{q.paramPlaceholder}}"
+                   placeholder="e.g. 25" />
+          </label>
+          <label class="wdm-se-mini">
+            <span>Suffix</span>
+            <input type="text" name="{{cat.prefix}}.{{q.index}}.paramSuffix" value="{{q.paramSuffix}}"
+                   placeholder="e.g. %" />
+          </label>
+        </div>
+        </div>
+      </details>
+      {{/each}}
+    </div>
+  </section>
+  {{/each}}
+
+</div>

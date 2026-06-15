@@ -1,0 +1,83 @@
+{{!-- Perk item sheet — a perk: icon + description + one or more transfer:true
+        Active Effects (stack as many as you like).
+        DISPLAY  → icon + name + description
+        CONFIG   → icon / name / description + the Active Effects. --}}
+
+<div class="wdm-item-sheet wdm-item-v2" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure perk{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════ DISPLAY VIEW ════════════ --}}
+  <div class="wdm-display-view">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">Perk</div>
+        </div>
+      </header>
+
+      {{#if source.description}}
+        <div class="wdm-w3-section-label">Description</div>
+        <div class="wdm-w3-effects">{{{source.description}}}</div>
+      {{else}}
+        <div class="wdm-w3-effects wdm-empty">No description yet.</div>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{!-- ════════════ CONFIG VIEW ════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Perk name" />
+      </div>
+
+      <div class="wdm-cfg-section">Description</div>
+      <textarea class="wdm-cfg-textarea is-tall" name="system.description"
+                placeholder="What this perk represents (a life event, a school bonus, a quirk…)">{{source.description}}</textarea>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      {{!-- The mechanics: a transfer:true Active Effect applied to whoever
+            carries the perk. Target stats/skills/combat passives in the AE editor. --}}
+      <div class="wdm-cfg-section">Effects <span class="wdm-cfg-sub">(Active Effects — applied to the character; stack as many as you like)</span></div>
+      <div class="wdm-cfg-effects">
+        {{#if effects.length}}
+          <ul class="wdm-effect-list">
+            {{#each effects}}
+              <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                <div class="wdm-effect-head">
+                  <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                  <span class="wdm-effect-name">{{this.name}}</span>
+                  <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                    <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                  </a>
+                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                </div>
+              </li>
+            {{/each}}
+          </ul>
+        {{else}}
+          <p class="wdm-empty">No effect configured.</p>
+        {{/if}}
+        <button type="button" class="wdm-add-effect" data-action="createEffect">
+          <i class="fa-solid fa-plus"></i> Add Effect
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</div>

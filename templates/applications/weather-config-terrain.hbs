@@ -1,0 +1,113 @@
+{{!-- Terrain tab. One card per landsite: a map appearance row (colour + icon)
+      and the local weather tweaks, shown as word sliders + plain numbers via the
+      field partial. --}}
+<section class="tab wdm-cfg-tab {{tab.cssClass}}" data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+    <div class="wdm-cfg-help">
+        <i class="fa-solid fa-circle-info"></i>
+        <p>{{localize "WITCHER.Weather.Config.TerrainIntro"}}</p>
+    </div>
+
+    <div class="wdm-cfg-section-head">
+        <h3><i class="fa-solid fa-earth-europe"></i> {{localize "WITCHER.Weather.Config.WorldMap"}}</h3>
+    </div>
+    <div class="wdm-cfg-card">
+        <div class="wdm-cfg-help">
+            <i class="fa-solid fa-circle-info"></i>
+            <p>{{localize "WITCHER.Weather.Config.WorldMapIntro"}}</p>
+        </div>
+        <div class="wdm-cfg-group">
+            <div class="wdm-cfg-fields wdm-cfg-meta">
+                <div class="wdm-cfg-field wdm-cfg-field-wide">
+                    <span class="wdm-cfg-flabel">{{localize "WITCHER.Weather.Config.MapScene"}}</span>
+                    <select name="map.scene">
+                        {{#each map.sceneOptions}}
+                        <option value="{{this.id}}" {{#if this.selected}}selected{{/if}}>{{this.name}}</option>
+                        {{/each}}
+                    </select>
+                    <span class="wdm-cfg-fhint">{{localize "WITCHER.Weather.Config.MapSceneHint"}}</span>
+                </div>
+            </div>
+        </div>
+        <div class="wdm-cfg-group">
+            <div class="wdm-cfg-fields">
+                <div class="wdm-cfg-field is-number">
+                    <span class="wdm-cfg-flabel">{{localize "WITCHER.Weather.Config.LatitudeSpan"}}</span>
+                    <span class="wdm-cfg-num">
+                        <input type="number" name="map.latitudeSpan" value="{{map.latitudeSpan}}" min="0" max="40" step="1">
+                        <span class="wdm-cfg-unit">°C</span>
+                    </span>
+                    <span class="wdm-cfg-fhint">{{localize "WITCHER.Weather.Config.LatitudeSpanHint"}}</span>
+                </div>
+                <div class="wdm-cfg-field is-number">
+                    <span class="wdm-cfg-flabel">{{localize "WITCHER.Weather.Config.FrontSweepDays"}}</span>
+                    <span class="wdm-cfg-num">
+                        <input type="number" name="map.frontSweepHours" value="{{map.frontSweepHours}}" min="1" max="336" step="1">
+                        <span class="wdm-cfg-unit">{{localize "WITCHER.Weather.Config.HoursUnit"}}</span>
+                    </span>
+                    <span class="wdm-cfg-fhint">{{localize "WITCHER.Weather.Config.FrontSweepDaysHint"}}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="wdm-cfg-section-head">
+        <h3><i class="fa-solid fa-mountain-sun"></i> {{localize "WITCHER.Weather.Config.Landsites"}}</h3>
+        <button type="button" class="wdm-cfg-add" data-action="addTerrain">
+            <i class="fa-solid fa-plus"></i> {{localize "WITCHER.Weather.Config.AddTerrain"}}
+        </button>
+    </div>
+
+    {{#each terrain}}
+    <div class="wdm-cfg-card">
+        <div class="wdm-cfg-card-head">
+            <span class="wdm-cfg-card-title">
+                <i class="{{this.icon}}" style="color:{{this.color}}"></i>
+                {{this.label}}
+            </span>
+            {{#unless this.isSeed}}
+            <button type="button" class="wdm-cfg-del" data-action="removeTerrain" data-key="{{this.key}}"
+                    data-tooltip="{{localize 'WITCHER.Weather.Config.Remove'}}">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+            {{/unless}}
+        </div>
+
+        <div class="wdm-cfg-group">
+            <span class="wdm-cfg-group-label">{{localize "WITCHER.Weather.Config.GroupMap"}}</span>
+            <div class="wdm-cfg-fields wdm-cfg-meta">
+                <div class="wdm-cfg-field">
+                    <span class="wdm-cfg-flabel">{{localize "WITCHER.Weather.Config.Field.color"}}</span>
+                    <input type="color" name="terrain.{{this.key}}.color" value="{{this.color}}">
+                </div>
+                <div class="wdm-cfg-field wdm-cfg-field-wide">
+                    <span class="wdm-cfg-flabel">{{localize "WITCHER.Weather.Config.Field.icon"}}</span>
+                    <input type="text" name="terrain.{{this.key}}.icon" value="{{this.icon}}" placeholder="fa-solid fa-mountain">
+                    <span class="wdm-cfg-fhint">{{localize "WITCHER.Weather.Config.Hint.icon"}}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="wdm-cfg-group">
+            <span class="wdm-cfg-group-label">{{localize "WITCHER.Weather.Config.GroupTemp"}}</span>
+            <div class="wdm-cfg-fields">
+                {{#each this.tempFields}}{{> "systems/witcher-ttrpg-death-march/templates/applications/weather-config-field.hbs"}}{{/each}}
+            </div>
+        </div>
+        <div class="wdm-cfg-group">
+            <span class="wdm-cfg-group-label">{{localize "WITCHER.Weather.Config.GroupCond"}}</span>
+            <div class="wdm-cfg-fields">
+                {{#each this.condFields}}{{> "systems/witcher-ttrpg-death-march/templates/applications/weather-config-field.hbs"}}{{/each}}
+            </div>
+        </div>
+    </div>
+    {{/each}}
+
+    <div class="wdm-cfg-tab-foot">
+        {{#unless usingDefaults}}<span class="wdm-cfg-custom-flag"><i class="fa-solid fa-pen"></i> {{localize "WITCHER.Weather.Config.Customized"}}</span>{{/unless}}
+        <button type="button" class="wdm-cfg-reset" data-action="resetTab" data-tab="terrain">
+            <i class="fa-solid fa-rotate-left"></i> {{localize "WITCHER.Weather.Config.ResetTab"}}
+        </button>
+    </div>
+
+</section>

@@ -1,0 +1,206 @@
+{{!-- Alchemical item sheet — two-layer (RAW Core p.83-95):
+        DISPLAY  → Witcher 3 in-game tooltip aesthetic (player reads)
+        CONFIG   → editable form (GM / owner with cog toggle)
+      Hero is type-driven (computed in WitcherAlchemicalSheet):
+        bomb                       → damage formula
+        potion/decoction           → toxicity
+        item/oil/other             → duration (or type label) --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-alchemical" data-mode="{{mode}}">
+
+  {{!-- ── Mode toggle (top-right) ─────────────────────────────── --}}
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure item{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view" data-rarity="{{source.availability}}">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">{{typeLabel}}</div>
+        </div>
+      </header>
+
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value">{{heroValue}}</div>
+        <div class="wdm-w3-hero-label">{{heroLabel}}</div>
+        {{#if heroSub}}
+          <div class="wdm-w3-hero-sub">{{heroSub}}</div>
+        {{/if}}
+      </div>
+
+      <ul class="wdm-w3-stats">
+        {{#if isBomb}}
+          {{#if source.range}}
+            <li class="wdm-w3-stat">
+              <span class="val">{{source.range}}</span>
+              <span class="lbl">Throwing Range</span>
+            </li>
+          {{/if}}
+          {{#unless (eq source.area 0)}}
+            <li class="wdm-w3-stat">
+              <span class="val">{{source.area}}m</span>
+              <span class="lbl">Area of Effect</span>
+            </li>
+          {{/unless}}
+        {{/if}}
+      </ul>
+
+      {{#if source.description}}
+        <div class="wdm-w3-description">{{{source.description}}}</div>
+      {{/if}}
+
+      {{!-- Footer mirrors the weapon display: weight + qty + conceal on
+           the left, availability + price anchored right. --}}
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        {{#unless (eq source.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+        {{/unless}}
+        {{#if source.conceal}}
+          {{#unless (eq source.conceal "N/A")}}
+            <span class="wdm-w3-foot-cell" title="Concealability"><i class="fa-solid fa-eye-slash"></i>{{localize (lookup WITCHER.concealment source.conceal)}}</span>
+          {{/unless}}
+        {{/if}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — compact spec form
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Alchemical name" />
+      </div>
+
+      <div class="wdm-cfg-section">Classification</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Type</span>
+          <select name="system.type">
+            {{#each WITCHER.alchemical.types}}
+              <option value="{{@key}}" {{#if (eq @key ../source.type)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        {{#if hasToxicity}}
+          <label class="wdm-cfg-row"><span>Toxicity</span>
+            <input type="number" min="0" name="system.toxicity" value="{{source.toxicity}}"
+                   title="Added to the Toxicity pool when consumed; pool > 100 → damage (Core p.84)" />
+          </label>
+        {{/if}}
+        {{#unless isBomb}}
+          <label class="wdm-cfg-row"><span>Duration</span>
+            <input type="text" name="system.duration" value="{{source.duration}}" placeholder="e.g. 1 hour, 10 rounds" />
+          </label>
+        {{/unless}}
+        {{#if isConsumableType}}
+          <label class="wdm-cfg-row"><span>Consumable</span>
+            <input type="checkbox" name="system.consumable" {{#if source.consumable}}checked{{/if}}
+                   title="When used (hotbar / right-click), spend one dose and apply this item's effects to the holder." />
+          </label>
+        {{/if}}
+      </div>
+
+      {{#if isBomb}}
+        <div class="wdm-cfg-section">Bomb</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span>Damage</span>
+            <input type="text" name="system.damage" value="{{source.damage}}" placeholder="5d6" />
+          </label>
+          <label class="wdm-cfg-row"><span>Damage Type</span>
+            <select name="system.damageType">
+              <option value="" {{#if (eq source.damageType "")}}selected{{/if}}>— none —</option>
+              {{#each WITCHER.damageTypes}}
+                <option value="{{@key}}" {{#if (eq @key ../source.damageType)}}selected{{/if}}>{{localize this}}</option>
+              {{/each}}
+            </select>
+          </label>
+          <label class="wdm-cfg-row"><span>Range</span>
+            <input type="text" name="system.range" value="{{source.range}}" placeholder="e.g. 10 or BODYx4" />
+          </label>
+          <label class="wdm-cfg-row"><span>Area (m)</span>
+            <input type="number" min="0" name="system.area" value="{{source.area}}" />
+          </label>
+        </div>
+      {{/if}}
+
+      <div class="wdm-cfg-section">Effects <span class="wdm-cfg-sub">(Foundry Active Effects)</span></div>
+      <div class="wdm-cfg-effects">
+        {{#if effects.length}}
+          <ul class="wdm-effect-list">
+            {{#each effects}}
+              <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                <div class="wdm-effect-head">
+                  <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                  <span class="wdm-effect-name">{{this.name}}</span>
+                  {{#if this.duration.label}}<span class="wdm-effect-duration">{{this.duration.label}}</span>{{/if}}
+                  <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                    <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                  </a>
+                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                </div>
+              </li>
+            {{/each}}
+          </ul>
+        {{else}}
+          <p class="wdm-empty">No effects configured.</p>
+        {{/if}}
+        <button type="button" class="wdm-add-effect" data-action="createEffect">
+          <i class="fa-solid fa-plus"></i> Add Effect
+        </button>
+      </div>
+
+      <div class="wdm-cfg-section">Procurement</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Availability</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Conceal</span>
+          <select name="system.conceal">
+            {{#each WITCHER.concealment}}
+              <option value="{{@key}}" {{#if (eq @key ../source.conceal)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Weight (kg)</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Cost</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Quantity</span>
+          <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Description</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="Alchemical lore, appearance, provenance…">{{source.description}}</textarea>
+
+    </div>
+  </div>
+
+</div>

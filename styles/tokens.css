@@ -1,0 +1,261 @@
+/* =============================================================================
+   WITCHER OVERHAUL UI · design tokens
+   These are the design primitives the rest of the module composes from.
+   Single source of truth for colour, type, motion, geometry, shadows.
+
+   All tokens live under `body.witcher-ttrpg-death-march` so a master disable removes them.
+   Per-feature toggles add `.wou-<feature>` body classes on top.
+   ============================================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&family=Barlow:wght@300;400;500;600&display=swap');
+
+@font-face {
+  font-family: 'PF DIN Text Cond Pro';
+  src: local('PF DIN Text Cond Pro'), local('PFDinTextCondPro-Regular');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'PF DIN Text Cond Pro';
+  src: local('PF DIN Text Cond Pro Bold'), local('PFDinTextCondPro-Bold');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'PF DIN Text Cond Pro';
+  src: local('PF DIN Text Cond Pro Italic'), local('PFDinTextCondPro-Italic');
+  font-weight: 400; font-style: italic; font-display: swap;
+}
+
+body.witcher-ttrpg-death-march {
+  /* ============================  COLOUR  ===================================
+     Sampled from the W3 base game references (empty BG averaged at #131313)
+     and tuned through the prototype.html merge. The amber tones are kept
+     intentionally muted ("aged tarnished brass") to avoid the vibrant green
+     cast that comes from saturated yellow stacking against warm-dark BG.
+  */
+
+  /* canvas */
+  --wdm-void:        #050402;     /* deepest black                          */
+  --wdm-bg:          #0a0908;     /* primary background — warm-tinged dark  */
+  --wdm-bg-lifted:   #14110d;     /* slightly raised panels                 */
+  --wdm-bg-deep:     #050402;     /* recessed wells / shadow pits           */
+
+  /* ink (text + line work) */
+  --wdm-ink-faint:   #5a574e;     /* hairline rules, very dim labels        */
+  --wdm-ink-dim:     #8a857a;     /* secondary labels, tab dim state        */
+  --wdm-ink:         #b0a994;     /* body text                              */
+  --wdm-ink-hi:      #cac4b0;     /* names, numbers                         */
+  --wdm-ink-bright:  #e0dac4;     /* peak highlight                         */
+  --wdm-ink-ash:     rgba(38, 28, 14, 0.95);   /* dark text on gilt surfaces */
+
+  /* amber accents — muted */
+  --wdm-amber-dim:   #6e5224;
+  --wdm-amber:       #a88450;
+  --wdm-amber-hi:    #b89464;
+  --wdm-amber-bright:#c8a878;
+
+  /* gilt (torn parchment surfaces) — normalised to the muted amber family */
+  --wdm-gilt:        #b58838;
+  --wdm-gilt-hi:     #d8a448;
+  --wdm-gilt-dk:     #5a3e1c;
+
+  /* signs / status (also intentionally muted) */
+  --wdm-red:         #8c3c3c;
+  --wdm-red-bright:  #a25050;
+  --wdm-poison:      #6e8a4a;
+  --wdm-frost:       #6a8aa2;
+  --wdm-bronze:      #9a7e44;
+  --wdm-teal:        #3a8a78;     /* rail-clip stroke (carried-weapon clips) */
+  --wdm-teal-dim:    #2c6258;
+
+  /* alchemical substance elements (component substanceType) — muted to sit
+     against warm-dark BG without screaming */
+  --wdm-elem-vitriol:    #4a8a5e;   /* iron/copper sulfate green       */
+  --wdm-elem-rebis:      #8a5a9a;   /* hermetic violet (red+blue)      */
+  --wdm-elem-aether:     #8ea8b8;   /* pale fifth-element cyan         */
+  --wdm-elem-quebrith:   #c0a040;   /* sulfur yellow                   */
+  --wdm-elem-hydragenum: #a8b0b8;   /* mercury silver                  */
+  --wdm-elem-vermilion:  #b04848;   /* mercury sulfide red             */
+  --wdm-elem-sol:        #d8a448;   /* sun gold                        */
+  --wdm-elem-caelum:     #6a8aa2;   /* sky blue                        */
+  --wdm-elem-fulgur:     #9a78c0;   /* lightning violet                */
+
+  /* substance badge palette (the alchemical-symbol SVGs). These are the
+     book glyph colours desaturated to sit against the warm-dark BG. Kept
+     SEPARATE from --wdm-elem-* (which the weather/character UI reuse) so
+     recolouring the badges never bleeds into those features. Source of
+     truth: assets/icons/substances/*.svg disc fills + crafting.js node colors. */
+  --wdm-sub-vitriol:     #8a4f80;
+  --wdm-sub-rebis:       #c25a44;
+  --wdm-sub-aether:      #7a9e9c;
+  --wdm-sub-quebrith:    #b0a544;
+  --wdm-sub-hydragenum:  #5e72a4;
+  --wdm-sub-vermilion:   #5f8a62;
+  --wdm-sub-sol:         #c39a4a;
+  --wdm-sub-caelum:      #9aae54;
+  --wdm-sub-fulgur:      #9a4540;
+
+  /* rarity / availability tiers (item background gradient). Everywhere has
+     no tier color — it keeps the plain slot background. */
+  --wdm-rarity-common:   #8a857b;   /* light warm grey — no tier, near-zero sat */
+  --wdm-rarity-poor:     #6a4f8c;   /* muted violet (~28% S, theme-matched)     */
+  --wdm-rarity-rare:     #b06b44;   /* rust-orange (~42% S) — held a touch warm  */
+                                    /* + red-shifted (~22° hue) so it can't read  */
+                                    /* green for protan/deutan vision             */
+  --wdm-rarity-witcher:  #a04040;   /* blood red (~40% S) — in the --wdm-red family */
+  /* scratchy grain (anisotropic turbulence → fine vertical scratches)
+     overlaid on rarity tiles for texture */
+  --wdm-rarity-tex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.9 0.05' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23s)' opacity='0.5'/%3E%3C/svg%3E");
+
+  /* ============================  TYPOGRAPHY  ============================== */
+  --wdm-font-display: 'PF DIN Text Cond Pro', 'Barlow Condensed', 'Oswald', sans-serif;
+  --wdm-font-body:    'Barlow', 'Barlow Condensed', system-ui, sans-serif;
+  --wdm-font-mono:    ui-monospace, 'JetBrains Mono', Menlo, monospace;
+
+  /* tracking ladders for all-caps headers */
+  --wdm-track-tight:  0.06em;
+  --wdm-track:        0.18em;
+  --wdm-track-wide:   0.28em;
+  --wdm-track-extra:  0.40em;
+
+  /* ============================  GEOMETRY  =============================== */
+  --wdm-radius-xs:    2px;
+  --wdm-radius-sm:    3px;
+  --wdm-radius:       4px;
+  --wdm-radius-pill:  999px;
+
+  --wdm-rule-1:       1px solid rgba(140,133,121,0.18);
+  --wdm-rule-2:       1px solid rgba(140,133,121,0.10);
+  --wdm-rule-amber:   1px solid var(--wdm-amber-dim);
+
+  /* sawtooth bar tooth pitch (used by .wou-sawtooth) */
+  --wdm-tooth-w:      12.5px;
+  --wdm-tooth-h:      10px;
+
+  /* ============================  SHADOWS  ================================ */
+  --wdm-shadow-card:  0 6px 18px rgba(0,0,0,0.7);
+  --wdm-shadow-amber: 0 0 14px rgba(184,148,100,0.22);
+
+  /* ============================  MOTION  ================================ */
+  --wdm-ease:         cubic-bezier(.2,.6,.25,1);
+  --wdm-dur-fast:     0.12s;
+  --wdm-dur:          0.18s;
+  --wdm-dur-slow:     0.35s;
+
+  /* ============================  Z LAYERS  =============================== */
+  --wdm-z-chrome:     50;
+  --wdm-z-overlay:    100;
+  --wdm-z-modal:      1000;
+}
+
+/* =============================================================================
+   UTILITY ATOMS — small reusable pieces composed by feature CSS layers
+   ============================================================================= */
+
+/* All-caps display label, tight tracking */
+.wou-cap-tight  { font-family: var(--wdm-font-display); text-transform: uppercase; letter-spacing: var(--wdm-track-tight); font-weight: 600; }
+.wou-cap        { font-family: var(--wdm-font-display); text-transform: uppercase; letter-spacing: var(--wdm-track);       font-weight: 600; }
+.wou-cap-wide   { font-family: var(--wdm-font-display); text-transform: uppercase; letter-spacing: var(--wdm-track-wide);  font-weight: 600; }
+.wou-cap-extra  { font-family: var(--wdm-font-display); text-transform: uppercase; letter-spacing: var(--wdm-track-extra); font-weight: 700; }
+
+/* Italic body for flavor / epithets */
+.wou-flavor     { font-family: var(--wdm-font-body); font-style: italic; color: var(--wdm-ink); }
+
+/* Hairline rule */
+.wou-rule       { height: 1px; background: linear-gradient(90deg, transparent, var(--wdm-amber-dim) 30%, var(--wdm-amber) 50%, var(--wdm-amber-dim) 70%, transparent); opacity: 0.5; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Token HUD (click a token) — repaint Foundry's default HUD into the chrome's
+   amber/dark theme. v14 root is #token-hud (.placeable-hud) inside #hud. Vars
+   carry literal fallbacks so the HUD stays themed even out of token scope.
+   ───────────────────────────────────────────────────────────────────────── */
+body.witcher-ttrpg-death-march #token-hud .control-icon {
+  background: var(--wdm-bg-deep, rgba(10, 9, 8, 0.88));
+  border: 1px solid var(--wdm-amber-dim, #6b5a3a);
+  border-radius: 4px;
+  color: var(--wdm-amber-bright, #c8a878);
+  box-shadow: none;
+}
+body.witcher-ttrpg-death-march #token-hud .control-icon > i { color: inherit; text-shadow: none; }
+body.witcher-ttrpg-death-march #token-hud .control-icon:hover {
+  border-color: var(--wdm-amber-bright, #c8a878);
+  color: var(--wdm-amber-bright, #c8a878);
+  box-shadow: 0 0 6px rgba(200, 168, 120, 0.45);
+}
+body.witcher-ttrpg-death-march #token-hud .control-icon.active {
+  background: var(--wdm-amber-dim, #6b5a3a);
+  border-color: var(--wdm-amber-bright, #c8a878);
+  color: var(--wdm-ink-hi, #efe4cb);
+}
+
+/* Pop-out palettes (effects / levels / movement) + list entries. */
+body.witcher-ttrpg-death-march #token-hud .palette {
+  background: var(--wdm-bg-deep, rgba(10, 9, 8, 0.94));
+  border: 1px solid var(--wdm-amber-dim, #6b5a3a);
+  border-radius: 5px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+}
+body.witcher-ttrpg-death-march #token-hud .palette-list-entry {
+  color: var(--wdm-ink, #cdbf9f);
+  font-family: var(--wdm-font-body, inherit);
+}
+body.witcher-ttrpg-death-march #token-hud .palette-list-entry:hover,
+body.witcher-ttrpg-death-march #token-hud .palette-list-entry.active {
+  color: var(--wdm-amber-bright, #c8a878);
+  background: rgba(200, 168, 120, 0.12);
+}
+
+/* Status-effects palette icons. */
+body.witcher-ttrpg-death-march #token-hud .status-effects .effect-control {
+  border: 1px solid transparent;
+  border-radius: 3px;
+  filter: grayscale(0.35) brightness(0.95);
+}
+body.witcher-ttrpg-death-march #token-hud .status-effects .effect-control:hover {
+  border-color: var(--wdm-amber-bright, #c8a878);
+  filter: none;
+}
+body.witcher-ttrpg-death-march #token-hud .status-effects .effect-control.active,
+body.witcher-ttrpg-death-march #token-hud .status-effects .effect-control.overlay {
+  border-color: var(--wdm-amber-bright, #c8a878);
+  filter: none;
+  box-shadow: 0 0 5px rgba(200, 168, 120, 0.55);
+}
+
+/* Attribute (HP/STA) bar inputs + elevation caret. */
+body.witcher-ttrpg-death-march #token-hud .attribute input {
+  background: var(--wdm-bg-deep, rgba(10, 9, 8, 0.88));
+  border: 1px solid var(--wdm-amber-dim, #6b5a3a);
+  color: var(--wdm-ink-hi, #efe4cb);
+  font-family: var(--wdm-font-body, inherit);
+}
+body.witcher-ttrpg-death-march #token-hud .attribute input:focus {
+  border-color: var(--wdm-amber-bright, #c8a878);
+  outline: none;
+}
+body.witcher-ttrpg-death-march #token-hud .attribute .caret { color: var(--wdm-amber-bright, #c8a878); }
+
+/* HP/STA bar labels — an icon before each number so the two HUD bars are
+   distinguishable (heart = vitality, bolt = stamina). Injected by
+   decorateTokenHudBars in module/canvas/token.mjs. */
+body.witcher-ttrpg-death-march #token-hud .attribute.bar1,
+body.witcher-ttrpg-death-march #token-hud .attribute.bar2 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+body.witcher-ttrpg-death-march #token-hud .attribute.bar1 input,
+body.witcher-ttrpg-death-march #token-hud .attribute.bar2 input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+body.witcher-ttrpg-death-march #token-hud .attribute .wdm-bar-icon {
+  flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 1;
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #token-hud .attribute .wdm-bar-icon.is-hp      { color: var(--wdm-red-bright, #c0504d); }
+body.witcher-ttrpg-death-march #token-hud .attribute .wdm-bar-icon.is-sta     { color: var(--wdm-gilt-hi, #d8a448); }
+body.witcher-ttrpg-death-march #token-hud .attribute .wdm-bar-icon.is-focus   { color: var(--wdm-frost, #6a8aa2); }
+body.witcher-ttrpg-death-march #token-hud .attribute .wdm-bar-icon.is-default { color: var(--wdm-amber-bright, #c8a878); }

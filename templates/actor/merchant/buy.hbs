@@ -1,0 +1,188 @@
+{{!-- Player-facing shop window. Ported from witcher-merchant-system buy-sheet.hbs. --}}
+<div class="buy-sheet-root">
+
+  {{!-- HEADER --}}
+  <div class="bs-header">
+    <img class="bs-portrait" src="{{snapshot.img}}" />
+    <div class="bs-title-block">
+      <div class="bs-shop-name">{{snapshot.shopName}}</div>
+      {{#unless (eq snapshot.shopName snapshot.name)}}
+        <div class="bs-merchant-name">{{snapshot.name}}</div>
+      {{/unless}}
+      <div class="bs-personality"><i class="fas fa-mask"></i> {{snapshot.personality}}</div>
+    </div>
+    <div class="bs-buyer-info">
+      {{#if hasBuyer}}
+        <div class="bs-buyer-label">{{localize "WITCHER.Merchant.ShoppingAs"}}</div>
+        <div class="bs-buyer-name">{{buyerName}}</div>
+      {{else}}
+        <div class="bs-buyer-warn"><i class="fas fa-exclamation-circle"></i> {{localize "WITCHER.Merchant.NoCharAssigned"}}</div>
+      {{/if}}
+    </div>
+  </div>
+
+  {{!-- TABS --}}
+  <div class="bs-tabs">
+    <button type="button" class="bs-tab {{#if (eq activeTab 'buy')}}active{{/if}}" data-action="switchTab" data-tab="buy">
+      <i class="fas fa-shopping-cart"></i> {{localize "WITCHER.Merchant.Buy"}}
+    </button>
+    <button type="button" class="bs-tab {{#if (eq activeTab 'sell')}}active{{/if}}" data-action="switchTab" data-tab="sell">
+      <i class="fas fa-hand-holding-usd"></i> {{localize "WITCHER.Merchant.Sell"}}
+    </button>
+    <button type="button" class="bs-tab-refresh" data-action="refresh" title="{{localize "WITCHER.Merchant.Refresh"}}">
+      <i class="fas fa-sync"></i>
+    </button>
+  </div>
+
+  {{!-- BUY TAB --}}
+  {{#if (eq activeTab 'buy')}}
+    <div class="bs-content">
+      {{#if appraisalLocked}}
+        <div class="bs-appraisal-lock"><i class="fas fa-lock"></i> {{localize "WITCHER.Merchant.AppraisalLockedHint"}}</div>
+      {{/if}}
+      {{#if items.length}}
+        <div class="bs-group-list">
+          {{#each groups}}
+            <section class="bs-group {{#if this.collapsed}}is-collapsed{{/if}}">
+              <header class="bs-group-header" data-action="toggleGroup" data-group="{{this.type}}" data-scope="buy">
+                <i class="fas fa-chevron-down bs-group-chevron"></i>
+                <span class="bs-group-label">{{this.label}}</span>
+                <span class="bs-group-count">({{this.count}})</span>
+              </header>
+              <div class="bs-item-list">
+                {{#each this.items}}
+                  <div class="bs-item {{#if this.pinned}}is-pinned{{/if}} {{#if this.expanded}}is-expanded{{/if}}" data-item-id="{{this.id}}">
+                    <div class="bs-item-row">
+                      <div class="bs-item-clickable" data-action="toggleItem" data-item-id="{{this.id}}" data-scope="buy">
+                        <i class="fas fa-chevron-right bs-item-chevron"></i>
+                        <div class="bs-item-slot" data-rarity="{{this.rarity}}"><img class="bs-item-img" src="{{this.img}}" /></div>
+                        <div class="bs-item-body">
+                          <div class="bs-item-name">{{this.name}}</div>
+                          <div class="bs-item-meta">
+                            <span class="bs-rarity rarity-{{this.rarity}}">{{this.rarity}}</span>
+                            <span class="bs-item-qty">×{{this.quantity}}</span>
+                            {{#if this.weight}}<span class="bs-item-weight"><i class="fas fa-weight-hanging"></i> {{this.weight}}</span>{{/if}}
+                          </div>
+                        </div>
+                      </div>
+                      <div class="bs-item-price">
+                        <div class="bs-price-display">
+                          <span class="bs-price-amount">{{this.price}}</span>
+                          <span class="bs-price-currency">{{../../snapshot.currency}}</span>
+                        </div>
+                        {{#if this.isRevealed}}
+                          <div class="bs-fair-price" title="{{localize "WITCHER.Merchant.FairTooltip"}}">
+                            <i class="fas fa-balance-scale"></i> {{localize "WITCHER.Merchant.Fair"}}: {{this.revealedBasePrice}}
+                          </div>
+                        {{/if}}
+                      </div>
+                      <div class="bs-item-actions">
+                        <button type="button" class="bs-action-btn reveal" data-action="revealPrice" data-item-id="{{this.id}}"
+                          title="{{localize "WITCHER.Merchant.RevealTooltip"}}" {{#if (or this.isRevealed ../../appraisalLocked)}}disabled{{/if}}>
+                          <i class="fas fa-search-dollar"></i>
+                        </button>
+                        <button type="button" class="bs-action-btn buy" data-action="buyItem" data-item-id="{{this.id}}">
+                          {{localize "WITCHER.Merchant.Buy"}}
+                        </button>
+                        {{#if ../../isGM}}
+                          <button type="button" class="bs-action-btn pin {{#if this.pinned}}active{{/if}}"
+                            data-action="togglePin" data-item-id="{{this.id}}" title="{{localize "WITCHER.Merchant.PinTooltip"}}">
+                            <i class="fas fa-thumbtack"></i>
+                          </button>
+                        {{/if}}
+                      </div>
+                    </div>
+                    <div class="bs-item-description">
+                      {{#if this.description}}
+                        {{{this.description}}}
+                      {{else}}
+                        <em>{{localize "WITCHER.Merchant.NoDescription"}}</em>
+                      {{/if}}
+                    </div>
+                  </div>
+                {{/each}}
+              </div>
+            </section>
+          {{/each}}
+        </div>
+      {{else}}
+        <div class="bs-empty">
+          <i class="fas fa-box-open"></i>
+          <p>{{localize "WITCHER.Merchant.ShopEmpty"}}</p>
+        </div>
+      {{/if}}
+    </div>
+  {{/if}}
+
+  {{!-- SELL TAB --}}
+  {{#if (eq activeTab 'sell')}}
+    <div class="bs-content">
+      {{#if hasBuyer}}
+        {{#if sellItems.length}}
+          <p class="bs-sell-blurb">{{localize "WITCHER.Merchant.SellBlurb"}}</p>
+          <div class="bs-group-list">
+            {{#each sellGroups}}
+              <section class="bs-group {{#if this.collapsed}}is-collapsed{{/if}}">
+                <header class="bs-group-header" data-action="toggleGroup" data-group="{{this.type}}" data-scope="sell">
+                  <i class="fas fa-chevron-down bs-group-chevron"></i>
+                  <span class="bs-group-label">{{this.label}}</span>
+                  <span class="bs-group-count">({{this.count}})</span>
+                </header>
+                <div class="bs-item-list">
+                  {{#each this.items}}
+                    <div class="bs-item {{#if this.expanded}}is-expanded{{/if}}" data-item-id="{{this.id}}">
+                      <div class="bs-item-row">
+                        <div class="bs-item-clickable" data-action="toggleItem" data-item-id="{{this.id}}" data-scope="sell">
+                          <i class="fas fa-chevron-right bs-item-chevron"></i>
+                          <div class="bs-item-slot" data-rarity="{{this.rarity}}"><img class="bs-item-img" src="{{this.img}}" /></div>
+                          <div class="bs-item-body">
+                            <div class="bs-item-name">{{this.name}}</div>
+                            <div class="bs-item-meta">
+                              <span class="bs-item-qty">×{{this.quantity}}</span>
+                              {{#if this.weight}}<span class="bs-item-weight"><i class="fas fa-weight-hanging"></i> {{this.weight}}</span>{{/if}}
+                              {{#if this.basePrice}}<span class="bs-item-basecost">{{localize "WITCHER.Merchant.Base"}} {{this.basePrice}}</span>{{/if}}
+                            </div>
+                          </div>
+                        </div>
+                        <div class="bs-item-price">
+                          <div class="bs-price-display">
+                            <span class="bs-price-amount">{{this.suggestedPrice}}</span>
+                            <span class="bs-price-currency">{{this.currency}}</span>
+                          </div>
+                          <div class="bs-sell-hint">{{localize "WITCHER.Merchant.Suggested"}}</div>
+                        </div>
+                        <div class="bs-item-actions">
+                          <button type="button" class="bs-action-btn buy" data-action="offerSell" data-item-id="{{this.id}}">
+                            {{localize "WITCHER.Merchant.Offer"}}
+                          </button>
+                        </div>
+                      </div>
+                      <div class="bs-item-description">
+                        {{#if this.description}}
+                          {{{this.description}}}
+                        {{else}}
+                          <em>{{localize "WITCHER.Merchant.NoDescription"}}</em>
+                        {{/if}}
+                      </div>
+                    </div>
+                  {{/each}}
+                </div>
+              </section>
+            {{/each}}
+          </div>
+        {{else}}
+          <div class="bs-empty">
+            <i class="fas fa-box-open"></i>
+            <p>{{localize "WITCHER.Merchant.NothingToSell"}}</p>
+          </div>
+        {{/if}}
+      {{else}}
+        <div class="bs-empty">
+          <i class="fas fa-exclamation-circle"></i>
+          <p>{{localize "WITCHER.Merchant.SellNeedChar"}}</p>
+        </div>
+      {{/if}}
+    </div>
+  {{/if}}
+
+</div>

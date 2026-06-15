@@ -1,0 +1,62 @@
+{{!-- Generic item sheet — system fallback layout, chrome-styled.
+      Covers every item type until per-type sheets land. Surfaces the
+      shared base fields (weight, quantity, equipped, class) plus the
+      description editor. Per-type fields can be reached via Foundry's
+      "Edit raw data" header button until they get bespoke UIs.
+
+      Do NOT wrap in <form>; the ApplicationV2 frame is already one
+      (DocumentSheetV2 tag:"form"). A nested form would steal input
+      ownership and break submitOnChange. --}}
+
+<div class="wdm-item-sheet">
+
+  {{!-- ── HEADER ───────────────────────────────────────────────── --}}
+  <header class="wdm-item-header">
+    <img class="wdm-portrait" src="{{item.img}}" data-edit="img" alt="" />
+    <input class="wdm-name" type="text" name="name" value="{{item.name}}" placeholder="Item name" />
+    <span class="wdm-type">{{item.type}}</span>
+  </header>
+
+  {{!-- ── BASE FIELDS ─────────────────────────────────────────── --}}
+  <section class="wdm-item-section">
+    <h2>Properties</h2>
+    <div class="wdm-item-base-grid">
+      <div class="wdm-item-field">
+        <label>Weight (kg)</label>
+        <input type="number" step="0.01" min="0" name="system.weight" value="{{system.weight}}" />
+      </div>
+      <div class="wdm-item-field">
+        <label>Quantity</label>
+        <input type="number" min="0" name="system.quantity" value="{{system.quantity}}" />
+      </div>
+      <div class="wdm-item-field">
+        <label>Encumb.</label>
+        <input type="number" step="0.01" name="system.encumb" value="{{system.encumb}}" />
+      </div>
+      <div class="wdm-item-field">
+        <label>Class</label>
+        <input type="text" name="system.class" value="{{system.class}}" />
+      </div>
+      <div class="wdm-item-field">
+        <label>{{localize "WITCHER.Item.Source"}}</label>
+        <input type="text" name="system.source" value="{{system.source}}"
+               placeholder="{{localize "WITCHER.Item.SourcePlaceholder"}}" />
+      </div>
+      <div class="wdm-item-field is-checkbox">
+        <label>Equipped</label>
+        <input type="checkbox" name="system.equipped" {{#if system.equipped}}checked{{/if}} />
+      </div>
+      <div class="wdm-item-field is-checkbox">
+        <label>Stored</label>
+        <input type="checkbox" name="system.isStored" {{#if system.isStored}}checked{{/if}} />
+      </div>
+    </div>
+  </section>
+
+  {{!-- ── DESCRIPTION ─────────────────────────────────────────── --}}
+  <section class="wdm-item-section wdm-item-description">
+    <h2>Description</h2>
+    <textarea name="system.description" placeholder="Item description, lore, mechanical notes…">{{system.description}}</textarea>
+  </section>
+
+</div>

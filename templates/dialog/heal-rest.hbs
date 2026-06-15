@@ -1,0 +1,27 @@
+{{!-- Heal / Rest dialog. The script in healSheetMixin populates totalRec
+      live as checkboxes toggle (see #extra-info). --}}
+
+<div class="wdm-heal-dialog">
+  <p class="wdm-heal-desc">
+    A day of recovery. Toggle the rest type and any aids; the recovered HP
+    updates below. Stress over WILL applies a penalty.
+  </p>
+
+  <div class="wdm-heal-options">
+    <label><input type="checkbox" id="resting"     /> Full rest (×REC instead of REC/2)</label>
+    <label><input type="checkbox" id="sterilized"  /> Sterilized wounds (+2 HP, +2 days each new wound)</label>
+    <label><input type="checkbox" id="healing-hand"/> Healing Hand (+3 HP)</label>
+    <label><input type="checkbox" id="healing-tent"/> Healing Tent (+2 HP)</label>
+  </div>
+
+  {{#if stressPenalty}}
+    <p class="wdm-heal-warning">
+      <strong>Stress penalty:</strong> −{{stressPenalty}} HP (stress {{stress}} over WILL {{will}}).
+    </p>
+  {{/if}}
+
+  <p id="extra-info" class="wdm-heal-readout">Total recover + {{totalRec}}</p>
+  <p id="sterilized-info" class="wdm-heal-sub invisible">
+    {{daysHealed}} day(s) of healing on each tended wound.
+  </p>
+</div>

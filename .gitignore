@@ -1,0 +1,8 @@
+
+# Copyrighted source text used only for the offline compliance audit — never commit/distribute
+tools/.compliance-corpus/
+
+# Official monster/NPC stat blocks are personal-use only — never in the public repo
+packs-src/bestiary/*.json
+!packs-src/bestiary/_folders.json
+node_modules/

@@ -1,0 +1,65 @@
+{{!-- Penalties tab. One labelled row per effect, grouped by weather condition.
+      Free-text description (localized if it matches an i18n key, shown verbatim
+      otherwise). Names map to mod.<tag>.<index>.<field>. --}}
+<section class="tab wdm-cfg-tab {{tab.cssClass}}" data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+    <div class="wdm-cfg-help">
+        <i class="fa-solid fa-circle-info"></i>
+        <p>{{localize "WITCHER.Weather.Config.ModifiersIntro"}}</p>
+    </div>
+
+    {{#each tags}}
+    <div class="wdm-cfg-card">
+        <div class="wdm-cfg-card-head">
+            <span class="wdm-cfg-card-title">{{this.label}}</span>
+            <button type="button" class="wdm-cfg-add" data-action="addMod" data-tag="{{this.tag}}">
+                <i class="fa-solid fa-plus"></i> {{localize "WITCHER.Weather.Config.AddRow"}}
+            </button>
+        </div>
+
+        {{#if this.rows.length}}
+        <div class="wdm-cfg-mod-head">
+            <span>{{localize "WITCHER.Weather.Config.ModTarget"}}</span>
+            <span>{{localize "WITCHER.Weather.Config.ModValue"}}</span>
+            <span data-tooltip="{{localize 'WITCHER.Weather.Config.ModMinLevelHint'}}">{{localize "WITCHER.Weather.Config.ModMinLevel"}}</span>
+            <span data-tooltip="{{localize 'WITCHER.Weather.Config.ModPerLevelHint'}}">{{localize "WITCHER.Weather.Config.ModPerLevel"}}</span>
+            <span>{{localize "WITCHER.Weather.Config.ModLabel"}}</span>
+            <span></span>
+        </div>
+        {{#each this.rows}}
+        <div class="wdm-cfg-mod-row">
+            <select name="mod.{{../tag}}.{{this.index}}.target">
+                {{#each ../../targetOptions}}
+                <option value="{{this.value}}" {{#if (eq this.value ../target)}}selected{{/if}}>{{this.label}}</option>
+                {{/each}}
+            </select>
+            <input type="number" name="mod.{{../tag}}.{{this.index}}.value" value="{{this.value}}" step="1"
+                   data-tooltip="{{localize 'WITCHER.Weather.Config.ModValueHint'}}">
+            <select name="mod.{{../tag}}.{{this.index}}.minLevel">
+                <option value="1" {{#if (eq this.minLevel 1)}}selected{{/if}}>{{localize "WITCHER.Weather.Config.Level1"}}</option>
+                <option value="2" {{#if (eq this.minLevel 2)}}selected{{/if}}>{{localize "WITCHER.Weather.Config.Level2"}}</option>
+                <option value="3" {{#if (eq this.minLevel 3)}}selected{{/if}}>{{localize "WITCHER.Weather.Config.Level3"}}</option>
+            </select>
+            <input type="checkbox" name="mod.{{../tag}}.{{this.index}}.perLevel" {{#if this.perLevel}}checked{{/if}}>
+            <input type="text" name="mod.{{../tag}}.{{this.index}}.label" value="{{this.label}}"
+                   placeholder="{{localize 'WITCHER.Weather.Config.ModLabelPlaceholder'}}">
+            <button type="button" class="wdm-cfg-del" data-action="removeMod" data-tag="{{../tag}}" data-index="{{this.index}}"
+                    data-tooltip="{{localize 'WITCHER.Weather.Config.Remove'}}">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        </div>
+        {{/each}}
+        {{else}}
+        <p class="wdm-cfg-empty">{{localize "WITCHER.Weather.Config.NoRows"}}</p>
+        {{/if}}
+    </div>
+    {{/each}}
+
+    <div class="wdm-cfg-tab-foot">
+        {{#unless usingDefaults}}<span class="wdm-cfg-custom-flag"><i class="fa-solid fa-pen"></i> {{localize "WITCHER.Weather.Config.Customized"}}</span>{{/unless}}
+        <button type="button" class="wdm-cfg-reset" data-action="resetTab" data-tab="modifiers">
+            <i class="fa-solid fa-rotate-left"></i> {{localize "WITCHER.Weather.Config.ResetTab"}}
+        </button>
+    </div>
+
+</section>

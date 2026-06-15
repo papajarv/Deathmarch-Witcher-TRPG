@@ -1,0 +1,17 @@
+{{!-- Shared "Source" block for bespoke item config views — which book /
+      supplement the item is from. Free text (system.source).
+
+      Self-contained (section + grid + row) so it drops into any per-type
+      template uniformly, with or without an existing Procurement grid.
+
+      The value root differs per caller (config views render against
+      `source.*`), so the caller passes the value in:
+        {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+      The submit name is always system.source. --}}
+<div class="wdm-cfg-section">{{localize "WITCHER.Item.Source"}}</div>
+<div class="wdm-cfg-grid">
+  <label class="wdm-cfg-row"><span>{{localize "WITCHER.Item.SourceBook"}}</span>
+    <input type="text" name="system.source" value="{{value}}"
+           placeholder="{{localize "WITCHER.Item.SourcePlaceholder"}}" />
+  </label>
+</div>

@@ -1,0 +1,3040 @@
+/* =============================================================================
+   WITCHER OVERHAUL UI · chrome
+   Phase 1 deliverable: collapsible top/left/right edges + always-on bottom
+   dock with placeholder data + encounter mode (embers + glow intensify).
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   1. Hide Foundry chrome we're replacing
+   ----------------------------------------------------------------------------- */
+body.witcher-ttrpg-death-march #players,
+body.witcher-ttrpg-death-march #players-inactive,
+body.witcher-ttrpg-death-march #players-active,
+body.witcher-ttrpg-death-march #scene-navigation { display: none !important; }
+
+/* Foundry's default hotbar is replaced by our dock — hide the original */
+body.witcher-ttrpg-death-march.wou-hotbar #hotbar { display: none !important; }
+
+/* Everything Foundry plants into the right column outside the sidebar gets
+   hidden — chat-notifications, chat-message, chat-controls, plus any other
+   floating widgets some mods or core features add there. Chat is only
+   reachable via the expanded sidebar. */
+body.witcher-ttrpg-death-march.wou-sidebar #ui-right-column-1 {
+  display: none !important;
+}
+
+/* WebRTC camera dock — Foundry renders #camera-views even when AV is set to
+   Disabled, leaving its user-tile buttons (eye-slash, popout/expand) floating
+   on top of our dock. Wipe it. */
+body.witcher-ttrpg-death-march #camera-views,
+body.witcher-ttrpg-death-march .camera-view,
+body.witcher-ttrpg-death-march .camera-container,
+body.witcher-ttrpg-death-march .av-control { display: none !important; }
+
+/* -----------------------------------------------------------------------------
+   2. Collapsible bars — base + states
+   ----------------------------------------------------------------------------- */
+body.witcher-ttrpg-death-march .wou-collapse {
+  transition:
+    transform var(--wdm-dur-slow) var(--wdm-ease),
+    filter var(--wdm-dur) var(--wdm-ease),
+    opacity var(--wdm-dur) var(--wdm-ease);
+  z-index: var(--wdm-z-chrome);
+}
+
+/* TOP edge — fully hidden until expanded.  No peek state.  Lower
+   z-tier than the left/right panels so they render OVER the top bar
+   when all three are open. */
+body.witcher-ttrpg-death-march .wou-collapse-top {
+  position: fixed; top: 0; left: 0; right: 0;
+  transform: translateY(-100%);
+  pointer-events: none;
+  z-index: calc(var(--wdm-z-chrome) + 5);
+}
+body.witcher-ttrpg-death-march .wou-collapse-top.is-open {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* LEFT edge — Foundry's #scene-controls.
+   Fully hidden until expanded.  No peek state — mirror of right sidebar.
+   z-index 9100 sits ABOVE the top bar's trigger (9001) + glow (9000) so
+   that when left+top are both available, the left controls win. */
+body.witcher-ttrpg-death-march .wou-collapse-left {
+  transform: translateX(-100%);
+  pointer-events: none;
+  z-index: 9100;
+}
+body.witcher-ttrpg-death-march .wou-collapse-left.is-open {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+/* RIGHT edge — Foundry's #sidebar.
+   Fully hidden by default (translateX 100% — no portion visible, no icons peek).
+   Slides in only when `.is-open` (driven by Foundry's `collapseSidebar` hook
+   via setEntryOpen → expanded state).  z-index 9100 = above top trigger/glow. */
+body.witcher-ttrpg-death-march .wou-collapse-right {
+  transform: translateX(100%);
+  pointer-events: none;
+  z-index: 9100;
+}
+body.witcher-ttrpg-death-march .wou-collapse-right.is-open {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+/* ----- Right-edge hover trigger + glow -----------------------------------
+   Two stacked elements, no visual coupling.
+
+   #wou-right-trigger — invisible hit zone on top.  Catches the click that
+     expands the sidebar and the :hover that lights the glow.  No background,
+     no border, no outline at any time, so Foundry's button/focus rules have
+     nothing to latch onto.
+
+   #wou-right-glow   — sits BEHIND the trigger (lower z-index) and is hidden
+     by default.  Lit via the adjacent-sibling selector when the trigger is
+     hovered, so the glow visually "fires from under" the hover zone instead
+     of being a property of the hit element itself.
+
+   Both stop above the bottom dock so they don't block dock clicks. */
+body.witcher-ttrpg-death-march #wou-right-trigger {
+  position: fixed;
+  top: 0; right: 0; bottom: 200px;
+  width: 56px;
+  height: auto;
+  /* Above the dropdown panels (inventory/journal/character/crafting at
+     z 9060) so the sidebar can still be summoned while one of those is
+     open.  Below the map panel (9070) so the map intentionally covers
+     the trigger zone.  Left-trigger stays at its lower default — the
+     dropdowns are intentionally above it. */
+  z-index: 9065;
+  cursor: pointer;
+  background: transparent !important;
+  border: 0 none !important;
+  outline: 0 none !important;
+  box-shadow: none !important;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+body.witcher-ttrpg-death-march #wou-right-glow {
+  position: fixed;
+  top: 0; bottom: 0;
+  /* Big negative right + extra width: the glow's peak amber sits AT the
+     viewport edge while its rectangular bounds overshoot well past it.
+     Body overflow:hidden clips the overshoot — visually the brightest
+     pixel is the rightmost on-screen pixel.  No vertical mask (the mask
+     was causing transparent top/bottom regions where the body BG or scene
+     canvas could show through as a "black sliver"). */
+  right: -80px;
+  width: 320px;
+  /* One below #wou-right-trigger so the visual glow is reachable while
+     the dropdown panels (z 9060) are open. */
+  z-index: 9064;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(to left,
+      rgba(184,148,100,0.30) 0%,
+      rgba(184,148,100,0.12) 30%,
+      rgba(184,148,100,0)    100%);
+  transition: opacity var(--wdm-dur) var(--wdm-ease);
+}
+body.witcher-ttrpg-death-march #wou-right-trigger:hover ~ #wou-right-glow {
+  opacity: 1;
+}
+body.witcher-ttrpg-death-march.wou-sidebar-open #wou-right-trigger,
+body.witcher-ttrpg-death-march.wou-sidebar-open #wou-right-glow {
+  display: none;
+}
+
+/* ----- Left-edge hover trigger + glow --------------------------------------
+   Mirror of the right pair, flipped horizontally.  Same sizes, same z-tier,
+   `linear-gradient(to right, …)` puts the brightest amber at the element's
+   left edge.  Hidden when scene-controls are open. */
+body.witcher-ttrpg-death-march #wou-left-trigger {
+  position: fixed;
+  top: 0; left: 0; bottom: 200px;
+  width: 56px;
+  height: auto;
+  z-index: 9001;
+  cursor: pointer;
+  background: transparent !important;
+  border: 0 none !important;
+  outline: 0 none !important;
+  box-shadow: none !important;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+body.witcher-ttrpg-death-march #wou-left-glow {
+  position: fixed;
+  top: 0; bottom: 0;
+  left: -80px;
+  width: 320px;
+  z-index: 9000;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(to right,
+      rgba(184,148,100,0.30) 0%,
+      rgba(184,148,100,0.12) 30%,
+      rgba(184,148,100,0)    100%);
+  transition: opacity var(--wdm-dur) var(--wdm-ease);
+}
+body.witcher-ttrpg-death-march #wou-left-trigger:hover ~ #wou-left-glow {
+  opacity: 1;
+}
+body.witcher-ttrpg-death-march.wou-controls-open #wou-left-trigger,
+body.witcher-ttrpg-death-march.wou-controls-open #wou-left-glow {
+  display: none;
+}
+
+/* ----- Top-edge hover trigger + glow ---------------------------------------
+   Same pattern as left/right, rotated 90°.  Trigger is a horizontal strip on
+   the top edge; glow extends down into the viewport and is lit via the
+   :hover ~ sibling selector. */
+body.witcher-ttrpg-death-march #wou-top-trigger {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 36px;
+  z-index: 8001;   /* below the left/right triggers (9001) */
+  cursor: pointer;
+  background: transparent !important;
+  border: 0 none !important;
+  outline: 0 none !important;
+  box-shadow: none !important;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+body.witcher-ttrpg-death-march #wou-top-glow {
+  position: fixed;
+  left: 0; right: 0;
+  top: -80px;
+  height: 320px;
+  z-index: 8000;   /* below the left/right glows (9000) */
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(to bottom,
+      rgba(184,148,100,0.30) 0%,
+      rgba(184,148,100,0.12) 30%,
+      rgba(184,148,100,0)    100%);
+  transition: opacity var(--wdm-dur) var(--wdm-ease);
+}
+body.witcher-ttrpg-death-march #wou-top-trigger:hover ~ #wou-top-glow { opacity: 1; }
+body.witcher-ttrpg-death-march.wou-topbar-open #wou-top-trigger,
+body.witcher-ttrpg-death-march.wou-topbar-open #wou-top-glow { display: none; }
+
+/* When the sidebar is open, lift the right column's stacking context above
+   the dock AND above the top bar's trigger/glow.  #ui-right is ALREADY
+   `position: absolute; inset: 0 0 0 auto` per Foundry — only add z-index,
+   NEVER override position or the sidebar loses its right-edge anchor. */
+body.witcher-ttrpg-death-march.wou-sidebar-open #ui-right {
+  z-index: 9100;
+}
+
+/* When the sidebar is COLLAPSED, NUKE everything on the right edge.
+   Foundry's #sidebar-tabs flex sibling + various module-injected widgets
+   (Carolingian taskbars, chat overlays, etc.) keep painting a dark sliver
+   at the right edge even after translateX/visibility tricks on the parent.
+   We hit it from multiple angles so any combination still gets hidden:
+     • #ui-right (whole column) — visibility hidden AND zero-width
+     • #sidebar — display none (removes layout box entirely)
+     • All descendants — visibility hidden so nested fixed-position kids
+       can't escape the parent's hidden state.
+   When ui.sidebar.expand() fires, body gets .wou-sidebar-open and none of
+   these rules match — the sidebar comes back fully intact. */
+body.witcher-ttrpg-death-march:not(.wou-sidebar-open) #ui-right,
+body.witcher-ttrpg-death-march:not(.wou-sidebar-open) #ui-right * {
+  visibility: hidden !important;
+}
+body.witcher-ttrpg-death-march:not(.wou-sidebar-open) #ui-right {
+  width: 0 !important;
+  min-width: 0 !important;
+}
+body.witcher-ttrpg-death-march:not(.wou-sidebar-open) #sidebar {
+  display: none !important;
+}
+
+/* Mirror nuke for the LEFT side: hide #ui-left entirely when scene-controls
+   are collapsed.  Foundry's scene-controls renders multiple parts (layers +
+   tools) that don't all sit inside the #scene-controls translation root —
+   so without this, the tools panel keeps peeking through. */
+body.witcher-ttrpg-death-march:not(.wou-controls-open) #ui-left,
+body.witcher-ttrpg-death-march:not(.wou-controls-open) #ui-left * {
+  visibility: hidden !important;
+}
+body.witcher-ttrpg-death-march:not(.wou-controls-open) #ui-left {
+  width: 0 !important;
+  min-width: 0 !important;
+}
+body.witcher-ttrpg-death-march:not(.wou-controls-open) #scene-controls {
+  display: none !important;
+}
+
+/* When the scene-controls expand, push them down below the top bar's bottom
+   edge so every button is reachable even when the top bar is open. */
+body.witcher-ttrpg-death-march.wou-controls-open #scene-controls {
+  margin-top: 130px !important;
+}
+
+/* Close-the-tools button — lives inside the scene-controls tools menu as
+   its last entry, so it reads like another tool.  Foundry's `.control`
+   class already gives it the right size and hover behavior; we only add a
+   subtle visual separator so it doesn't blend into the actual tools above. */
+body.witcher-ttrpg-death-march #scene-controls .wou-close-li {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dotted rgba(140,133,121,0.18);
+}
+body.witcher-ttrpg-death-march #scene-controls #wou-controls-close {
+  color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march #scene-controls #wou-controls-close:hover {
+  color: var(--wdm-amber-bright);
+}
+
+/* -----------------------------------------------------------------------------
+   3. Top bar (#wou-top-bar) — same DNA as the prototype merge
+   ----------------------------------------------------------------------------- */
+body.witcher-ttrpg-death-march #wou-top-bar {
+  padding: 22px 28px;            /* symmetric — keeps the subnav-era thickness while vertically centering content */
+  /* Solid warm-dark fill (matches dock + sidebar + inventory plate). No
+     fade at the bottom edge — when inventory opens, the bottom-of-bar
+     translucency was bleeding the inventory plate through. */
+  background: rgba(10,9,8,0.99);
+  border-bottom: 0;
+  backdrop-filter: blur(8px);
+  /* NOTE: do NOT add `position: relative` here.  `.wou-collapse-top`
+     (lower specificity) sets `position: fixed` so the bar can translate
+     off-screen when collapsed. */
+}
+
+/* Amber rune-trim along the BOTTOM edge — mirror of the dock's top rule.
+   Subtle in peacetime, fierce double-shadow glow during combat. */
+body.witcher-ttrpg-death-march #wou-top-bar::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 5%,
+    var(--wdm-amber-dim) 15%,
+    transparent 30%,
+    var(--wdm-amber) 50%,
+    transparent 70%,
+    var(--wdm-amber-dim) 85%,
+    transparent 95%);
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.6s var(--wdm-ease), filter 0.6s var(--wdm-ease);
+}
+body.witcher-ttrpg-death-march.in-encounter #wou-top-bar::after {
+  opacity: 1;
+  filter:
+    drop-shadow(0 0 22px rgba(214,170,90,0.85))
+    drop-shadow(0 0 48px rgba(214,170,90,0.35));
+  animation: wou-rule-pulse 2.2s ease-in-out infinite;
+}
+
+/* Collapse button — borderless chevron inline beside the scene name.
+   Override Foundry's global button{} chrome aggressively so all that
+   shows is the icon itself. */
+body.witcher-ttrpg-death-march #wou-top-bar .brand #wou-topbar-close {
+  height: auto !important;
+  min-height: 0 !important;
+  width: auto;
+  /* 4px margin + 6px button padding = 10px from title text to chevron icon */
+  margin-left: 4px;
+  padding: 4px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: var(--wdm-amber-hi);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  flex: 0 0 auto;
+  transition: color var(--wdm-dur), transform var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #wou-top-bar .brand #wou-topbar-close:hover {
+  color: var(--wdm-amber-bright);
+  transform: translateY(-1px);
+}
+body.witcher-ttrpg-death-march #wou-top-bar .brand #wou-topbar-close i { font-size: 13px; color: inherit; }
+
+body.witcher-ttrpg-death-march #wou-top-bar .wou-tb-row {
+  display: grid;
+  /* `1fr auto 1fr` puts the tabnav DEAD-CENTER in the viewport regardless
+     of brand / HUD widths.  Brand left-aligned in col 1, HUD right-aligned
+     in col 3, tabs centered in col 2. */
+  grid-template-columns: 1fr auto 1fr;
+  gap: 24px;
+  align-items: center;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .brand { justify-self: start; }
+body.witcher-ttrpg-death-march #wou-top-bar .hud   { justify-self: end; }
+
+body.witcher-ttrpg-death-march #wou-top-bar .brand {
+  display: flex; align-items: center;
+  /* explicit margins per-item instead of flex gap so the collapse button
+     can sit 10px from the title without bleeding the title-icon gap. */
+  gap: 0;
+  min-width: 0;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .brand i,
+body.witcher-ttrpg-death-march #wou-top-bar .brand .brand-mark {
+  font-size: 22px;
+  width: 26px; height: 22px;
+  color: var(--wdm-amber);
+  flex: 0 0 auto;
+  margin-right: 12px;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .brand .title {
+  font-family: var(--wdm-font-display);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: var(--wdm-track-extra);
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi);
+  white-space: nowrap;     /* no wrap, no truncation — the brand column auto-sizes */
+}
+body.witcher-ttrpg-death-march #wou-top-bar .brand .title::before,
+body.witcher-ttrpg-death-march #wou-top-bar .brand .title::after {
+  content: '·';
+  color: var(--wdm-amber-dim);
+  margin: 0 6px;
+}
+
+/* Tab nav (torn parchment hover state) */
+body.witcher-ttrpg-death-march #wou-top-bar .tabnav {
+  display: flex; justify-content: center; align-items: center;
+  gap: 28px; position: relative; min-height: 58px;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .tab {
+  position: relative;
+  /* Override Foundry's global button{} rule that forces height + chrome */
+  height: auto !important;
+  min-height: 0 !important;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 4px 14px 6px;          /* mockup-spec */
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  gap: 5px;
+  color: var(--wdm-ink-dim);
+  font-family: var(--wdm-font-display);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: var(--wdm-track-wide);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--wdm-dur) var(--wdm-ease), transform var(--wdm-dur-fast) var(--wdm-ease);
+  z-index: 2;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .tab:focus,
+body.witcher-ttrpg-death-march #wou-top-bar .tab:focus-visible,
+body.witcher-ttrpg-death-march #wou-top-bar .tab.active {
+  outline: none !important;
+  box-shadow: none !important;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .tab i {
+  font-size: 22px;
+  color: var(--wdm-ink-dim);
+  transition: color var(--wdm-dur);
+  display: block;
+  width: 100%;                  /* span full tab width so text-align centers the glyph reliably */
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  line-height: 26px;
+  text-align: center;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .tab i::before {
+  display: inline-block;
+  line-height: 26px;
+  vertical-align: top;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .tab > span {
+  display: block;
+  text-align: center;
+  line-height: 1.2;
+  width: 100%;
+}
+/* Parchment torn highlight on HOVER (no .is-active state for now). */
+body.witcher-ttrpg-death-march #wou-top-bar .tab:hover { color: var(--wdm-ink-ash); transform: translateY(-1px); }
+body.witcher-ttrpg-death-march #wou-top-bar .tab:hover i { color: var(--wdm-ink-ash); }
+body.witcher-ttrpg-death-march #wou-top-bar .tab:hover::before {
+  content: '';
+  position: absolute;
+  inset: -4px -16px -4px -16px;
+  z-index: -1;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='90'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 0.42 0 0 0 0 0.35 0 0 0 0 0.22 0 0 0 0.12 0'/></filter><rect width='100%25' height='100%25' filter='url(%23p)'/></svg>"),
+    radial-gradient(ellipse at 35% 25%, rgba(228,210,168,0.30), transparent 55%),
+    linear-gradient(170deg, var(--wdm-amber-bright) 0%, var(--wdm-amber-hi) 45%, var(--wdm-amber-dim) 100%);
+  background-size: 180px 90px, 100% 100%, 100% 100%;
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 70' preserveAspectRatio='none'><path d='M3 6 L8 3 L14 6 L22 2 L30 5 L38 3 L46 7 L54 4 L62 6 L70 3 L78 6 L86 3 L94 5 L102 3 L110 6 L118 4 L126 6 L134 4 L137 12 L137 58 L134 66 L126 64 L118 67 L110 64 L102 67 L94 64 L86 66 L78 64 L70 66 L62 64 L54 66 L46 64 L38 67 L30 65 L22 67 L14 64 L8 67 L3 65 L5 56 L5 14 Z' fill='black'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 70' preserveAspectRatio='none'><path d='M3 6 L8 3 L14 6 L22 2 L30 5 L38 3 L46 7 L54 4 L62 6 L70 3 L78 6 L86 3 L94 5 L102 3 L110 6 L118 4 L126 6 L134 4 L137 12 L137 58 L134 66 L126 64 L118 67 L110 64 L102 67 L94 64 L86 66 L78 64 L70 66 L62 64 L54 66 L46 64 L38 67 L30 65 L22 67 L14 64 L8 67 L3 65 L5 56 L5 14 Z' fill='black'/></svg>");
+  -webkit-mask-size: 100% 100%;
+          mask-size: 100% 100%;
+  box-shadow: var(--wdm-shadow-card);
+  transform: rotate(-0.6deg);
+}
+body.witcher-ttrpg-death-march #wou-top-bar .tab:hover::after {
+  content: '';
+  position: absolute;
+  left: 50%; top: -1px;
+  transform: translateX(-50%);
+  width: 3px; height: 3px;
+  background: rgba(0,0,0,0.7);
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(0,0,0,0.6);
+}
+
+/* HUD top-right */
+body.witcher-ttrpg-death-march #wou-top-bar .hud {
+  display: flex; align-items: center; gap: 14px;
+}
+/* Coin: amber wallet glyph + a compact row of single-letter currency chips. */
+body.witcher-ttrpg-death-march #wou-top-bar .hud .coin {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--wdm-font-display);
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--wdm-ink);
+}
+body.witcher-ttrpg-death-march #wou-top-bar .hud .coin > i { font-size: 13px; color: var(--wdm-amber); }
+body.witcher-ttrpg-death-march #wou-top-bar .hud .coin .cur {
+  display: inline-flex; align-items: baseline; gap: 2px;
+  color: var(--wdm-ink-bright);
+  line-height: 1;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .hud .coin .cur em {
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--wdm-amber-hi);
+  font-weight: 700;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .hud .coin .cur.is-empty {
+  color: var(--wdm-ink-faint);
+}
+body.witcher-ttrpg-death-march #wou-top-bar .hud .coin .cur.is-empty em {
+  color: var(--wdm-amber-dim);
+}
+body.witcher-ttrpg-death-march #wou-top-bar .hud .weight {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--wdm-ink-hi);
+  font-family: var(--wdm-font-display);
+  font-size: 12px; font-weight: 500;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .hud .weight i { font-size: 12px; color: var(--wdm-ink-dim); }
+body.witcher-ttrpg-death-march #wou-top-bar .hud .weight .enc-sep { color: var(--wdm-ink-faint); margin: 0 4px; font-weight: 400; }
+body.witcher-ttrpg-death-march #wou-top-bar .hud .level-block {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 0 12px;
+  border-left: var(--wdm-rule-1);
+  border-right: var(--wdm-rule-1);
+}
+body.witcher-ttrpg-death-march #wou-top-bar .hud .level-block .lab {
+  font-size: 9px; letter-spacing: var(--wdm-track-wide); color: var(--wdm-ink-faint); text-transform: uppercase;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .hud .level-block .val {
+  font-size: 18px; font-weight: 700; color: var(--wdm-amber-bright); line-height: 1;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .hud .xp-bar {
+  width: 160px; height: 14px;
+  display: flex; align-items: center; gap: 6px;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .hud .xp-bar .xp-min { font-size: 10px; color: var(--wdm-red); font-weight: 500; min-width: 26px; text-align: right; }
+body.witcher-ttrpg-death-march #wou-top-bar .hud .xp-bar .xp-max { font-size: 10px; color: var(--wdm-ink-faint); min-width: 32px; }
+body.witcher-ttrpg-death-march #wou-top-bar .hud .xp-bar .teeth { flex: 1; height: 14px; }
+
+/* Sub-nav row */
+body.witcher-ttrpg-death-march #wou-top-bar .subnav {
+  display: flex; justify-content: center; gap: 14px;
+  margin-top: 8px; padding-bottom: 12px;
+}
+body.witcher-ttrpg-death-march #wou-top-bar .sub-tab {
+  position: relative;
+  background: none; border: 1px solid rgba(140,133,121,0.18);
+  cursor: pointer;
+  padding: 5px 14px 5px 10px;
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--wdm-ink-dim);
+  font-family: var(--wdm-font-display);
+  font-weight: 500; font-size: 11px;
+  letter-spacing: 0.16em; text-transform: capitalize;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #wou-top-bar .sub-tab i { font-size: 12px; color: var(--wdm-ink-dim); transition: color var(--wdm-dur); }
+body.witcher-ttrpg-death-march #wou-top-bar .sub-tab:hover { color: var(--wdm-ink-bright); border-color: var(--wdm-amber-dim); }
+body.witcher-ttrpg-death-march #wou-top-bar .sub-tab:hover i { color: var(--wdm-amber-hi); }
+body.witcher-ttrpg-death-march #wou-top-bar .sub-tab.is-active { color: var(--wdm-ink-ash); border-color: transparent; }
+body.witcher-ttrpg-death-march #wou-top-bar .sub-tab.is-active i { color: var(--wdm-ink-ash); }
+body.witcher-ttrpg-death-march #wou-top-bar .sub-tab.is-active::before {
+  content: '';
+  position: absolute; inset: 0; z-index: -1;
+  background:
+    radial-gradient(ellipse at 30% 25%, rgba(228,210,168,0.28), transparent 55%),
+    linear-gradient(165deg, var(--wdm-amber-bright), var(--wdm-amber-hi) 60%, var(--wdm-amber-dim));
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 28' preserveAspectRatio='none'><path d='M2 4 L8 2 L16 4 L24 2 L32 4 L40 2 L48 4 L56 2 L64 4 L72 2 L80 4 L88 2 L96 4 L104 2 L112 4 L118 6 L118 22 L112 25 L104 23 L96 26 L88 23 L80 26 L72 23 L64 26 L56 23 L48 26 L40 23 L32 26 L24 23 L16 26 L8 23 L2 25 L4 18 L4 8 Z' fill='black'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 28' preserveAspectRatio='none'><path d='M2 4 L8 2 L16 4 L24 2 L32 4 L40 2 L48 4 L56 2 L64 4 L72 2 L80 4 L88 2 L96 4 L104 2 L112 4 L118 6 L118 22 L112 25 L104 23 L96 26 L88 23 L80 26 L72 23 L64 26 L56 23 L48 26 L40 23 L32 26 L24 23 L16 26 L8 23 L2 25 L4 18 L4 8 Z' fill='black'/></svg>");
+  -webkit-mask-size: 100% 100%;
+          mask-size: 100% 100%;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.7);
+}
+
+/* -----------------------------------------------------------------------------
+   4. Bottom dock — always visible.  Structure mirrors reference.html
+   `.bottom-strip` exactly: identity / pool-grid / sign-tray, with a prompts
+   row below.  Sits ABOVE the right-edge glow so the glow tucks under it.
+   ----------------------------------------------------------------------------- */
+body.witcher-ttrpg-death-march #wou-dock {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  /* Above the triggers (9001) and glows (9000), but BELOW the open
+     side panels (sidebar + scene-controls at 9100) so they slide over
+     the dock when expanded. */
+  z-index: 9050;
+  padding: 18px 36px 12px;
+  /* Solid warm-dark fill (matches top bar + sidebar + inventory plate). No
+     softening band at the top — when inventory opens, the top-of-dock
+     translucency was bleeding the inventory plate through. */
+  background: rgba(10,9,8,0.99);
+  border-top: 1px solid rgba(140,133,121,0.12);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+body.witcher-ttrpg-death-march #wou-dock::before {
+  /* hairline rule across the very top — INTENSIFIES in encounter mode */
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 5%,
+    var(--wdm-amber-dim) 15%,
+    transparent 30%,
+    var(--wdm-amber) 50%,
+    transparent 70%,
+    var(--wdm-amber-dim) 85%,
+    transparent 95%);
+  opacity: 0.4;
+  transition: opacity 0.6s var(--wdm-ease), filter 0.6s var(--wdm-ease);
+}
+body.witcher-ttrpg-death-march.in-encounter #wou-dock::before {
+  opacity: 1;
+  filter:
+    drop-shadow(0 0 22px rgba(214,170,90,0.85))
+    drop-shadow(0 0 48px rgba(214,170,90,0.35));
+  animation: wou-rule-pulse 2.2s ease-in-out infinite;
+}
+@keyframes wou-rule-pulse {
+  0%, 100% {
+    filter:
+      drop-shadow(0 0 18px rgba(214,170,90,0.70))
+      drop-shadow(0 0 36px rgba(214,170,90,0.25));
+  }
+  50% {
+    filter:
+      drop-shadow(0 0 32px rgba(240,200,110,0.95))
+      drop-shadow(0 0 64px rgba(240,200,110,0.45));
+  }
+}
+
+/* Corner adornments — flowing scroll-flourish.  TR is a mirror of TL. */
+body.witcher-ttrpg-death-march #wou-dock .rune-corner {
+  position: absolute;
+  top: 8px;
+  color: var(--wdm-amber-hi);
+  opacity: 0.55;
+  pointer-events: none;
+  line-height: 0;
+}
+body.witcher-ttrpg-death-march #wou-dock .rune-corner .adorn {
+  width: 76px; height: 24px;
+  display: block;
+}
+body.witcher-ttrpg-death-march #wou-dock .rune-corner.tl { left: 20px; }
+body.witcher-ttrpg-death-march #wou-dock .rune-corner.tr { right: 20px; }
+body.witcher-ttrpg-death-march #wou-dock .rune-corner.tr .adorn { transform: scaleX(-1); }
+
+/* 3-column grid: identity · state-stack (peace/combat overlap) · sign-tray */
+body.witcher-ttrpg-death-march #wou-dock .bs-grid {
+  display: grid;
+  grid-template-columns: minmax(340px, auto) 1fr auto;
+  gap: 16px;                 /* was 36 — tighter padding between identity & combat-state */
+  align-items: center;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Peace + combat states share the same center grid cell — but only ONE is
+   in the DOM layout at a time so the inactive state doesn't push the grid
+   columns out of balance.  Toggle via body's .in-encounter class.
+   `display: none / flex` keeps the grid sizing correct in both modes; an
+   `animation` on the active state provides a fade-and-rise on enter. */
+body.witcher-ttrpg-death-march #wou-dock .dock-state {
+  grid-column: 2; grid-row: 1;
+  /* Fixed footprint matching peace mode.  Combat elements render at full
+     size and any content that exceeds this height overflows VISUALLY above
+     the dock's top edge (overflow: visible) — the dock itself never grows. */
+  height: 96px;
+  min-height: 96px;
+  max-height: 96px;
+  overflow: visible;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state {
+  display: none;
+}
+body.witcher-ttrpg-death-march.in-encounter #wou-dock .peace-state { display: none; }
+body.witcher-ttrpg-death-march.in-encounter #wou-dock .combat-state {
+  /* Flex centered cluster between the identity card and combat buttons.
+     Elements render at their natural size; the DOCK itself enforces the
+     peace-mode height via fixed height + overflow on `.dock-state`. */
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 28px;
+  margin-left: -20px;         /* nudge the whole section past the medallion */
+  animation: wou-combat-in 0.35s var(--wdm-ease);
+  opacity: 1;
+  transition: opacity 0.35s var(--wdm-ease);
+}
+body.witcher-ttrpg-death-march.in-encounter.wou-combat-leaving #wou-dock .combat-state,
+body.witcher-ttrpg-death-march.in-encounter.wou-combat-leaving #wou-dock .identity .identity-combat {
+  opacity: 0;
+  transition: opacity 0.35s var(--wdm-ease);
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .stats-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;     /* top-align so Full Round lines up with
+                                 the Balanced button across the dock */
+}
+@keyframes wou-combat-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+/* Vitality (HP) pool — the bar itself is governed by the peace-mode
+ * rules below (.ident-text > .pool[data-kind="hp"] sets its fixed
+ * 144px width). All this block does is style the three trailing cur
+ * numbers (HP / STA / TOX) and switch the pool to a flex row in
+ * combat so the numbers sit immediately to the right of the bar
+ * WITHOUT shrinking it. */
+body.witcher-ttrpg-death-march #wou-dock .ident-text .pool .cur {
+  display: none;
+  font-family: var(--wdm-font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.8);
+  flex: 0 0 auto;
+}
+body.witcher-ttrpg-death-march #wou-dock .ident-text .pool .max { display: none; }
+/* HP number follows the pool's --accent so it darkens with the bar
+ * when the actor crosses the wound threshold or enters death state. */
+body.witcher-ttrpg-death-march #wou-dock .ident-text .pool .cur-hp  { color: var(--accent, #a83838); }
+body.witcher-ttrpg-death-march #wou-dock .ident-text .pool .cur-sta { color: #6d8da9; }
+body.witcher-ttrpg-death-march #wou-dock .ident-text .pool .cur-tox { color: #8aa05a; }
+
+body.witcher-ttrpg-death-march.in-encounter #wou-dock .ident-text .pool {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;            /* grow past the bar's 144px to fit the numbers */
+}
+body.witcher-ttrpg-death-march.in-encounter #wou-dock .ident-text .pool .teeth {
+  flex: 0 0 144px;        /* lock to peace-mode width */
+}
+body.witcher-ttrpg-death-march.in-encounter #wou-dock .ident-text .pool .cur {
+  display: inline-block;
+}
+
+/* ---- Action budget — long thin Full Round banner on top, 3 stacked
+ * icon-over-label boxes (Movement / Action / Extra Action) below. Styled
+ * to fit the dock's amber-on-warm-dark chrome: subtle radial-gradient
+ * panel background, amber-dim border, display-font tracking, drop-shadow
+ * on icons (matching .sign / .counter conventions). Width pinned so the
+ * stats-stack doesn't grow horizontally. ---- */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-budget {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 260px;
+  max-width: 260px;
+  /* No panel chrome — the divider beneath Full Round visually groups the
+   * three sub-actions instead. */
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-row {
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  width: 100%;
+}
+/* Teal grouping divider between Full Round and the 3 sub-buttons,
+ * spanning the full 260px panel width (= the combined width of the 3
+ * buttons). Real <div> instead of a pseudo because .action-btn has
+ * overflow: hidden which clipped button-anchored pseudos. Same
+ * gradient as the Balanced divider so the dock's two action-clusters
+ * read as visual siblings. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-divider {
+  height: 1px;
+  width: 100%;
+  /* 3px top gap matches the Balanced ::after's `bottom: -3px` offset, so
+   * both underbars sit at the same vertical position relative to their
+   * 18px-tall parent button (Full Round / Balanced). */
+  margin: 3px 0 4px;
+  background: linear-gradient(90deg,
+    transparent 0%, var(--wdm-amber-dim) 18%, var(--wdm-amber) 50%,
+    var(--wdm-amber-dim) 82%, transparent 100%);
+  opacity: 0.75;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+/* The Balanced sword icon — tilted ~30° so it reads as a balanced
+ * weapon resting at an angle rather than a vertical drawn blade. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .guard-btn .guard-sword {
+  transform: rotate(-30deg);
+  transform-origin: center;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn {
+  /* Strip Foundry's default button chrome. */
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 2px !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: var(--wdm-ink-dim, #8a857a);
+  font-family: var(--wdm-font-display);
+  text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn:hover {
+  color: var(--wdm-ink-bright, #e0dac4) !important;
+  background: rgba(184,148,100,0.12) !important;
+  border-color: rgba(184,148,100,0.30) !important;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn:hover i {
+  color: var(--wdm-amber-bright, #c8a878);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn i {
+  color: var(--wdm-amber-hi, #b89464);
+  filter: drop-shadow(0 0 3px rgba(0,0,0,0.7));
+  transition: color 0.15s;
+}
+
+/* Full Round — long thin amber banner across the top. Underlined by a
+ * decorative hairline that spans the full width of the panel so it
+ * visually "groups" the three sub-actions beneath it as belonging to
+ * Full Round. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.full-round {
+  padding: 2px 8px !important;
+  min-height: 0 !important;
+  height: 18px !important;
+  line-height: 1;
+  font-size: 9px;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+  font-weight: 500;
+  gap: 8px;
+  color: var(--wdm-ink, #b0a994);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.full-round i {
+  font-size: 10px;
+}
+
+/* Movement / Action / Extra Action — stacked-icon-and-label cards. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-row .action-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 2px !important;
+  min-height: 0 !important;
+  height: 38px !important;
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+  text-indent: 0.16em;
+  line-height: 1;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-row .action-btn i {
+  font-size: 14px;
+}
+
+/* Spent slot — dimmed, struck, but still clickable (movement can be
+ * re-declared, the GM may want to override). The icon loses its amber
+ * glow and the label greys out so the eye reads "already used". */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.is-used {
+  color: var(--wdm-ink-faint, #5a574e);
+  opacity: 0.72;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.is-used i {
+  color: var(--wdm-amber-dim, #6e5224);
+  filter: none;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.is-used .nm {
+  text-decoration: line-through;
+  text-decoration-color: var(--wdm-amber-dim, #6e5224);
+}
+/* A used slot still glows on hover so it stays obviously interactive. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.is-used:hover {
+  opacity: 1;
+}
+
+/* Full-round committed — the whole turn is spent on one action. The
+ * three sub-slots beneath the banner are subsumed, so mute the row and
+ * mark the banner as the active commitment with an amber tint. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-budget.is-locked .action-row {
+  opacity: 0.45;
+  pointer-events: none;
+  filter: saturate(0.4);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.full-round.is-used {
+  color: var(--wdm-amber-bright, #c8a878);
+  opacity: 1;
+  background: rgba(184,148,100,0.10);
+  border-color: rgba(184,148,100,0.28) !important;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.full-round.is-used i {
+  color: var(--wdm-amber-bright, #c8a878);
+  filter: drop-shadow(0 0 4px rgba(0,0,0,0.6));
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.full-round.is-used .nm {
+  text-decoration: none;
+}
+/* Full Round unavailable — a slot was already spent this turn, so the whole
+ * turn can't be committed. Greyed and non-interactive (the click still
+ * notifies via the mixin, but the cue reads "not an option now"). */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.full-round.is-blocked {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.full-round.is-blocked:hover {
+  color: var(--wdm-ink, #b0a994);
+  background: transparent !important;
+  border-color: transparent !important;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.full-round.is-blocked i {
+  color: var(--wdm-amber-dim, #6e5224);
+}
+/* Full Round committed (used) — grey it out and strike it through like any
+ * spent slot, overriding the amber "active commitment" highlight. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.full-round.is-used.is-blocked {
+  color: var(--wdm-ink-faint, #5a574e);
+  opacity: 0.5;
+  background: transparent !important;
+  border-color: rgba(140,133,121,0.20) !important;
+  cursor: not-allowed;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.full-round.is-used.is-blocked i {
+  color: var(--wdm-amber-dim, #6e5224);
+  filter: none;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-btn.full-round.is-used.is-blocked .nm {
+  text-decoration: line-through;
+  text-decoration-color: var(--wdm-amber-dim, #6e5224);
+}
+/* Generic blocked action button (Movement forfeit after acting, Extra Action
+ * before the normal action is spent) — greyed and non-interactive. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-row .action-btn.is-blocked {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-row .action-btn.is-blocked:hover {
+  color: var(--wdm-ink, #b0a994);
+  background: transparent !important;
+  border-color: transparent !important;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-row .action-btn.is-blocked i {
+  color: var(--wdm-amber-dim, #6e5224);
+}
+
+body.witcher-ttrpg-death-march #wou-dock .combat-state .counters-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 32px;
+  padding-top: 4px;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .counter {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--wdm-font-display);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--wdm-ink);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .counter i {
+  font-size: 12px;
+  color: var(--wdm-amber-hi);
+  filter: drop-shadow(0 0 4px rgba(0,0,0,0.6));
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .counter .val {
+  font-weight: 700;
+  color: var(--wdm-ink-bright);
+  font-size: 12px;
+  min-width: 12px;
+  text-align: right;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .counter .sep { color: var(--wdm-ink-faint); margin: 0 1px; }
+body.witcher-ttrpg-death-march #wou-dock .combat-state .counter .mx  { color: var(--wdm-ink-faint); font-weight: 500; font-size: 11px; }
+/* Shield counter shows only the current value — no /max. Clickable: each
+ * click spends one Quen-shield point. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .counter[data-kind="shield"] .sep,
+body.witcher-ttrpg-death-march #wou-dock .combat-state .counter[data-kind="shield"] .mx { display: none; }
+body.witcher-ttrpg-death-march #wou-dock .combat-state .counter[data-kind="shield"] {
+  cursor: pointer;
+  transition: color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .counter[data-kind="shield"]:hover {
+  color: var(--wdm-amber-bright, #c8a878);
+}
+
+/* Adrenaline counter is clickable: spend points to roll temp HP. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .counter[data-kind="adrenaline"] {
+  cursor: pointer;
+  transition: color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .counter[data-kind="adrenaline"]:hover {
+  color: var(--wdm-amber-bright, #c8a878);
+}
+
+/* ---- Defense column — armor body figure on the left, Dodge / Rel /
+   Brawl stacked vertically on its right.  The cluster's height is
+   normalized to the stat bars (further left) and weapons list (further
+   right) so everything in the combat-state strip reads on one horizontal
+   line.  Three buttons in the same column height means each gets a
+   smaller icon + label than the original two-button layout. ---- */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .defense-col {
+  display: flex;
+  flex-direction: column;     /* guard-btn on top, defense-row beneath */
+  align-items: stretch;
+  gap: 3px;
+  align-self: flex-start;     /* top-align so Balanced lines up with
+                                 the Full Round button across the dock */
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .defense-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  height: 71px;               /* matches .sp-figure (was 64) — +10% scale */
+}
+
+/* Guard-stance button — sits above the armor figure + Dodge/Rel/Brawl.
+ * Same chrome family as .action-btn so the dock reads cohesively. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .guard-btn {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 2px !important;
+  outline: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 2px 8px !important;
+  min-height: 0 !important;
+  height: 18px !important;
+  line-height: 1;
+  color: var(--wdm-ink, #b0a994);
+  font-family: var(--wdm-font-display);
+  font-size: 9px;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+  text-transform: uppercase;
+  font-weight: 500;
+  white-space: nowrap;
+  position: relative;
+  margin-bottom: 4px;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .guard-btn:hover {
+  color: var(--wdm-ink-bright, #e0dac4);
+  background: rgba(184,148,100,0.12) !important;
+  border-color: rgba(184,148,100,0.30) !important;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .guard-btn i {
+  font-size: 12px;
+  color: var(--wdm-amber-hi, #b89464);
+  filter: drop-shadow(0 0 3px rgba(0,0,0,0.7));
+  transition: color 0.15s;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .guard-btn:hover i {
+  color: var(--wdm-amber-bright, #c8a878);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .guard-btn::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  bottom: -3px;
+  height: 1px;
+  /* Teal divider color (per design.png) — visually groups the elements
+   * beneath the heading and contrasts with the dock's amber chrome. */
+  background: linear-gradient(90deg,
+    transparent 0%, var(--wdm-amber-dim) 18%, var(--wdm-amber) 50%,
+    var(--wdm-amber-dim) 82%, transparent 100%);
+  opacity: 0.75;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .defense-buttons {
+  display: flex;
+  flex-direction: column;     /* Dodge / Rel / Brawl stacked */
+  gap: 2px;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+  padding: 0;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .defense-btn {
+  /* Borderless, backgroundless — just an icon + tiny label, clickable.
+     Shrunk vs the original two-button stack so three fit in the same
+     71px column. */
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 1px 4px !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  color: var(--wdm-ink-faint);
+  font-family: var(--wdm-font-display);
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  display: inline-flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  transition: color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .defense-btn:hover {
+  color: var(--wdm-ink-bright);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .defense-btn:hover i {
+  color: var(--wdm-amber-bright);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .defense-btn i {
+  font-size: 13px;
+  color: var(--wdm-amber-hi);
+  line-height: 1;
+  transition: color var(--wdm-dur);
+}
+
+/* Free reaction spent → every further defense costs 1 STA. Dim all defensive
+   controls (Dodge / Rel / Brawl + each weapon's Parry-Block icon) while idle,
+   so the cost is glanceable; hover still lights them up since they stay usable.
+   Flagged by `.defenses-costing` on #wou-dock (set in renderDock). */
+body.witcher-ttrpg-death-march #wou-dock.defenses-costing .combat-state .defense-btn:not(:hover):not([data-action="brawl"]),
+body.witcher-ttrpg-death-march #wou-dock.defenses-costing .combat-state .weapon-item .weapon-parry:not(:hover) {
+  opacity: 0.72;
+}
+body.witcher-ttrpg-death-march #wou-dock.defenses-costing .combat-state .defense-btn:not(:hover):not([data-action="brawl"]) i,
+body.witcher-ttrpg-death-march #wou-dock.defenses-costing .combat-state .weapon-item .weapon-parry:not(:hover) i {
+  /* One notch below the normal amber-hi — still clearly lit ("usable at a
+     cost"), NOT the amber-dim used for blocked/disabled controls. */
+  color: var(--wdm-amber, #a88450);
+}
+
+/* ---- SP body figure — combat-mode replacement for the old text list.
+   Each SVG zone (head / torso / arms / legs) is a click target that damages
+   that location by 1; hover spawns the popover with SP + resistance info. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .sp-figure-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border-left: 1px solid rgba(140,133,121,0.18);
+  border-right: 1px solid rgba(140,133,121,0.18);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .sp-figure {
+  /* Height sized to match the adjacent stat-bar stack + weapons list so
+   * the body figure reads as one item in that horizontal strip, not a
+   * tall slab above them.  Width is auto so the SVG keeps its 100:220
+   * aspect ratio.  64 → 71 = +10% scale. */
+  height: 71px;
+  width: auto;
+  display: block;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .sp-zone {
+  fill: rgba(140,133,121,0.18);
+  stroke: rgba(140,133,121,0.55);
+  stroke-width: 1;
+  cursor: pointer;
+  transition: fill .12s ease, stroke .12s ease, filter .12s ease;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .sp-zone.is-worn {
+  fill: rgba(184,148,100,0.45);
+  stroke: var(--wdm-amber-dim);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .sp-zone.is-fresh {
+  fill: rgba(184,148,100,0.85);
+  stroke: var(--wdm-amber-bright);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .sp-zone.is-empty {
+  fill: rgba(80,70,55,0.30);
+  stroke: rgba(140,133,121,0.30);
+  cursor: default;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .sp-zone:hover {
+  filter: brightness(1.35);
+  stroke: var(--wdm-amber-bright);
+  stroke-width: 1.5;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .sp-zone.is-empty:hover {
+  filter: none;
+  stroke: rgba(140,133,121,0.30);
+  stroke-width: 1;
+}
+
+/* ---- Equipped weapons list (combat mode only) ---- */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 340px;
+  min-width: 220px;
+  /* Match the dock's locked height — extra weapons scroll vertically
+     within the list instead of pushing the dock taller. */
+  max-height: 96px;
+  overflow-y: auto;
+}
+/* Trim the scrollbar so the list reads cleanly inside the dock */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-list::-webkit-scrollbar {
+  width: 4px;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-list::-webkit-scrollbar-thumb {
+  background: var(--wdm-amber-dim);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-empty {
+  font-family: var(--wdm-font-display);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-faint);
+  font-style: italic;
+  padding: 4px 8px;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item {
+  display: flex;
+  align-items: stretch;
+  border-left: 2px solid var(--wdm-amber-dim);
+  transition: border-color var(--wdm-dur);
+  position: relative;             /* anchor the oil-coating time bar */
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item:hover {
+  border-left-color: var(--wdm-amber);
+}
+/* Both internal buttons strip Foundry's global button{} chrome. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-parry,
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-main,
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-reload,
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-sheath,
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-drop {
+  height: auto !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--wdm-dur), color var(--wdm-dur);
+}
+
+/* Sheath + Drop — small square buttons on the right, mirroring Parry. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-sheath,
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-drop {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  padding: 4px 4px !important;
+  border-left: 1px solid rgba(184,148,100,0.18) !important;
+  color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-sheath:hover {
+  background: rgba(184,148,100,0.10) !important;
+  color: var(--wdm-amber-bright);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-drop:hover {
+  /* drop tints red to signal "leaving the actor" */
+  background: rgba(190,72,72,0.14) !important;
+  color: var(--wdm-red-bright, #a25050);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-sheath i,
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-drop i {
+  font-size: 11px;
+  color: inherit;
+}
+/* Parry button — small square on the left with a divider on the right. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-parry {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  padding: 4px 4px !important;
+  border-right: 1px solid rgba(184,148,100,0.18) !important;
+  color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-parry:hover {
+  background: rgba(184,148,100,0.10) !important;
+  color: var(--wdm-amber-bright);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-parry i {
+  font-size: 13px;
+  color: inherit;
+}
+/* Main attack button — fills remaining width, weapon icon + name + qualities. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-main {
+  flex: 1;
+  display: grid !important;
+  grid-template-columns: 20px 1fr;
+  align-items: center;
+  column-gap: 10px;
+  padding: 4px 8px !important;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-main:hover {
+  background: rgba(184,148,100,0.08) !important;
+}
+/* Two-handed weapon blocked by an equipped Quick item — both the attack
+ * button AND the parry button go dim and unclickable; per-button title=
+ * tooltips explain why. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item.is-blocked-by-quick .weapon-main,
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item.is-blocked-by-quick .weapon-parry {
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item.is-blocked-by-quick .weapon-main:hover,
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item.is-blocked-by-quick .weapon-parry:hover {
+  background: transparent !important;
+}
+/* No action slot left this turn → grey the attack button (parry/defense stays
+ * available, so only .weapon-main dims). */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item.is-no-action .weapon-main {
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-main > i {
+  font-size: 16px;
+  color: var(--wdm-amber-hi);
+  text-align: center;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-name {
+  font-family: var(--wdm-font-display);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-bright);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-hand-tag {
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--wdm-ink-dim);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-qualities {
+  margin-top: 1px;
+  font-family: var(--wdm-font-body);
+  font-style: italic;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--wdm-ink-faint);
+  line-height: 1.25;
+  white-space: normal;          /* allow wrap to multiple lines */
+  overflow: visible;
+  word-break: break-word;
+}
+
+/* Reload button — small square mirroring Sheath, with a left divider. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-reload {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  padding: 4px 4px !important;
+  border-left: 1px solid rgba(184,148,100,0.18) !important;
+  color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-reload:hover {
+  background: rgba(184,148,100,0.10) !important;
+  color: var(--wdm-amber-bright);
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-reload i {
+  font-size: 11px;
+  color: inherit;
+}
+
+/* Loaded indicator — a small chip in the weapon text line. Amber when a
+ * round is ready, muted red when the chamber/quiver is empty. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-ammo {
+  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  font-family: var(--wdm-font-display);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-ammo i { font-size: 8px; flex: 0 0 auto; }
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-ammo .weapon-ammo-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-ammo.is-loaded { color: var(--wdm-amber-bright); }
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-ammo.is-empty  { color: var(--wdm-red-bright, #a25050); }
+
+/* ---- Reload ammo-picker dialog (multiple eligible ammo types) ----------- */
+body.witcher-ttrpg-death-march .wdm-ammo-pick-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 280px;
+}
+body.witcher-ttrpg-death-march .wdm-ammo-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  background: rgba(184,148,100,0.06);
+  border: 1px solid var(--wdm-amber-dim);
+  border-radius: 4px;
+  color: var(--wdm-ink-bright);
+  cursor: pointer;
+  transition: background var(--wdm-dur), border-color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march .wdm-ammo-pick:hover {
+  background: rgba(184,148,100,0.16);
+  border-color: var(--wdm-amber-bright);
+}
+body.witcher-ttrpg-death-march .wdm-ammo-pick img {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  border: none;
+}
+body.witcher-ttrpg-death-march .wdm-ammo-pick-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+body.witcher-ttrpg-death-march .wdm-ammo-pick-name {
+  font-family: var(--wdm-font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+body.witcher-ttrpg-death-march .wdm-ammo-pick-meta {
+  font-size: 10px;
+  color: var(--wdm-ink-faint);
+}
+
+/* ---- Oil coating on equipped weapons (combat dock) ----------------------
+   A droplet pinned over the weapon icon flags a coated blade at a glance;
+   the thin bar at the bottom of each .weapon-item shows time remaining. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-icon-wrap {
+  position: relative;
+  display: inline-flex;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-oil-icon {
+  position: absolute;
+  top: -4px;
+  right: -5px;
+  font-size: 0.62em;
+  color: #b8c97a;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-oil-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: auto;          /* allow data-tooltip hover */
+  cursor: help;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-oil-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #6b8e3b 0%, #b8c97a 100%);
+  transition: width 0.2s ease;
+}
+
+/* Multi-action reload progress — thin amber bar atop the card (amber reads as
+   a "working" state, distinct from the green oil-coating bar at the bottom).
+   Shown only while a reload is mid-progress. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-reload-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  cursor: help;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .weapon-item .weapon-reload-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--wdm-amber-dim) 0%, var(--wdm-amber-bright) 100%);
+  transition: width 0.2s ease;
+}
+
+/* Oil bar popover — portaled to <body> by dock.js so it escapes the dock's
+   overflow clipping. Position (top/left) is set by JS via getBoundingClientRect;
+   visual style lives here. ID-based selector keeps it portable across body
+   classes (in case the witcher-ou body class isn't applied at all times). */
+#wou-oil-popover.wou-oil-popover {
+  position: fixed;
+  z-index: 9999;
+  min-width: 220px;
+  max-width: 300px;
+  padding: 10px 14px;
+  background:
+    radial-gradient(ellipse 280px 200px at 50% 30%, rgba(168,132,80,0.05), transparent 70%),
+    linear-gradient(180deg, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.88) 60%, rgba(0,0,0,0.82) 100%);
+  border: 1px solid rgba(140,133,121,0.18);
+  color: var(--wdm-ink);
+  font-family: var(--wdm-font-body, 'Barlow Condensed', sans-serif);
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  text-align: left;
+  text-transform: none;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(2px);
+  pointer-events: none;              /* never blocks clicks */
+}
+#wou-oil-popover.wou-oil-popover .wou-oil-tt-title {
+  font-family: var(--wdm-font-display, 'Barlow Condensed', sans-serif);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi);
+  padding-bottom: 5px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(140,133,121,0.18);
+}
+#wou-oil-popover.wou-oil-popover .wou-oil-tt-charges {
+  color: var(--wdm-ink-hi);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  font-size: 10px;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+#wou-oil-popover.wou-oil-popover .wou-oil-tt-effect {
+  color: var(--wdm-ink-dim);
+  font-style: italic;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* ---- IDENTITY ---- */
+body.witcher-ttrpg-death-march #wou-dock .identity {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 14px;
+  align-items: center;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait {
+  --tox-frac: 0;
+  width: 70px; height: 70px;
+  border-radius: 50%;
+  background:
+    /* TOX fluid — multi-stop vertical gradient faking a PoE-style orb.
+       Key trick: the meniscus highlight stops sit at `frac*100% + Npx`
+       (i.e. ABOVE the fluid surface, in the air).  When frac<1 those
+       positions are inside the element so the meniscus glows just above
+       the waterline.  When frac=1 those positions slide outside the
+       element entirely and the meniscus vanishes — leaving a solid orb
+       with no visible surface line at max toxicity.  Body alphas are
+       near-opaque so the filled portion never reads as washed-out. */
+    linear-gradient(0deg,
+      /* hot bottom glow — solid bright */
+      rgba(190, 235, 120, 0.95) 0%,
+      rgba(160, 215, 90, 0.92)  calc(var(--tox-frac, 0) * 18%),
+      /* fluid body — mid green, solid */
+      rgba(125, 180, 70, 0.90)  calc(var(--tox-frac, 0) * 45%),
+      rgba(100, 155, 55, 0.88)  calc(var(--tox-frac, 0) * 70%),
+      /* surface band — body extends right up to the waterline */
+      rgba(95, 150, 52, 0.88)   calc(var(--tox-frac, 0) * 100% - 1px),
+      rgba(110, 165, 58, 0.86)  calc(var(--tox-frac, 0) * 100%),
+      /* meniscus + halo — ABOVE the fluid line.  At frac=1 these slide
+         outside [0,100%] and don't render, so 100% looks solid. */
+      rgba(200, 240, 130, 0.55) calc(var(--tox-frac, 0) * 100% + 0.5px),
+      rgba(220, 250, 160, 0.18) calc(var(--tox-frac, 0) * 100% + 2px),
+      rgba(220, 250, 160, 0.00) calc(var(--tox-frac, 0) * 100% + 3px),
+      transparent               calc(var(--tox-frac, 0) * 100% + 3.1px),
+      transparent               100%),
+    /* original portrait highlight + dark gradient */
+    radial-gradient(circle at 30% 25%, rgba(255,235,180,0.12), transparent 55%),
+    radial-gradient(circle, #1c1612, var(--wdm-bg));
+  border: 1px solid var(--wdm-amber-dim);
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  animation: wou-medallion-breath 4.5s ease-in-out infinite;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait::after {
+  content: ''; position: absolute; inset: -3px;
+  border: 1px solid rgba(140,133,121,0.18);
+  border-radius: 50%;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait::before {
+  content: ''; position: absolute; inset: -8px;
+  border: 1px dashed rgba(200,154,74,0.10);
+  border-radius: 50%;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait .medallion {
+  width: 52px; height: 52px;
+  object-fit: contain;
+  display: block;
+  /* Tint the white-silhouette PNG into the amber palette: sepia base,
+     saturated and hue-shifted toward warm amber/bronze, slightly darkened
+     for an aged-brass feel.  Drop-shadow keeps it readable on the portrait. */
+  filter:
+    sepia(1)
+    saturate(2.4)
+    hue-rotate(-12deg)
+    brightness(0.78)
+    drop-shadow(0 1px 1px rgba(0,0,0,0.8));
+}
+@keyframes wou-medallion-breath {
+  0%, 100% { box-shadow: 0 0 0 rgba(184,148,100,0); }
+  50%      { box-shadow: 0 0 10px rgba(184,148,100,0.16); }
+}
+
+/* Discreet help trigger — a faint circled-i that opens a themed rich tooltip
+   (data-tooltip + data-tooltip-class="wou-craft-tip"). Shared across the
+   bestiary, wounds pane and war bar. */
+body.witcher-ttrpg-death-march .wdm-help-tip {
+  display: inline-flex;
+  align-items: center;
+  color: var(--wdm-amber-dim);
+  opacity: 0.65;
+  cursor: help;
+  font-size: 11px;
+  user-select: none;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+body.witcher-ttrpg-death-march .wdm-help-tip:hover {
+  opacity: 1;
+  color: var(--wdm-amber-bright);
+}
+/* Top-right ⓘ inside the Action / Full Round dialog — absolutely positioned so
+   it overlays the corner and reserves no layout space. */
+body.witcher-ttrpg-death-march .wou-action-menu { position: relative; }
+body.witcher-ttrpg-death-march .wou-action-menu .wou-action-menu-help {
+  position: absolute;
+  top: 0;
+  right: 0;
+  line-height: 1;
+  z-index: 2;
+}
+
+/* =========================================================================
+   VIGOR ARC — Witcher-3-style segmented gauge curving around the medallion's
+   lower-left (6→9 o'clock).  One `.v-unit` <path> per point of Vigor; the upper
+   units stay lit (yellow→green), round Chaos eats them from the bottom (red).
+   Hidden below 1 Vigor.  The 100×100 SVG overhangs the 70px portrait so the arc
+   sits just outside the medallion ring; pointer-events off so it never blocks
+   the medallion's race-popover click.
+   ========================================================================= */
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait .vigor-arc {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 110px;
+  height: 110px;
+  transform: translate(-50%, -50%);
+  overflow: visible;
+  pointer-events: none;
+  z-index: 3;
+  display: none;              /* war mode only — revealed by .in-encounter below */
+}
+/* Only show the arc in combat ("war mode"), and only when there's Vigor to
+   show (renderVigorBar sets [hidden] below 1 Vigor). */
+body.witcher-ttrpg-death-march.in-encounter #wou-dock .identity .portrait .vigor-arc:not([hidden]) {
+  display: block;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait .vigor-arc .v-unit {
+  stroke-width: 6;
+  stroke-linecap: butt;       /* flat ends → the inter-pip gaps stay crisp */
+  transition: stroke 0.2s ease, opacity 0.2s ease;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait .vigor-arc .v-unit.is-lit {
+  stroke: #b89a52;            /* desaturated amber fallback; JS sets per-pip gradient */
+  filter: drop-shadow(0 0 1.5px rgba(160,130,70,0.45));
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait .vigor-arc .v-unit.is-spent {
+  stroke: #6e3232;           /* muted dried-blood red, not bright */
+  opacity: 0.6;
+}
+
+/* =========================================================================
+   Medallion click affordance — when race effects exist, the medallion lights
+   up on hover and shows a pointer cursor.  Click opens .wou-race-popover.
+   ========================================================================= */
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait .medallion[data-has-race-effects="1"] {
+  cursor: pointer;
+  transition: filter 0.18s ease, transform 0.18s ease;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait .medallion[data-has-race-effects="1"]:hover {
+  filter:
+    sepia(1)
+    saturate(2.4)
+    hue-rotate(-12deg)
+    brightness(1.0)
+    drop-shadow(0 0 8px rgba(214,160,80,0.85))
+    drop-shadow(0 0 14px rgba(214,160,80,0.45))
+    drop-shadow(0 1px 1px rgba(0,0,0,0.8));
+  transform: scale(1.05);
+}
+
+/* =========================================================================
+   Race effects popover — opens above the dock medallion on click.
+   Header = race name, tab strip = one tab per enabled effect, body = the
+   active effect's description (HTML from the ActiveEffect document).
+   ========================================================================= */
+body.witcher-ttrpg-death-march #wou-race-popover {
+  position: fixed;
+  z-index: 9999;
+  min-width: 280px;
+  max-width: 420px;
+  /* max-height is set dynamically in showRacePopover (capped to the
+     viewport space above the medallion).  The popover is flex-column so
+     title + tabs stay pinned and the panel area scrolls. */
+  display: none;
+  flex-direction: column;
+  padding: 12px 14px 14px;
+  text-align: left;
+  background:
+    radial-gradient(ellipse 320px 160px at 50% 0%, rgba(184,148,100,0.12), transparent 75%),
+    linear-gradient(180deg, rgba(22,18,13,0.98) 0%, rgba(10,9,8,0.98) 100%);
+  background-color: rgba(10,9,8,0.98);
+  border: 1px solid var(--wdm-amber-dim);
+  border-radius: 2px;
+  box-shadow:
+    0 12px 32px rgba(0,0,0,0.85),
+    0 0 0 1px rgba(0,0,0,0.6),
+    inset 0 0 0 1px rgba(184,148,100,0.10);
+  color: var(--wdm-ink-hi);
+  font-family: var(--wdm-font-body);
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+}
+body.witcher-ttrpg-death-march #wou-race-popover.is-open { display: flex; }
+
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-popover-title {
+  flex: 0 0 auto;
+  font-family: var(--wdm-font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-bright);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid transparent;
+  border-image:
+    linear-gradient(90deg,
+      transparent, var(--wdm-amber-dim) 30%, var(--wdm-amber) 50%,
+      var(--wdm-amber-dim) 70%, transparent) 1;
+}
+
+/* Tab strip — wraps when there are many effects; each tab is a button. */
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(184,148,100,0.20);
+}
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-tab {
+  appearance: none;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 0;
+  padding: 5px 10px;
+  margin-bottom: -1px;
+  font-family: var(--wdm-font-display);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-dim);
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-shadow: none;
+}
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-tab:hover {
+  color: var(--wdm-ink-bright);
+  background: rgba(184,148,100,0.06);
+}
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-tab.is-active {
+  color: var(--wdm-amber-bright);
+  background: rgba(184,148,100,0.10);
+  border-color: rgba(184,148,100,0.30);
+  border-bottom-color: rgba(10,9,8,0.98); /* sit flush over the strip's bottom rule */
+}
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-tab:focus,
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-tab:focus-visible {
+  outline: none;
+  background: rgba(184,148,100,0.08);
+}
+
+/* Panels — only the active one is rendered.  flex: 1 1 auto + min-height: 0
+   lets the panel area shrink to fit inside the popover's clamped max-height
+   and scroll its content; without min-height:0 a flex child refuses to
+   shrink below its content size and the overflow doesn't trigger. */
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-panels {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  color: var(--wdm-ink);
+}
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-panel { display: none; }
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-panel.is-active { display: block; }
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-panel p { margin: 0 0 6px; }
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-panel p:last-child { margin-bottom: 0; }
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-panel strong { color: var(--wdm-amber-bright); }
+body.witcher-ttrpg-death-march #wou-race-popover .wou-race-panel-empty {
+  color: var(--wdm-ink-faint);
+  font-style: italic;
+}
+
+body.witcher-ttrpg-death-march #wou-dock .identity .name {
+  font-family: var(--wdm-font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.18em;
+  color: var(--wdm-ink-bright);
+  text-transform: uppercase;
+  line-height: 1.15;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .rule {
+  height: 1px;
+  margin: 5px 0 0;             /* zero below — bars below are flush to the rule */
+  background: linear-gradient(90deg,
+    var(--wdm-amber-dim) 0%,
+    var(--wdm-amber)     50%,
+    transparent          100%);
+  opacity: 0.7;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .profession,
+body.witcher-ttrpg-death-march #wou-dock .identity .race {
+  font-family: var(--wdm-font-display);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: var(--wdm-ink);
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .profession {
+  margin-top: 5px;     /* small breathing room after the bars stack above */
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .race {
+  color: var(--wdm-ink-faint);
+  font-size: 9px;
+  letter-spacing: 0.28em;
+}
+/* Hide empty profession/race lines so the rule doesn't dangle */
+body.witcher-ttrpg-death-march #wou-dock .identity .profession:empty,
+body.witcher-ttrpg-death-march #wou-dock .identity .race:empty { display: none; }
+
+/* ---- MEDALLION ARCS (stamina inside · toxicity outside) ----
+   Half-moon arcs that wrap the RIGHT side of the medallion, drawn from top
+   to bottom clockwise.  `pathLength=100` on the SVG path normalizes its
+   length so the JS just writes `strokeDashoffset = 100 - frac * 100`. */
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait .arcs {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90px; height: 90px;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 2;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait .arc-fill {
+  transition: stroke-dashoffset var(--wdm-dur) var(--wdm-ease);
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait .arc-fill[data-kind="sta"]    { stroke: #496d8d; }
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait .arc-fill[data-kind="stress"] { stroke: #8a4a5a; }
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait .arc-decor                    { stroke: var(--wdm-amber-hi); opacity: 0.55; }
+
+/* Combat-only addendum: pinned spells row. Sits in the TEXT column (col 2),
+   aligned under the name / profession / race — NOT under the medallion. */
+body.witcher-ttrpg-death-march #wou-dock .identity .identity-combat {
+  grid-column: 2;
+  display: none;
+  margin-top: 6px;
+  width: 100%;
+}
+body.witcher-ttrpg-death-march.in-encounter #wou-dock .identity .identity-combat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .spells-row {
+  display: flex;
+  gap: 4px;                   /* row-gap + column-gap once wrapping kicks in */
+  flex-wrap: wrap;            /* keep buttons full-size; spill onto new rows */
+  width: 100%;
+  min-width: 0;
+  align-items: flex-start;
+  align-content: flex-start;
+  padding-bottom: 2px;        /* breathing room below a wrapped final row */
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .spells-empty {
+  font-family: var(--wdm-font-display);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-faint);
+  font-style: italic;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .spell-btn {
+  /* Override Foundry's button{} chrome.  Fixed 24px square that does NOT
+     shrink — when the row runs out of width the buttons wrap onto a new line
+     (flex-wrap on .spells-row) instead of squeezing smaller. */
+  flex: 0 0 24px;            /* fixed 24px, no grow / no shrink → wrap */
+  width: 24px;
+  aspect-ratio: 1 / 1;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 1px !important;
+  background: rgba(20,17,13,0.7) !important;
+  border: 1px solid var(--wdm-amber-dim) !important;
+  border-radius: 2px !important;
+  outline: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: background var(--wdm-dur), border-color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .spell-btn:hover {
+  background: rgba(34,28,20,0.9) !important;
+  border-color: var(--wdm-amber) !important;
+}
+/* No action slot left this turn → grey the cast buttons. */
+body.witcher-ttrpg-death-march #wou-dock .identity .spell-btn.is-disabled {
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .spell-btn img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* Arcs fade between peace and combat instead of popping.  Keeping them in
+   layout (no display:none) lets opacity animate on both directions. */
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait .arcs {
+  opacity: 1;
+  transition: opacity 0.45s var(--wdm-ease);
+}
+/* Medallion visualization (arcs + TOX gradient + vitality bar) used to
+ * migrate to the combat center column. It now stays put in both peace
+ * and combat — only the cur/max readouts appear in combat (see
+ * trailing the bar — see `.cur-hp/sta/tox` rules). The old `.arcs {
+ * opacity: 0 }`, `--tox-frac:
+ * 0`, and `.ident-text > .pool { display: none }` rules have been
+ * intentionally removed. */
+
+/* The decorative ::after / ::before rings on the portrait fight visually
+   with the arcs.  Soften them so the arcs are the dominant accent ring. */
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait::after,
+body.witcher-ttrpg-death-march #wou-dock .identity .portrait::before {
+  opacity: 0.3;
+}
+
+/* ---- NAME ROW ----
+   Name anchored to the left.  Profession + race now stack below the
+   healthbar (see .identity .profession / .race above), in both modes. */
+body.witcher-ttrpg-death-march #wou-dock .identity .name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 240px;
+  /* Anchor for the absolute-positioned .wou-statuses (see statuses.css) so
+   * status badges float along the right edge without participating in this
+   * row's flex flow.  Without this, badges would push the vitality bar
+   * downward whenever the badge column was taller than the text. */
+  position: relative;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .name-row .name {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* ---- VITALITY BAR (standalone, beneath the rule, left-aligned).
+   Width ≈ 60% of the name bar (rule) above. The --accent variable drives
+   both the sawtooth outline+fill and (in combat) the trailing HP number.
+   data-severity is set by renderDock per turn: 'wounded' at ≤ half HP
+   (Witcher wound threshold), 'dying' at ≤ 0 HP (death saves) — each
+   darkens the accent to a deeper blood-red. */
+body.witcher-ttrpg-death-march #wou-dock .identity .ident-text > .pool[data-kind="hp"][data-severity="wounded"] {
+  --accent: #6e2222;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .ident-text > .pool[data-kind="hp"][data-severity="dying"] {
+  --accent: #4a1010;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .ident-text > .pool[data-kind="hp"] {
+  width: 144px;             /* 60% of the 240px rule */
+  margin-top: 3px;
+  --accent: #a83838;
+}
+body.witcher-ttrpg-death-march #wou-dock .identity .ident-text > .pool .teeth {
+  height: 12px;
+  display: block;
+  width: 100%;
+}
+
+/* ---- COUNTERS (now in the bs-grid CENTER column) ---- */
+body.witcher-ttrpg-death-march #wou-dock .counters {
+  display: flex; justify-content: center; align-items: center;
+  gap: 36px;
+}
+body.witcher-ttrpg-death-march #wou-dock .counter {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--wdm-font-display);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--wdm-ink);
+  cursor: default;
+}
+body.witcher-ttrpg-death-march #wou-dock .counter i {
+  font-size: 12px;
+  color: var(--wdm-amber-hi);
+  filter: drop-shadow(0 0 4px rgba(0,0,0,0.6));
+}
+body.witcher-ttrpg-death-march #wou-dock .counter .val {
+  font-weight: 700;
+  color: var(--wdm-ink-bright);
+  font-size: 12px;
+  min-width: 12px;
+  text-align: right;
+}
+body.witcher-ttrpg-death-march #wou-dock .counter .sep {
+  color: var(--wdm-ink-faint);
+  margin: 0 1px;
+}
+body.witcher-ttrpg-death-march #wou-dock .counter .mx {
+  color: var(--wdm-ink-faint);
+  font-weight: 500;
+  font-size: 11px;
+}
+/* All three counter icons share the mockup's amber palette — no per-kind
+   accent override.  The data-kind attribute stays for potential future
+   theming (e.g. a colored ring at high values) without breaking it now. */
+
+/* ---- ACTION TRAYS — peace vs combat variants share the same grid cell ---- */
+body.witcher-ttrpg-death-march #wou-dock .sign-tray {
+  display: flex;
+  gap: 32px;          /* room for long labels like "INITIATIVE" / "SAVING THROW" */
+  align-items: center;
+  grid-column: 3; grid-row: 1;
+}
+/* combat-signs holds one more button than peace-signs (Initiative tacked on
+   the right), so shrink the inter-button gap and the buttons themselves to
+   fit in the same tray footprint. */
+body.witcher-ttrpg-death-march #wou-dock .combat-signs { display: none; gap: 18px; }
+body.witcher-ttrpg-death-march #wou-dock .combat-signs .sign { width: 42px; height: 42px; font-size: 16px; }
+body.witcher-ttrpg-death-march #wou-dock .combat-signs .sign i { width: 18px; height: 18px; }
+body.witcher-ttrpg-death-march.in-encounter #wou-dock .peace-signs  { display: none; }
+body.witcher-ttrpg-death-march.in-encounter #wou-dock .combat-signs { display: flex; }
+body.witcher-ttrpg-death-march #wou-dock .sign {
+  position: relative;
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,235,180,0.06), transparent 55%),
+    radial-gradient(circle, #181410, var(--wdm-bg));
+  border: 1px solid rgba(140,133,121,0.30);
+  border-radius: 50%;
+  color: var(--wdm-ink-dim);
+  cursor: pointer;
+  font-size: 19px;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #wou-dock .sign::before {
+  content: '';
+  position: absolute; inset: -4px;
+  border-radius: 50%;
+  border: 1px solid rgba(200,154,74,0.08);
+}
+body.witcher-ttrpg-death-march #wou-dock .sign i {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+}
+body.witcher-ttrpg-death-march #wou-dock .sign i::before { line-height: 1; }
+body.witcher-ttrpg-death-march #wou-dock .sign:hover {
+  color: var(--wdm-ink-bright);
+  border-color: var(--wdm-ink-dim);
+}
+body.witcher-ttrpg-death-march #wou-dock .sign.is-active {
+  color: var(--wdm-amber-bright);
+  border-color: var(--wdm-amber);
+  animation: wou-sign-pulse 2.6s ease-in-out infinite;
+}
+@keyframes wou-sign-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(184,148,100,0.22), inset 0 0 3px rgba(0,0,0,0.4); }
+  50%      { box-shadow: 0 0 12px rgba(184,148,100,0.38), 0 0 22px rgba(184,148,100,0.10), inset 0 0 3px rgba(0,0,0,0.4); }
+}
+body.witcher-ttrpg-death-march #wou-dock .sign .nm {
+  position: absolute;
+  top: 100%; margin-top: 5px; left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--wdm-font-display);
+  font-size: 9px;
+  letter-spacing: 0.28em;       /* matches .identity .race */
+  color: var(--wdm-ink-faint);  /* matches .identity .race */
+  text-transform: uppercase;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+body.witcher-ttrpg-death-march #wou-dock .sign.is-active .nm { color: var(--wdm-amber-hi); }
+
+/* Drunk-level badge on the Sober Up sign — mirrors the witcher-drunk-mechanic
+   character-sheet inject (Roman numeral, dark amber chip). Hidden when sober. */
+body.witcher-ttrpg-death-march #wou-dock .sign .sober-badge {
+  display: none;
+  position: absolute;
+  bottom: -4px; right: -6px;
+  z-index: 2;
+  font-family: var(--wdm-font-display);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #f0e6d3;
+  background: #5a2d0c;
+  border: 1px solid #8b4513;
+  border-radius: 3px;
+  padding: 0 3px;
+  line-height: 1.3;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #wou-dock .sign .sober-badge.has-rank { display: block; }
+
+/* ---- PROMPTS (hotbar macros as keycap prompts) ---- */
+body.witcher-ttrpg-death-march #wou-dock .prompts {
+  margin-top: 10px;
+  padding-top: 8px;
+  display: flex; justify-content: center; gap: 28px;
+  border-top: 1px dotted rgba(140,133,121,0.18);
+  position: relative;
+}
+body.witcher-ttrpg-death-march #wou-dock .prompts::before {
+  /* tiny diamond marker centered on the prompt rule */
+  content: '';
+  position: absolute;
+  left: 50%; top: -3px;
+  transform: translateX(-50%) rotate(45deg);
+  width: 4px; height: 4px;
+  background: var(--wdm-amber);
+  box-shadow: 0 0 6px rgba(214,160,80,0.5);
+}
+body.witcher-ttrpg-death-march #wou-dock .prompt {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: var(--wdm-ink-dim);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #wou-dock .prompt:hover { color: var(--wdm-ink-bright); }
+body.witcher-ttrpg-death-march #wou-dock .prompt.is-empty { opacity: 0.55; }
+body.witcher-ttrpg-death-march #wou-dock .prompt.is-empty:hover { color: var(--wdm-ink-dim); }
+
+/* Active drag target — outline the slot to show it accepts the drop */
+body.witcher-ttrpg-death-march #wou-dock .prompt.is-drag-target {
+  background: rgba(184,148,100,0.10);
+  box-shadow: inset 0 0 0 1px var(--wdm-amber);
+  color: var(--wdm-ink-bright);
+}
+body.witcher-ttrpg-death-march #wou-dock .prompt .key {
+  font-weight: 700;
+  color: var(--wdm-ink-hi);
+}
+body.witcher-ttrpg-death-march #wou-dock .prompt .key::before { content: '['; color: var(--wdm-ink-faint); margin-right: 1px; }
+body.witcher-ttrpg-death-march #wou-dock .prompt .key::after  { content: ']'; color: var(--wdm-ink-faint); margin-left: 1px; }
+
+/* -----------------------------------------------------------------------------
+   5. Embers — hidden by default, shown only in encounter mode
+   ----------------------------------------------------------------------------- */
+body.witcher-ttrpg-death-march #wou-dock .ember {
+  position: absolute;
+  top: 0;                       /* spawn from the dock's top edge (the glowing rule) */
+  width: 2px; height: 2px;
+  background: var(--wdm-amber-bright);
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(0.5px);
+  opacity: 0;
+}
+body.witcher-ttrpg-death-march #wou-dock .ember.lg { width: 3px; height: 3px; background: var(--wdm-amber-hi); }
+body.witcher-ttrpg-death-march #wou-dock .ember.sm { width: 1.5px; height: 1.5px; }
+
+body.witcher-ttrpg-death-march.in-encounter #wou-dock .ember {
+  animation: wou-ember-drift linear infinite;
+  /* combat embers — bigger, brighter, glowier than peacetime */
+  width: 3px; height: 3px;
+  background: var(--wdm-amber-bright);
+  filter: blur(0.4px) drop-shadow(0 0 4px rgba(214,170,90,0.7));
+}
+body.witcher-ttrpg-death-march.in-encounter #wou-dock .ember.lg {
+  width: 5px; height: 5px;
+  background: #f0c570;
+  filter: blur(0.5px) drop-shadow(0 0 6px rgba(240,197,112,0.8));
+}
+body.witcher-ttrpg-death-march.in-encounter #wou-dock .ember.sm {
+  width: 2.5px; height: 2.5px;
+  filter: blur(0.3px) drop-shadow(0 0 3px rgba(214,170,90,0.6));
+}
+@keyframes wou-ember-drift {
+  0%   { transform: translateY(0)    translateX(0);  opacity: 0;    }
+  10%  {                                              opacity: 0.85; }
+  50%  { transform: translateY(-320px) translateX(14px); opacity: 0.75; }
+  90%  {                                              opacity: 0.40; }
+  100% { transform: translateY(-540px) translateX(-12px); opacity: 0; }
+}
+
+/* =========================================================================
+   "View as" picker — GM-only impersonation control, shared across the
+   inventory / character / journal / bestiary tabs.  The state itself lives
+   in scripts/lib/actor.js so picking a target in one tab propagates to all
+   the others.
+   ========================================================================= */
+body.witcher-ttrpg-death-march .wou-viewas {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 4px 3px 8px;
+  background: rgba(0,0,0,0.30);
+  border: 1px solid rgba(184,148,100,0.22);
+  border-radius: 2px;
+  font-family: var(--wdm-font-display);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-faint);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+  vertical-align: middle;
+}
+body.witcher-ttrpg-death-march .wou-viewas:hover {
+  color: var(--wdm-amber-bright);
+  border-color: var(--wdm-amber-bright);
+}
+body.witcher-ttrpg-death-march .wou-viewas i { font-size: 10px; opacity: 0.8; }
+body.witcher-ttrpg-death-march .wou-viewas-lbl { color: inherit; }
+body.witcher-ttrpg-death-march .wou-viewas-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0 18px 0 4px;
+  margin: 0;
+  font: inherit;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-hi);
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 9px) 50%, calc(100% - 5px) 50%;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+}
+body.witcher-ttrpg-death-march .wou-viewas-select:focus {
+  outline: none;
+  color: var(--wdm-amber-bright);
+}
+body.witcher-ttrpg-death-march .wou-viewas-select option {
+  background: #18130b;
+  color: var(--wdm-ink);
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 12px;
+}
+/* When the override is engaged, mark the control so the user can see at a
+ * glance that they're not viewing the default. */
+body.witcher-ttrpg-death-march .wou-viewas.is-engaged {
+  color: var(--wdm-amber-bright);
+  border-color: var(--wdm-amber-bright);
+  background: rgba(184,148,100,0.10);
+}
+body.witcher-ttrpg-death-march .wou-viewas.is-engaged .wou-viewas-select { color: var(--wdm-amber-bright); }
+
+/* One-click clear button on the "View as" picker — appears only when an
+ * override is engaged, sits just to the right of the <select>.  Tinted
+ * to the same amber as the engaged pill, but with a red-bright hover so
+ * the action reads as "undo this." */
+body.witcher-ttrpg-death-march .wou-viewas-clear {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0 2px;
+  margin-left: 2px;
+  font: inherit;
+  color: var(--wdm-amber-bright);
+  opacity: 0.70;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px;
+  border-radius: 2px;
+  transition: color 120ms ease, opacity 120ms ease, background 120ms ease;
+}
+body.witcher-ttrpg-death-march .wou-viewas-clear i { font-size: 10px; }
+body.witcher-ttrpg-death-march .wou-viewas-clear:hover {
+  color: var(--wdm-red-bright);
+  opacity: 1;
+  background: rgba(162,80,80,0.18);
+}
+
+/* =============================================================================
+   GAME PAUSED SCREEN
+   ============================================================================= */
+
+body.witcher-ttrpg-death-march #pause {
+  background:
+    linear-gradient(
+      to right,
+      transparent 0%,
+      rgba(8,7,5,0.78) 28%,
+      rgba(12,9,6,0.88) 50%,
+      rgba(8,7,5,0.78) 72%,
+      transparent 100%
+    );
+  border-top: 1px solid rgba(110,82,36,0.22);
+  border-bottom: 1px solid rgba(110,82,36,0.22);
+  gap: 1rem;
+}
+
+/* Hide the Foundry compass — replaced by the wolf medallion below */
+body.witcher-ttrpg-death-march #pause img {
+  display: none !important;
+}
+
+/* Wolf medallion pseudo-element */
+body.witcher-ttrpg-death-march #pause::before {
+  content: '';
+  display: block;
+  width: 100px;
+  height: 100px;
+  background: url('../assets/medallions/wolf.png') center / contain no-repeat;
+  filter:
+    sepia(0.7) saturate(0.5) brightness(0.75)
+    drop-shadow(0 0 8px rgba(168,132,80,0.0));
+  animation: wou-medallion-glow 4s ease-in-out infinite;
+}
+
+@keyframes wou-medallion-glow {
+  0%   { filter: sepia(0.7) saturate(0.5) brightness(0.70) drop-shadow(0 0  6px rgba(168,132,80,0.15)); }
+  50%  { filter: sepia(0.6) saturate(0.6) brightness(0.88) drop-shadow(0 0 18px rgba(184,148,80,0.55)); }
+  100% { filter: sepia(0.7) saturate(0.5) brightness(0.70) drop-shadow(0 0  6px rgba(168,132,80,0.15)); }
+}
+
+body.witcher-ttrpg-death-march #pause figcaption {
+  font-family: var(--wdm-font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi);
+  text-shadow:
+    0 0 24px rgba(168,132,80,0.35),
+    0 1px 4px rgba(0,0,0,0.95);
+  line-height: 1;
+}
+
+/* Cancel Foundry's default scale-pulse — the medallion glow handles the animation */
+body.witcher-ttrpg-death-march #pause.paused {
+  animation: none;
+}
+
+/* =============================================================================
+   MAIN MENU  (ESC screen)
+   ============================================================================= */
+
+/* Native dialog backdrop — ::backdrop lives in the top-layer so body scope
+   doesn't reach it; the file only loads when the module is active anyway. */
+#menu::backdrop {
+  background: rgba(5,4,2,0.70);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+/* Panel */
+body.witcher-ttrpg-death-march #menu {
+  width: 300px;
+  background:
+    linear-gradient(180deg, rgba(22,18,12,0.97) 0%, rgba(10,9,6,0.98) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 0 !important;
+  border: 1px solid rgba(110,82,36,0.38) !important;
+  box-shadow:
+    0 0 0 1px rgba(110,82,36,0.10),
+    0 24px 64px rgba(0,0,0,0.90) !important;
+  outline: none;
+  padding: 0;
+}
+
+body.witcher-ttrpg-death-march #menu #main-menu-items {
+  padding: 16px 16px 18px;
+  gap: 0;
+}
+
+/* Each row */
+body.witcher-ttrpg-death-march #menu .menu-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  background: rgba(10,9,8,0.25);
+  border: 1px solid rgba(110,82,36,0.25);
+  border-top: none;
+  color: var(--wdm-ink-hi);
+  cursor: pointer;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur), background var(--wdm-dur);
+  list-style: none;
+}
+
+body.witcher-ttrpg-death-march #menu .menu-item:first-child {
+  border-top: 1px solid rgba(110,82,36,0.25);
+}
+
+body.witcher-ttrpg-death-march #menu .menu-item:hover {
+  color: var(--wdm-amber-bright) !important;
+  border-color: var(--wdm-amber-dim) !important;
+  background: rgba(168,132,80,0.08) !important;
+  text-shadow: none !important;
+}
+
+body.witcher-ttrpg-death-march #menu .menu-item > i {
+  color: var(--wdm-amber-dim);
+  font-size: 13px;
+  flex: 0 0 18px;
+  text-align: center;
+  opacity: 1 !important;
+  transition: color var(--wdm-dur);
+}
+
+body.witcher-ttrpg-death-march #menu .menu-item:hover > i {
+  color: var(--wdm-amber);
+}
+
+body.witcher-ttrpg-death-march #menu .menu-item h2 {
+  font-family: var(--wdm-font-display) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.30em !important;
+  text-transform: uppercase !important;
+  color: inherit !important;
+  margin: 0 !important;
+}
+
+/* =========================================================================
+   FOUNDRY NOTIFICATIONS — re-anchored above #wou-dock as a horizontal
+   strip and restyled to match WOU chrome.  Foundry still owns the queue,
+   lifetime, and click-to-dismiss; we only override visuals.
+     • bg: warm-dark gradient with the same 30%/25% radial sheen the dock
+            and .sign buttons use, so a fired notification reads as a piece
+            of the same forge as everything else.
+     • border: thin ink-faint outer + per-type 3px amber/red/poison/frost
+            stripe on the left, matching the dock's hairline rule motif.
+     • text: Barlow body for the message (--wdm-ink-hi), display-font
+            UPPERCASE caps label (--wdm-track-wide), gilt FA glyph.
+     • per-type accent uses semantic palette: frost (info), gilt (warn),
+            red (error), poison (success).
+   `--wdm-dock-h` is published from JS so the strip hugs the dock through
+   state swaps + resizes.
+   ========================================================================= */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) {
+  position: fixed !important;
+  left: 36px !important;
+  right: 36px !important;
+  top: auto !important;
+  bottom: calc(var(--wdm-dock-h, 96px) + 10px) !important;
+  width: auto !important;
+  max-width: none !important;
+  /* Above the chrome overlays (inventory 9060, bestiary/crafting 9100) and
+     ApplicationV2 windows (9200) so transient warnings stay visible while
+     the inventory screen is open. */
+  z-index: 9300;
+  display: flex !important;
+  flex-direction: column-reverse;
+  align-items: stretch;
+  gap: 5px;
+  padding: 0 !important;
+  margin: 0 !important;
+  list-style: none;
+  pointer-events: none;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Chat previews live in their OWN strip, not Foundry's #notifications, so
+   they can sit BEHIND every piece of UI and float only over the scene.
+   #interface is NOT a stacking context (position: relative, no z-index),
+   so its children compete in the root context: canvas#board at z 0, the
+   #ui-left/#ui-right bars at z 30 (lifted to 9100 when a sidebar opens),
+   chrome overlays at 9060-9100, and .application dialogs at 9200. The
+   preview container is a body child in that same root context, so a
+   z-index just above the board but below the bars puts the cards behind
+   ALL of the UI while keeping them visible over the board. Real warnings
+   stay in #notifications (z 99999) and keep overlaying everything. */
+body.witcher-ttrpg-death-march.wou-notifications-styled #wdm-chat-previews {
+  z-index: 5;
+}
+
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification {
+  all: unset;
+  box-sizing: border-box;
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 16px 9px 18px;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  cursor: pointer;
+  list-style: none;
+
+  /* Warm-dark fill with the dock/.sign radial sheen + a vertical gradient
+     to give it a subtle "leather" feel under chrome lighting. */
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,235,180,0.06), transparent 55%),
+    linear-gradient(180deg, var(--wdm-bg-lifted, #14110d) 0%, var(--wdm-bg, #0a0908) 100%);
+  border: 1px solid var(--wdm-ink-faint, #5a574e);
+  border-left: 3px solid var(--wdm-amber-dim, #6e5224);
+  border-radius: var(--wdm-radius-sm, 3px);
+  box-shadow:
+    0 1px 0 rgba(255, 230, 180, 0.04) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.55) inset,
+    0 6px 22px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+
+  font-family: var(--wdm-font-body, inherit);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--wdm-ink, #b0a994);
+  letter-spacing: var(--wdm-track-tight, 0.06em);
+  animation: wou-notif-slide-in 0.24s var(--wdm-ease, cubic-bezier(.4,.0,.2,1));
+  transition: border-color .15s, color .15s;
+}
+
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification > p {
+  margin: 0 !important;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--wdm-ink-hi, #cac4b0);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Leading FA glyph — gilt by default, recolored per type below.  Drops
+   in via ::before so we don't mutate the markup Foundry stamps. */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification::before {
+  font-family: "Font Awesome 7 Pro", "Font Awesome 6 Pro", "Font Awesome 6 Free", "FontAwesome";
+  font-weight: 900;
+  font-size: 15px;
+  line-height: 1;
+  flex: 0 0 auto;
+  width: 18px;
+  text-align: center;
+  color: var(--wdm-amber-hi, #b89464);
+  text-shadow: 0 0 6px rgba(184, 148, 100, 0.35);
+}
+
+/* Caps label prefix — display font, wide tracking, divider on the right;
+   reads as a typewritten dispatch tag (Tidings / Warning / Failure /
+   Resolved) ahead of the message. */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification::after {
+  font-family: var(--wdm-font-display, inherit);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: var(--wdm-track-wide, 0.28em);
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi, #b89464);
+  flex: 0 0 auto;
+  order: 0;
+  align-self: center;
+  border-right: 1px solid rgba(140, 133, 121, 0.22);
+  padding-right: 10px;
+  margin-right: -2px;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.info::after    { content: "Tidings"; }
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.warning::after { content: "Warning"; }
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.error::after   { content: "Failure"; }
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.success::after { content: "Resolved"; }
+
+/* ---- Per-type accents — stripe + glyph + label color ---- */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.info {
+  border-left-color: var(--wdm-frost, #6a8aa2);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.info::before {
+  content: '\f129';                /* fa-circle-info */
+  color: var(--wdm-frost, #6a8aa2);
+  text-shadow: 0 0 6px rgba(106, 138, 162, 0.45);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.info::after {
+  color: var(--wdm-frost, #6a8aa2);
+}
+
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.warning {
+  border-left-color: var(--wdm-gilt, #b58838);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.warning::before {
+  content: '\f071';                /* fa-triangle-exclamation */
+  color: var(--wdm-gilt-hi, #d8a448);
+  text-shadow: 0 0 6px rgba(216, 164, 72, 0.45);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.warning::after {
+  color: var(--wdm-gilt-hi, #d8a448);
+}
+
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.error {
+  border-left-color: var(--wdm-red, #8c3c3c);
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,160,150,0.06), transparent 55%),
+    linear-gradient(180deg, #1c0f0d 0%, #0d0807 100%);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.error::before {
+  content: '\f06a';                /* fa-circle-exclamation */
+  color: var(--wdm-red-bright, #a25050);
+  text-shadow: 0 0 6px rgba(162, 80, 80, 0.55);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.error::after {
+  color: var(--wdm-red-bright, #a25050);
+  border-right-color: rgba(140, 60, 60, 0.30);
+}
+
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.success {
+  border-left-color: var(--wdm-poison, #6e8a4a);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.success::before {
+  content: '\f00c';                /* fa-check */
+  color: var(--wdm-poison, #6e8a4a);
+  text-shadow: 0 0 6px rgba(110, 138, 74, 0.45);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.success::after {
+  color: var(--wdm-poison, #6e8a4a);
+}
+
+/* Hover — border lifts to bright amber, text brightens (matches the
+   .sign / qol-popup hover affordance). */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification:hover {
+  border-color: var(--wdm-amber, #a88450);
+  color: var(--wdm-ink-hi, #cac4b0);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification:hover > p {
+  color: var(--wdm-ink-bright, #e0dac4);
+}
+
+/* Persistent notifications get a small dismiss hint floated on the right. */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.permanent {
+  padding-right: 32px;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.permanent > p::after {
+  content: '\f00d';
+  font-family: "Font Awesome 7 Pro", "Font Awesome 6 Pro", "Font Awesome 6 Free", "FontAwesome";
+  font-weight: 900;
+  font-size: 11px;
+  color: var(--wdm-ink-faint, #5a574e);
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.6;
+  transition: opacity 0.12s, color 0.12s;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.permanent:hover > p::after {
+  opacity: 1;
+  color: var(--wdm-amber-hi, #b89464);
+}
+
+/* Progress-bar notifications — repaint the track in amber-dim with a
+   gilt leading edge so the fill reads as "burning toward complete". */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.progress {
+  background:
+    linear-gradient(
+      to right,
+      rgba(184, 136, 56, 0.22) 0,
+      rgba(184, 136, 56, 0.22) calc(var(--pct, 0%) - 1px),
+      var(--wdm-gilt, #b58838) calc(var(--pct, 0%) - 1px),
+      var(--wdm-gilt, #b58838) var(--pct, 0%),
+      transparent var(--pct, 0%),
+      transparent 100%),
+    radial-gradient(circle at 30% 25%, rgba(255,235,180,0.06), transparent 55%),
+    linear-gradient(180deg, var(--wdm-bg-lifted, #14110d) 0%, var(--wdm-bg, #0a0908) 100%) !important;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification .pct {
+  margin-left: auto;
+  font-family: var(--wdm-font-display, inherit);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: var(--wdm-track-wide, 0.28em);
+  color: var(--wdm-amber-bright, #c8a878);
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes wou-notif-slide-in {
+  from { opacity: 0; transform: translateY(8px); filter: brightness(0.7); }
+  to   { opacity: 1; transform: translateY(0);   filter: brightness(1); }
+}
+
+/* ---- Chat-card previews — piggyback the notification strip ----------------
+ * Same surface as a regular notification, but the caps label is the speaker's
+ * name (sourced from data-wou-sender) and the leading glyph is a chat
+ * bubble.  Whispered messages swap the stripe + glyph color to frost so a
+ * private message is recognisable at a glance even in the preview.
+ * --------------------------------------------------------------------------- */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview {
+  border-left-color: var(--wdm-amber, #a88450);
+  align-items: flex-start;
+  padding: 11px 18px 12px 18px;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview::before {
+  content: '\f075';                /* fa-comment */
+  color: var(--wdm-amber-hi, #b89464);
+  text-shadow: 0 0 6px rgba(184, 148, 100, 0.45);
+  align-self: flex-start;
+  margin-top: 2px;
+}
+/* Suppress the per-type ::after chip that other notification kinds use
+ * — chat previews use a real <span.wou-chat-preview-sender> below so the
+ * sender name isn't subject to the parent's `overflow: hidden` clipping
+ * (which was lopping the front off long labels and leaving "TR"-like
+ * fragments visible). */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview::after {
+  content: none;
+  display: none;
+}
+
+/* Sender chip — same display-font caps treatment the other notifications
+ * use for their type label, but as a real DOM element so it never clips. */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview > .wou-chat-preview-sender {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 2px;
+  font-family: var(--wdm-font-display, inherit);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: var(--wdm-track-wide, 0.28em);
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi, #b89464);
+  border-right: 1px solid rgba(140, 133, 121, 0.22);
+  padding-right: 10px;
+  max-width: 140px;                       /* hard cap; ellipsizes from the right */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Text column — subtitle stacked above body, takes all remaining width. */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview > .wou-chat-preview-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-subtitle {
+  font-family: var(--wdm-font-display, inherit);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: var(--wdm-track, 0.18em);
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi, #b89464);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-text > p {
+  margin: 0 !important;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  color: var(--wdm-ink-hi, #cac4b0);
+  font-size: 12.5px;
+}
+
+/* Whisper variant — frost accents on stripe, glyph, sender, subtitle. */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview.is-whisper {
+  border-left-color: var(--wdm-frost, #6a8aa2);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview.is-whisper::before {
+  content: '\f3e5';                /* fa-comment-dots (private murmur) */
+  color: var(--wdm-frost, #6a8aa2);
+  text-shadow: 0 0 6px rgba(106, 138, 162, 0.45);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview.is-whisper > .wou-chat-preview-sender,
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview.is-whisper .wou-chat-preview-subtitle {
+  color: var(--wdm-frost, #6a8aa2);
+}
+
+/* Roll formulas — one row per Roll: "formula = total".  Formula in mono,
+ * total in display-font amber-bright so the result jumps out at a glance. */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-rolls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-roll {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 8px;
+  background: rgba(0,0,0,0.32);
+  border: 1px solid rgba(140,133,121,0.20);
+  border-left: 2px solid var(--wdm-amber-dim, #6e5224);
+  border-radius: var(--wdm-radius-xs, 2px);
+  font-size: 11px;
+  line-height: 1.3;
+  width: fit-content;
+  max-width: 100%;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-roll .formula {
+  font-family: var(--wdm-font-mono, ui-monospace, monospace);
+  color: var(--wdm-ink-dim, #8a857a);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-roll .eq {
+  color: var(--wdm-ink-faint, #5a574e);
+  font-family: var(--wdm-font-mono, ui-monospace, monospace);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-roll .total {
+  font-family: var(--wdm-font-display, inherit);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--wdm-amber-bright, #c8a878);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview.is-whisper .wou-chat-preview-roll {
+  border-left-color: var(--wdm-frost, #6a8aa2);
+}
+
+/* Skill-roll preview: lay the pieces out in a single horizontal row
+ * (name · chips · dice · verdict) rather than stacking them vertically. */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview.is-skill-roll .wou-chat-preview-text {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview.is-skill-roll .wou-chat-preview-rolls {
+  margin-top: 0;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview.is-skill-roll .wou-chat-preview-verdict {
+  margin-top: 0;
+}
+/* The chips body reads as one calm hint line, not a paragraph. */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview.is-skill-roll .wou-chat-preview-text > p {
+  font-family: var(--wdm-font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  color: var(--wdm-ink-dim, #8a857a);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-verdict {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: var(--wdm-radius-xs, 2px);
+  font-family: var(--wdm-font-display, inherit);
+  text-transform: uppercase;
+  letter-spacing: var(--wdm-track-tight, 0.06em);
+  font-weight: 700;
+  font-size: 10px;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-verdict .dc {
+  color: var(--wdm-ink-dim, #8a857a);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-verdict.pass {
+  background: rgba(70, 110, 64, 0.18);
+  border: 1px solid #4e7a48;
+  color: #8fbf82;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-verdict.fail {
+  background: rgba(140, 60, 60, 0.18);
+  border: 1px solid var(--wdm-red, #8c3c3c);
+  color: var(--wdm-red-bright, #a25050);
+}
+
+/* Action buttons — small rectangular pills below the body.  Clicks proxy
+ * to the real button in the live chat log (so system handlers fire). */
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-action {
+  all: unset;
+  cursor: pointer;
+  padding: 4px 12px;
+  font-family: var(--wdm-font-display, inherit);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: var(--wdm-track, 0.18em);
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi, #b89464);
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,235,180,0.06), transparent 55%),
+    linear-gradient(180deg, var(--wdm-bg-lifted, #14110d) 0%, var(--wdm-bg-deep, #050402) 100%);
+  border: 1px solid var(--wdm-amber-dim, #6e5224);
+  border-radius: var(--wdm-radius-xs, 2px);
+  box-shadow:
+    0 1px 0 rgba(255, 230, 180, 0.04) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.55) inset;
+  transition: color .12s, border-color .12s, background .12s;
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview .wou-chat-preview-action:hover {
+  color: var(--wdm-amber-bright, #c8a878);
+  border-color: var(--wdm-amber, #a88450);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview.is-whisper .wou-chat-preview-action {
+  color: var(--wdm-frost, #6a8aa2);
+  border-color: rgba(106, 138, 162, 0.55);
+}
+body.witcher-ttrpg-death-march.wou-notifications-styled :is(#notifications, #wdm-chat-previews) > .notification.wou-chat-preview.is-whisper .wou-chat-preview-action:hover {
+  color: #8fb6e4;
+  border-color: var(--wdm-frost, #6a8aa2);
+}
+
+/* =========================================================================
+   SKILL-MODIFIER PROMPT (dock Awareness → weather/light + situational mods)
+   Rendered inside a DialogV2; just enough layout to make the toggle rows and
+   the manual field read cleanly. Inherits the dialog's own colours/fonts.
+   ========================================================================= */
+body.witcher-ttrpg-death-march .wou-skillmod-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+body.witcher-ttrpg-death-march .wou-skillmod-head {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 2px;
+}
+body.witcher-ttrpg-death-march .wou-skillmod-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+body.witcher-ttrpg-death-march .wou-skillmod-row input[type="checkbox"] {
+  flex: 0 0 auto;
+}
+body.witcher-ttrpg-death-march .wou-skillmod-name {
+  flex: 1 1 auto;
+}
+body.witcher-ttrpg-death-march .wou-skillmod-val {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+body.witcher-ttrpg-death-march .wou-skillmod-note {
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.7;
+  font-style: italic;
+}
+body.witcher-ttrpg-death-march .wou-skillmod-empty {
+  opacity: 0.7;
+  font-style: italic;
+  margin: 2px 0;
+}
+body.witcher-ttrpg-death-march .wou-skillmod-manual {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--wdm-amber-dim, rgba(180, 140, 70, 0.35));
+}
+body.witcher-ttrpg-death-march .wou-skillmod-manual input[type="number"] {
+  flex: 0 0 72px;
+  text-align: right;
+}

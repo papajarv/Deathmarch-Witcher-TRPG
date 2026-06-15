@@ -1,0 +1,113 @@
+{{!-- Die item sheet — two-layer (a gaming die used as a Farkle stake/skin):
+        DISPLAY → Witcher 3 tooltip aesthetic showing the six faces + loaded flag
+        CONFIG  → per-face image pickers and landing weights --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-die" data-mode="{{mode}}">
+
+  {{!-- ── Mode toggle (top-right) ─────────────────────────────── --}}
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure item{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view" data-rarity="{{source.availability}}">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">{{#if isLoaded}}{{localize "WITCHER.Die.loadedDie"}}{{else}}{{localize "WITCHER.Die.fairDie"}}{{/if}}</div>
+        </div>
+      </header>
+
+      <ul class="wdm-die-faces">
+        {{#each faces}}
+          <li class="wdm-die-face" title="{{localize "WITCHER.Die.face"}} {{this.value}} — {{localize "WITCHER.Die.weight"}} {{this.weight}}">
+            {{#if this.img}}
+              <img class="wdm-die-face-img" src="{{this.img}}" alt="" />
+            {{else}}
+              <span class="wdm-die-face-pip">{{this.value}}</span>
+            {{/if}}
+            <span class="wdm-die-face-weight">{{this.weight}}</span>
+          </li>
+        {{/each}}
+      </ul>
+
+      {{#if source.description}}
+        <div class="wdm-w3-description">{{{source.description}}}</div>
+      {{/if}}
+
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        {{#unless (eq source.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+        {{/unless}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — per-face art + weights
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Die name" />
+      </div>
+
+      <div class="wdm-cfg-section">{{localize "WITCHER.Die.faces"}}</div>
+      <div class="wdm-die-cfg-grid">
+        {{#each faces}}
+          <div class="wdm-die-cfg-face">
+            <span class="wdm-die-cfg-pip">{{this.value}}</span>
+            <img class="wdm-die-cfg-img" src="{{#if this.img}}{{this.img}}{{else}}icons/svg/dice-target.svg{{/if}}"
+                 data-action="editImage" data-edit="system.face{{this.value}}Image" alt=""
+                 title="{{localize "WITCHER.Die.faceImageHint"}}" />
+            <input class="wdm-die-cfg-weight" type="number" step="0.1" min="0"
+                   name="system.face{{this.value}}Weight" value="{{this.weight}}"
+                   title="{{localize "WITCHER.Die.weightHint"}}" />
+          </div>
+        {{/each}}
+      </div>
+
+      <div class="wdm-cfg-section">Procurement</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Availability</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Weight (kg)</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Cost</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Quantity Held</span>
+          <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Description</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="Provenance, craftsmanship, the tell of a loaded die…">{{source.description}}</textarea>
+
+    </div>
+  </div>
+
+</div>

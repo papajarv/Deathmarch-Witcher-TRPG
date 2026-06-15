@@ -1,0 +1,241 @@
+{{!-- Diagrams item sheet — two-layer (Core p.127-146):
+        DISPLAY → Witcher 3 in-game tooltip (player reads the recipe)
+        CONFIG  → editable form (GM / owner with cog toggle)
+      A diagram is a crafting blueprint (specific ingredients) or, when
+      isFormulae is set, an alchemical formula (the nine substances). The
+      hero is the single craft DC — Crafting roll for diagrams, Alchemy
+      roll for formulae. Output item + ingredients are linked by dropping
+      Items onto the config zones (see WitcherDiagramsSheet). --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-diagrams" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure item{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view" data-rarity="{{source.availability}}">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">
+            {{#if levelLabel}}{{levelLabel}}{{/if}}
+            {{#if isFormulae}} · Formula{{else}} · Diagram{{/if}}
+            {{#if subtypeLabel}} · {{subtypeLabel}}{{/if}}
+          </div>
+        </div>
+      </header>
+
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value">{{dc}}</div>
+        <div class="wdm-w3-hero-label">{{dcLabel}}</div>
+      </div>
+
+      <ul class="wdm-w3-stats">
+        {{#if source.craftingTime}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{source.craftingTime}}</span>
+            <span class="lbl">Crafting Time</span>
+          </li>
+        {{/if}}
+        {{#unless (eq source.investment 0)}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{source.investment}}</span>
+            <span class="lbl">Investment (crowns)</span>
+          </li>
+        {{/unless}}
+        {{#if source.learned}}
+          <li class="wdm-w3-stat is-positive">
+            <span class="val"><i class="fa-solid fa-check"></i></span>
+            <span class="lbl">Memorized</span>
+          </li>
+        {{/if}}
+      </ul>
+
+      {{#if output.linked}}
+        <div class="wdm-w3-output">
+          <img src="{{output.img}}" alt="" />
+          <div class="wdm-w3-output-meta">
+            <span class="wdm-w3-output-kicker">Produces</span>
+            <span class="wdm-w3-output-name">{{output.name}}</span>
+          </div>
+        </div>
+      {{/if}}
+
+      {{#if hasIngredients}}
+        <div class="wdm-w3-section-label">Ingredients</div>
+        <ul class="wdm-w3-ingredients">
+          {{#each ingredients}}
+            <li class="wdm-w3-ingredient">
+              <img src="{{this.img}}" alt="" />
+              <span class="nm">{{this.name}}</span>
+              <span class="qt">×{{this.quantity}}</span>
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+      {{#if hasSubstances}}
+        <div class="wdm-w3-section-label">Substances</div>
+        <div class="wdm-w3-subs">
+          {{#each substancesRequired}}
+            <span class="wdm-w3-sub" style="--sub-color: var(--wdm-sub-{{this.key}})">
+              <img class="wdm-sub-icon" src="{{this.art}}" alt="" />{{this.label}} ×{{this.qty}}
+            </span>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if source.description}}
+        <div class="wdm-w3-description">{{{source.description}}}</div>
+      {{/if}}
+
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        {{#unless (eq source.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+        {{/unless}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — editable form
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Diagram name" />
+      </div>
+
+      <div class="wdm-cfg-section">Classification</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row is-checkbox" title="Alchemical formula (uses the nine substances). Off = crafting diagram (specific ingredients).">
+          <span>Alchemical Formula</span>
+          <input type="checkbox" name="system.isFormulae" {{#if source.isFormulae}}checked{{/if}} />
+        </label>
+        <label class="wdm-cfg-row"><span>Level</span>
+          <select name="system.level">
+            {{#each levels}}
+              <option value="{{@key}}" {{#if (eq @key ../source.level)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Sub-type</span>
+          <select name="system.type">
+            <option value="" {{#if (eq source.type "")}}selected{{/if}}>— none —</option>
+            {{#each subtypeOptions}}
+              <option value="{{@key}}" {{#if (eq @key ../source.type)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">Crafting</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>{{dcLabel}}</span>
+          <input type="number" min="0" name="{{dcField}}" value="{{dc}}"
+                 title="Difficulty of the {{#if isFormulae}}Alchemy{{else}}Crafting{{/if}} roll." />
+        </label>
+        {{#unless isFormulae}}
+        <label class="wdm-cfg-row is-checkbox" title="Metalwork — crafting this needs a Forge rather than a portable Crafting kit. Drives the tool requirement on the crafting panel.">
+          <span>Requires Forge</span>
+          <input type="checkbox" name="system.requiresForge" {{#if source.requiresForge}}checked{{/if}} />
+        </label>
+        {{/unless}}
+        <label class="wdm-cfg-row"><span>Crafting Time</span>
+          <input type="text" name="system.craftingTime" value="{{source.craftingTime}}" placeholder="1 Hour / 2 Days" />
+        </label>
+        <label class="wdm-cfg-row"><span>Investment</span>
+          <input type="number" min="0" name="system.investment" value="{{source.investment}}"
+                 title="Crowns paid to speed up the craft (Core p.130)." />
+        </label>
+        <label class="wdm-cfg-row is-checkbox" title="Memorized — craftable without the physical diagram in hand.">
+          <span>Memorized</span>
+          <input type="checkbox" name="system.learned" {{#if source.learned}}checked{{/if}} />
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">Produced Item</div>
+      <div class="wdm-drop-zone" data-drop-zone="output">
+        {{#if output.linked}}
+          <div class="wdm-link-row">
+            <img src="{{output.img}}" alt="" />
+            <span class="wdm-link-name">{{output.name}}</span>
+            <button type="button" class="wdm-link-remove" data-action="removeOutput" title="Unlink"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        {{else}}
+          <div class="wdm-drop-hint"><i class="fa-solid fa-hand-pointer"></i> Drop the produced item here</div>
+        {{/if}}
+      </div>
+
+      <div class="wdm-cfg-section">Ingredients</div>
+      <div class="wdm-drop-zone is-list" data-drop-zone="ingredient">
+        {{#each ingredients}}
+          <div class="wdm-link-row" data-ingredient-index="{{this.index}}">
+            <img src="{{this.img}}" alt="" />
+            <span class="wdm-link-name">{{this.name}}</span>
+            <input class="wdm-link-qty" type="number" min="0" value="{{this.quantity}}" data-ingredient-qty="{{this.index}}" title="Quantity required" />
+            <button type="button" class="wdm-link-remove" data-action="removeIngredient" title="Remove"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        {{/each}}
+        <div class="wdm-drop-hint"><i class="fa-solid fa-plus"></i> Drop ingredient items here</div>
+      </div>
+
+      {{#if isFormulae}}
+        <div class="wdm-cfg-section">Substances Required</div>
+        <div class="wdm-sub-grid">
+          {{#each substances}}
+            <label class="wdm-sub-cell">
+              <span class="wdm-sub-name" style="--sub-color: var(--wdm-sub-{{this.key}})">
+                <img class="wdm-sub-icon" src="{{this.art}}" alt="" />{{this.label}}
+              </span>
+              <input type="number" min="0" value="{{this.qty}}" data-substance-key="{{this.key}}" />
+            </label>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      <div class="wdm-cfg-section">Procurement</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Availability</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Weight (kg)</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Cost</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Quantity</span>
+          <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Description</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="What the diagram describes, where it was found…">{{source.description}}</textarea>
+
+    </div>
+  </div>
+
+</div>

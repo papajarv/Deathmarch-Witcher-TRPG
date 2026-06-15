@@ -1,0 +1,10 @@
+{{!-- Play stage: the 3D dice board. This PART is never re-rendered (the GL
+      canvas must persist), so it is driven imperatively by DiceBoard3D. Both
+      seats' dice — the local player's AND the opponent's (NPC or PvP) — roll
+      and are selected on this same board. --}}
+<div class="wdm-fk-stage-part">
+    <div class="wdm-fk-board-wrap">
+        <canvas class="wdm-fk-board-canvas" width="{{boardW}}" height="{{boardH}}"></canvas>
+        {{#if boardPrompt}}<div class="wdm-fk-board-prompt">{{boardPrompt}}</div>{{/if}}
+    </div>
+</div>

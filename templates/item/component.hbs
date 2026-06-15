@@ -1,0 +1,153 @@
+{{!-- Component item sheet — two-layer (crafting / alchemy ingredient,
+        Core p.83, p.143):
+        DISPLAY → Witcher 3 in-game tooltip aesthetic (player reads)
+        CONFIG  → editable form (GM / owner with cog toggle)
+      Hero is the substance when the component yields one of the nine
+      alchemical substances, otherwise its rarity/availability
+      (computed in WitcherComponentSheet). --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-component" data-mode="{{mode}}">
+
+  {{!-- ── Mode toggle (top-right) ─────────────────────────────── --}}
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure item{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view" data-rarity="{{source.availability}}">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">{{#if isSubstance}}Alchemical Substance{{else}}Crafting Material{{/if}}</div>
+        </div>
+      </header>
+
+      {{#if hasHero}}
+        <div class="wdm-w3-hero">
+          <div class="wdm-w3-hero-value is-substance" style="--sub-color: var(--wdm-sub-{{substanceKey}})">
+            <img class="wdm-sub-icon" src="{{substanceArt}}" alt="" />{{substanceName}}
+          </div>
+          <div class="wdm-w3-hero-label">SUBSTANCE</div>
+        </div>
+      {{/if}}
+
+      <ul class="wdm-w3-stats">
+        {{#if source.forageLocation}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{source.forageLocation}}</span>
+            <span class="lbl">Found In</span>
+          </li>
+        {{/if}}
+        {{#unless (eq source.forageDC 0)}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{source.forageDC}}</span>
+            <span class="lbl">Forage DC</span>
+          </li>
+        {{/unless}}
+        {{#if source.forageQuantity}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{source.forageQuantity}}</span>
+            <span class="lbl">Yield</span>
+          </li>
+        {{/if}}
+      </ul>
+
+      {{#if source.description}}
+        <div class="wdm-w3-description">{{{source.description}}}</div>
+      {{/if}}
+
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        {{#unless (eq source.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+        {{/unless}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — compact spec form
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Component name" />
+      </div>
+
+      <div class="wdm-cfg-section">Substance</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Yields a Substance</span>
+          <input type="checkbox" name="system.isSubstance" {{#if source.isSubstance}}checked{{/if}}
+                 title="Tick if this ingredient yields one of the nine alchemical substances (Core p.143)." />
+        </label>
+        {{#if source.isSubstance}}
+          <label class="wdm-cfg-row"><span>Substance Type</span>
+            <select name="system.substanceType">
+              <option value="" {{#if (eq source.substanceType "")}}selected{{/if}}>— choose —</option>
+              {{#each WITCHER.alchemical.substances}}
+                <option value="{{@key}}" {{#if (eq @key ../source.substanceType)}}selected{{/if}}>{{localize this}}</option>
+              {{/each}}
+            </select>
+          </label>
+        {{/if}}
+      </div>
+
+      <div class="wdm-cfg-section">Foraging</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Availability</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Location</span>
+          <input type="text" name="system.forageLocation" value="{{source.forageLocation}}"
+                 placeholder="Fields / Mountains & underground / Forests …" />
+        </label>
+        <label class="wdm-cfg-row"><span>Forage DC</span>
+          <input type="number" min="0" name="system.forageDC" value="{{source.forageDC}}"
+                 title="Wilderness Survival DC to find this in the wild (0 = can't be foraged)." />
+        </label>
+        <label class="wdm-cfg-row"><span>Quantity Found</span>
+          <input type="text" name="system.forageQuantity" value="{{source.forageQuantity}}"
+                 placeholder="1d10 Units / 2d6 Units / N/A" />
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">Procurement</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Weight (kg)</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Cost</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Quantity Held</span>
+          <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Description</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="Ingredient lore, appearance, where it's harvested…">{{source.description}}</textarea>
+
+    </div>
+  </div>
+
+</div>

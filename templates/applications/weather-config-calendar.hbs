@@ -1,0 +1,52 @@
+{{!-- Calendar tab of the WeatherConfigApp. The human-meaningful calendar knobs:
+      daylight hours per season (drives auto scene darkness + the engine's
+      dawn/dusk) and the primary moon's cycle length. Names map to
+      calendar.sun.<index>.<dawn|dusk> and calendar.moonCycle. --}}
+<section class="tab wdm-cfg-tab {{tab.cssClass}}" data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+    <div class="wdm-cfg-help">
+        <i class="fa-solid fa-circle-info"></i>
+        <p>{{localize "WITCHER.Weather.Config.CalendarIntro"}}</p>
+    </div>
+
+    <div class="wdm-cfg-section-head">
+        <h3><i class="fa-solid fa-sun"></i> {{localize "WITCHER.Weather.Config.Daylight"}}</h3>
+    </div>
+
+    <div class="wdm-cfg-card">
+        <div class="wdm-cfg-mod-head wdm-cfg-sun-head">
+            <span>{{localize "WITCHER.Weather.Config.Season"}}</span>
+            <span>{{localize "WITCHER.Weather.Config.Dawn"}}</span>
+            <span>{{localize "WITCHER.Weather.Config.Dusk"}}</span>
+        </div>
+        {{#each sun}}
+        <div class="wdm-cfg-mod-row wdm-cfg-sun-row">
+            <span class="wdm-cfg-sun-name">{{this.name}}</span>
+            <input type="number" name="calendar.sun.{{this.index}}.dawn" value="{{this.dawn}}" min="0" max="23" step="1">
+            <input type="number" name="calendar.sun.{{this.index}}.dusk" value="{{this.dusk}}" min="0" max="23" step="1">
+        </div>
+        {{/each}}
+    </div>
+
+    <div class="wdm-cfg-section-head">
+        <h3><i class="fa-solid fa-moon"></i> {{localize "WITCHER.Weather.Config.Moon"}}</h3>
+    </div>
+
+    <div class="wdm-cfg-card">
+        <div class="wdm-cfg-fields">
+            <label class="wdm-cfg-field wdm-cfg-field-wide">
+                <span class="wdm-cfg-flabel">{{localize "WITCHER.Weather.Config.MoonCycle"}} ({{moonName}})</span>
+                <input type="number" name="calendar.moonCycle" value="{{moonCycle}}" min="1" step="1">
+            </label>
+        </div>
+        <p class="wdm-cfg-note">{{localize "WITCHER.Weather.Config.MoonNote"}}</p>
+    </div>
+
+    <div class="wdm-cfg-tab-foot">
+        {{#unless usingDefaults}}<span class="wdm-cfg-custom-flag">{{localize "WITCHER.Weather.Config.Customized"}}</span>{{/unless}}
+        <button type="button" class="wdm-cfg-reset" data-action="resetTab" data-tab="calendar">
+            <i class="fa-solid fa-rotate-left"></i> {{localize "WITCHER.Weather.Config.ResetTab"}}
+        </button>
+    </div>
+
+</section>

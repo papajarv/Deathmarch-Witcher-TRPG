@@ -1,0 +1,75 @@
+{{!-- Time & Date tab of the WeatherControlApp. Clock, time shortcuts, climate
+      selector, and a short forecast. Live-refreshed while the window is open. --}}
+<section class="tab wdm-wc-tab {{tab.cssClass}}" data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+    <div class="wdm-wc-clock">
+        <span class="wdm-wc-date">{{dateStr}}</span>
+        <span class="wdm-wc-time">{{clock}}</span>
+    </div>
+
+    <div class="wdm-wc-group">
+        <div class="wdm-wc-head">{{localize "WITCHER.Weather.AdvanceRewind"}}</div>
+        <div class="wdm-wc-btns six">
+            <button type="button" data-action="adjust" data-adjust="-86400" title="−1 day">−1d</button>
+            <button type="button" data-action="adjust" data-adjust="-3600"  title="−1 hour">−1h</button>
+            <button type="button" data-action="adjust" data-adjust="-600"   title="−10 minutes">−10m</button>
+            <button type="button" data-action="adjust" data-adjust="600"    title="+10 minutes">+10m</button>
+            <button type="button" data-action="adjust" data-adjust="3600"   title="+1 hour">+1h</button>
+            <button type="button" data-action="adjust" data-adjust="86400"  title="+1 day">+1d</button>
+        </div>
+    </div>
+
+    <div class="wdm-wc-group">
+        <div class="wdm-wc-head">{{localize "WITCHER.Weather.JumpTo"}}</div>
+        <div class="wdm-wc-btns four">
+            <button type="button" data-action="jump" data-jump="dawn">{{localize "WITCHER.Weather.Dawn"}}</button>
+            <button type="button" data-action="jump" data-jump="noon">{{localize "WITCHER.Weather.Noon"}}</button>
+            <button type="button" data-action="jump" data-jump="dusk">{{localize "WITCHER.Weather.Dusk"}}</button>
+            <button type="button" data-action="jump" data-jump="midnight">{{localize "WITCHER.Weather.Midnight"}}</button>
+        </div>
+    </div>
+
+    <div class="wdm-wc-group">
+        <div class="wdm-wc-head">{{localize "WITCHER.Settings.WeatherBiome.Name"}}</div>
+        <select class="wdm-wc-climate" data-bind="climate">
+            {{#each climateOptions}}
+            <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+            {{/each}}
+        </select>
+    </div>
+
+    <div class="wdm-wc-group">
+        <div class="wdm-wc-head">{{localize "WITCHER.Weather.Map.ActiveHead"}}</div>
+        <div class="wdm-wc-place {{#if place.isGlobal}}is-global{{/if}}">
+            <div class="wdm-wc-place-status">
+                <i class="{{place.icon}}"></i>
+                <span>{{place.headline}}</span>
+            </div>
+            {{#unless place.isGlobal}}
+            <div class="wdm-wc-place-detail">
+                {{#if place.terrainLabel}}
+                <span class="wdm-wc-place-terrain"><i class="{{place.terrainIcon}}" style="color:{{place.terrainColor}}"></i> {{place.terrainLabel}}</span>
+                {{/if}}
+                {{#if place.cell}}<span class="wdm-wc-place-cell">{{localize "WITCHER.Weather.Map.ActiveCell"}} {{place.cell}}</span>{{/if}}
+                {{#if place.biomeLabel}}<span class="wdm-wc-place-biome">{{place.biomeLabel}}</span>{{/if}}
+                {{#if place.sceneName}}<span class="wdm-wc-place-scene">{{place.sceneName}}</span>{{/if}}
+            </div>
+            {{/unless}}
+        </div>
+    </div>
+
+    <div class="wdm-wc-group">
+        <div class="wdm-wc-head">{{localize "WITCHER.Weather.Forecast"}}</div>
+        <div class="wdm-wc-forecast">
+            {{#each forecast}}
+            <div class="wdm-wc-fc-row">
+                <span class="wdm-wc-fc-day">{{this.day}}</span>
+                <i class="wdm-wc-fc-icon {{this.icon}}" data-tooltip="{{this.cond}}"></i>
+                <span class="wdm-wc-fc-temp">{{this.temp}}</span>
+                <span class="wdm-wc-fc-cond">{{this.cond}}{{#if this.badge}} <span class="wdm-wc-badge">{{this.badge}}</span>{{/if}}</span>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+
+</section>

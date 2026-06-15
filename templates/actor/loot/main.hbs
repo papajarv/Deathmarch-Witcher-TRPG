@@ -1,0 +1,68 @@
+{{!-- Loot actor sheet — treasure pile / dropped sack / NPC cart.
+      Reuses the v2 visual language from item sheets so the system reads
+      coherent: banner + hero (coin pouch) + currency rail. No stat block,
+      no skills — loot is a static pile.
+      Do NOT wrap in <form>; ApplicationV2's frame already is one. --}}
+
+<div class="wdm-actor-sheet wdm-item-v2">
+
+  <header class="wdm-banner">
+    <img class="wdm-banner-portrait" src="{{actor.img}}" data-edit="img" alt="" />
+    <div class="wdm-banner-id">
+      <input class="wdm-banner-name" type="text" name="name" value="{{actor.name}}" placeholder="Loot name (e.g. Bandit Stash)" />
+      <span class="wdm-banner-sub">
+        {{items.length}} item{{#unless (eq items.length 1)}}s{{/unless}} carried
+      </span>
+    </div>
+    <span class="wdm-banner-chip">Loot</span>
+  </header>
+
+  <section class="wdm-hero">
+    <div>
+      <div class="wdm-hero-label">Coin Pouch</div>
+      <div class="wdm-hero-value is-mid">
+        {{system.currency.crown}}c · {{system.currency.oren}}o
+      </div>
+      <span class="wdm-hero-sub">
+        {{system.currency.bizant}}b · {{system.currency.ducat}}d · {{system.currency.lintar}}l · {{system.currency.floren}}f
+      </span>
+    </div>
+    <div class="wdm-hero-meta">
+      <span class="wdm-hero-sub">items</span>
+      <div class="wdm-hero-value is-mid is-right is-dim">{{items.length}}</div>
+    </div>
+  </section>
+
+  <section class="wdm-stat-rail">
+    <div class="wdm-stat-plate">
+      <label>Bizant</label>
+      <input type="number" min="0" name="system.currency.bizant" value="{{source.currency.bizant}}" />
+    </div>
+    <div class="wdm-stat-plate">
+      <label>Ducat</label>
+      <input type="number" min="0" name="system.currency.ducat" value="{{source.currency.ducat}}" />
+    </div>
+    <div class="wdm-stat-plate">
+      <label>Lintar</label>
+      <input type="number" min="0" name="system.currency.lintar" value="{{source.currency.lintar}}" />
+    </div>
+    <div class="wdm-stat-plate">
+      <label>Floren</label>
+      <input type="number" min="0" name="system.currency.floren" value="{{source.currency.floren}}" />
+    </div>
+    <div class="wdm-stat-plate">
+      <label>Crown</label>
+      <input type="number" min="0" name="system.currency.crown" value="{{source.currency.crown}}" />
+    </div>
+    <div class="wdm-stat-plate">
+      <label>Oren</label>
+      <input type="number" min="0" name="system.currency.oren" value="{{source.currency.oren}}" />
+    </div>
+  </section>
+
+  <section class="wdm-section-block">
+    <h3>Notes</h3>
+    <textarea name="system.notes" placeholder="What's in the pile, who left it, narrative hooks…">{{source.notes}}</textarea>
+  </section>
+
+</div>

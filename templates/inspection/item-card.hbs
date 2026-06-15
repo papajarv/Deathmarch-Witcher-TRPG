@@ -1,0 +1,483 @@
+{{!-- Inventory inspection panel — renders an item's display layer in
+      the chrome's inspect pane. Mirrors the Witcher-3 tooltip from the
+      weapon sheet display view so the inspect panel matches the sheet.
+      Falls through to a compact name + image + description for item
+      types that don't have a bespoke section yet. --}}
+
+<div class="wdm-w3 wdm-w3-inspect is-{{type}}">
+
+  <header class="wdm-w3-head">
+    <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+    <div class="wdm-w3-titles">
+      <h1 class="wdm-w3-title">{{item.name}}</h1>
+      <div class="wdm-w3-subtitle">
+        {{#if (eq type "weapon")}}{{#if item.system.weaponType}}{{localize (lookup config.weapon.types item.system.weaponType)}}{{/if}}{{#if item.system.hands}} · {{#unless (eq item.system.hands "two")}}{{#if item.system.quick}}Quick {{/if}}{{/unless}}{{localize (lookup config.weapon.hands item.system.hands)}}{{/if}}{{else if (eq type "armor")}}{{#if item.system.armorType}}{{localize (lookup config.armor.types item.system.armorType)}}{{/if}}{{else if (eq type "alchemical")}}{{alchemyMeta.typeLabel}}{{else if (eq type "component")}}{{#if componentMeta.isSubstance}}Alchemical Substance{{else}}Crafting Material{{/if}}{{else if (eq type "container")}}Container{{else if (eq type "mutagen")}}{{#if mutagenMeta.typeLabel}}{{mutagenMeta.typeLabel}} {{/if}}Mutagen{{else if (eq type "diagrams")}}{{#if diagramMeta.levelLabel}}{{diagramMeta.levelLabel}} · {{/if}}{{diagramMeta.kindLabel}}{{#if diagramMeta.subtypeLabel}} · {{diagramMeta.subtypeLabel}}{{/if}}{{else}}{{type}}{{/if}}
+      </div>
+    </div>
+  </header>
+
+  {{#if (eq type "weapon")}}
+    {{!-- Weapon: damage hero + key stats + qualities. When enhancements
+         are socketed, the hero and stat rows show effective (derived)
+         values; otherwise they fall back to the base source values. --}}
+    <div class="wdm-w3-hero">
+      <div class="wdm-w3-hero-value">{{#if effective.modified}}{{effective.damage}}{{else}}{{item.system.damage}}{{/if}}</div>
+      <div class="wdm-w3-hero-label">DAMAGE{{#if effective.modified}} <i class="fa-solid fa-gem" title="Enhanced"></i>{{/if}}</div>
+      {{#if item.system.requiresAmmo}}
+        <div class="wdm-w3-hero-sub">By Ammunition</div>
+      {{else if effective.damageTypes.length}}
+        <div class="wdm-w3-hero-sub">
+          {{#each effective.damageTypes}}{{#unless @first}} · {{/unless}}{{this}}{{/each}}
+        </div>
+      {{else if item.system.damageTypes.length}}
+        <div class="wdm-w3-hero-sub">
+          {{#each item.system.damageTypes}}{{#unless @first}} · {{/unless}}{{this}}{{/each}}
+        </div>
+      {{/if}}
+    </div>
+
+    <ul class="wdm-w3-stats">
+      {{#unless (eq effective.accuracy 0)}}
+        <li class="wdm-w3-stat {{#if (gte effective.accuracy 0)}}is-positive{{/if}}">
+          <span class="val">{{#if (gte effective.accuracy 0)}}+{{/if}}{{effective.accuracy}}</span>
+          <span class="lbl">Weapon Accuracy</span>
+        </li>
+      {{/unless}}
+      {{#unless (eq effective.reliabilityMax 0)}}
+        <li class="wdm-w3-stat">
+          <span class="val">{{item.system.reliability.value}}/{{effective.reliabilityMax}}</span>
+          <span class="lbl">Reliability</span>
+        </li>
+      {{/unless}}
+      {{#if item.system.range}}
+        <li class="wdm-w3-stat">
+          <span class="val">{{item.system.range}}m</span>
+          <span class="lbl">Range</span>
+        </li>
+      {{/if}}
+      {{#if (eq item.system.weaponType "thrown")}}
+        {{#unless (eq item.system.radius 0)}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{item.system.radius}}m</span>
+            <span class="lbl">Radius</span>
+          </li>
+        {{/unless}}
+      {{/if}}
+      {{#if enhancementSlots.length}}
+        <li class="wdm-w3-stat wdm-w3-stat-slots">
+          <span class="val">{{enhancementSlots.length}}</span>
+          <span class="lbl">Enhancement Slots</span>
+          <span class="wdm-w3-slots">
+            {{#each enhancementSlots}}
+              {{#if this.filled}}
+                <span class="wdm-w3-slot is-filled" data-tooltip="{{this.name}}" data-tooltip-direction="UP">
+                  <img src="{{this.img}}" alt="" />
+                </span>
+              {{else}}
+                <span class="wdm-w3-slot"></span>
+              {{/if}}
+            {{/each}}
+          </span>
+        </li>
+      {{/if}}
+    </ul>
+
+    {{#if weaponQualityList.length}}
+      <div class="wdm-w3-tags">
+        {{#each weaponQualityList}}
+          <span class="wdm-w3-tag" data-tooltip="{{this.description}}" data-tooltip-direction="UP">{{this.label}}</span>
+        {{/each}}
+      </div>
+    {{/if}}
+
+    {{#if socketedQualityList.length}}
+      <div class="wdm-w3-section-label">From Enhancements</div>
+      <div class="wdm-w3-tags">
+        {{#each socketedQualityList}}
+          <span class="wdm-w3-tag is-enhanced" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+            <i class="fa-solid fa-gem"></i> {{this.label}}
+          </span>
+        {{/each}}
+      </div>
+    {{/if}}
+  {{/if}}
+
+  {{#if (eq type "armor")}}
+    {{!-- Armor: stopping-power hero + coverage subline + resistance
+         flags + EV + enhancement slots + quality tags. Mirrors the
+         armor sheet's display layer. --}}
+    <div class="wdm-w3-hero">
+      <div class="wdm-w3-hero-value">{{armorMeta.primarySP}}{{#if armorMeta.primarySPMax}}/{{armorMeta.primarySPMax}}{{/if}}</div>
+      <div class="wdm-w3-hero-label">{{armorMeta.primaryStatLabel}}</div>
+      {{#if armorMeta.coverageLabel}}
+        <div class="wdm-w3-hero-sub">{{armorMeta.coverageLabel}}</div>
+      {{/if}}
+    </div>
+
+    <ul class="wdm-w3-stats">
+      {{#unless (eq effective.bonusSP 0)}}
+        <li class="wdm-w3-stat is-positive">
+          <span class="val">+{{effective.bonusSP}}</span>
+          <span class="lbl">Bonus Stopping <i class="fa-solid fa-gem"></i></span>
+        </li>
+      {{/unless}}
+      {{#if item.system.bludgeoning}}
+        <li class="wdm-w3-stat is-positive">
+          <span class="val"><i class="fa-solid fa-check"></i></span>
+          <span class="lbl">Resists Bludgeoning</span>
+        </li>
+      {{/if}}
+      {{#if item.system.slashing}}
+        <li class="wdm-w3-stat is-positive">
+          <span class="val"><i class="fa-solid fa-check"></i></span>
+          <span class="lbl">Resists Slashing</span>
+        </li>
+      {{/if}}
+      {{#if item.system.piercing}}
+        <li class="wdm-w3-stat is-positive">
+          <span class="val"><i class="fa-solid fa-check"></i></span>
+          <span class="lbl">Resists Piercing</span>
+        </li>
+      {{/if}}
+      {{#each effective.addedResistances}}
+        <li class="wdm-w3-stat is-positive">
+          <span class="val"><i class="fa-solid fa-gem"></i></span>
+          <span class="lbl">Resists {{this}}</span>
+        </li>
+      {{/each}}
+      {{#unless (eq item.system.encumbranceValue 0)}}
+        <li class="wdm-w3-stat is-negative">
+          <span class="val">−{{item.system.encumbranceValue}}</span>
+          <span class="lbl">Encumbrance Penalty</span>
+        </li>
+      {{/unless}}
+      {{#if enhancementSlots.length}}
+        <li class="wdm-w3-stat wdm-w3-stat-slots">
+          <span class="val">{{enhancementSlots.length}}</span>
+          <span class="lbl">Enhancement Slots</span>
+          <span class="wdm-w3-slots">
+            {{#each enhancementSlots}}
+              {{#if this.filled}}
+                <span class="wdm-w3-slot is-filled" data-tooltip="{{this.name}}" data-tooltip-direction="UP">
+                  <img src="{{this.img}}" alt="" />
+                </span>
+              {{else}}
+                <span class="wdm-w3-slot"></span>
+              {{/if}}
+            {{/each}}
+          </span>
+        </li>
+      {{/if}}
+    </ul>
+
+    {{#if armorQualityList.length}}
+      <div class="wdm-w3-tags">
+        {{#each armorQualityList}}
+          <span class="wdm-w3-tag" data-tooltip="{{this.description}}" data-tooltip-direction="UP">{{this.label}}</span>
+        {{/each}}
+      </div>
+    {{/if}}
+
+    {{#if socketedQualityList.length}}
+      <div class="wdm-w3-section-label">From Enhancements</div>
+      <div class="wdm-w3-tags">
+        {{#each socketedQualityList}}
+          <span class="wdm-w3-tag is-enhanced" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+            <i class="fa-solid fa-gem"></i> {{this.label}}
+          </span>
+        {{/each}}
+      </div>
+    {{/if}}
+  {{/if}}
+
+  {{#if (eq type "alchemical")}}
+    {{!-- Alchemical: type-driven hero + key stats. --}}
+    <div class="wdm-w3-hero">
+      <div class="wdm-w3-hero-value">{{alchemyMeta.heroValue}}</div>
+      <div class="wdm-w3-hero-label">{{alchemyMeta.heroLabel}}</div>
+      {{#if alchemyMeta.heroSub}}
+        <div class="wdm-w3-hero-sub">{{alchemyMeta.heroSub}}</div>
+      {{/if}}
+    </div>
+
+    <ul class="wdm-w3-stats">
+      {{#if alchemyMeta.isBomb}}
+        {{#if item.system.range}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{item.system.range}}</span>
+            <span class="lbl">Throwing Range</span>
+          </li>
+        {{/if}}
+        {{#unless (eq item.system.area 0)}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{item.system.area}}m</span>
+            <span class="lbl">Area of Effect</span>
+          </li>
+        {{/unless}}
+      {{/if}}
+    </ul>
+  {{/if}}
+
+  {{#if (eq type "component")}}
+    {{!-- Component: substance hero only when it yields one of the nine
+         substances (rarity lives in the footer, not the body). --}}
+    {{#if componentMeta.hasHero}}
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value is-substance" style="--sub-color: var(--wdm-sub-{{componentMeta.substanceKey}})">
+          <img class="wdm-sub-icon" src="{{componentMeta.substanceArt}}" alt="" />{{componentMeta.substanceName}}
+        </div>
+        <div class="wdm-w3-hero-label">SUBSTANCE</div>
+      </div>
+    {{/if}}
+
+    <ul class="wdm-w3-stats">
+      {{#if item.system.forageLocation}}
+        <li class="wdm-w3-stat">
+          <span class="val">{{item.system.forageLocation}}</span>
+          <span class="lbl">Found In</span>
+        </li>
+      {{/if}}
+      {{#unless (eq item.system.forageDC 0)}}
+        <li class="wdm-w3-stat">
+          <span class="val">{{item.system.forageDC}}</span>
+          <span class="lbl">Forage DC</span>
+        </li>
+      {{/unless}}
+      {{#if item.system.forageQuantity}}
+        <li class="wdm-w3-stat">
+          <span class="val">{{item.system.forageQuantity}}</span>
+          <span class="lbl">Yield</span>
+        </li>
+      {{/if}}
+    </ul>
+  {{/if}}
+
+  {{#if (eq type "mutagen")}}
+    {{!-- Mutagen: Mutation DC hero + the Active-Effect modifiers ("+3 Melee"),
+         mirroring the mutagen sheet's display layer. --}}
+    {{#if item.system.mutationDC}}
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value">{{item.system.mutationDC}}</div>
+        <div class="wdm-w3-hero-label">MUTATION DC</div>
+      </div>
+    {{/if}}
+    {{#if mutagenMeta.modifiers.length}}
+      <div class="wdm-w3-section-label">Effect</div>
+      <ul class="wdm-w3-stats">
+        {{#each mutagenMeta.modifiers}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{this.value}}</span>
+            <span class="lbl">{{this.label}}</span>
+          </li>
+        {{/each}}
+      </ul>
+    {{/if}}
+    {{#if item.system.minorEffect}}
+      <div class="wdm-w3-section-label">Minor Effect</div>
+      <div class="wdm-w3-effects">{{item.system.minorEffect}}</div>
+    {{/if}}
+    {{#if item.system.transmutation}}
+      <div class="wdm-w3-section-label">Transmutation</div>
+      <div class="wdm-w3-effects">{{item.system.transmutation}}</div>
+    {{/if}}
+  {{/if}}
+
+  {{#if (eq type "container")}}
+    {{!-- Container: stored / capacity (kg) load hero + fill bar + count.
+         Mirrors the container sheet's display layer. --}}
+    <div class="wdm-w3-hero">
+      <div class="wdm-w3-hero-value {{#if containerMeta.isOver}}is-over{{/if}}">
+        {{containerMeta.storedWeight}}{{#if containerMeta.hasCapacity}} / {{containerMeta.capacity}}{{/if}}
+      </div>
+      <div class="wdm-w3-hero-label">{{#if containerMeta.hasCapacity}}Capacity (kg){{else}}Stored (kg){{/if}}</div>
+    </div>
+
+    {{#if containerMeta.hasCapacity}}
+      <div class="wdm-w3-capbar {{#if containerMeta.isOver}}is-over{{/if}}">
+        <div class="wdm-w3-capbar-fill" style="width: {{containerMeta.fillPct}}%"></div>
+      </div>
+    {{/if}}
+
+    <ul class="wdm-w3-stats">
+      <li class="wdm-w3-stat">
+        <span class="val">{{containerMeta.contentCount}}</span>
+        <span class="lbl">Items Stored</span>
+      </li>
+    </ul>
+  {{/if}}
+
+  {{#if (eq type "diagrams")}}
+    {{!-- Diagram / formula: craft-DC hero + crafting stats, produced-item
+         preview, ingredient list and (formulae) required substances.
+         Mirrors the diagram sheet's display layer. --}}
+    <div class="wdm-w3-hero">
+      <div class="wdm-w3-hero-value">{{diagramMeta.dc}}</div>
+      <div class="wdm-w3-hero-label">{{diagramMeta.dcLabel}}</div>
+    </div>
+
+    <ul class="wdm-w3-stats">
+      {{#if diagramMeta.craftingTime}}
+        <li class="wdm-w3-stat">
+          <span class="val">{{diagramMeta.craftingTime}}</span>
+          <span class="lbl">Crafting Time</span>
+        </li>
+      {{/if}}
+      {{#unless (eq diagramMeta.investment 0)}}
+        <li class="wdm-w3-stat">
+          <span class="val">{{diagramMeta.investment}}</span>
+          <span class="lbl">Investment (crowns)</span>
+        </li>
+      {{/unless}}
+      {{#if diagramMeta.learned}}
+        <li class="wdm-w3-stat is-positive">
+          <span class="val"><i class="fa-solid fa-check"></i></span>
+          <span class="lbl">Memorized</span>
+        </li>
+      {{/if}}
+    </ul>
+
+    {{#if diagramMeta.output.linked}}
+      <div class="wdm-w3-output">
+        <img src="{{diagramMeta.output.img}}" alt="" />
+        <div class="wdm-w3-output-meta">
+          <span class="wdm-w3-output-kicker">Produces</span>
+          <span class="wdm-w3-output-name">{{diagramMeta.output.name}}</span>
+        </div>
+      </div>
+    {{/if}}
+
+    {{#if diagramMeta.hasIngredients}}
+      <div class="wdm-w3-section-label">Ingredients</div>
+      <ul class="wdm-w3-ingredients">
+        {{#each diagramMeta.ingredients}}
+          <li class="wdm-w3-ingredient">
+            <img src="{{this.img}}" alt="" />
+            <span class="nm">{{this.name}}</span>
+            <span class="qt">×{{this.quantity}}</span>
+          </li>
+        {{/each}}
+      </ul>
+    {{/if}}
+
+    {{#if diagramMeta.hasSubstances}}
+      <div class="wdm-w3-section-label">Substances</div>
+      <div class="wdm-w3-subs">
+        {{#each diagramMeta.substancesRequired}}
+          <span class="wdm-w3-sub" style="--sub-color: var(--wdm-sub-{{this.key}})">
+            <img class="wdm-sub-icon" src="{{this.art}}" alt="" />{{this.label}} ×{{this.qty}}
+          </span>
+        {{/each}}
+      </div>
+    {{/if}}
+  {{/if}}
+
+  {{!-- Shared description + footer, normalized across the three physical
+       item types so weapon / armor / alchemical inspect cards match.
+       Description sits above the footer; the footer carries
+       weight | qty | conceal | availability (rarity) | price. The conceal
+       cell self-hides when the item has no concealment (e.g. armor). --}}
+  {{#if bookMeta}}
+    <div class="wdm-w3-section-label">Reading Progress</div>
+    <div class="wdm-book-progress{{#if bookMeta.completed}} is-complete{{/if}}">
+      <div class="wdm-book-progress-bar"><span style="width:{{bookMeta.percent}}%"></span></div>
+      <div class="wdm-book-progress-pct">{{bookMeta.percent}}%{{#if bookMeta.completed}} · Complete{{/if}}</div>
+    </div>
+  {{/if}}
+
+  {{#if (eq type "valuable")}}
+    {{#if (eq item.system.type "remains")}}
+      {{!-- Remains: track what's been done to the carcass — no description/value/availability. --}}
+      <div class="wdm-w3-section-label">Carcass</div>
+      <div class="wdm-remains-state">
+        <span class="wdm-remains-tag{{#if remainsState.harvested}} is-done{{/if}}">
+          <i class="fa-solid {{#if remainsState.harvested}}fa-check{{else}}fa-xmark{{/if}}"></i> Harvested
+        </span>
+        <span class="wdm-remains-tag{{#if remainsState.extracted}} is-done{{/if}}">
+          <i class="fa-solid {{#if remainsState.extracted}}fa-check{{else}}fa-xmark{{/if}}"></i> Mutagen Extracted
+        </span>
+        <span class="wdm-remains-tag wdm-remains-charges" title="Each harvest/extract costs 1 charge, dissect costs 2">
+          <i class="fa-solid fa-droplet"></i> {{remainsState.charges}}/{{remainsState.chargesMax}} charges
+        </span>
+      </div>
+    {{else}}
+      {{#if item.system.description}}
+        <div class="wdm-w3-description">{{{descriptionHtml}}}</div>
+      {{/if}}
+    {{/if}}
+  {{else}}
+    {{#if item.system.description}}
+      <div class="wdm-w3-description">{{{descriptionHtml}}}</div>
+    {{/if}}
+  {{/if}}
+
+  {{#if (or (eq type "weapon") (eq type "armor") (eq type "alchemical"))}}
+    <div class="wdm-w3-footer">
+      <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
+      {{#unless (eq item.system.quantity 1)}}
+        <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
+      {{/unless}}
+      {{#if item.system.conceal}}
+        {{#unless (eq item.system.conceal "N/A")}}
+          <span class="wdm-w3-foot-cell" title="Concealability"><i class="fa-solid fa-eye-slash"></i>{{localize (lookup config.concealment item.system.conceal)}}</span>
+        {{/unless}}
+      {{/if}}
+      <span class="wdm-w3-foot-spacer"></span>
+      <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup config.availability item.system.availability)}}</span>
+      <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
+    </div>
+  {{/if}}
+
+  {{#if (eq type "component")}}
+    <div class="wdm-w3-footer">
+      <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
+      {{#unless (eq item.system.quantity 1)}}
+        <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
+      {{/unless}}
+      <span class="wdm-w3-foot-spacer"></span>
+      <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup config.availability item.system.availability)}}</span>
+      <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
+    </div>
+  {{/if}}
+
+  {{#if (eq type "container")}}
+    <div class="wdm-w3-footer">
+      <span class="wdm-w3-foot-cell" title="Empty weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
+      {{#if item.system.equipped}}
+        <span class="wdm-w3-foot-cell" title="Equipped"><i class="fa-solid fa-person-walking-luggage"></i>Worn</span>
+      {{/if}}
+      <span class="wdm-w3-foot-spacer"></span>
+      <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
+    </div>
+  {{/if}}
+
+  {{#if (eq type "diagrams")}}
+    <div class="wdm-w3-footer">
+      <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
+      {{#unless (eq item.system.quantity 1)}}
+        <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
+      {{/unless}}
+      <span class="wdm-w3-foot-spacer"></span>
+      <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup config.availability item.system.availability)}}</span>
+      <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
+    </div>
+  {{/if}}
+
+  {{#if (eq type "valuable")}}
+    {{#if (eq item.system.type "remains")}}
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
+      </div>
+    {{else}}
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
+        {{#unless (eq item.system.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
+        {{/unless}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup config.availability item.system.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
+      </div>
+    {{/if}}
+  {{/if}}
+
+</div>

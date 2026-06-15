@@ -1,0 +1,706 @@
+{{!-- Character sheet — chrome-styled actor sheet (mockup port).
+      Layout mirrors vladimir_mockup/character_actorsheet.html: an always-
+      visible HUD (portrait + identity + vitals), a flat statblock, derived
+      pills, a trackers strip, then tabbed panels.
+
+      IMPORTANT: do NOT wrap this in <form>. ApplicationV2's frame is already
+      a <form>; a nested form would orphan every input from submitOnChange.
+
+      Tab visibility is CSS-driven: `data-active-tab` on the root + `data-tab`
+      on each panel (changeTab action persists the choice via actor flag).
+      Because hidden panels still render their inputs into the DOM — and
+      submitOnChange submits ALL inputs — every editable `name=` appears in
+      EXACTLY ONE place across the whole template. --}}
+<div class="wcs-sheet" data-active-tab="{{activeTab}}" data-sheet-view="{{sheetView}}">
+
+  {{!-- ── TOP-LEVEL VIEW TABS (Sheet / Notes) — per-user, persisted ── --}}
+  <nav class="wcs-viewtabs">
+    <button type="button" class="wcs-viewtab{{#if (eq sheetView "sheet")}} is-active{{/if}}" data-action="changeSheetView" data-view="sheet"><i class="fa-solid fa-id-card"></i><span>Sheet</span></button>
+    <button type="button" class="wcs-viewtab{{#if (eq sheetView "notes")}} is-active{{/if}}" data-action="changeSheetView" data-view="notes"><i class="fa-solid fa-feather"></i><span>Notes</span></button>
+  </nav>
+
+  {{!-- ── SHEET VIEW — display:contents, transparent to the flex layout — --}}
+  <div class="wcs-view" data-view="sheet">
+
+  {{!-- ── TITLE STRIP ─────────────────────────────────────────────── --}}
+  <header class="wcs-title">
+    <span class="wcs-title-word">Character</span>
+  </header>
+
+  {{!-- ── HUD ─────────────────────────────────────────────────────── --}}
+  <section class="wcs-hud">
+    <div class="wcs-portrait">
+      <img src="{{actor.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.EditImage'}}" />
+      {{#if system.healthState.dying}}
+        <span class="wcs-wound-state is-dying" title="Death state — Core p.162"><i class="fa-solid fa-skull"></i></span>
+      {{else if system.healthState.wounded}}
+        <span class="wcs-wound-state is-wounded" title="Wounded — Core p.156"><i class="fa-solid fa-heart-crack"></i></span>
+      {{else}}
+        <span class="wcs-wound-state" title="Healthy"><i class="fa-solid fa-heart"></i></span>
+      {{/if}}
+    </div>
+
+    <div class="wcs-hud-right">
+      <div class="wcs-name-row">
+        <input class="wcs-name" type="text" name="name" value="{{actor.name}}" placeholder="Character name" />
+        <div class="wcs-death" title="Successful death saves — each adds −1 to the next (Core p.162)">
+          <a data-action="adjustValue" data-target="system.deathSaves" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
+          <i class="fa-solid fa-skull"></i><span>Death</span>
+          <span class="wcs-death-count">{{system.deathSaves}}</span><span class="wcs-death-cap">&minus;</span>
+          <a data-action="adjustValue" data-target="system.deathSaves" data-delta="1" data-min="0" title="+1"><i class="fa-solid fa-plus"></i></a>
+        </div>
+      </div>
+
+      {{!-- Identity row — display-only echoes. The editable inputs for these
+           fields live on the Background tab (single form-home). --}}
+      <div class="wcs-identity">
+        {{#if raceItem}}<span class="wcs-ident"><i class="fa-solid fa-dragon"></i><em>{{raceItem.name}}</em></span>{{/if}}
+        {{#if professionItem}}<span class="wcs-ident"><i class="fa-solid fa-shield-halved"></i><em>{{professionItem.name}}</em></span>{{/if}}
+        {{#if system.gender}}<span class="wcs-ident"><i class="fa-solid fa-venus-mars"></i>{{system.gender}}</span>{{/if}}
+        {{#if system.general.age}}<span class="wcs-ident"><i class="fa-solid fa-hourglass-half"></i>{{system.general.age}} yrs</span>{{/if}}
+        {{#if homelandLabel}}<span class="wcs-ident"><i class="fa-solid fa-map-location-dot"></i>{{homelandLabel}}</span>{{/if}}
+        {{#if system.general.socialStanding}}<span class="wcs-ident"><i class="fa-solid fa-crown"></i>{{system.general.socialStanding}}</span>{{/if}}
+      </div>
+
+      <div class="wcs-tag-row">
+        <span class="wcs-tag wcs-tag-ip" title="Improvement Points — edit on the Skills tab"><i class="fa-solid fa-clipboard-list"></i>IP<span class="num">{{system.improvementPoints}}</span></span>
+        <span class="wcs-tag wcs-tag-mip" title="Magic IP — edit on the Skills tab"><i class="fa-solid fa-wand-sparkles"></i>Magic<span class="num">{{system.magic.magicImprovementPoints}}</span></span>
+
+        <span class="wcs-actions">
+          <a class="wcs-btn" data-action="rollInitiative" title="Initiative — 1d10 + REF (Core p.151)"><i class="fa-solid fa-user-ninja"></i></a>
+          <a class="wcs-btn" data-action="takeBreath" title="Take a Breath — STA += REC (Core p.152)"><i class="fa-solid fa-bolt"></i></a>
+          <a class="wcs-btn wcs-btn-heal" data-action="heal" title="Rest / Heal"><i class="fa-solid fa-briefcase-medical"></i></a>
+          <a class="wcs-btn wcs-btn-stun" data-action="rollStunSave" title="Stun save — 1d10 ≤ Stun (Core p.152)"><i class="fa-solid fa-face-dizzy"></i></a>
+          <a class="wcs-btn wcs-btn-death" data-action="rollDeathSave" title="Death save — 1d10 ≤ unmodified Stun (−1 per prior success); a fail is death (Core p.162)"><i class="fa-solid fa-skull"></i></a>
+          <a class="wcs-btn wcs-btn-brawl" data-action="rollBrawl" title="Brawl — unarmed / grapple attack"><i class="fa-solid fa-hand-fist"></i></a>
+          <a class="wcs-btn wcs-btn-crit" data-action="rollCrit" title="Critical — roll a critical wound and apply it"><i class="fa-solid fa-heart-crack"></i></a>
+          <a class="wcs-btn wcs-btn-fumble" data-action="rollFumble" title="Fumble — roll on the fumble table"><i class="fa-solid fa-dice-one"></i></a>
+        </span>
+      </div>
+
+      {{!-- Vitals — HP / STA / TOX. HP folds temp into both numbers; the
+           current input (data-hp-total, no name) drains temp first on a lower
+           value, heals real HP on a higher one (see base.mjs _onRender). --}}
+      <div class="wcs-vitals-row">
+      <div class="wcs-vitals-col">
+      <div class="wcs-vitals">
+        <div class="wcs-vital" data-kind="hp" style="--pct: {{hpBar.fillPct}}%">
+          <span class="wcs-vital-lbl"><i class="fa-solid fa-heart"></i>Vitality</span>
+          {{#if hpBar.hasTemp}}
+            <input class="wcs-vital-cur" type="number" data-hp-total value="{{hpBar.curDisplay}}"
+                   title="Includes {{hpBar.temp}} temp HP — lower to deal damage (drains temp first), raise to heal real HP" />
+          {{else}}
+            <input class="wcs-vital-cur" type="number" name="system.derivedStats.hp.value" value="{{source.derivedStats.hp.value}}" />
+          {{/if}}
+          <span class="wcs-vital-bar"><span class="fill"></span></span>
+          <span class="wcs-vital-max">/ {{hpBar.maxDisplay}}</span>
+          {{#if hpBar.hasTemp}}<span class="wcs-vital-bonus" title="Temp HP">+{{hpBar.temp}}</span>{{else}}<span></span>{{/if}}
+        </div>
+        <div class="wcs-vital" data-kind="sta" style="--pct: {{vitals.sta.pct}}%">
+          <span class="wcs-vital-lbl"><i class="fa-solid fa-wind"></i>Stamina</span>
+          <input class="wcs-vital-cur" type="number" name="system.derivedStats.sta.value" value="{{vitals.sta.value}}" />
+          <span class="wcs-vital-bar"><span class="fill"></span></span>
+          <span class="wcs-vital-max">/ {{vitals.sta.max}}</span>
+          <span></span>
+        </div>
+        <div class="wcs-vital" data-kind="tox" style="--pct: {{vitals.tox.pct}}%">
+          <span class="wcs-vital-lbl"><i class="fa-solid fa-flask"></i>Toxicity</span>
+          <input class="wcs-vital-cur" type="number" name="system.stats.toxicity.value" value="{{vitals.tox.value}}" min="0" />
+          <span class="wcs-vital-bar"><span class="fill"></span></span>
+          <span class="wcs-vital-max">/ {{vitals.tox.max}}</span>
+          <span></span>
+        </div>
+      </div>
+
+        {{!-- Adrenaline / Luck trackers under the vital bars. --}}
+        <div class="wcs-trackers">
+          {{#if adrenalineEnabled}}
+          <span class="wcs-track">
+            <i class="fa-solid fa-burst"></i>Adrenaline
+            <a data-action="adjustValue" data-target="system.adrenaline.value" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
+            <input type="number" name="system.adrenaline.value" value="{{source.adrenaline.value}}" min="0" title="Max BODY per RAW p.153" />
+            <a data-action="adjustValue" data-target="system.adrenaline.value" data-delta="1" data-min="0" data-max="{{bodyValue}}" title="+1"><i class="fa-solid fa-plus"></i></a>
+          </span>
+          {{/if}}
+          <span class="wcs-track">
+            <i class="fa-solid fa-clover"></i>Luck
+            <input type="number" name="system.stats.luck.value" value="{{source.stats.luck.value}}" min="0" title="Spendable LUCK pool" />
+            <span class="wcs-track-cap">/ {{system.stats.luck.max}}</span>
+            <a data-action="refillLuck" title="Refill pool to LUCK (session start)"><i class="fa-solid fa-rotate-left"></i></a>
+          </span>
+          {{#if (homebrew "stress")}}
+            <span class="wcs-track">
+              <i class="fa-solid fa-brain"></i>Stress
+              <input type="number" name="system.stress" value="{{system.stress}}" min="0" />
+            </span>
+          {{/if}}
+        </div>
+      </div>
+
+        {{!-- Right column: derived pills + Vigor / Shield trackers. --}}
+        <div class="wcs-hud-side">
+          <section class="wcs-derived">
+            {{#each derivedPills}}
+              {{#if this.action}}
+                <a class="wcs-pill is-rollable" data-action="{{this.action}}" title="{{this.title}}"><span class="lbl">{{this.label}}</span><span class="val">{{this.val}}</span></a>
+              {{else}}
+                <div class="wcs-pill"><span class="lbl">{{this.label}}</span><span class="val">{{this.val}}</span></div>
+              {{/if}}
+            {{/each}}
+          </section>
+          <div class="wcs-trackers">
+            <span class="wcs-track">
+              <i class="fa-solid fa-circle-notch"></i>Vigor
+              <a data-action="adjustValue" data-target="system.derivedStats.vigor" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
+              <input type="number" name="system.derivedStats.vigor" value="{{system.derivedStats.vigor}}" min="0" title="Static ceiling — profession / skill tree (Core p.38)" />
+              <a data-action="adjustValue" data-target="system.derivedStats.vigor" data-delta="1" data-min="0" title="+1"><i class="fa-solid fa-plus"></i></a>
+            </span>
+            <span class="wcs-track">
+              <i class="fa-solid fa-shield"></i>Shield
+              <a data-action="adjustValue" data-target="system.derivedStats.shield" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
+              <input type="number" name="system.derivedStats.shield" value="{{system.derivedStats.shield}}" min="0" title="Static counter — Quen, armor, etc." />
+              <a data-action="adjustValue" data-target="system.derivedStats.shield" data-delta="1" data-min="0" title="+1"><i class="fa-solid fa-plus"></i></a>
+            </span>
+            <span class="wcs-track">
+              <i class="fa-solid fa-magnifying-glass"></i>Focus
+              <a data-action="adjustValue" data-target="system.derivedStats.focus.value" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
+              <input type="number" name="system.derivedStats.focus.value" value="{{source.derivedStats.focus.value}}" min="0" max="{{system.derivedStats.focus.max}}" title="Investigation pool — A Witcher's Journal p.145" />
+              <span class="wcs-track-cap">/ {{system.derivedStats.focus.max}}</span>
+              <a data-action="adjustValue" data-target="system.derivedStats.focus.value" data-delta="1" data-min="0" data-max="{{system.derivedStats.focus.max}}" title="+1"><i class="fa-solid fa-plus"></i></a>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {{!-- Total Stats — right-anchored tally sitting atop the statblock. --}}
+  <div class="wcs-total-row">
+    <span class="wcs-track wcs-track-total" title="Sum of the nine statistics including LUCK (RAW total stats)">
+      <i class="fa-solid fa-dice-d20"></i>Total Stats
+      <span class="wcs-track-val">{{totalStats}}</span>
+    </span>
+  </div>
+
+  {{!-- ── STATBLOCK ───────────────────────────────────────────────────
+       8 attrs + LUCK + REP. Editable base input (source value) with the
+       post-AE modified readout beneath. LUCK binds the stat (luck.max);
+       REP binds general.reputation.value. --}}
+  <section class="wcs-statblock">
+    {{#each statCells}}
+      <div class="wcs-stat{{#if this.isLuck}} is-luck{{/if}}{{#if this.isRep}} is-rep{{/if}}">
+        <span class="wcs-stat-abbr">{{this.abbr}}</span>
+        <input class="wcs-stat-val" type="number" name="{{this.name}}" value="{{this.base}}"
+               {{#if this.min}}min="{{this.min}}"{{/if}}{{#if this.max}} max="{{this.max}}"{{/if}} />
+        {{#if this.showMod}}
+          <span class="wcs-stat-mod">
+            <span class="mod-{{this.deltaSign}}">{{this.deltaText}}</span><span class="mod-base">/ {{this.modified}}</span>
+          </span>
+        {{else}}
+          <span class="wcs-stat-mod">&nbsp;</span>
+        {{/if}}
+      </div>
+    {{/each}}
+  </section>
+
+  {{!-- ── TAB NAV ─────────────────────────────────────────────────────
+       Persists via actor flag (changeTab action) so submitOnChange
+       re-renders keep the active tab. --}}
+  <nav class="wcs-tabs">
+    <button type="button" class="wcs-tab{{#if (eq activeTab "combat")    }} is-active{{/if}}" data-action="changeTab" data-tab="combat"><i class="fa-solid fa-shield-halved"></i>Combat</button>
+    <button type="button" class="wcs-tab{{#if (eq activeTab "skills")    }} is-active{{/if}}" data-action="changeTab" data-tab="skills"><i class="fa-solid fa-chart-simple"></i>Skills</button>
+    <button type="button" class="wcs-tab{{#if (eq activeTab "magic")     }} is-active{{/if}}" data-action="changeTab" data-tab="magic"><i class="fa-solid fa-wand-sparkles"></i>Magic</button>
+    <button type="button" class="wcs-tab{{#if (eq activeTab "inventory") }} is-active{{/if}}" data-action="changeTab" data-tab="inventory"><i class="fa-solid fa-sack-dollar"></i>Inventory</button>
+    <button type="button" class="wcs-tab{{#if (eq activeTab "profession")}} is-active{{/if}}" data-action="changeTab" data-tab="profession"><i class="fa-solid fa-shield"></i>Profession</button>
+    <button type="button" class="wcs-tab{{#if (eq activeTab "background")}} is-active{{/if}}" data-action="changeTab" data-tab="background"><i class="fa-solid fa-book-bookmark"></i>Background</button>
+    <button type="button" class="wcs-tab{{#if (eq activeTab "effects")   }} is-active{{/if}}" data-action="changeTab" data-tab="effects"><i class="fa-solid fa-sparkles"></i>Effects</button>
+  </nav>
+
+  {{!-- ── PANELS ──────────────────────────────────────────────────── --}}
+  <section class="wcs-panels">
+
+    {{!-- ============ COMBAT ============ --}}
+    <div class="wcs-panel" data-tab="combat">
+
+      {{#if system.healthState.dying}}
+        <div class="wcs-banner is-dying">Death State — all stats ×⅓ until stabilized (Core p.162)</div>
+      {{else if system.healthState.wounded}}
+        <div class="wcs-banner is-wounded">Wounded — REF / DEX / INT / WILL halved (HP below {{system.healthState.woundThreshold}}; Core p.156)</div>
+      {{/if}}
+
+      {{#if hasEquipableItems}}
+        <div class="wcs-section-label">Weapons &amp; Equipped</div>
+        <div class="wcs-list">
+          {{#each equipableItems}}
+            <div class="wcs-item-row {{#if this.equipped}}is-equipped{{/if}}" data-item-id="{{this.id}}">
+              <img class="wcs-item-img" src="{{this.img}}" alt="" />
+              <button type="button" class="wcs-item-name" data-action="rollWeapon" data-item-id="{{this.id}}"
+                      title="Attack — 1d10 + stat + skill + WA">{{this.name}}</button>
+              {{#if this.oil}}<span class="wcs-oil" title="{{this.oilTip}}"><i class="fa-solid fa-droplet"></i>{{this.oilLabel}}</span>{{/if}}
+              {{#if this.isQuick}}<span class="wcs-quick-chip" title="Quick item — can occupy the off-hand / quick slot"><i class="fa-solid fa-bolt"></i>Quick</span>{{/if}}
+              <span class="wcs-item-stats">
+                {{#if this.damage}}<span class="wcs-stat-chip"><span class="lbl">DMG</span>{{this.damage}}</span>{{/if}}
+                {{#if this.range}}<span class="wcs-stat-chip"><span class="lbl">RNG</span>{{this.range}}m</span>{{/if}}
+                {{#if this.accuracy}}<span class="wcs-stat-chip"><span class="lbl">WA</span>{{this.accuracy}}</span>{{/if}}
+                {{#if this.reliabilityMax}}<span class="wcs-stat-chip"><span class="lbl">REL</span>{{this.reliability}}/{{this.reliabilityMax}}</span>{{/if}}
+              </span>
+              {{#if this.equipped}}
+                {{#if this.canSelectHand}}
+                  <select class="wcs-hand-select" data-hand-select data-item-id="{{this.id}}"
+                          title="Choose which hand holds {{this.name}}">
+                    <option value="right" {{#if (eq this.slot "right")}}selected{{/if}}>Right</option>
+                    <option value="left"  {{#if (eq this.slot "left")}}selected{{/if}}>Left</option>
+                    {{#if this.quickEligible}}<option value="quick" {{#if (eq this.slot "quick")}}selected{{/if}}>Quick</option>{{/if}}
+                  </select>
+                {{else}}
+                  <span class="wcs-hand-indicator" title="Held in {{this.slotLabel}}"><i class="fa-solid fa-hand-fist"></i><span>{{this.slotShort}}</span></span>
+                {{/if}}
+                <span class="wcs-weapon-actions">
+                  {{#if this.canSheathe}}
+                    <button type="button" class="wcs-wpn-btn" data-action="sheatheWeapon" data-item-id="{{this.id}}"
+                            title="Sheathe into a container (costs an action in combat)"><i class="fa-solid fa-arrow-down-to-bracket"></i></button>
+                  {{/if}}
+                  <button type="button" class="wcs-wpn-btn" data-action="unequipWeapon" data-item-id="{{this.id}}"
+                          title="Unequip — leave loose in inventory (costs an action in combat)"><i class="fa-solid fa-hand"></i></button>
+                  <button type="button" class="wcs-wpn-btn" data-action="dropWeapon" data-item-id="{{this.id}}"
+                          title="Drop to the world — any player can pick it up (free)"><i class="fa-solid fa-hand-holding"></i></button>
+                </span>
+              {{else}}
+                <button type="button" class="wcs-equip-toggle" data-action="toggleEquip" data-item-id="{{this.id}}"
+                        title="Equip — picks the hand automatically"><i class="fa-solid fa-hand"></i><span>Equip</span></button>
+              {{/if}}
+            </div>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if hasArmorItems}}
+        <div class="wcs-section-label">Armor{{#if armorEV}} · EV −{{armorEV}}{{/if}}</div>
+        <div class="wcs-list">
+          {{#each armorList}}
+            <div class="wcs-item-row{{#if this.equipped}} is-equipped{{/if}}" data-item-id="{{this.id}}">
+              <img class="wcs-item-img" src="{{this.img}}" alt="" />
+              <button type="button" class="wcs-item-name" data-action="editItem" title="Open armor sheet">{{this.name}}</button>
+              <span class="wcs-armor-type">{{this.typeLabel}}{{#if this.ev}} · EV −{{this.ev}}{{/if}}</span>
+              <span class="wcs-item-stats">
+                {{#each this.coverage}}<span class="wcs-stat-chip"><span class="lbl">{{this.label}}</span>{{this.sp}}</span>{{/each}}
+                {{#each this.resists}}<span class="wcs-resist-chip" title="Resists {{this}} damage">{{this}}</span>{{/each}}
+              </span>
+              <button type="button" class="wcs-equip-toggle{{#if this.equipped}} is-on{{/if}}" data-action="toggleEquip" data-item-id="{{this.id}}"
+                      title="{{#if this.equipped}}Worn — click to remove{{else}}Click to wear{{/if}}">{{#if this.equipped}}<i class="fa-solid fa-shield-halved"></i><span>Worn</span>{{else}}<i class="fa-solid fa-shield"></i><span>Wear</span>{{/if}}</button>
+            </div>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if hasArmor}}
+        <div class="wcs-section-label">Stopping Power by Location</div>
+        <div class="wcs-armor-grid">
+          {{#each armorByLocation}}
+            <div class="wcs-armor-cell">
+              <span class="wcs-armor-loc">{{this.label}}</span>
+              <span class="wcs-armor-sp" title="{{#each this.pieces}}{{this.name}}: {{this.sp}} SP{{#unless @last}} · {{/unless}}{{/each}}{{#unless this.pieces.length}}No armor{{/unless}}">{{this.total}}</span>
+              {{#if this.layers}}<span class="wcs-armor-layers">{{this.layers}} layer{{#unless (eq this.layers 1)}}s{{/unless}}</span>{{/if}}
+              {{#if this.resists.length}}<span class="wcs-armor-resists">{{#each this.resists}}<span class="wcs-resist-chip" title="Resists {{this}} damage">{{this}}</span>{{/each}}</span>{{/if}}
+            </div>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      <div class="wcs-section-label">Critical Wounds</div>
+      {{#if hasCriticalWounds}}
+        <div class="wcs-crit-list">
+          {{#each criticalWounds}}
+            <div class="wcs-crit-row wcs-crit-{{this.system.criticalLevel}}" data-item-id="{{this.id}}">
+              <div class="wcs-crit-head">
+                <a class="wcs-crit-name" data-action="editItem" data-item-id="{{this.id}}" title="View">{{this.name}}</a>
+                <span class="wcs-crit-level">{{this.system.criticalLevel}}</span>
+                <span class="wcs-crit-loc">{{this.system.location}}</span>
+                <span class="wcs-crit-state">{{this.system.state}}</span>
+                {{#if (eq this.system.state 'treated')}}<span class="wcs-crit-progress" title="Days healed / total">{{this.system.healDaysElapsed}}/{{this.system.healingTime}}</span>{{/if}}
+                <span class="wcs-crit-actions">
+                  <button type="button" data-action="stabilizeWound" data-item-id="{{this.id}}" class="wcs-crit-btn {{#if (eq this.system.state 'unstabilized')}}is-primary{{/if}}" {{#unless (eq this.system.state 'unstabilized')}}disabled{{/unless}} title="Stabilize — First Aid roll (DC by severity)">Stab.</button>
+                  <button type="button" data-action="treatWound" data-item-id="{{this.id}}" class="wcs-crit-btn {{#if (eq this.system.state 'stabilized')}}is-primary{{/if}}" {{#if (eq this.system.state 'treated')}}disabled{{/if}} title="Treat — doctor's Healing Hands; starts the healing clock">Treat</button>
+                  <button type="button" data-action="resolveWound" data-item-id="{{this.id}}" class="wcs-crit-btn" title="Resolve — spawns follow-up + removes wound">Resolve</button>
+                  <a data-action="deleteItem" data-item-id="{{this.id}}" title="Remove"><i class="fa-solid fa-trash"></i></a>
+                </span>
+              </div>
+              {{#if this.system.activeEffect}}<div class="wcs-crit-desc">{{{this.system.activeEffect}}}</div>{{/if}}
+            </div>
+          {{/each}}
+        </div>
+      {{else}}
+        <p class="wcs-empty">No active critical wounds. Drop a wound from the <em>Critical Wounds</em> compendium to track healing.</p>
+      {{/if}}
+    </div>
+
+    {{!-- ============ SKILLS ============ --}}
+    <div class="wcs-panel" data-tab="skills">
+      <div class="wcs-skill-groups">
+        {{#each system.skills}}
+          <div class="wcs-skill-group">
+            <div class="wcs-skill-group-head"><span class="stat-name">{{@key}}</span></div>
+            {{#each this}}
+              <div class="wcs-skill-line{{#if this.isDifficult}} is-difficult{{/if}}">
+                <button type="button" class="wcs-skill-cat wcs-skill-cat-{{#if this.category}}{{this.category}}{{else}}none{{/if}}"
+                        data-action="cycleSkillCategory" data-stat="{{@../key}}" data-skill="{{@key}}"
+                        title="{{#if (eq this.category 'profession')}}Profession skill — granted by your profession (locked){{else if (eq this.category 'pickup')}}Pickup skill — click to clear{{else}}Click to mark as a Pickup skill{{/if}}">{{#if (eq this.category 'profession')}}P{{else if (eq this.category 'pickup')}}Pu{{/if}}</button>
+                <input class="wcs-skill-rank" type="number"
+                       name="system.skills.{{@../key}}.{{@key}}.value"
+                       value="{{lookup (lookup (lookup ../../source.skills @../key) @key) 'value'}}"
+                       min="0" max="10" title="Ranks (0-10)" />
+                <button type="button" class="wcs-skill-name" data-action="rollSkill" data-skill="{{@key}}"
+                        {{#if this.isDifficult}}title="Difficult skill — ×2 IP per rank (Core p.49)"{{/if}}>
+                  {{localize (concat "WITCHER.skills." @key ".label")}}
+                </button>
+                <output class="wcs-skill-mod" title="Modifier from effects + items">{{this.modifier}}</output>
+                <output class="wcs-skill-total" title="Total: stat + rank + modifier">{{this.total}}</output>
+              </div>
+            {{/each}}
+          </div>
+        {{/each}}
+      </div>
+
+      <div class="wcs-ip-panel">
+        <div class="wcs-ip-head">
+          <span class="title">Improvement Points</span>
+          {{#if ipLogEntries.length}}
+            <button type="button" class="wcs-ip-clear" data-action="clearIpLog"
+                    title="Clear the IP spending log">
+              <i class="fa-solid fa-trash-can"></i> Clear Log
+            </button>
+          {{/if}}
+        </div>
+        <div class="wcs-ip-row">
+          <label>General IP</label>
+          <input type="number" name="system.improvementPoints" value="{{system.improvementPoints}}" min="0" title="General advancement (Core p.59)" />
+        </div>
+        <div class="wcs-ip-row">
+          <label>Magic IP</label>
+          <input type="number" name="system.magic.magicImprovementPoints" value="{{system.magic.magicImprovementPoints}}" min="0" title="Magic-school advancement (Core p.59)" />
+        </div>
+        {{#if ipLogEntries.length}}
+          <ul class="wcs-ip-log">
+            {{#each ipLogEntries}}
+              <li><span>{{this.label}}</span><em>{{#if (gte this.value 0)}}+{{/if}}{{this.value}} IP</em></li>
+            {{/each}}
+          </ul>
+        {{/if}}
+      </div>
+    </div>
+
+    {{!-- ============ MAGIC ============ --}}
+    <div class="wcs-panel" data-tab="magic">
+      <div class="wcs-section-label">Magical Foci</div>
+      <div class="wcs-foci-grid">
+        <label class="wcs-focus"><span>Focus 1</span><input type="text" name="system.focus1" value="{{system.focus1}}" /></label>
+        <label class="wcs-focus"><span>Focus 2</span><input type="text" name="system.focus2" value="{{system.focus2}}" /></label>
+        <label class="wcs-focus"><span>Focus 3</span><input type="text" name="system.focus3" value="{{system.focus3}}" /></label>
+        <label class="wcs-focus"><span>Focus 4</span><input type="text" name="system.focus4" value="{{system.focus4}}" /></label>
+      </div>
+
+      {{#if hasMagic}}
+        {{#each magicGroups}}
+          {{#if this.items.length}}
+            <div class="wcs-spell-section">
+              <div class="wcs-spell-head"><h3>{{this.label}}</h3><span class="count">{{this.items.length}}</span></div>
+              <div class="wcs-spell-body">
+                {{#each this.items}}
+                  <div class="wcs-spell-row" data-item-id="{{this.id}}" data-action="castItem" title="Cast — {{this.name}}">
+                    <img class="wcs-spell-icon" src="{{this.img}}" alt="" />
+                    <button type="button" class="wcs-spell-name" data-action="castItem" data-item-id="{{this.id}}">{{this.name}}</button>
+                    <span class="wcs-spell-meta">{{this.meta}}</span>
+                    <a data-action="editItem" data-item-id="{{this.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
+                    <a data-action="deleteItem" data-item-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                  </div>
+                {{/each}}
+              </div>
+            </div>
+          {{/if}}
+        {{/each}}
+      {{else}}
+        <p class="wcs-empty">No spells, signs, invocations, hexes, or rituals yet. Drag from a compendium.</p>
+      {{/if}}
+    </div>
+
+    {{!-- ============ INVENTORY ============ --}}
+    <div class="wcs-panel" data-tab="inventory">
+      <div class="wcs-section-label">Currency</div>
+      <div class="wcs-currency">
+        <div class="wcs-coin"><span class="name">Bizant</span><input type="number" name="system.currency.bizant" value="{{system.currency.bizant}}" min="0" /></div>
+        <div class="wcs-coin"><span class="name">Ducat</span><input type="number" name="system.currency.ducat" value="{{system.currency.ducat}}" min="0" /></div>
+        <div class="wcs-coin"><span class="name">Lintar</span><input type="number" name="system.currency.lintar" value="{{system.currency.lintar}}" min="0" /></div>
+        <div class="wcs-coin"><span class="name">Floren</span><input type="number" name="system.currency.floren" value="{{system.currency.floren}}" min="0" /></div>
+        <div class="wcs-coin"><span class="name">Crown</span><input type="number" name="system.currency.crown" value="{{system.currency.crown}}" min="0" /></div>
+        <div class="wcs-coin"><span class="name">Oren</span><input type="number" name="system.currency.oren" value="{{system.currency.oren}}" min="0" /></div>
+      </div>
+
+      {{#each gearGroups}}
+        {{#if this.items.length}}
+          <div class="wcs-inv-section">
+            <h3>{{this.label}} <span class="count">({{this.items.length}})</span></h3>
+            {{#each this.items}}
+              <div class="wcs-item-row" data-item-id="{{this.id}}">
+                <img class="wcs-item-img" src="{{this.img}}" alt="" />
+                <span class="wcs-item-name">{{this.name}}</span>
+                {{#if this.isQuick}}<span class="wcs-quick-chip" title="Quick item — can occupy the off-hand / quick slot"><i class="fa-solid fa-bolt"></i>Quick</span>{{/if}}
+                <span class="wcs-item-meta">{{this.meta}}</span>
+                {{#if this.canEquip}}<a data-action="toggleEquip" data-item-id="{{this.id}}" title="{{this.equipLabel}} — picks the hand automatically"><i class="fa-solid {{this.equipIcon}}"></i></a>{{/if}}
+                <a data-action="editItem" data-item-id="{{this.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
+                <a data-action="deleteItem" data-item-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+              </div>
+            {{/each}}
+          </div>
+        {{/if}}
+      {{/each}}
+
+      {{#if hasContainers}}
+        <div class="wcs-inv-section wcs-containers">
+          <h3>Containers <span class="count">({{containers.length}})</span></h3>
+          {{#each containers}}
+            <div class="wcs-container{{#if this.collapsed}} is-collapsed{{/if}}">
+              <div class="wcs-container-head wcs-item-row" data-item-id="{{this.id}}">
+                <a class="wcs-container-toggle" data-action="toggleContainer" data-container-id="{{this.id}}" title="Expand / collapse"><i class="fa-solid fa-chevron-down wcs-container-caret"></i></a>
+                <img class="wcs-item-img" src="{{this.img}}" alt="" />
+                <span class="wcs-item-name">{{this.name}}</span>
+                {{#if this.capLabel}}<span class="wcs-cap{{#if this.over}} is-over{{/if}}" title="Stored / capacity"><i class="fa-solid fa-weight-hanging"></i>{{this.capLabel}}</span>{{/if}}
+                <a data-action="editItem" data-item-id="{{this.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
+                <a data-action="deleteItem" data-item-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+              </div>
+              {{#if this.items.length}}
+                <div class="wcs-container-body">
+                  {{#each this.items}}
+                    <div class="wcs-item-row wcs-nested {{#if this.equipped}}is-equipped{{/if}}" data-item-id="{{this.id}}">
+                      <img class="wcs-item-img" src="{{this.img}}" alt="" />
+                      <span class="wcs-item-name">{{this.name}}</span>
+                      {{#if this.isQuick}}<span class="wcs-quick-chip" title="Quick item — can occupy the off-hand / quick slot"><i class="fa-solid fa-bolt"></i>Quick</span>{{/if}}
+                      <span class="wcs-item-meta">{{this.meta}}</span>
+                      {{#if this.canEquip}}<a data-action="toggleEquip" data-item-id="{{this.id}}" title="{{this.equipLabel}} — picks the hand automatically"><i class="fa-solid {{this.equipIcon}}"></i></a>{{/if}}
+                      <a data-action="editItem" data-item-id="{{this.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
+                      <a data-action="deleteItem" data-item-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                    </div>
+                  {{/each}}
+                </div>
+              {{else}}
+                <p class="wcs-empty wcs-container-empty">Empty — right-click an item and choose “Put in Container…”.</p>
+              {{/if}}
+            </div>
+          {{/each}}
+        </div>
+      {{/if}}
+    </div>
+
+    {{!-- ============ PROFESSION ============ --}}
+    <div class="wcs-panel" data-tab="profession">
+      <div class="wcs-section-label">Profession</div>
+      {{#if professionItem}}
+        <div class="wcs-feature-card">
+          <img class="wcs-feature-img" src="{{professionItem.img}}" alt="" />
+          <div class="wcs-feature-body">
+            <h3 class="wcs-feature-name">{{professionItem.name}}</h3>
+            {{#if professionItem.system.definingSkill.skillName}}<div class="wcs-feature-meta"><strong>Defining Skill:</strong> {{professionItem.system.definingSkill.skillName}}</div>{{/if}}
+            {{#if professionItem.system.description}}<div class="wcs-feature-desc">{{{professionItem.system.description}}}</div>{{/if}}
+          </div>
+          <a class="wcs-feature-edit" data-action="editItem" data-item-id="{{professionItem.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
+          <a class="wcs-feature-remove" data-action="deleteItem" data-item-id="{{professionItem.id}}" title="Remove"><i class="fa-solid fa-trash"></i></a>
+        </div>
+
+        {{#if professionTree}}
+          <div class="wcs-prof-tree">
+            {{#with professionTree.defining}}
+              <div class="wcs-prof-item is-defining{{#if this.expanded}} is-expanded{{/if}}">
+                <div class="wcs-prof-row">
+                  <span class="wcs-prof-tag">Defining</span>
+                  <button type="button" class="wcs-prof-head" data-action="toggleProfSkill" data-prof-key="{{this.path}}" title="Show description">
+                    <i class="fa-solid fa-chevron-{{#if this.expanded}}down{{else}}right{{/if}} wcs-prof-caret"></i>
+                    <span class="wcs-prof-skill">{{this.skillName}}</span>
+                  </button>
+                  {{#if this.stat}}<span class="wcs-prof-stat">{{this.stat}}</span>{{/if}}
+                  <input class="wcs-prof-rank" type="number" value="{{this.level}}" min="0" max="10"
+                         data-prof-path="{{this.path}}" title="Rank (0-10)" />
+                  <button type="button" class="wcs-prof-roll" data-action="rollProfSkill" data-prof-slot="{{this.slotPath}}"
+                          title="Roll {{this.skillName}}"><i class="fa-solid fa-dice-d10"></i></button>
+                </div>
+                {{#if this.expanded}}<div class="wcs-prof-def">{{#if this.definition}}{{{this.definition}}}{{else}}<em>No description.</em>{{/if}}</div>{{/if}}
+              </div>
+            {{/with}}
+            <div class="wcs-prof-paths">
+              {{#each professionTree.paths}}
+                <div class="wcs-prof-path-col">
+                  <div class="wcs-prof-path-name">{{this.pathName}}</div>
+                  {{#each this.skills}}
+                    <div class="wcs-prof-item{{#if this.expanded}} is-expanded{{/if}}">
+                      <div class="wcs-prof-row">
+                        <button type="button" class="wcs-prof-head" data-action="toggleProfSkill" data-prof-key="{{this.path}}" title="Show description">
+                          <i class="fa-solid fa-chevron-{{#if this.expanded}}down{{else}}right{{/if}} wcs-prof-caret"></i>
+                          <span class="wcs-prof-skill">{{this.skillName}}</span>
+                        </button>
+                        {{#if this.stat}}<span class="wcs-prof-stat">{{this.stat}}</span>{{/if}}
+                        <input class="wcs-prof-rank" type="number" value="{{this.level}}" min="0" max="10"
+                               data-prof-path="{{this.path}}" title="Rank (0-10)" />
+                        <button type="button" class="wcs-prof-roll" data-action="rollProfSkill" data-prof-slot="{{this.slotPath}}"
+                                title="Roll {{this.skillName}}"><i class="fa-solid fa-dice-d10"></i></button>
+                      </div>
+                      {{#if this.expanded}}<div class="wcs-prof-def">{{#if this.definition}}{{{this.definition}}}{{else}}<em>No description.</em>{{/if}}</div>{{/if}}
+                    </div>
+                  {{/each}}
+                </div>
+              {{/each}}
+            </div>
+          </div>
+        {{/if}}
+      {{else}}
+        <p class="wcs-empty">No profession assigned. Drag a Profession item onto the sheet.</p>
+      {{/if}}
+
+      <div class="wcs-section-label">Race &amp; Homeland</div>
+      {{#if raceItem}}
+        <div class="wcs-feature-card">
+          <img class="wcs-feature-img" src="{{raceItem.img}}" alt="" />
+          <div class="wcs-feature-body">
+            <h3 class="wcs-feature-name">{{raceItem.name}}</h3>
+            {{#if raceItem.system.description}}<div class="wcs-feature-desc">{{{raceItem.system.description}}}</div>{{/if}}
+          </div>
+          <a class="wcs-feature-edit" data-action="editItem" data-item-id="{{raceItem.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
+          <a class="wcs-feature-remove" data-action="deleteItem" data-item-id="{{raceItem.id}}" title="Remove"><i class="fa-solid fa-trash"></i></a>
+        </div>
+      {{else}}
+        <p class="wcs-empty">No race assigned. Drag a Race item onto the sheet.</p>
+      {{/if}}
+      {{#if homelandItem}}
+        <div class="wcs-feature-card">
+          <img class="wcs-feature-img" src="{{homelandItem.img}}" alt="" />
+          <div class="wcs-feature-body">
+            <h3 class="wcs-feature-name">{{homelandItem.name}} <span class="wcs-feature-tag">Homeland</span></h3>
+            {{#if homelandItem.system.description}}<div class="wcs-feature-desc">{{{homelandItem.system.description}}}</div>{{/if}}
+          </div>
+          <a class="wcs-feature-edit" data-action="editItem" data-item-id="{{homelandItem.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
+          <a class="wcs-feature-remove" data-action="deleteItem" data-item-id="{{homelandItem.id}}" title="Remove"><i class="fa-solid fa-trash"></i></a>
+        </div>
+      {{/if}}
+
+      <div class="wcs-section-label">Perks
+        <a class="wcs-section-add" data-action="createPerk" title="Add a perk"><i class="fa-solid fa-plus"></i></a>
+      </div>
+      {{#each perkItems}}
+        <div class="wcs-feature-card">
+          <img class="wcs-feature-img" src="{{this.img}}" alt="" />
+          <div class="wcs-feature-body">
+            <h3 class="wcs-feature-name">{{this.name}} <span class="wcs-feature-tag">Perk</span></h3>
+            {{#if this.system.description}}<div class="wcs-feature-desc">{{{this.system.description}}}</div>{{/if}}
+          </div>
+          <a class="wcs-feature-edit" data-action="editItem" data-item-id="{{this.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
+          <a class="wcs-feature-remove" data-action="deleteItem" data-item-id="{{this.id}}" title="Remove"><i class="fa-solid fa-trash"></i></a>
+        </div>
+      {{else}}
+        <p class="wcs-empty">No perks. Add one, or drag a Perk item onto the sheet.</p>
+      {{/each}}
+    </div>
+
+    {{!-- ============ BACKGROUND ============ --}}
+    <div class="wcs-panel" data-tab="background">
+      <div class="wcs-section-label">Identity</div>
+      <div class="wcs-bg-grid">
+        <label class="wcs-bg-field"><span>Gender</span><input type="text" name="system.gender" value="{{system.gender}}" /></label>
+        <label class="wcs-bg-field"><span>Age</span><input type="number" name="system.general.age" value="{{system.general.age}}" min="0" /></label>
+        <label class="wcs-bg-field"><span>Social Standing</span><input type="text" name="system.general.socialStanding" value="{{system.general.socialStanding}}" /></label>
+        {{#if homelandItem}}
+        <div class="wcs-bg-field"><span>Homeland</span><a class="wcs-bg-link" data-action="editItem" data-item-id="{{homelandItem.id}}" title="Linked to homeland item — open to edit"><i class="fa-solid fa-link"></i>{{homelandItem.name}}</a></div>
+        {{else}}
+        <label class="wcs-bg-field"><span>Homeland</span><input type="text" name="system.general.homeland" value="{{system.general.homeland}}" /></label>
+        {{/if}}
+        <label class="wcs-bg-field"><span>Personality</span><input type="text" name="system.general.personality" value="{{system.general.personality}}" placeholder="Temperament, outlook" /></label>
+        <label class="wcs-bg-field"><span>Feelings on People</span><input type="text" name="system.general.feelingsOnPeople" value="{{system.general.feelingsOnPeople}}" placeholder="How they regard others" /></label>
+      </div>
+
+      <div class="wcs-section-label">Reputation</div>
+      <div class="wcs-bg-grid">
+        <label class="wcs-bg-field"><span>Reputation</span><output title="Edit in the statblock above — 1d10 vs Rep (Core pp.60-61)">{{system.general.reputation.value}}</output></label>
+      </div>
+      {{#if system.general.reputation.modifiers.length}}
+        <ul class="wcs-bg-modlist">
+          {{#each system.general.reputation.modifiers}}
+            <li><span>{{this.name}}</span><em>{{#if (gte this.value 0)}}+{{/if}}{{this.value}}</em></li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+      <div class="wcs-section-label">Details</div>
+      <div class="wcs-bg-prose">
+        <label class="wcs-bg-field is-wide is-tall"><span>Details</span><textarea name="system.general.details" placeholder="Appearance, mannerisms, beliefs, ties to other PCs">{{system.general.details}}</textarea></label>
+      </div>
+
+      <div class="wcs-section-label">Life Events        <a class="wcs-section-add" data-action="addLifeEvent" title="Add life event"><i class="fa-solid fa-plus"></i></a>
+      </div>
+      {{#if lifeEventEntries.length}}
+        <div class="wcs-life-list">
+          {{#each lifeEventEntries}}
+            <div class="wcs-life-event" data-event-id="{{this.id}}">
+              <div class="wcs-life-head">
+                <strong>{{#if this.label}}{{this.label}}{{else}}Untitled moment{{/if}}</strong>
+                {{#if this.date}}<span class="wcs-life-year">{{this.date}}</span>{{/if}}
+                {{#if this.location}}<span class="wcs-life-loc">{{this.location}}</span>{{/if}}
+                <span class="wcs-life-actions">
+                  <a data-action="editLifeEvent" data-event-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteLifeEvent" data-event-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                </span>
+              </div>
+              {{#if this.detail}}<p class="wcs-life-body">{{this.detail}}</p>{{/if}}
+            </div>
+          {{/each}}
+        </div>
+      {{else}}
+        <p class="wcs-empty">No life events recorded yet. Roll the chargen lifepath tables or write your own (Core p.39).</p>
+      {{/if}}
+    </div>
+
+    {{!-- ============ EFFECTS ============ --}}
+    <div class="wcs-panel" data-tab="effects">
+      <div class="wcs-section-label">Active Effects        <a class="wcs-section-add" data-action="createEffect" title="Add effect"><i class="fa-solid fa-plus"></i></a>
+      </div>
+      {{#if effects.length}}
+        <div class="wcs-effects-list">
+          {{#each effects}}
+            <div class="wcs-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+              <img class="wcs-effect-img" src="{{this.img}}" alt="" />
+              <div class="wcs-effect-body">
+                <span class="wcs-effect-name">{{this.name}}</span>
+                {{#if this.description}}<span class="wcs-effect-desc">{{{this.description}}}</span>{{/if}}
+              </div>
+              {{#if this.duration.label}}<span class="wcs-effect-duration">{{this.duration.label}}</span>{{/if}}
+              <span class="wcs-effect-source">{{this.sourceName}}</span>
+              <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}"><i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i></a>
+              <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
+              <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+            </div>
+          {{/each}}
+        </div>
+      {{else}}
+        <p class="wcs-empty">No active effects. Race / Profession items and statuses appear here.</p>
+      {{/if}}
+
+      {{#if hasActiveStatuses}}
+        <div class="wcs-section-label">Active Statuses</div>
+        <div class="wcs-status-list">
+          {{#each activeStatuses}}
+            <div class="wcs-status-row" data-status-id="{{this.id}}">
+              <img class="wcs-status-icon" src="{{this.img}}" alt="" />
+              <span class="wcs-status-label">{{this.label}}{{#if this.tier}}<span class="wcs-status-tier">{{this.tier}}</span>{{/if}}</span>
+              <span class="wcs-status-text">{{this.description}}</span>
+            </div>
+          {{/each}}
+        </div>
+      {{/if}}
+    </div>
+
+  </section>
+  </div>{{!-- /wcs-view sheet --}}
+
+  {{!-- ── NOTES VIEW — portrait + rich-text editor (system.notes) ───── --}}
+  <div class="wcs-view wcs-notes" data-view="notes">
+    <div class="wcs-notes-portrait">
+      <img src="{{actor.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.EditImage'}}" />
+    </div>
+    <prose-mirror class="wcs-notes-editor" name="system.notes" toggled value="{{system.notes}}">{{{enrichedNotes}}}</prose-mirror>
+  </div>
+</div>

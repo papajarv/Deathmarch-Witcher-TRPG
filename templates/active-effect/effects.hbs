@@ -1,0 +1,29 @@
+{{!-- Unified "Effects" tab. One list of action rows; each row picks an
+      action type (Modify / Heal / Damage / Suppress) and shows only that
+      action's fields. Rows are pre-rendered to HTML in
+      WitcherActiveEffectConfig._preparePartContext. The whole list persists
+      as flags.<systemId>.actions[]. --}}
+<section class="tab effects wdm-effects-tab{{#if tab.active}} active{{/if}}"
+         data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+  <p class="wdm-changes-hint">{{localize "WITCHER.Effect.EffectsHint"}}</p>
+
+  {{!-- Shared autocomplete source for every Modify row's free-text Target
+        input. Option value is the data path; the label shows the friendly
+        name. --}}
+  <datalist id="wdm-effect-targets">
+    {{#each targetList as |opt|}}
+      <option value="{{opt.key}}" label="{{opt.label}}"></option>
+    {{/each}}
+  </datalist>
+
+  <ol class="wdm-changes scrollable" data-actions>
+    {{#each actions as |action|}}
+      {{{action}}}
+    {{/each}}
+  </ol>
+
+  <button type="button" class="wdm-add-change" data-action="addAction">
+    <i class="fa-solid fa-plus"></i> {{localize "WITCHER.Effect.AddAction"}}
+  </button>
+</section>

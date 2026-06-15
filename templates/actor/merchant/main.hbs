@@ -1,0 +1,662 @@
+{{!-- Merchant (GM) sheet — faithful port of witcher-merchant-system's
+      header + 5 tabs. The original used Foundry's generic tab nav with
+      `.tab.active` show/hide; here the panels show/hide via `data-active-tab`
+      on the root and the base sheet's `changeTab` action. Field paths are
+      adapted to the new schema: a single shop denomination (`system.shopDenom`)
+      and the six-denomination wallet (`system.currency.<denom>`) replace the
+      original's `system.currency` string + `system.coinReserve` number.
+      Do NOT wrap in <form>; ApplicationV2's frame already is one. --}}
+
+<div class="merchant-sheet wdm-merchant" data-active-tab="{{activeTab}}">
+
+  {{!-- ── Header ─────────────────────────────────────────── --}}
+  <div class="merchant-header">
+    <div class="header-left">
+      <img class="profile-img" src="{{actor.img}}" data-action="editImage" data-edit="img" title="{{actor.name}}" />
+    </div>
+
+    <div class="header-center">
+      <input class="merchant-name-input" name="name" type="text" value="{{actor.name}}" placeholder="Merchant Name" />
+
+      <div class="header-fields">
+        <div class="field">
+          <label>Shop</label>
+          <input type="text" name="system.shopName" value="{{source.shopName}}" placeholder="Shop Name" />
+        </div>
+
+        <div class="field">
+          <label>Personality</label>
+          <select name="system.personality.type">
+            <option value="friendly"  {{#if (eq currentPersonality "friendly")}}selected{{/if}}>Friendly (-10%)</option>
+            <option value="grumpy"    {{#if (eq currentPersonality "grumpy")}}selected{{/if}}>Grumpy (+15%)</option>
+            <option value="shifty"    {{#if (eq currentPersonality "shifty")}}selected{{/if}}>Shifty (+20%)</option>
+            <option value="noble"     {{#if (eq currentPersonality "noble")}}selected{{/if}}>Noble (+5%)</option>
+            <option value="desperate" {{#if (eq currentPersonality "desperate")}}selected{{/if}}>Desperate (-25%)</option>
+            <option value="neutral"   {{#if (eq currentPersonality "neutral")}}selected{{/if}}>Neutral (0%)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Currency</label>
+          <select name="system.shopDenom">
+            <option value="crown"  {{#if (eq shopDenom "crown")}}selected{{/if}}>Crown</option>
+            <option value="bizant" {{#if (eq shopDenom "bizant")}}selected{{/if}}>Bizant</option>
+            <option value="ducat"  {{#if (eq shopDenom "ducat")}}selected{{/if}}>Ducat</option>
+            <option value="lintar" {{#if (eq shopDenom "lintar")}}selected{{/if}}>Lintar</option>
+            <option value="floren" {{#if (eq shopDenom "floren")}}selected{{/if}}>Floren</option>
+            <option value="oren"   {{#if (eq shopDenom "oren")}}selected{{/if}}>Oren</option>
+          </select>
+        </div>
+
+        <div class="field quirk-field">
+          <label>Quirk</label>
+          <input type="text" name="system.personality.quirk" value="{{personalityQuirk}}" placeholder="A nervous tic, odd habit..." />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {{!-- ── Tab nav ────────────────────────────────────────── --}}
+  <nav class="wdm-merchant-tabs">
+    <button type="button" class="wdm-tab{{#if (eq activeTab "general")}} is-active{{/if}}" data-action="changeTab" data-tab="general"><i class="fas fa-user"></i> General</button>
+    <button type="button" class="wdm-tab{{#if (eq activeTab "pricing")}} is-active{{/if}}" data-action="changeTab" data-tab="pricing"><i class="fas fa-coins"></i> Pricing</button>
+    <button type="button" class="wdm-tab{{#if (eq activeTab "inventory")}} is-active{{/if}}" data-action="changeTab" data-tab="inventory"><i class="fas fa-boxes-stacked"></i> Inventory</button>
+    <button type="button" class="wdm-tab{{#if (eq activeTab "relationships")}} is-active{{/if}}" data-action="changeTab" data-tab="relationships"><i class="fas fa-handshake"></i> Relationships</button>
+    <button type="button" class="wdm-tab{{#if (eq activeTab "stocking")}} is-active{{/if}}" data-action="changeTab" data-tab="stocking"><i class="fas fa-dice"></i> Stocking</button>
+  </nav>
+
+  <div class="wdm-merchant-panels">
+
+    {{!-- ── General ──────────────────────────────────────── --}}
+    <section class="wdm-panel" data-tab="general">
+      <div class="merchant-tab-content">
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="card-label">Inventory</div>
+            <div class="card-value">{{itemCount}} items</div>
+            <div class="card-sub">{{totalInventoryValue}} {{shopDenom}} total value</div>
+          </div>
+
+          <div class="summary-card">
+            <div class="card-label">Coin Reserve</div>
+            <div class="card-value coin-readonly">{{coinReserve}}</div>
+            <div class="card-sub">{{shopDenom}} (manage in Inventory tab)</div>
+          </div>
+
+          <div class="summary-card">
+            <div class="card-label">Personality</div>
+            <div class="card-value personality-badge">{{personalityLabel}}</div>
+            {{#if personalityQuirk}}
+              <div class="card-sub quirk">"{{personalityQuirk}}"</div>
+            {{/if}}
+          </div>
+
+          <div class="summary-card">
+            <div class="card-label">Markup</div>
+            <div class="card-value">{{markupSign}}{{markupPercent}}%</div>
+            <div class="card-sub">base price adjustment</div>
+          </div>
+        </div>
+
+        <div class="description-section">
+          <label>Description</label>
+          <textarea name="system.description" placeholder="Who is this merchant? What do they sell? Where do they operate?">{{source.description}}</textarea>
+        </div>
+
+        <p class="merchant-scene-hint">
+          <i class="fas fa-store"></i> Drag this merchant onto a scene to place a shop card — a second way for players to browse the wares.
+        </p>
+      </div>
+    </section>
+
+    {{!-- ── Pricing ──────────────────────────────────────── --}}
+    <section class="wdm-panel" data-tab="pricing">
+      <div class="merchant-tab-content">
+        <div class="pricing-block">
+          <h3>Price Markup</h3>
+          <p class="pricing-hint">How much this merchant charges above or below standard prices. 1% precision.</p>
+
+          <div class="slider-row">
+            <input type="range" name="system.pricing.baseMarkup"
+              value="{{baseMarkup}}" min="0.5" max="3" step="0.01"
+              class="markup-slider precision-slider" />
+            <div class="slider-readout {{markupClass}}">{{markupSign}}{{markupPercent}}%</div>
+          </div>
+          <div class="slider-labels markup-labels">
+            <span style="left:0%">-50%</span>
+            <span style="left:10%">-25%</span>
+            <span style="left:20%">0%</span>
+            <span style="left:40%">+50%</span>
+            <span style="left:60%">+100%</span>
+            <span style="left:100%">+200%</span>
+          </div>
+        </div>
+
+        <div class="pricing-block">
+          <h3>Bulk Discount</h3>
+          <p class="pricing-hint">Discount applied when a buyer purchases at or above the quantity threshold.</p>
+
+          <div class="bulk-controls">
+            <div class="bulk-field">
+              <label>Buy this many or more:</label>
+              <input type="number" name="system.pricing.bulkDiscountThreshold"
+                value="{{bulkDiscountThreshold}}" min="1" max="50" step="1" class="threshold-input" />
+            </div>
+
+            <div class="bulk-field">
+              <label>Discount:</label>
+              <div class="slider-row">
+                <input type="range" name="system.pricing.bulkDiscountPercent"
+                  value="{{bulkDiscountPercent}}" min="0" max="50" step="1"
+                  class="discount-slider precision-slider"
+                  data-sync-target="discount-numeric" />
+                <input type="number"
+                  value="{{bulkDiscountPercent}}" min="0" max="50" step="1"
+                  class="slider-numeric"
+                  data-sync-id="discount-numeric"
+                  data-sync-source="discount-slider" />
+                <div class="slider-readout markup-negative">{{bulkDiscountPercent}}% off</div>
+              </div>
+              <div class="slider-labels">
+                <span>0%</span><span>10%</span><span>20%</span><span>30%</span><span>40%</span><span>50%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bulk-example">
+            {{#if hasBulkDiscount}}
+              Buying {{bulkDiscountThreshold}}+ of the same item &rarr; {{bulkDiscountPercent}}% discount
+            {{else}}
+              No bulk discount currently set.
+            {{/if}}
+          </div>
+        </div>
+
+        <div class="pricing-block pricing-note">
+          <i class="fas fa-info-circle"></i>
+          Final price = base cost &times; markup &plusmn; personality modifier &plusmn; relationship bonus &minus; bulk discount.
+        </div>
+      </div>
+    </section>
+
+    {{!-- ── Inventory ────────────────────────────────────── --}}
+    <section class="wdm-panel" data-tab="inventory">
+      <div class="merchant-tab-content merchant-inventory">
+        <div class="inventory-topbar">
+          <div class="inv-stats">
+            <div class="inv-stat coin-stat">
+              <i class="fas fa-coins"></i>
+              <span class="coin-display">{{coinReserve}}</span>
+              <span class="currency-label">{{shopDenom}}</span>
+              <div class="coin-buttons">
+                <button type="button" class="inv-btn coin-btn" data-action="depositCoin" title="Deposit coin">
+                  <i class="fas fa-plus"></i>
+                </button>
+                <button type="button" class="inv-btn coin-btn" data-action="withdrawCoin" title="Withdraw coin">
+                  <i class="fas fa-minus"></i>
+                </button>
+              </div>
+            </div>
+            <div class="inv-stat">
+              <i class="fas fa-boxes-stacked"></i>
+              <span>{{itemCount}} items</span>
+            </div>
+            <div class="inv-stat">
+              <i class="fas fa-tag"></i>
+              <span>{{totalInventoryValue}} {{shopDenom}} value</span>
+            </div>
+            <div class="inv-stat">
+              <i class="fas fa-weight-hanging"></i>
+              <span>{{totalWeight}} kg</span>
+            </div>
+          </div>
+          <div class="inv-actions">
+            <button type="button" class="inv-btn" data-action="clearStock" title="Delete all items">
+              <i class="fas fa-broom"></i> Clear
+            </button>
+            <button type="button" class="inv-btn" data-action="runRestock" title="Restock from last full stock">
+              <i class="fas fa-rotate"></i> Restock
+            </button>
+          </div>
+        </div>
+
+        {{#if itemCount}}
+          <table class="inv-table">
+            <thead>
+              <tr>
+                <th class="col-expand"></th>
+                <th class="col-img"></th>
+                <th class="col-name sortable" data-action="sortInventory" data-sort-field="name">
+                  Item {{#if (eq sortField "name")}}<i class="fas fa-caret-{{#if (eq sortDir "asc")}}up{{else}}down{{/if}}"></i>{{/if}}
+                </th>
+                <th class="col-type sortable" data-action="sortInventory" data-sort-field="type">
+                  Type {{#if (eq sortField "type")}}<i class="fas fa-caret-{{#if (eq sortDir "asc")}}up{{else}}down{{/if}}"></i>{{/if}}
+                </th>
+                <th class="col-price sortable" data-action="sortInventory" data-sort-field="cost">
+                  Price {{#if (eq sortField "cost")}}<i class="fas fa-caret-{{#if (eq sortDir "asc")}}up{{else}}down{{/if}}"></i>{{/if}}
+                </th>
+                <th class="col-qty sortable" data-action="sortInventory" data-sort-field="quantity">
+                  Qty {{#if (eq sortField "quantity")}}<i class="fas fa-caret-{{#if (eq sortDir "asc")}}up{{else}}down{{/if}}"></i>{{/if}}
+                </th>
+                <th class="col-weight sortable" data-action="sortInventory" data-sort-field="weight">
+                  Wt. {{#if (eq sortField "weight")}}<i class="fas fa-caret-{{#if (eq sortDir "asc")}}up{{else}}down{{/if}}"></i>{{/if}}
+                </th>
+                <th class="col-actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#each allItems}}
+                <tr class="inv-row {{#if this.isExpanded}}expanded{{/if}}" data-item-id="{{this.id}}">
+                  <td class="col-expand">
+                    {{#if this.hasDescription}}
+                      <a data-action="toggleItemExpand" title="Expand">
+                        <i class="fas fa-caret-{{#if this.isExpanded}}down{{else}}right{{/if}}"></i>
+                      </a>
+                    {{/if}}
+                  </td>
+                  <td class="col-img"><div class="bs-item-slot" data-rarity="{{this.rarity}}"><img src="{{this.img}}" title="{{this.name}}" /></div></td>
+                  <td class="col-name">{{this.name}}</td>
+                  <td class="col-type"><span class="type-badge">{{this.type}}</span></td>
+                  <td class="col-price">
+                    <div class="price-cell">
+                      {{#if this.hasItemMarkup}}
+                        <span class="base-price-strike" title="Base cost: {{this.cost}}">{{this.cost}}</span>
+                        <span class="effective-price" title="With item markup: {{this.itemMarkupSign}}{{this.itemMarkupPercent}}%">{{this.effectivePrice}}</span>
+                        <span class="item-markup-pct {{this.itemMarkupClass}}">{{this.itemMarkupSign}}{{this.itemMarkupPercent}}%</span>
+                      {{else}}
+                        {{this.cost}}
+                      {{/if}}
+                    </div>
+                  </td>
+                  <td class="col-qty">
+                    <input type="number" class="qty-edit" data-item-id="{{this.id}}" data-item-qty value="{{this.quantity}}" min="0" step="1" />
+                  </td>
+                  <td class="col-weight">{{this.weight}}</td>
+                  <td class="col-actions">
+                    <a data-action="editItemMarkup" data-item-id="{{this.id}}" title="Set item markup/discount"><i class="fas fa-percent"></i></a>
+                    <a data-action="inventoryDelete" data-item-id="{{this.id}}" title="Remove"><i class="fas fa-trash"></i></a>
+                  </td>
+                </tr>
+                {{#if this.isExpanded}}
+                  <tr class="inv-row-detail">
+                    <td colspan="8">
+                      <div class="item-description">{{{this.description}}}</div>
+                    </td>
+                  </tr>
+                {{/if}}
+              {{/each}}
+            </tbody>
+          </table>
+        {{else}}
+          <div class="empty-inv">
+            <i class="fas fa-box-open"></i>
+            <p>No items in stock.</p>
+            <p class="hint">Drag items from a compendium, or configure the Stocking tab to auto-fill.</p>
+          </div>
+        {{/if}}
+      </div>
+    </section>
+
+    {{!-- ── Relationships ────────────────────────────────── --}}
+    <section class="wdm-panel" data-tab="relationships">
+      <div class="merchant-tab-content">
+        <div class="theorycraft-banner">
+          <i class="fas fa-handshake"></i>
+          <span>Relationships affect this merchant's pricing per player. Trusted customers pay less, hostile ones pay more.</span>
+        </div>
+
+        {{#if relationships.length}}
+          <div class="relations-list">
+            {{#each relationships}}
+              <div class="relation-card relation-{{this.relationshipColor}}">
+                <div class="relation-header">
+                  <img src="{{this.playerImg}}" class="relation-avatar" />
+                  <div class="relation-info">
+                    <div class="relation-name">{{this.playerName}}</div>
+                    <div class="relation-status">
+                      <span class="relation-label">{{this.relationshipLabel}}</span>
+                      <span class="relation-score">{{this.relationship}}</span>
+                      <span class="relation-modifier">{{this.priceModifierLabel}}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="relation-controls">
+                  <input type="range"
+                    value="{{this.relationship}}" min="-100" max="100" step="1"
+                    class="relation-slider" data-player-id="{{this.playerId}}" />
+
+                  <div class="relation-buttons">
+                    <button type="button" class="relation-btn" data-action="adjustRelationship" data-player-id="{{this.playerId}}" data-delta="-10" title="-10">-10</button>
+                    <button type="button" class="relation-btn" data-action="adjustRelationship" data-player-id="{{this.playerId}}" data-delta="-1" title="-1">-1</button>
+                    <button type="button" class="relation-btn reset" data-action="resetRelationship" data-player-id="{{this.playerId}}" title="Reset to 0">
+                      <i class="fas fa-undo"></i>
+                    </button>
+                    <button type="button" class="relation-btn" data-action="adjustRelationship" data-player-id="{{this.playerId}}" data-delta="1" title="+1">+1</button>
+                    <button type="button" class="relation-btn" data-action="adjustRelationship" data-player-id="{{this.playerId}}" data-delta="10" title="+10">+10</button>
+                  </div>
+                </div>
+
+                <textarea class="relation-notes"
+                  placeholder="Notes about this player..."
+                  data-player-id="{{this.playerId}}">{{this.notes}}</textarea>
+              </div>
+            {{/each}}
+          </div>
+        {{else}}
+          <div class="empty-inv">
+            <i class="fas fa-users"></i>
+            <p>No player characters found in this world.</p>
+            <p class="hint">Assign characters to users to start tracking relationships.</p>
+          </div>
+        {{/if}}
+      </div>
+    </section>
+
+    {{!-- ── Stocking ─────────────────────────────────────── --}}
+    <section class="wdm-panel" data-tab="stocking">
+      <div class="merchant-tab-content stocking-content">
+
+        <div class="stocking-topbar">
+          <div class="stocking-summary">
+            <i class="fas fa-warehouse"></i>
+            <span>Last stocked: <strong>{{stockingData.lastStockedAtFormatted}}</strong></span>
+            {{#if stockingData.hasLastStock}}
+              <span class="separator">·</span>
+              <span>{{stockingData.lastStockCount}} items</span>
+            {{/if}}
+          </div>
+          <div class="stocking-actions">
+            <button type="button" class="inv-btn primary" data-action="runStocking" title="Generate fresh stock from config">
+              <i class="fas fa-magic"></i> Stock Now
+            </button>
+            <button type="button" class="inv-btn" data-action="runRestock" title="Restock 1/4 from last stocking"
+              {{#unless stockingData.hasLastStock}}disabled{{/unless}}>
+              <i class="fas fa-rotate"></i> Restock
+            </button>
+          </div>
+        </div>
+
+        {{!-- Sources --}}
+        <div class="stocking-section">
+          <div class="section-head">
+            <h3><i class="fas fa-book"></i> Sources</h3>
+          </div>
+
+          <div class="source-mode-toggle">
+            <label class="radio-label">
+              <input type="radio" name="system.stocking.useItemPool" value="false" {{#unless stockingData.useItemPool}}checked{{/unless}} />
+              <i class="fas fa-book"></i> Compendium
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="system.stocking.useItemPool" value="true" {{#if stockingData.useItemPool}}checked{{/if}} />
+              <i class="fas fa-hand-holding"></i> Item Pool
+            </label>
+            <p class="hint-text" style="margin-top:0.4rem;">
+              {{#if stockingData.useItemPool}}
+                Stock will be rolled from items dropped onto this merchant's inventory. Useful for taverns, restaurants, or curated shops.
+              {{else}}
+                Stock will be rolled from configured compendium sources below.
+              {{/if}}
+            </p>
+          </div>
+
+          {{#unless stockingData.useItemPool}}
+          <div class="compendium-sources-block">
+            <div class="section-head" style="margin-top:0.5rem;">
+              <span></span>
+              <button type="button" class="inv-btn small" data-action="addSource">
+                <i class="fas fa-plus"></i> Add Compendium
+              </button>
+            </div>
+
+            {{#if stockingData.sources.length}}
+              <div class="sources-list" data-source-pool>
+                {{#each stockingData.sources}}
+                  <div class="source-row" data-source-index="{{@index}}">
+                    <div class="source-info">
+                      <div class="source-name">
+                        <i class="fas fa-book"></i> {{this.packLabel}}
+                      </div>
+                      <div class="source-controls">
+                        <button type="button" class="icon-btn" data-action="editSource" data-index="{{@index}}" title="Edit folders &amp; keywords">
+                          <i class="fas fa-pen"></i>
+                        </button>
+                        <button type="button" class="icon-btn delete" data-action="removeSource" data-index="{{@index}}" title="Remove">
+                          <i class="fas fa-times"></i>
+                        </button>
+                      </div>
+                    </div>
+                    {{#if this.folderPaths.length}}
+                      <div class="source-folders">
+                        {{#each this.folderPaths}}
+                          <span class="folder-chip"><i class="fas fa-folder"></i> {{this}}</span>
+                        {{/each}}
+                      </div>
+                    {{/if}}
+                    {{#if (or this.includeKeywords this.excludeKeywords)}}
+                      <div class="source-filters">
+                        {{#if this.includeKeywords}}
+                          <span class="filter-badge include" title="Must match at least one"><i class="fas fa-plus"></i> {{this.includeKeywords}}</span>
+                        {{/if}}
+                        {{#if this.excludeKeywords}}
+                          <span class="filter-badge exclude" title="Must not match any"><i class="fas fa-minus"></i> {{this.excludeKeywords}}</span>
+                        {{/if}}
+                      </div>
+                    {{/if}}
+                    <div class="source-slider-row">
+                      <input type="range" class="source-slider precision-slider"
+                        data-source-index="{{@index}}"
+                        value="{{this.weight}}" min="0" max="100" step="1" />
+                      <div class="source-readout">{{this.weight}}%</div>
+                    </div>
+                  </div>
+                {{/each}}
+              </div>
+              <div class="pool-status">Total: <strong class="pool-total">100%</strong> · Pool auto-balances when you adjust a slider</div>
+            {{else}}
+              <div class="empty-sub">No compendium sources yet. Add one to start configuring stock generation.</div>
+            {{/if}}
+          </div>
+          {{/unless}}
+
+          {{#if stockingData.useItemPool}}
+          <div class="item-pool-info">
+            <div class="item-pool-status">
+              <i class="fas fa-cubes"></i>
+              <span>Pool: <strong>{{stockingData.itemPoolCount}}</strong> items saved</span>
+            </div>
+            <p class="hint-text">
+              Drop items onto this merchant's <strong>Inventory</strong> tab to build a menu, then click <strong>Save as Pool</strong> to snapshot them.
+              <strong>Stock Now</strong> will randomly select from the saved pool. Great for taverns, restaurants, and curated shops.
+            </p>
+            <div class="item-pool-actions">
+              <button type="button" class="inv-btn small" data-action="saveItemPool" title="Save current inventory as the item pool">
+                <i class="fas fa-save"></i> Save as Pool
+              </button>
+              {{#if stockingData.itemPoolCount}}
+                <button type="button" class="inv-btn small" data-action="clearItemPool" title="Clear the saved item pool">
+                  <i class="fas fa-trash"></i> Clear Pool
+                </button>
+              {{/if}}
+            </div>
+          </div>
+          {{/if}}
+        </div>
+
+        {{!-- Quantity --}}
+        <div class="stocking-section">
+          <h3><i class="fas fa-boxes-stacked"></i> Quantity</h3>
+
+          <div class="qty-mode-toggle">
+            <label class="radio-label">
+              <input type="radio" name="system.stocking.totalMode" value="fixed" {{#if (eq stockingData.totalMode "fixed")}}checked{{/if}} />
+              Fixed amount
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="system.stocking.totalMode" value="random" {{#if (eq stockingData.totalMode "random")}}checked{{/if}} />
+              Random range
+            </label>
+          </div>
+
+          {{#if (eq stockingData.totalMode "fixed")}}
+            <div class="qty-input-row">
+              <label>Total items per stocking:</label>
+              <input type="number" name="system.stocking.totalFixed" value="{{stockingData.totalFixed}}" min="1" max="500" step="1" />
+            </div>
+          {{else}}
+            <div class="qty-input-row">
+              <label>Min:</label>
+              <input type="number" name="system.stocking.totalRandomMin" value="{{stockingData.totalRandomMin}}" min="1" max="500" step="1" />
+              <label>Max:</label>
+              <input type="number" name="system.stocking.totalRandomMax" value="{{stockingData.totalRandomMax}}" min="1" max="500" step="1" />
+            </div>
+          {{/if}}
+
+          <hr class="subdivider" />
+
+          <h4>Stack Tolerance</h4>
+          <p class="hint-text">Controls how often the stocker rolls multiple copies of the same item, and how many.</p>
+
+          <label class="inline-checkbox">
+            <input type="checkbox" name="system.stocking.allowStacks" {{#if stockingData.allowStacks}}checked{{/if}} />
+            Allow stacks
+          </label>
+
+          {{#if stockingData.allowStacks}}
+            <div class="stack-explanation">
+              <p><strong>Total = # of inventory rows.</strong> Stacks just add copies to a row, not extra rows.</p>
+              <p>For each row: roll <strong>Stack chance</strong> → if hit, give 2-{{stockingData.maxStack}} copies. Otherwise ×1.</p>
+            </div>
+
+            <div class="stack-controls">
+              <div class="stack-field">
+                <label>Max stack size:</label>
+                <input type="number" name="system.stocking.maxStack" value="{{stockingData.maxStack}}" min="2" max="10" step="1" />
+              </div>
+              <div class="stack-field">
+                <label>Stack chance:</label>
+                <div class="slider-row">
+                  <input type="range" name="system.stocking.stackChance" value="{{stockingData.stackChance}}" min="0" max="100" step="1" class="precision-slider stack-chance-slider" />
+                  <div class="slider-readout stack-chance-readout">{{stockingData.stackChance}}%</div>
+                </div>
+              </div>
+            </div>
+          {{/if}}
+        </div>
+
+        {{!-- Availability --}}
+        <div class="stocking-section">
+          <h3><i class="fas fa-gem"></i> Availability</h3>
+          <p class="hint-text">Filter which item rarities can appear in this merchant's stock.</p>
+
+          <div class="rarity-toggles">
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.everywhere" {{#if stockingData.rarityEnabled.everywhere}}checked{{/if}} />
+              <span class="rarity-badge everywhere">Everywhere</span>
+            </label>
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.common" {{#if stockingData.rarityEnabled.common}}checked{{/if}} />
+              <span class="rarity-badge common">Common</span>
+            </label>
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.poor" {{#if stockingData.rarityEnabled.poor}}checked{{/if}} />
+              <span class="rarity-badge poor">Poor</span>
+            </label>
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.rare" {{#if stockingData.rarityEnabled.rare}}checked{{/if}} />
+              <span class="rarity-badge rare">Rare</span>
+            </label>
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.witcher" {{#if stockingData.rarityEnabled.witcher}}checked{{/if}} />
+              <span class="rarity-badge witcher">Witcher</span>
+            </label>
+          </div>
+
+          <hr class="subdivider" />
+
+          <label class="inline-checkbox">
+            <input type="checkbox" name="system.stocking.useRarityWeights" {{#if stockingData.useRarityWeights}}checked{{/if}} />
+            <strong>Use weighted rarity</strong> &mdash; adjust how likely each rarity is to appear
+          </label>
+
+          {{#if stockingData.useRarityWeights}}
+            <div class="rarity-weights">
+              {{#if stockingData.rarityEnabled.everywhere}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge everywhere">Everywhere</span>
+                  <input type="range" name="system.stocking.rarityWeights.everywhere" value="{{stockingData.rarityWeights.everywhere}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.everywhere}}%</div>
+                </div>
+              {{/if}}
+              {{#if stockingData.rarityEnabled.common}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge common">Common</span>
+                  <input type="range" name="system.stocking.rarityWeights.common" value="{{stockingData.rarityWeights.common}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.common}}%</div>
+                </div>
+              {{/if}}
+              {{#if stockingData.rarityEnabled.poor}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge poor">Poor</span>
+                  <input type="range" name="system.stocking.rarityWeights.poor" value="{{stockingData.rarityWeights.poor}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.poor}}%</div>
+                </div>
+              {{/if}}
+              {{#if stockingData.rarityEnabled.rare}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge rare">Rare</span>
+                  <input type="range" name="system.stocking.rarityWeights.rare" value="{{stockingData.rarityWeights.rare}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.rare}}%</div>
+                </div>
+              {{/if}}
+              {{#if stockingData.rarityEnabled.witcher}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge witcher">Witcher</span>
+                  <input type="range" name="system.stocking.rarityWeights.witcher" value="{{stockingData.rarityWeights.witcher}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.witcher}}%</div>
+                </div>
+              {{/if}}
+            </div>
+          {{/if}}
+        </div>
+
+        {{!-- Presets --}}
+        <div class="stocking-section">
+          <div class="section-head">
+            <h3><i class="fas fa-bookmark"></i> Presets</h3>
+            <button type="button" class="inv-btn small" data-action="savePreset">
+              <i class="fas fa-save"></i> Save Current
+            </button>
+          </div>
+
+          {{#if stockingData.presets.length}}
+            <div class="presets-list">
+              {{#each stockingData.presets}}
+                <div class="preset-row" data-preset-id="{{this.id}}">
+                  <div class="preset-info">
+                    <i class="fas fa-bookmark"></i>
+                    <span class="preset-name">{{this.name}}</span>
+                    {{#if this.createdBy}}<span class="preset-author">by {{this.createdBy}}</span>{{/if}}
+                  </div>
+                  <div class="preset-actions">
+                    <button type="button" class="icon-btn" data-action="loadPreset" data-preset-id="{{this.id}}" title="Load this preset">
+                      <i class="fas fa-upload"></i> Load
+                    </button>
+                    <button type="button" class="icon-btn delete" data-action="deletePreset" data-preset-id="{{this.id}}" title="Delete">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              {{/each}}
+            </div>
+          {{else}}
+            <div class="empty-sub">No saved presets yet. Configure your stocking and save it to reuse the configuration on this merchant.</div>
+          {{/if}}
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+</div>

@@ -1,0 +1,292 @@
+{{!-- Armor item sheet — two layers:
+        DISPLAY  → Witcher 3 tooltip aesthetic (player view)
+        CONFIG   → compact spec-sheet form (GM cog toggle)
+      Defaults to display; cog flips to config for owners. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-armor" data-mode="{{mode}}">
+
+  {{!-- ── Mode toggle (top-right) ─────────────────────────────── --}}
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure item{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view" data-rarity="{{source.availability}}">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">
+            {{#if source.armorType}}{{localize (lookup WITCHER.armor.types source.armorType)}}{{/if}}
+          </div>
+        </div>
+      </header>
+
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value">{{primarySP}}{{#if primarySPMax}}/{{primarySPMax}}{{/if}}</div>
+        <div class="wdm-w3-hero-label">{{primaryStatLabel}}</div>
+        {{#if coverageLabel}}
+          <div class="wdm-w3-hero-sub">{{coverageLabel}}</div>
+        {{/if}}
+      </div>
+
+      <ul class="wdm-w3-stats">
+        {{!-- Per-location SP rows removed: the hero now shows the
+             stopping-power number and the coverage subline above
+             names the locations covered. --}}
+        {{#if source.bludgeoning}}
+          <li class="wdm-w3-stat is-positive">
+            <span class="val"><i class="fa-solid fa-check"></i></span>
+            <span class="lbl">Resists Bludgeoning</span>
+          </li>
+        {{/if}}
+        {{#if source.slashing}}
+          <li class="wdm-w3-stat is-positive">
+            <span class="val"><i class="fa-solid fa-check"></i></span>
+            <span class="lbl">Resists Slashing</span>
+          </li>
+        {{/if}}
+        {{#if source.piercing}}
+          <li class="wdm-w3-stat is-positive">
+            <span class="val"><i class="fa-solid fa-check"></i></span>
+            <span class="lbl">Resists Piercing</span>
+          </li>
+        {{/if}}
+        {{#unless (eq source.encumbranceValue 0)}}
+          <li class="wdm-w3-stat is-negative">
+            <span class="val">−{{source.encumbranceValue}}</span>
+            <span class="lbl">Encumbrance Penalty</span>
+          </li>
+        {{/unless}}
+        {{#if bonusSP}}
+          <li class="wdm-w3-stat is-positive">
+            <span class="val">+{{bonusSP}}</span>
+            <span class="lbl">Stopping (enhanced) <i class="fa-solid fa-gem"></i></span>
+          </li>
+        {{/if}}
+        {{#each addedResistances}}
+          <li class="wdm-w3-stat is-positive">
+            <span class="val"><i class="fa-solid fa-gem"></i></span>
+            <span class="lbl">Resists {{this}} (enhanced)</span>
+          </li>
+        {{/each}}
+        {{#if enhancementSlots.length}}
+          <li class="wdm-w3-stat wdm-w3-stat-slots">
+            <span class="val">{{enhancementSlots.length}}</span>
+            <span class="lbl">Enhancement Slots</span>
+            {{!-- Drag a Glyph / armor-mod enhancement onto an empty box to
+                 socket it; the × detaches (owners only). --}}
+            <span class="wdm-w3-slots" data-enh-slots>
+              {{#each enhancementSlots}}
+                {{#if this.filled}}
+                  <span class="wdm-w3-slot is-filled" data-enh-index="{{this.index}}"
+                        data-tooltip="{{this.name}}" data-tooltip-direction="UP">
+                    <img src="{{this.img}}" alt="" />
+                    {{#if ../canEdit}}
+                      <button type="button" class="wdm-slot-detach" data-action="detachEnhancement" title="Remove enhancement">
+                        <i class="fa-solid fa-xmark"></i>
+                      </button>
+                    {{/if}}
+                  </span>
+                {{else}}
+                  <span class="wdm-w3-slot" data-slot-index="{{this.index}}"
+                        data-tooltip="Empty slot — drag a Glyph or armor-mod enhancement to fill"
+                        data-tooltip-direction="UP"></span>
+                {{/if}}
+              {{/each}}
+            </span>
+          </li>
+        {{/if}}
+      </ul>
+
+      {{#if armorQualityList.length}}
+        <div class="wdm-w3-tags">
+          {{#each armorQualityList}}
+            <span class="wdm-w3-tag" data-tooltip="{{this.description}}" data-tooltip-direction="UP">{{this.label}}</span>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if socketedQualityList.length}}
+        <div class="wdm-w3-section-label">From Enhancements</div>
+        <div class="wdm-w3-tags">
+          {{#each socketedQualityList}}
+            <span class="wdm-w3-tag is-enhanced" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+              <i class="fa-solid fa-gem"></i> {{this.label}}
+            </span>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{!-- Effects block removed: damage resistance is now a binary
+           toggle per type (rendered in the stat list above) and the
+           free-form on-equip text field was dropped from the config. --}}
+
+      {{#if source.description}}
+        <div class="wdm-w3-description">{{{source.description}}}</div>
+      {{/if}}
+
+      {{!-- Footer mirrors the weapon display: weight + qty on the left,
+           availability + price anchored right. Armor has no concealment
+           field, so that cell is omitted. --}}
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        {{#unless (eq source.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+        {{/unless}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — compact spec form
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Armor name" />
+      </div>
+
+      <div class="wdm-cfg-section">Combat</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Type</span>
+          <select name="system.armorType">
+            {{#each WITCHER.armor.types}}
+              <option value="{{@key}}" {{#if (eq @key ../source.armorType)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Primary Location</span>
+          <select name="system.location">
+            {{#each WITCHER.armor.locations}}
+              <option value="{{@key}}" {{#if (eq @key ../source.location)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>EV (Encumbrance)</span>
+          <input type="number" min="0" name="system.encumbranceValue" value="{{source.encumbranceValue}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Enhancement Slots</span>
+          <input type="number" min="0" name="system.armorEnhancement" value="{{source.armorEnhancement}}" />
+        </label>
+        {{#if isShield}}
+          <label class="wdm-cfg-row wdm-cfg-row-pair"><span>Reliability</span>
+            <span class="wdm-cfg-pair">
+              <input type="number" min="0" name="system.reliability.value"
+                     value="{{source.reliability.value}}"
+                     title="Blocks remaining" />
+              <span class="wdm-cfg-slash">/</span>
+              <input type="number" min="0" name="system.reliability.max"
+                     value="{{source.reliability.max}}"
+                     title="Total blocks before breaking" />
+            </span>
+          </label>
+        {{/if}}
+      </div>
+
+      <div class="wdm-cfg-section">Stopping Power <span class="wdm-cfg-sub">(per location — current/max)</span></div>
+      <div class="wdm-cfg-grid">
+        {{#each spInputs}}
+          <label class="wdm-cfg-row wdm-cfg-row-pair"><span>{{this.label}}</span>
+            <span class="wdm-cfg-pair">
+              <input type="number" min="0" name="system.{{this.key}}Stopping"
+                     value="{{this.value}}" title="Current SP at {{this.label}}" />
+              <span class="wdm-cfg-slash">/</span>
+              <input type="number" min="0" name="system.{{this.key}}MaxStopping"
+                     value="{{this.max}}" title="Max SP at {{this.label}}" />
+            </span>
+          </label>
+        {{/each}}
+      </div>
+
+      <div class="wdm-cfg-section">Damage Resistance</div>
+      <div class="wdm-cfg-checkgrid">
+        <label class="wdm-cfg-check">
+          <input type="checkbox" name="system.bludgeoning" {{#if source.bludgeoning}}checked{{/if}} />
+          <span>Bludgeoning</span>
+        </label>
+        <label class="wdm-cfg-check">
+          <input type="checkbox" name="system.slashing" {{#if source.slashing}}checked{{/if}} />
+          <span>Slashing</span>
+        </label>
+        <label class="wdm-cfg-check">
+          <input type="checkbox" name="system.piercing" {{#if source.piercing}}checked{{/if}} />
+          <span>Piercing</span>
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">Qualities <span class="wdm-cfg-sub">(edit catalog in system settings)</span></div>
+      <div class="wdm-cfg-checkgrid">
+        {{#each armorQualitiesCatalog}}
+          {{#if this.param}}
+            <div class="wdm-cfg-check is-parameterized" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+              <label class="wdm-cfg-check-label">
+                <input type="checkbox" name="system.qualities" value="{{@key}}"
+                       data-dtype="String"
+                       {{#if (includes ../source.qualities @key)}}checked{{/if}} />
+                <span>{{this.label}}</span>
+              </label>
+              <input type="{{this.param.type}}" class="wdm-cfg-param"
+                     name="system.qualityValues.{{@key}}"
+                     value="{{lookup ../source.qualityValues @key}}"
+                     placeholder="{{this.param.placeholder}}"
+                     title="Parameter for {{this.label}}" />
+              {{#if this.param.suffix}}<span class="wdm-cfg-param-suffix">{{this.param.suffix}}</span>{{/if}}
+            </div>
+          {{else}}
+            <label class="wdm-cfg-check" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+              <input type="checkbox" name="system.qualities" value="{{@key}}"
+                     data-dtype="String"
+                     {{#if (includes ../source.qualities @key)}}checked{{/if}} />
+              <span>{{this.label}}</span>
+            </label>
+          {{/if}}
+        {{/each}}
+      </div>
+
+      <div class="wdm-cfg-section">Procurement</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>Availability</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Weight (kg)</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Cost</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>Quantity</span>
+          <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+        <label class="wdm-cfg-row is-checkbox">
+          <span>Equipped</span>
+          <input type="checkbox" name="system.equipped" {{#if source.equipped}}checked{{/if}} />
+        </label>
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Description</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="Armor lore, appearance, provenance…">{{source.description}}</textarea>
+
+    </div>
+  </div>
+
+</div>

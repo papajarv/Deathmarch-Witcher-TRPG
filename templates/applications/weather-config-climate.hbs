@@ -1,0 +1,106 @@
+{{!-- Climate & Seasons tab. Each biome / season is a card split into a
+      "Temperature" group and a "Weather tendencies" group. Confusing -0.3..0.3
+      bias axes are shown as word sliders (Dry → Wet, etc.) via the field
+      partial; only real units (°C) stay numeric. --}}
+<section class="tab wdm-cfg-tab {{tab.cssClass}}" data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+    <div class="wdm-cfg-help">
+        <i class="fa-solid fa-circle-info"></i>
+        <p>{{localize "WITCHER.Weather.Config.ClimateIntro"}}</p>
+    </div>
+
+    <div class="wdm-cfg-section-head">
+        <h3><i class="fa-solid fa-location-crosshairs"></i> {{localize "WITCHER.Weather.Config.Region"}}</h3>
+    </div>
+
+    <div class="wdm-cfg-card">
+        <p class="wdm-cfg-note">{{localize "WITCHER.Weather.Config.RegionIntro"}}</p>
+        <div class="wdm-cfg-fields">
+            <label class="wdm-cfg-field wdm-cfg-field-wide">
+                <span class="wdm-cfg-flabel">{{localize "WITCHER.Weather.Config.RegionPreset"}}</span>
+                <select class="wdm-cfg-region-preset">
+                    {{#each regionPresets}}
+                    <option value="{{this.baseline}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+                    {{/each}}
+                    <option value="custom" {{#if regionCustom}}selected{{/if}}>{{localize "WITCHER.Weather.Config.RegionCustom"}}</option>
+                </select>
+            </label>
+            <label class="wdm-cfg-field">
+                <span class="wdm-cfg-flabel">{{localize "WITCHER.Weather.Config.RegionBaseline"}}</span>
+                <span class="wdm-cfg-num">
+                    <input type="number" class="wdm-cfg-region-baseline" name="regionBaseline" value="{{regionBaseline}}" step="1">
+                    <span class="wdm-cfg-unit">°C</span>
+                </span>
+            </label>
+        </div>
+    </div>
+
+    <div class="wdm-cfg-section-head">
+        <h3><i class="fa-solid fa-earth-europe"></i> {{localize "WITCHER.Weather.Config.Biomes"}}</h3>
+        <button type="button" class="wdm-cfg-add" data-action="addBiome">
+            <i class="fa-solid fa-plus"></i> {{localize "WITCHER.Weather.Config.AddBiome"}}
+        </button>
+    </div>
+
+    {{#each biomes}}
+    <div class="wdm-cfg-card">
+        <div class="wdm-cfg-card-head">
+            <span class="wdm-cfg-card-title">{{this.label}}</span>
+            {{#unless this.isSeed}}
+            <button type="button" class="wdm-cfg-del" data-action="removeBiome" data-key="{{this.key}}"
+                    data-tooltip="{{localize 'WITCHER.Weather.Config.Remove'}}">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+            {{/unless}}
+        </div>
+        <div class="wdm-cfg-group">
+            <span class="wdm-cfg-group-label">{{localize "WITCHER.Weather.Config.GroupTemp"}}</span>
+            <div class="wdm-cfg-fields">
+                {{#each this.tempFields}}{{> "systems/witcher-ttrpg-death-march/templates/applications/weather-config-field.hbs"}}{{/each}}
+            </div>
+        </div>
+        <div class="wdm-cfg-group">
+            <span class="wdm-cfg-group-label">{{localize "WITCHER.Weather.Config.GroupCond"}}</span>
+            <div class="wdm-cfg-fields">
+                {{#each this.condFields}}{{> "systems/witcher-ttrpg-death-march/templates/applications/weather-config-field.hbs"}}{{/each}}
+            </div>
+        </div>
+    </div>
+    {{/each}}
+
+    <div class="wdm-cfg-section-head">
+        <h3><i class="fa-solid fa-leaf"></i> {{localize "WITCHER.Weather.Config.Seasons"}}</h3>
+    </div>
+
+    {{#each seasons}}
+    <div class="wdm-cfg-card">
+        <div class="wdm-cfg-card-head">
+            <span class="wdm-cfg-card-title">{{this.label}}</span>
+            <label class="wdm-cfg-check" data-tooltip="{{localize 'WITCHER.Weather.Config.AuroraHint'}}">
+                <input type="checkbox" name="season.{{this.key}}.aurora" {{#if this.aurora}}checked{{/if}}>
+                {{localize "WITCHER.Weather.Config.Aurora"}}
+            </label>
+        </div>
+        <div class="wdm-cfg-group">
+            <span class="wdm-cfg-group-label">{{localize "WITCHER.Weather.Config.GroupTemp"}}</span>
+            <div class="wdm-cfg-fields">
+                {{#each this.tempFields}}{{> "systems/witcher-ttrpg-death-march/templates/applications/weather-config-field.hbs"}}{{/each}}
+            </div>
+        </div>
+        <div class="wdm-cfg-group">
+            <span class="wdm-cfg-group-label">{{localize "WITCHER.Weather.Config.GroupCond"}}</span>
+            <div class="wdm-cfg-fields">
+                {{#each this.condFields}}{{> "systems/witcher-ttrpg-death-march/templates/applications/weather-config-field.hbs"}}{{/each}}
+            </div>
+        </div>
+    </div>
+    {{/each}}
+
+    <div class="wdm-cfg-tab-foot">
+        {{#unless usingDefaults}}<span class="wdm-cfg-custom-flag"><i class="fa-solid fa-pen"></i> {{localize "WITCHER.Weather.Config.Customized"}}</span>{{/unless}}
+        <button type="button" class="wdm-cfg-reset" data-action="resetTab" data-tab="climate">
+            <i class="fa-solid fa-rotate-left"></i> {{localize "WITCHER.Weather.Config.ResetTab"}}
+        </button>
+    </div>
+
+</section>

@@ -1,0 +1,210 @@
+/* Dice poker overlay extras.
+ *
+ * The DicePokerApp reuses the Farkle board chrome wholesale (it carries the
+ * `wdm-farkle wdm-farkle-app` classes, so styles/farkle.css does the heavy
+ * lifting: the transparent full-scene overlay, the centered 3D tray, the
+ * floating score cards, the right rail, the rules dialog). This file only adds
+ * the few poker-specific readouts that Farkle has no analogue for: the central
+ * pot banner and the per-seat locked-hand label. */
+
+/* The pot lives only on the right rail (controls.hbs) — no top banner, so it
+ * can't sit over the North seat's name. */
+
+/* True-seat name cards: each seat sits at its real place around the board —
+ * you on the near edge (S), opponents at N/W/E — so a given player keeps the
+ * same seat for everyone. The cards hug the four edges of the letterboxed board
+ * and stay clear of the central dice well (legible even in a 4-seat game). */
+.wdm-dp-seat {
+    position: absolute;
+    z-index: 3;
+    pointer-events: none;
+}
+.wdm-dp-seat .wdm-fk-score { position: static; }
+.wdm-dp-seat-n {
+    top: calc(var(--fk-pad-y, 0px) + 2.6rem);
+    left: 50%;
+    transform: translateX(-50%);
+}
+.wdm-dp-seat-n .wdm-fk-score { align-items: center; text-align: center; }
+.wdm-dp-seat-s {
+    bottom: calc(var(--fk-pad-y, 0px) + 1rem + 45px);
+    left: 50%;
+    transform: translateX(-50%);
+}
+.wdm-dp-seat-s .wdm-fk-score { align-items: center; text-align: center; }
+.wdm-dp-seat-w {
+    left: calc(var(--fk-pad-x, 0px) + 1rem);
+    top: 50%;
+    transform: translateY(-50%);
+}
+.wdm-dp-seat-w .wdm-fk-score { align-items: flex-start; text-align: left; }
+.wdm-dp-seat-e {
+    right: calc(var(--fk-pad-x, 0px) + 1rem);
+    top: 50%;
+    transform: translateY(-50%);
+}
+.wdm-dp-seat-e .wdm-fk-score { align-items: flex-end; text-align: right; }
+
+/* The right rail (pot + actions) is vertically centred on the right edge, exactly
+ * where the East seat sits. Nudge it ~20px PAST the board's right edge into the
+ * letterbox margin so it clears the East seat's dice without flying off to the
+ * window edge; lift the East seat into the upper-right corner too. */
+.wdm-dicepoker-app .wdm-fk-rail { right: calc(var(--fk-pad-x, 0px) - 1.25rem); }
+/* The East seat shares the right edge with the rail, so its name collided with
+ * the pot/buttons. Drop it to the lower-right corner — below the rail — and keep
+ * its text right-aligned so it reads as sitting "under the buttons". */
+.wdm-dicepoker-app .wdm-dp-seat-e {
+    top: auto;
+    left: auto;
+    bottom: calc(var(--fk-pad-y, 0px) + 3.4rem);
+    right: calc(var(--fk-pad-x, 0px) - 0.75rem);
+    transform: none;
+}
+
+/* Keep the rail narrow so it stays in the side margin: smaller, tighter info
+ * text and a modest wrap width (the hints/wait/result are full sentences, not
+ * the one-word Farkle prompts these styles were sized for). */
+.wdm-dicepoker-app .wdm-fk-hint { max-width: 9rem; font-size: 0.74rem; }
+.wdm-dicepoker-app .wdm-fk-wait { max-width: 9rem; font-size: 0.74rem; }
+.wdm-dicepoker-app .wdm-dp-keepcount { font-size: 0.7rem; }
+.wdm-dicepoker-app .wdm-fk-goal-num { font-size: 1.1rem; }
+.wdm-dicepoker-app .wdm-fk-result { font-size: 0.95rem; max-width: 11rem; }
+.wdm-dicepoker-app .wdm-fk-result-pot { font-size: 0.72rem; }
+
+/* Hand-result banners ("Opponent folded — hand yours") are full sentences, but
+ * they reuse Farkle's one-word victory banner sizing (3.6rem) and overflow into
+ * an ugly multi-line block. Shrink them and cap the width so they wrap tidily,
+ * centred over the felt. */
+.wdm-dicepoker-app .wdm-fk-board-banner,
+.wdm-dicepoker-app .wdm-fk-board-banner[data-variant="win"],
+.wdm-dicepoker-app .wdm-fk-board-banner[data-variant="lose"] {
+    font-size: 2.6rem;
+    max-width: 26rem;
+    line-height: 1.15;
+    text-align: center;
+}
+/* Between-hand notices ("Hand lost — 0–1", "Opponent folded — hand yours …")
+ * are whole sentences, not the one-word match-end "Victory" — at 2.6rem they
+ * wrap into a wall. Shrink + widen so they read as a tidy line or two, clearly
+ * subordinate to the big match-end banner. */
+.wdm-dicepoker-app .wdm-fk-board-banner.wdm-fk-banner-sm {
+    font-size: 1.5rem;
+    max-width: 22rem;
+}
+
+/* Transient action label: a seat's check/call/raise/fold, rendered INSIDE its
+ * own card so it always sits directly under that player's hand indicator (no
+ * absolute positioning to guess at). ~10px gap under the hand; fades in. */
+.wdm-dp-action {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 0.18rem 0.6rem;
+    border-radius: 0.6rem;
+    background: rgba(20, 16, 12, 0.82);
+    border: 1px solid var(--wdm-gilt-dk, #6b5326);
+    color: var(--wdm-ink, #e8dcc4);
+    font-family: var(--wdm-font-display, "Trajan Pro", serif);
+    font-size: 0.74rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px #000;
+    animation: wdm-dp-action-in 180ms ease both;
+}
+@keyframes wdm-dp-action-in {
+    from { opacity: 0; transform: translateY(-0.3rem); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* Locked hand name shown under each seat once they stand / finish a turn. */
+.wdm-dp-hand {
+    font-family: var(--wdm-font-display, "Trajan Pro", serif);
+    font-size: 1rem;
+    letter-spacing: 0.04em;
+    color: var(--wdm-ink, #e8dcc4);
+}
+.wdm-fk-score-active .wdm-dp-hand {
+    color: var(--wdm-gilt-hi, #e3c270);
+}
+
+/* GM-only "kick" button beside a house gambler's name: forces that AI seat to
+ * forfeit. The seat card is pointer-events:none, so the button re-enables them. */
+.wdm-dp-kick {
+    pointer-events: auto;
+    margin-right: 0.3rem;
+    padding: 0 0.28rem;
+    border: 1px solid var(--wdm-danger-dk, #7d3320);
+    border-radius: 0.4rem;
+    background: rgba(20, 16, 12, 0.6);
+    color: var(--wdm-danger, #d98b73);
+    font-size: 0.72rem;
+    line-height: 1.4;
+    cursor: pointer;
+    transition: color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.wdm-dp-kick:hover {
+    border-color: var(--wdm-danger, #d98b73);
+    box-shadow: 0 0 8px rgba(217, 139, 115, 0.3);
+}
+
+/* "Folded" badge: a seat that bowed out of the CURRENT hand (still in the
+ * match). Muted, lower-key than the red match-quit "Forfeited" badge; the whole
+ * card dims so a glance reads "sitting this one out". */
+.wdm-dp-foldedout {
+    display: inline-block;
+    margin-bottom: 0.15rem;
+    padding: 0 0.4rem;
+    border-radius: 0.5rem;
+    background: rgba(20, 16, 12, 0.7);
+    border: 1px solid var(--wdm-ink-dim, #b8a888);
+    color: var(--wdm-ink-dim, #b8a888);
+    font-family: var(--wdm-font-display, "Trajan Pro", serif);
+    font-size: 0.66rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 1px #000;
+}
+.wdm-fk-score-foldedout { opacity: 0.55; }
+
+/* Net win/loss chip beside each seat's name. */
+.wdm-dp-net {
+    margin-left: 0.35rem;
+    padding: 0 0.3rem;
+    border-radius: 0.6rem;
+    font-family: var(--wdm-font-display, "Trajan Pro", serif);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 1px #000;
+    vertical-align: middle;
+}
+.wdm-dp-net-up    { color: var(--wdm-gilt-hi, #e3c270); }
+.wdm-dp-net-down  { color: var(--wdm-danger, #d98b73); }
+.wdm-dp-net-even  { color: var(--wdm-ink-dim, #b8a888); }
+
+/* Best-of-three score pips on the right rail (heads-up betting matches). */
+.wdm-dp-score {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    justify-content: flex-end;
+    font-family: var(--wdm-font-display, "Trajan Pro", serif);
+}
+.wdm-dp-score-num {
+    font-size: 1.25rem;
+    color: var(--wdm-gilt-hi, #e3c270);
+    text-shadow: 0 1px 2px #000;
+}
+.wdm-dp-score-sep { color: var(--wdm-ink-dim, #b8a888); }
+.wdm-dp-score-lbl {
+    font-size: 0.7rem;
+    letter-spacing: 0.03em;
+    color: var(--wdm-ink-dim, #b8a888);
+}
+
+/* Surrender / fold button: muted danger tint, distinct from the go button. */
+.wdm-fk-btn-bad { border-color: var(--wdm-danger-dk, #7d3320); color: var(--wdm-danger, #d98b73); }
+.wdm-fk-btn-bad:hover:not(:disabled) {
+    border-color: var(--wdm-danger, #d98b73);
+    color: var(--wdm-danger, #d98b73);
+    box-shadow: inset 0 1px 0 rgba(217, 139, 115, 0.2), 0 0 10px rgba(217, 139, 115, 0.3);
+}

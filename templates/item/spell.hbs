@@ -1,0 +1,216 @@
+{{!-- Spell item sheet — two-layer (RAW Core p.99-115):
+        DISPLAY  → Witcher 3 in-game tooltip aesthetic (player reads)
+        CONFIG   → editable form (GM / owner with cog toggle)
+      Violet accent (.is-spell). Fields are structured for the cast flow:
+      STA + cast time are numbers, defense / duration / targeting / school /
+      form / tier are enums, and components are links to real items.
+      STA cost is the hero — it gates whether you can cast in a round. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-spell" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure item{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip layout
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">{{formLabel}} · {{tierLabel}}{{#if schoolLabel}} · {{schoolLabel}}{{/if}}</div>
+        </div>
+      </header>
+
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value">{{staLabel}}</div>
+        <div class="wdm-w3-hero-label">STAMINA</div>
+        <div class="wdm-w3-hero-sub">vs {{defenseLabel}}</div>
+      </div>
+
+      <ul class="wdm-w3-stats">
+        <li class="wdm-w3-stat">
+          <span class="val">{{source.castingTime}}</span>
+          <span class="lbl">Actions to Cast</span>
+        </li>
+        {{#if source.range}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{source.range}}</span>
+            <span class="lbl">Range</span>
+          </li>
+        {{/if}}
+        <li class="wdm-w3-stat">
+          <span class="val">{{durationLabel}}</span>
+          <span class="lbl">Duration</span>
+        </li>
+        <li class="wdm-w3-stat">
+          <span class="val">{{targetLabel}}</span>
+          <span class="lbl">Targeting</span>
+        </li>
+      </ul>
+
+      {{#if source.effect}}
+        <div class="wdm-w3-section-label">Effect</div>
+        <div class="wdm-w3-effects">{{{source.effect}}}</div>
+      {{/if}}
+
+      {{#if componentLinks.length}}
+        <div class="wdm-w3-section-label">Components</div>
+        <ul class="wdm-w3-ingredients">
+          {{#each componentLinks}}
+            <li class="wdm-w3-ingredient" data-component-index="{{this.index}}" data-uuid="{{this.uuid}}" data-action="openComponent">
+              <img src="{{this.img}}" alt="" />
+              <span class="nm">{{this.name}}</span>
+              {{#if (gte this.qty 2)}}<span class="qt">×{{this.qty}}</span>{{/if}}
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — compact tech form.
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Spell name" />
+      </div>
+
+      <div class="wdm-cfg-section">Casting</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span title="Stamina spent to cast the spell">STA Cost</span>
+          <input type="number" min="0" name="system.staminaCost" value="{{source.staminaCost}}" />
+        </label>
+        <label class="wdm-cfg-row is-checkbox"><span title="The cost scales with the cast — the flow prompts for it (e.g. Dispel)">Variable Cost</span>
+          <input type="checkbox" name="system.variableCost" {{#if source.variableCost}}checked{{/if}} />
+        </label>
+        <label class="wdm-cfg-row"><span title="Number of actions the cast takes">Cast (actions)</span>
+          <input type="number" min="0" name="system.castingTime" value="{{source.castingTime}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="Spell / Witcher Sign / Priest Invocation">Form</span>
+          <select name="system.spellForm">
+            {{#each WITCHER.magic.forms}}
+              <option value="{{@key}}" {{#if (eq @key ../source.spellForm)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>School</span>
+          <select name="system.school">
+            {{#each WITCHER.magic.schools}}
+              <option value="{{@key}}" {{#if (eq @key ../source.school)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span title="Novice / Journeyman / Master — gated by Magic Training rank">Tier</span>
+          <select name="system.spellType">
+            {{#each WITCHER.magic.tiers}}
+              <option value="{{@key}}" {{#if (eq @key ../source.spellType)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span title="Direct / Area / Self — defines the defense roll (Core p.169)">Targeting</span>
+          <select name="system.targetType">
+            {{#each WITCHER.magic.targets}}
+              <option value="{{@key}}" {{#if (eq @key ../source.targetType)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>Range</span>
+          <input type="text" name="system.range" value="{{source.range}}" placeholder="Touch, 10m, Sight…" />
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">Defense <span class="wdm-cfg-sub">(how the target resists — pick any; none = auto-hit)</span></div>
+      <div class="wdm-cfg-checkgrid">
+        {{#each WITCHER.magic.defenses}}
+          <label class="wdm-cfg-check">
+            <input type="checkbox" name="system.defense" value="{{@key}}"
+                   data-dtype="String"
+                   {{#if (includes ../source.defense @key)}}checked{{/if}} />
+            <span>{{localize this}}</span>
+          </label>
+        {{/each}}
+      </div>
+
+      <div class="wdm-cfg-section">Duration</div>
+      <div class="wdm-cfg-grid">
+        {{#unless (or (eq source.duration.unit "instant") (eq source.duration.unit "permanent"))}}
+          <label class="wdm-cfg-row"><span title="A fixed count or a dice formula, e.g. 5 or 1d10">Amount</span>
+            <input type="text" name="system.duration.value" value="{{source.duration.value}}" placeholder="5 or 1d10" />
+          </label>
+        {{/unless}}
+        <label class="wdm-cfg-row"><span>Unit</span>
+          <select name="system.duration.unit">
+            {{#each WITCHER.magic.durationUnits}}
+              <option value="{{@key}}" {{#if (eq @key ../source.duration.unit)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Effect</div>
+      <textarea class="wdm-cfg-textarea" name="system.effect" placeholder="Mechanical effect, damage formula, on-hit rules…">{{source.effect}}</textarea>
+
+      {{#if (eq source.spellForm "gift")}}
+      <div class="wdm-cfg-section">{{localize "WITCHER.Item.Spell.SideEffect"}}</div>
+      <textarea class="wdm-cfg-textarea" name="system.sideEffect" placeholder="The gift's mandatory side-effect…">{{source.sideEffect}}</textarea>
+      {{/if}}
+
+      <div class="wdm-cfg-section">Components</div>
+      <div class="wdm-drop-zone is-list" data-component-drop>
+        {{#each componentLinks}}
+          <div class="wdm-link-row" data-component-index="{{this.index}}" data-uuid="{{this.uuid}}">
+            <img src="{{this.img}}" alt="" />
+            <span class="wdm-link-name">{{this.name}}</span>
+            <input type="number" class="wdm-link-qty" data-component-qty min="1" value="{{this.qty}}" title="Quantity" />
+            <button type="button" class="wdm-link-remove" data-action="removeComponent" title="Remove"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        {{/each}}
+        <div class="wdm-drop-hint"><i class="fa-solid fa-plus"></i> Drop any item here as a component</div>
+      </div>
+
+      <div class="wdm-cfg-section">Effects <span class="wdm-cfg-sub">(applied on a successful cast — not the caster)</span></div>
+      <div class="wdm-cfg-effects">
+        {{#if effects.length}}
+          <ul class="wdm-effect-list">
+            {{#each effects}}
+              <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                <div class="wdm-effect-head">
+                  <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                  <span class="wdm-effect-name">{{this.name}}</span>
+                  {{#if this.duration.label}}<span class="wdm-effect-duration">{{this.duration.label}}</span>{{/if}}
+                  <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                    <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                  </a>
+                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                </div>
+              </li>
+            {{/each}}
+          </ul>
+        {{else}}
+          <p class="wdm-empty">No effects configured.</p>
+        {{/if}}
+        <button type="button" class="wdm-add-effect" data-action="createEffect">
+          <i class="fa-solid fa-plus"></i> Add Effect
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</div>

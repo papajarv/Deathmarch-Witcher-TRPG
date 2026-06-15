@@ -1,0 +1,9 @@
+{{!-- Play stage: the 3D dice board (shared by all seats). This PART is never
+      re-rendered — the GL canvas must persist — so it is driven imperatively by
+      DiceBoard3D. Kept dice rest atop the near rim (asideOnRim). --}}
+<div class="wdm-fk-stage-part">
+    <div class="wdm-fk-board-wrap">
+        <canvas class="wdm-fk-board-canvas" width="{{boardW}}" height="{{boardH}}"></canvas>
+        {{#if boardPrompt}}<div class="wdm-fk-board-prompt">{{boardPrompt}}</div>{{/if}}
+    </div>
+</div>

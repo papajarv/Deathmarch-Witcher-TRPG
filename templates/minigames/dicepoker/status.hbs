@@ -1,0 +1,42 @@
+{{!-- Minimalist readouts floating over the live scene: the pot up top, and each
+      opponent at its TRUE place around the table (N/E/W), with you on the near
+      side (S). Reuses the Farkle score-card styling (wdm-fk-*). Supports 2–4
+      seats; a seat slot is simply absent when no one sits there. --}}
+<div class="wdm-fk-status-part">
+
+    {{!-- The pot is shown once, on the right rail (controls.hbs); no top banner
+          here so it can't sit over the North seat's name. --}}
+
+    {{#*inline "seatCard"}}
+    <div class="wdm-fk-score wdm-fk-score-opp {{#if active}}wdm-fk-score-active{{/if}} {{#if forfeited}}wdm-fk-score-forfeited{{/if}} {{#if foldedOut}}wdm-fk-score-foldedout{{/if}}">
+        {{#if forfeited}}<span class="wdm-fk-forfeit-badge">{{localize "WITCHER.DicePoker.forfeited"}}</span>{{/if}}
+        {{#if foldedOut}}<span class="wdm-dp-foldedout">{{localize "WITCHER.DicePoker.foldedOut"}}</span>{{/if}}
+        <span class="wdm-fk-score-name">{{#if canKick}}<button type="button" class="wdm-dp-kick" data-action="forceForfeit" data-seat="{{id}}" title="{{localize "WITCHER.DicePoker.kick"}}"><i class="fa-solid fa-user-slash"></i></button>{{/if}}{{name}}{{#if isAI}} <i class="fa-solid fa-robot"></i>{{/if}}
+            <span class="wdm-dp-net wdm-dp-net-{{netSign}}" title="{{localize "WITCHER.DicePoker.netTitle"}}">{{netLabel}}</span>
+        </span>
+        <span class="wdm-fk-score-line">
+            <span class="wdm-dp-hand">{{#if handName}}{{handName}}{{else}}—{{/if}}</span>
+        </span>
+        {{#each actions}}<span class="wdm-dp-action">{{this.text}}</span>{{/each}}
+    </div>
+    {{/inline}}
+
+    {{#if seatN}}<div class="wdm-dp-seat wdm-dp-seat-n">{{> seatCard seatN}}</div>{{/if}}
+    {{#if seatW}}<div class="wdm-dp-seat wdm-dp-seat-w">{{> seatCard seatW}}</div>{{/if}}
+    {{#if seatE}}<div class="wdm-dp-seat wdm-dp-seat-e">{{> seatCard seatE}}</div>{{/if}}
+
+    {{!-- You: near side / bottom (absent when observing a table without a seat). --}}
+    {{#if me}}
+    <div class="wdm-dp-seat wdm-dp-seat-s">
+        <div class="wdm-fk-score wdm-fk-score-you {{#if me.active}}wdm-fk-score-active{{/if}} {{#if me.foldedOut}}wdm-fk-score-foldedout{{/if}}">
+            {{#if me.foldedOut}}<span class="wdm-dp-foldedout">{{localize "WITCHER.DicePoker.foldedOut"}}</span>{{/if}}
+            <span class="wdm-fk-score-name">{{localize "WITCHER.DicePoker.you"}}
+                <span class="wdm-dp-net wdm-dp-net-{{me.netSign}}" title="{{localize "WITCHER.DicePoker.netTitle"}}">{{me.netLabel}}</span>
+            </span>
+            <span class="wdm-fk-score-line">
+                <span class="wdm-dp-hand">{{#if me.handName}}{{me.handName}}{{else}}—{{/if}}</span>
+            </span>
+        </div>
+    </div>
+    {{/if}}
+</div>

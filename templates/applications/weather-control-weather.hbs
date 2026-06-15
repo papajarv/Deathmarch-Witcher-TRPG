@@ -1,0 +1,90 @@
+{{!-- Weather tab of the WeatherControlApp. Manual override toggle + the five
+      layered pickers, then the live stacked-modifier readout. --}}
+<section class="tab wdm-wc-tab {{tab.cssClass}}" data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+    <label class="wdm-wc-mtoggle">
+        <input type="checkbox" data-bind="manual-toggle" {{#if manualOn}}checked{{/if}}/>
+        <span>{{localize "WITCHER.Weather.ManualOverride"}}</span>
+    </label>
+
+    {{#if manualOn}}
+    <div class="wdm-wc-layers">
+        {{#each layers}}
+        <div class="wdm-wc-layer">
+            <div class="wdm-wc-mlabel">{{this.title}}</div>
+            <div class="wdm-wc-mstates">
+                <button type="button" class="wdm-wc-mstate {{#if this.noneActive}}is-active{{/if}}"
+                        data-action="setManual" data-layer="{{this.key}}" data-state="">
+                    {{localize "WITCHER.Weather.ManualNone"}}
+                </button>
+                {{#each this.states}}
+                <button type="button" class="wdm-wc-mstate {{#if this.active}}is-active{{/if}}"
+                        data-action="setManual" data-layer="{{../key}}" data-state="{{this.id}}" title="{{this.label}}">
+                    <i class="{{this.icon}}"></i> {{this.label}}
+                </button>
+                {{/each}}
+            </div>
+        </div>
+        {{/each}}
+    </div>
+    {{/if}}
+
+    <div class="wdm-wc-group wdm-wc-scenemode">
+        <div class="wdm-wc-head">{{sceneWeather.legend}}</div>
+        {{#if sceneWeather.hasScene}}
+        <div class="wdm-wc-scenemode-btns">
+            {{#each sceneWeather.modes}}
+            <button type="button" class="wdm-weather-mode-btn{{#if this.active}} active{{/if}}"
+                    data-action="setSceneMode" data-mode="{{this.mode}}" aria-pressed="{{this.active}}">
+                <i class="fa-solid {{this.icon}}"></i> {{this.label}}
+            </button>
+            {{/each}}
+            <button type="button" class="wdm-weather-mode-btn wdm-weather-dark-btn{{#if sceneWeather.noTimeDarkness}} active{{/if}}"
+                    data-action="setTimeDarkness" aria-pressed="{{sceneWeather.noTimeDarkness}}"
+                    title="{{localize "WITCHER.Weather.SceneMode.NoTimeDarknessHint"}}">
+                <i class="fa-solid fa-lightbulb"></i> {{localize "WITCHER.Weather.SceneMode.NoTimeDarkness"}}
+            </button>
+        </div>
+        {{/if}}
+    </div>
+
+    <div class="wdm-wc-group">
+        <div class="wdm-wc-head">{{localize "WITCHER.Weather.Effects"}}</div>
+        <div class="wdm-wc-fx">
+            {{#if noEffects}}
+            <div class="wdm-wc-fx-empty">{{localize "WITCHER.Weather.NoEffects"}}</div>
+            {{else}}
+            {{#each effects}}
+            <div class="wdm-wc-fx-row {{this.cls}}">
+                <span class="wdm-wc-fx-target">{{this.targetLabel}}</span>
+                <span class="wdm-wc-fx-total">{{this.total}}</span>
+                <span class="wdm-wc-fx-parts">
+                    {{#each this.parts}}<span class="wdm-wc-fx-part">{{this.value}} {{this.label}}</span>{{/each}}
+                </span>
+            </div>
+            {{/each}}
+            {{/if}}
+            {{#each notes}}<div class="wdm-wc-fx-note">{{this}}</div>{{/each}}
+        </div>
+        <button type="button" class="wdm-wc-edit-fx" data-action="editPenalties">
+            <i class="fa-solid fa-cloud-bolt"></i> {{localize "WITCHER.Weather.EditPenalties"}}
+        </button>
+    </div>
+
+    {{#if conditions.length}}
+    <div class="wdm-wc-group wdm-wc-conditions">
+        <div class="wdm-wc-head">{{localize "WITCHER.Weather.Condition.GrabHead"}}{{#if conditionsTemp}} ({{conditionsTemp}}){{/if}}</div>
+        <div class="wdm-wc-grab-row">
+            {{#each conditions}}
+            <button type="button" class="wdm-wc-grab{{#if this.active}} is-active{{/if}}"
+                    data-action="grabCondition" data-condition="{{this.id}}"
+                    data-tooltip="{{this.desc}}" data-tooltip-direction="UP">
+                <i class="fa-solid {{this.icon}}"></i> {{this.label}}
+            </button>
+            {{/each}}
+        </div>
+        <div class="wdm-wc-grab-hint">{{localize "WITCHER.Weather.Condition.GrabHint"}}</div>
+    </div>
+    {{/if}}
+
+</section>

@@ -1,0 +1,2669 @@
+/* =============================================================================
+   WITCHER OVERHAUL UI · right sidebar visual treatment
+
+   This file owns the LOOK of the open-state sidebar. The OPEN/CLOSE behavior
+   (translateX, visibility nuke, z-index lift) is owned by chrome.css and
+   stays untouched.
+
+   Restyle target — Foundry v13's native sidebar DOM:
+     <aside id="sidebar">
+       <nav class="tabs faded-ui">              ← icon strip on right edge
+         <menu class="flexcol">
+           <li>
+             <button data-action="tab" data-tab="…" aria-pressed="…">
+             <div class="notification-pip">     ← red badge
+           </li>
+           …
+           <li><button data-action="toggleState"></li>   ← collapse caret
+         </menu>
+       </nav>
+       <div id="sidebar-content" class="flexcol active-{tabId}">
+         <template id="{tabId}">                 ← stub replaced by each tab's app
+         …
+       </div>
+     </aside>
+   ============================================================================= */
+
+
+/* --- slide animation ----------------------------------------------------------
+   chrome.css nukes the closed sidebar via 3 instant rules (display:none on
+   #sidebar; visibility:hidden + width:0 on #ui-right and descendants) which
+   kill the transform-based slide. Override:
+     1. Keep #sidebar rendered (display: flex).
+     2. Make descendants inherit visibility from #ui-right — so we only have
+        to delay the parent's visibility flip.
+     3. Add transition-delay to #ui-right's visibility so the slide-out plays
+        before the nuke. Crucially, this does NOT apply to #sidebar (which
+        has its own .wou-collapse transition: transform), avoiding clobber. */
+body.witcher-ttrpg-death-march:not(.wou-sidebar-open) #sidebar {
+  display: flex !important;
+}
+body.witcher-ttrpg-death-march:not(.wou-sidebar-open) #ui-right * {
+  visibility: inherit !important;           /* override chrome.css's explicit hidden on descendants */
+}
+body.witcher-ttrpg-death-march #ui-right {
+  transition: visibility 0s var(--wdm-dur-slow);   /* closing: delay visibility flip until slide finishes */
+}
+body.witcher-ttrpg-death-march.wou-sidebar-open #ui-right {
+  transition: visibility 0s 0s;                    /* opening: visible immediately for slide-in */
+}
+
+/* --- vertical clamp -----------------------------------------------------------
+   Confine the sidebar's column wrapper (#ui-right, which Foundry positions
+   `position: absolute; inset: 0 0 0 auto`) to the band between the top bar
+   and the bottom dock. Right/left anchors survive because we only override
+   top and bottom — they fall out of the `inset` shorthand individually.
+
+   Two height variants because the bottom dock has two static heights:
+     --wdm-dock-h         = 160px (peace)
+     --wdm-dock-combat-h  = 230px (war / in-encounter)
+   Both are set as static body-level CSS vars by sideedges.js#publishChromeHeights. */
+body.witcher-ttrpg-death-march.wou-sidebar-open #ui-right {
+  top: var(--wdm-topstrip-h, 64px) !important;
+  /* `--wdm-sidebar-bottom-clamp` is the LIVE measured height of #wou-dock,
+     published by scripts/chrome/sidebar-clamp.js via a ResizeObserver on the
+     dock. Auto-tracks combat transitions and content-driven height changes. */
+  bottom: var(--wdm-sidebar-bottom-clamp, 160px) !important;
+  /* Foundry sets `height: calc(100% / var(--ui-scale))` explicitly on #ui-right.
+     With position:absolute, `top + height` wins over `bottom` — so `bottom`
+     above would silently be ignored. Drop `height: auto` so the browser
+     computes height from top + bottom instead. */
+  height: auto !important;
+}
+
+/* --- container chrome --------------------------------------------------------
+   IMPORTANT: do NOT touch `position` — chrome.css inherits Foundry's right-edge
+   anchor and the open/close translateX rides on it. We only colour, size, and
+   reflow the interior. */
+body.witcher-ttrpg-death-march.wou-sidebar-open #sidebar {
+  display: flex !important;
+  flex-direction: row-reverse !important;       /* DOM: nav first, content second → visual: strip on right */
+  width: 436px !important;                      /* 56 strip + 380 panel */
+  height: 100% !important;                      /* belt: fit parent #ui-right's clamped box */
+  max-height: 100% !important;                  /* braces: don't let intrinsic content push past it */
+  /* Flat warm-dark fill — identical tint to the top bar / dock so all
+     four chrome plates (top bar, dock, sidebar, inventory/journal) read
+     as one continuous surface. No radial color wash. */
+  background: rgba(10,9,8,0.99) !important;
+  border-left: 1px solid rgba(140,133,121,0.12) !important;
+  backdrop-filter: blur(2px);
+  overflow: hidden;
+}
+
+/* inner vertical rune-trim between strip and content */
+body.witcher-ttrpg-death-march.wou-sidebar-open #sidebar::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  right: 56px; width: 1px;
+  background: linear-gradient(180deg,
+    transparent 5%, var(--wdm-amber-dim) 15%, transparent 30%,
+    var(--wdm-amber-dim) 50%, transparent 70%,
+    var(--wdm-amber-dim) 85%, transparent 95%);
+  opacity: 0.35;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* --- icon strip (Foundry's <nav class="tabs">) -------------------------------
+   The strip MUST fit in sidebar height to avoid clipping the bottom tabs +
+   collapse arrow. 11 tabs × 36 + 10 gaps × 4 + toggle 24 + padding 28 + 6 gap
+   ≈ 510px — fits comfortably even on a 700px sidebar height. */
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui {
+  flex: 0 0 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 0;                /* was 28 each → saved 28px */
+  position: relative;
+  min-height: 0;
+  overflow-y: auto;
+  background: none !important;
+  border: none !important;
+  /* Defeat Foundry's .faded-ui dim — we want the strip readable always. */
+  opacity: 1 !important;
+}
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui::-webkit-scrollbar { width: 0; }
+
+/* amber hairlines top + bottom of the strip */
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui::before,
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui::after {
+  content: '';
+  position: absolute; left: 12px; right: 12px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--wdm-amber-dim) 50%, transparent);
+  opacity: 0.35;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui::before { top: 14px; }
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui::after  { bottom: 14px; }
+
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui menu.flexcol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;                       /* was 6 → saved 22px across 11 gaps */
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  background: none;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui menu.flexcol > li {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: none;
+  list-style: none;
+}
+
+/* --- the tab buttons --------------------------------------------------------
+   Was 44×44 / 18px icon — strip didn't fit (11 buttons × 44 + gaps + toggle
+   = ~630px). Shrunk to 36×36 / 16px so the strip fits even on shorter
+   viewports including combat-mode clamp. */
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui button[data-action="tab"] {
+  position: relative;
+  width: 36px !important;
+  height: 36px !important;
+  min-height: 0 !important;
+  border-radius: 0 !important;
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  color: var(--wdm-ink-dim) !important;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px !important;
+  transition: color var(--wdm-dur), transform var(--wdm-dur-fast);
+  z-index: 2;
+}
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui button[data-action="tab"]:hover {
+  color: var(--wdm-amber-hi) !important;
+  transform: translateX(-1px);
+}
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui button[data-action="tab"][aria-pressed="true"] {
+  color: var(--wdm-ink-ash) !important;
+}
+
+/* Parchment-torn active state.
+   NOTE: Foundry's tab buttons carry their FontAwesome icon class directly on
+   the <button> (no child <i>) and render the glyph via the button's `::before`
+   pseudo. We MUST NOT touch `::before` or the icon disappears — so the
+   parchment lives on `::after` instead. */
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui button[data-action="tab"][aria-pressed="true"]::after {
+  content: '';
+  position: absolute;
+  inset: -2px -6px;
+  z-index: -1;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='90' height='180'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 0.42 0 0 0 0 0.35 0 0 0 0 0.22 0 0 0 0.12 0'/></filter><rect width='100%25' height='100%25' filter='url(%23p)'/></svg>"),
+    radial-gradient(ellipse at 30% 30%, rgba(228,210,168,0.30), transparent 55%),
+    linear-gradient(110deg, var(--wdm-amber-bright) 0%, var(--wdm-amber-hi) 45%, var(--wdm-amber-dim) 100%);
+  background-size: 90px 180px, 100% 100%, 100% 100%;
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 70 140' preserveAspectRatio='none'><path d='M14 3 L8 6 L6 14 L3 22 L6 30 L3 38 L7 46 L4 54 L6 62 L3 70 L6 78 L3 86 L5 94 L3 102 L6 110 L4 118 L6 126 L4 134 L12 137 L20 134 L28 137 L36 134 L44 137 L52 134 L60 137 L66 130 L67 122 L64 114 L67 106 L64 98 L66 90 L64 82 L67 74 L64 66 L66 58 L64 50 L67 42 L64 34 L66 26 L64 18 L66 10 L60 4 L52 7 L44 4 L36 7 L28 4 L20 7 Z' fill='black'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 70 140' preserveAspectRatio='none'><path d='M14 3 L8 6 L6 14 L3 22 L6 30 L3 38 L7 46 L4 54 L6 62 L3 70 L6 78 L3 86 L5 94 L3 102 L6 110 L4 118 L6 126 L4 134 L12 137 L20 134 L28 137 L36 134 L44 137 L52 134 L60 137 L66 130 L67 122 L64 114 L67 106 L64 98 L66 90 L64 82 L67 74 L64 66 L66 58 L64 50 L67 42 L64 34 L66 26 L64 18 L66 10 L60 4 L52 7 L44 4 L36 7 L28 4 L20 7 Z' fill='black'/></svg>");
+  -webkit-mask-size: 100% 100%;
+          mask-size: 100% 100%;
+  box-shadow: -4px 0 14px rgba(0,0,0,0.7);
+  transform: rotate(0.6deg);
+}
+
+/* --- notification pip → red badge ------------------------------------------- */
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui .notification-pip {
+  position: absolute;
+  top: 4px; right: 4px;
+  min-width: 8px; height: 8px;
+  border-radius: 6px;
+  background: var(--wdm-red);
+  border: 1px solid rgba(0,0,0,0.7);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* --- collapse caret — pinned to the BOTTOM of the strip so it's always
+   reachable regardless of how many tabs the strip can fit. The parent <li>
+   gets pinned; the button inside it gets quiet styling. */
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui menu.flexcol > li:last-child {
+  margin-top: auto;             /* pushes to bottom if there's extra space */
+  flex: 0 0 auto;
+  padding-top: 6px;
+}
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui button[data-action="toggleState"] {
+  width: 36px !important;
+  height: 20px !important;
+  min-height: 0 !important;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--wdm-ink-faint) !important;
+  cursor: pointer;
+  font-size: 12px !important;
+  margin: 0;
+  transition: color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #sidebar nav.tabs.faded-ui button[data-action="toggleState"]:hover {
+  color: var(--wdm-amber-hi) !important;
+}
+
+/* --- content area (Foundry's #sidebar-content) ------------------------------
+   Foundry sizes this with `width: var(--sidebar-full-width)` AND a negative
+   `margin-right: calc(... * -1)` to pull it out of the flow next to the
+   absolutely-positioned tabs in Foundry's default layout. In our flex
+   row-reverse layout, that's exactly wrong — the negative margin makes the
+   content overflow past the panel's right edge into the strip. Kill the
+   width/margin overrides and let our flex slot determine the size. */
+body.witcher-ttrpg-death-march #sidebar #sidebar-content {
+  flex: 1 1 auto;
+  display: flex !important;
+  flex-direction: column !important;
+  min-width: 0;
+  min-height: 0;
+  width: auto !important;             /* drop Foundry's fixed --sidebar-full-width */
+  margin: 0 !important;               /* drop Foundry's negative margin-right trick */
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden;
+  padding: 0;
+  background: none;
+  border: none;
+  justify-content: flex-start;
+}
+
+/* The per-tab Applications render into <template> stubs that get replaced.
+   We want the active tab to fill the panel and the inactive ones hidden.
+   Foundry adds `active-{tabId}` to #sidebar-content; the active tab's root
+   element has `[data-application-part]` or just `:not([hidden])`. The system
+   already handles show/hide via display, so we don't toggle visibility here —
+   only ensure the active app sizes correctly inside the flex column. */
+body.witcher-ttrpg-death-march #sidebar #sidebar-content > * {
+  min-height: 0;
+  min-width: 0;
+}
+body.witcher-ttrpg-death-march #sidebar #sidebar-content > .application,
+body.witcher-ttrpg-death-march #sidebar #sidebar-content > section {
+  flex: 1 1 auto;
+  background: none !important;
+  border: none !important;
+  padding: 0;
+}
+
+/* =============================================================================
+   CHAT TAB
+   Foundry v14 splits the chat across TWO sibling containers inside #ui-right:
+
+     #ui-right
+       #ui-right-column-1               ← the chat INPUT lives here
+         #chat-notifications.faded-ui
+           .overflow > ol.chat-log      (transient floating messages)
+           prose-mirror#chat-message.chat-input   ← "Enter a message" box
+           #chat-controls               (roll-mode + GM buttons)
+       #sidebar > #chat                 ← the chat LOG lives here
+         #wou-chat-head (injected)
+         .chat-scroll > ol.chat-log
+           li.chat-message.message ...
+         (.wou-chat-input wrapper is injected around #chat-message in
+          #ui-right-column-1 by chrome/sidebar-chat.js)
+
+   IMPORTANT: input/controls/notifications rules scope to #ui-right (the common
+   ancestor), NOT #sidebar — the input is NOT a descendant of #sidebar. Log /
+   message rules stay scoped to #sidebar #chat. */
+
+/* Foundry chat CSS variables — repaint with our amber palette.
+   --chat-input-height is critical: Foundry uses it as flex-basis on the
+   textarea, which OVERRIDES any height/min-height we set. Must change it
+   here rather than fight it.
+   --sidebar-width: Foundry uses this for .chat-log max-width and .chat-form
+   width. With align-items: flex-end on the chat tab, anything narrower than
+   the panel width leaves an empty left strip. Override to fill our panel. */
+body.witcher-ttrpg-death-march #sidebar {
+  --chat-message-background: rgba(10,9,8,0.7);
+  --chat-message-border-color: rgba(140,133,121,0.18);
+  --chat-message-spacing: 4px;
+  --chat-input-height: 30px;       /* was 100px globally */
+  --sidebar-width: 100%;           /* was 300px globally — fills the 380px panel */
+}
+/* In Foundry v14 the chat INPUT (#chat-notifications → prose-mirror#chat-message
+   + #chat-controls) renders in #ui-right-column-1, a SIBLING of #sidebar — so it
+   never inherited the overrides above and fell back to Foundry defaults (light
+   parchment bg, Signika font, 128px tall). Repaint there too. Deliberately omit
+   --sidebar-width: #chat-notifications reads it for its own width and should keep
+   Foundry's value. */
+body.witcher-ttrpg-death-march #ui-right-column-1 {
+  --chat-message-background: rgba(10,9,8,0.7);
+  --chat-message-border-color: rgba(140,133,121,0.18);
+  --chat-message-spacing: 4px;
+  --chat-input-height: 30px;
+}
+
+/* --- chat app root: pin input to bottom via flex column --------------------
+   KEEP Foundry's `align-items: flex-end` — the chat-log uses it (with
+   max-width: var(--sidebar-width)) to align messages to the right edge of the
+   panel. Use `align-self: stretch` on MY injected elements to opt them out
+   per-element. */
+body.witcher-ttrpg-death-march #sidebar #chat {
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  gap: 0;
+  min-height: 0;
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden;
+}
+/* Per-element stretch opt-out for the injected chat header (still a child of
+   #sidebar #chat). The input wrapper lives in #ui-right-column-1 now and gets
+   its stretch from the .wou-chat-input rule directly. */
+body.witcher-ttrpg-death-march #sidebar #chat > #wou-chat-head {
+  align-self: stretch !important;
+  width: auto;
+}
+
+/* --- scrolling log fills the middle ---------------------------------------- */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 6px 6px 6px 8px;
+  background: none;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-scroll::-webkit-scrollbar { width: 6px; }
+body.witcher-ttrpg-death-march #sidebar #chat .chat-scroll::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); border-radius: 3px; }
+
+body.witcher-ttrpg-death-march #sidebar #chat .chat-log {
+  display: flex; flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* --- a single message ------------------------------------------------------ */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message {
+  padding: 0;
+  margin: 0;
+  border: none !important;
+  border-radius: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  font-size: 13px;
+  color: var(--wdm-ink);
+  position: relative;
+}
+/* dotted hairline divider beneath each (except last) */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -4px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(140,133,121,0.18) 35%, rgba(140,133,121,0.18) 65%, transparent);
+}
+
+/* message header: sender + time on one row, flavor wrapping below */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-header {
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  margin-bottom: 4px;
+  border: none !important;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-sender {
+  font-family: var(--wdm-font-display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi);
+  margin: 0;
+  padding: 0;
+  border: none;
+  line-height: 1.2;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-metadata {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-left: auto;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-timestamp {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-faint);
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-delete,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-dismiss {
+  color: var(--wdm-ink-faint);
+  font-size: 10px;
+  transition: color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-delete:hover,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-dismiss:hover {
+  color: var(--wdm-red-bright);
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .whisper-to {
+  flex-basis: 100%;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--wdm-frost);
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--wdm-ink);
+}
+/* Plain flavor (e.g., "Awareness Check") gets italic dim treatment, but the
+   Witcher system stuffs entire attack/defense/damage cards into flavor-text
+   too — those should NOT be italicized or dimmed. */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text:not(:has(.attack-message, .defense-message, .damage-message, h1, h2, button)) {
+  font-style: italic;
+  opacity: 0.85;
+}
+
+/* message body */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content {
+  color: var(--wdm-ink);
+  line-height: 1.4;
+  font-size: 13px;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content > p:last-child { margin-bottom: 0; }
+
+/* --- outcome banners (.dice-success / .dice-fail) -------------------------
+   The system (TheWitcherTRPG/styles/system-styles.css:304-312) ships these
+   with lightgreen / lightpink backgrounds and no explicit text color. Under
+   WOU's dark chat that produces near-illegible text. Re-skin them with the
+   amber/red WOU palette and an explicit ink color so contrast is forced. */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-success,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-fail {
+  background: none !important;            /* kill system's lightgreen/lightpink */
+  padding: 5px 10px;
+  margin: 4px 0;
+  border-radius: 0;
+  font-family: var(--wdm-font-display);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-success {
+  background-color: rgba(110, 163, 86, 0.18) !important;
+  border: 1px solid rgba(149, 196, 129, 0.45);
+  border-left: 2px solid #6ea356;
+  color: #cfe5b8 !important;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-success i {
+  color: #aacf8a;
+  font-style: normal;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-fail {
+  background-color: rgba(182, 90, 90, 0.18) !important;
+  border: 1px solid rgba(210, 128, 128, 0.45);
+  border-left: 2px solid #b65a5a;
+  color: #f1c8c8 !important;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-fail i {
+  color: #e89999;
+  font-style: normal;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+/* --- dice roll cards inside messages --------------------------------------- */
+/* Compact one-line dice card: `5d6 + 1 + 0 = 11` on a single row, wrapping
+   ONLY the actual content. The chevron on the right toggles Foundry's
+   .dice-tooltip (collapsed grid-template-rows: 0fr) so individual dice are
+   only visible when expanded. */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll {
+  position: relative;
+  display: inline-block !important;
+  margin-top: 4px;
+  padding: 4px 22px 4px 8px;        /* right padding reserved for chevron */
+  background: rgba(10,9,8,0.7);
+  border: 1px solid rgba(140,133,121,0.18);
+  border-left: 2px solid var(--wdm-amber);
+  border-radius: 0;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  vertical-align: middle;
+  line-height: 1.3;
+  max-width: 100%;                  /* don't blow past the message column */
+}
+
+/* Expand-affordance chevron — sits in the top-right corner with no padding
+   reservation; content can flow under it because the dice are centered and
+   short enough to never reach that corner. */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll::after {
+  content: '\f078';                  /* fa-chevron-down */
+  font-family: var(--font-awesome);
+  font-weight: 900;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 9px;
+  color: var(--wdm-amber);
+  opacity: 0.6;
+  transition: transform var(--wdm-dur), opacity var(--wdm-dur);
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll:hover::after {
+  opacity: 1;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll.expanded::after {
+  transform: rotate(180deg);
+}
+/* Tiny label above the inline formula (if a roll has flavor text). */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll .dice-flavor {
+  display: block;
+  font-family: var(--wdm-font-display);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: var(--wdm-ink-faint);
+  text-transform: uppercase;
+  line-height: 1.2;
+  margin-bottom: 1px;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll .dice-result {
+  display: grid;
+  gap: 2px;
+}
+/* Formula and total on ONE inline row; tooltip wraps to a new row via
+   flex-basis: 100% so the per-die expansion appears BELOW the inline line
+   (not between formula and total which is the DOM order). */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll .dice-result {
+  display: flex !important;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0;
+  text-align: left;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll .dice-formula {
+  display: inline-block !important;
+  color: var(--wdm-ink);
+  font-family: var(--wdm-font-mono);
+  font-size: 11px;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0;
+  margin: 0;
+  line-height: 1.3;
+  text-align: left;
+  width: auto !important;
+  flex: 0 0 auto;
+  order: 1;
+}
+/* The "=" sigil joining formula and total */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll .dice-formula::after {
+  content: ' = ';
+  color: var(--wdm-ink-faint);
+  font-family: var(--wdm-font-mono);
+  font-size: 11px;
+  margin: 0 2px;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll .dice-total {
+  display: inline-block !important;
+  font-family: var(--wdm-font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--wdm-amber-bright);
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  width: auto !important;
+  flex: 0 0 auto;
+  order: 2;
+}
+/* tooltip wraps below the inline formula+total row, and animates open/closed
+   via max-height. Foundry's grid-template-rows 0fr→1fr is browser-fussy;
+   max-height transition is universally smooth. */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll .dice-tooltip {
+  display: block !important;          /* override Foundry's display: grid */
+  flex: 0 0 100%;
+  width: 100%;
+  order: 3;
+  text-align: left;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height var(--wdm-dur-slow) var(--wdm-ease);
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll.expanded .dice-tooltip {
+  max-height: 600px;                  /* generous ceiling; clips only super-long rolls */
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll .dice-tooltip > .wrapper {
+  overflow: visible;                  /* Foundry sets hidden — let our max-height parent clip instead */
+}
+
+/* Per-roll expansion (.dice-tooltip) — lean readout matching the rest of
+   the card. Foundry renders one .tooltip-part per dice group. */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip {
+  text-align: left;                 /* per-die breakdown reads left, not centered */
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .tooltip-part {
+  margin-top: 4px;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .part-header {
+  border-bottom: 1px solid var(--wdm-amber-dim) !important;
+  margin: 0 0 4px;
+  padding: 0 0 2px;
+  font-family: var(--wdm-font-mono);
+  font-size: 10px;
+  color: var(--wdm-ink-dim);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .part-header .part-formula {
+  color: var(--wdm-ink);
+  flex: 1;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .part-header .part-total {
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  color: var(--wdm-amber-hi) !important;
+  font-family: var(--wdm-font-display) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+  padding: 0;
+  letter-spacing: 0.02em;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .dice-rolls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: visible;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .dice-rolls .roll {
+  float: none !important;            /* Foundry uses float:left — we need flex layout */
+  margin: 0 !important;
+}
+/* Individual die rolls — solid dark amber-bordered chips, NOT Foundry's
+   grey dice SVGs. The number renders at its true colour against the dark
+   chip; no `filter` is used (that would dim the text along with the bg). */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .dice-rolls .roll {
+  background-image: none !important;
+  background-color: rgba(0,0,0,0.55) !important;
+  border: 1px solid var(--wdm-amber-dim) !important;
+  border-radius: 0 !important;
+  color: var(--wdm-ink-bright) !important;
+  font-weight: 700 !important;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.85);
+  filter: none !important;
+  min-width: 24px;
+  line-height: 22px;
+  text-align: center;
+}
+/* Max / success — golden number, amber border, faint warm wash */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .dice-rolls .roll.max,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .dice-rolls .roll.success {
+  color: var(--wdm-gilt-hi) !important;
+  border-color: var(--wdm-amber) !important;
+  background-color: rgba(184,148,100,0.12) !important;
+}
+/* Min / failure — red number, red border, faint red wash */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .dice-rolls .roll.min,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .dice-rolls .roll.failure {
+  color: var(--wdm-red-bright) !important;
+  border-color: var(--wdm-red) !important;
+  background-color: rgba(140,60,60,0.12) !important;
+}
+/* Discarded / re-rolled — dim, per Foundry convention */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .dice-rolls .roll.discarded,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .dice-rolls .roll.rerolled {
+  color: var(--wdm-ink-faint) !important;
+  border-color: rgba(140,133,121,0.18) !important;
+  background-color: rgba(0,0,0,0.35) !important;
+  opacity: 0.55;
+}
+/* crit / fumble accents — Foundry adds .critical / .fumble to .dice-total */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll:has(.dice-total.critical) {
+  border-left-color: var(--wdm-amber-bright);
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll .dice-total.critical {
+  color: var(--wdm-amber-bright);
+  text-shadow: 0 0 14px rgba(214,160,80,0.5);
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll:has(.dice-total.fumble) {
+  border-left-color: var(--wdm-red-bright);
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-roll .dice-total.fumble {
+  color: var(--wdm-red-bright);
+}
+
+/* dice tooltip (per-die expansion) — keep readable but dim */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip {
+  background: rgba(5,4,2,0.6);
+  border: none;
+  padding: 6px;
+  margin: 4px 0;
+  font-size: 10px;
+  color: var(--wdm-ink-dim);
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .dice-tooltip .roll {
+  color: var(--wdm-ink-hi);
+}
+
+/* --- jump-to-bottom button ------------------------------------------------- */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-form .jump-to-bottom {
+  position: absolute;
+  right: 14px;
+  bottom: 80px;
+  width: 28px !important;
+  height: 28px !important;
+  min-height: 0 !important;
+  background: rgba(10,9,8,0.85) !important;
+  border: 1px solid var(--wdm-amber-dim) !important;
+  border-radius: 50% !important;
+  color: var(--wdm-amber-hi) !important;
+  font-size: 12px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.7);
+  transition: color var(--wdm-dur), border-color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-form .jump-to-bottom:hover {
+  color: var(--wdm-amber-bright) !important;
+  border-color: var(--wdm-amber) !important;
+}
+
+/* --- chat input area (textarea + controls) — pin to bottom ----------------- */
+/* The textarea now lives INSIDE .wou-chat-input (injected by sidebar-chat.js).
+   The wrapper carries the border, background, and padding; the textarea
+   itself is borderless + transparent and just provides the text caret. */
+body.witcher-ttrpg-death-march #ui-right .wou-chat-input {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 8px 4px 8px;
+  pointer-events: auto;            /* defeat #sidebar-content.active-chat { pointer-events: none } */
+  padding: 6px 10px;
+  width: auto;                                  /* fills the parent flex column with align-items: stretch */
+  align-self: stretch;                          /* belt — if some ancestor still has flex-end alignment */
+  background: rgba(10,9,8,0.7) !important;
+  border: 1px solid rgba(140,133,121,0.18) !important;
+  transition: border-color var(--wdm-dur);
+  flex: 0 0 auto;                               /* don't inherit Foundry's flex:0 0 var(--chat-input-h) */
+  box-sizing: border-box;
+}
+body.witcher-ttrpg-death-march #ui-right .wou-chat-input:focus-within {
+  border-color: var(--wdm-amber-dim);
+  box-shadow: 0 0 0 1px var(--wdm-amber-dim);
+}
+body.witcher-ttrpg-death-march #ui-right .wou-chat-input .wou-chat-feather {
+  color: var(--wdm-amber);
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+body.witcher-ttrpg-death-march #ui-right .wou-chat-input .wou-chat-send {
+  flex: 0 0 auto;
+  width: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 4px !important;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--wdm-ink-dim) !important;
+  cursor: pointer;
+  font-size: 12px !important;
+  transition: color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #ui-right .wou-chat-input .wou-chat-send:hover {
+  color: var(--wdm-amber-hi) !important;
+}
+
+/* Always kill the resize handle on #chat-message regardless of whether it's
+   inside our wrapper yet (catches the brief unwrapped state during render).
+   Also pin the WOU body font here — textareas don't inherit font-family from
+   parent in some browsers, so the "Enter a Message" placeholder fell back to
+   Foundry's default Signika before our wrapper rule kicked in (and stuck if
+   the wrapper hadn't been injected). */
+body.witcher-ttrpg-death-march #ui-right #chat-message {
+  resize: none !important;
+  font-family: var(--wdm-font-body) !important;
+  font-size: 13px !important;
+  letter-spacing: 0.02em !important;
+}
+body.witcher-ttrpg-death-march #ui-right #chat-message::placeholder {
+  font-family: var(--wdm-font-body) !important;
+  letter-spacing: 0.04em !important;
+  font-style: normal !important;
+  color: var(--wdm-ink-faint) !important;
+}
+body.witcher-ttrpg-death-march #ui-right .wou-chat-input #chat-message {
+  /* Inside the wrapper now — drop margins/borders/bg. */
+  flex: 1 1 auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  max-height: 96px !important;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  resize: none !important;            /* kills the bottom-right resize handle */
+  color: var(--wdm-ink-hi) !important;
+  font-family: var(--wdm-font-body) !important;
+  font-size: 13px !important;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+body.witcher-ttrpg-death-march #ui-right .wou-chat-input #chat-message:focus {
+  box-shadow: none !important;          /* wrapper handles the focus ring */
+}
+body.witcher-ttrpg-death-march #ui-right .wou-chat-input #chat-message::placeholder {
+  color: var(--wdm-ink-faint);
+  letter-spacing: 0.04em;
+  font-style: normal;                   /* override Foundry's italic placeholder */
+  text-align: left !important;          /* override Foundry's center-when-empty */
+}
+
+/* roll-privacy + GM controls */
+body.witcher-ttrpg-death-march #ui-right #chat-controls {
+  padding: 2px 8px 8px 8px;
+  pointer-events: auto;                  /* defeat #sidebar-content.active-chat { pointer-events: none } */
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  background: none !important;
+  border: none !important;
+}
+body.witcher-ttrpg-death-march #ui-right #chat-controls .split-button,
+body.witcher-ttrpg-death-march #ui-right #chat-controls .control-buttons {
+  display: flex;
+  gap: 4px;
+  background: none !important;
+  border: none !important;
+}
+
+/* Hide ONLY the native "Public as Character" (IC) speak-as button — it
+   duplicates the chrome's IC chip. The rest of #message-modes (Public / GM /
+   Blind / Self) stays put, since the chrome doesn't offer Blind/Self. */
+body.witcher-ttrpg-death-march #ui-right #chat-controls #message-modes [data-mode="ic"] { display: none !important; }
+
+/* Speak-as mode toggles (OOC / IC / EM / GM) — text-label chips before the
+   privacy buttons. Always visible. Active state shows current speak-as mode. */
+body.witcher-ttrpg-death-march #ui-right #chat-controls .wou-chat-modes {
+  display: flex;
+  gap: 3px;
+  background: none !important;
+  border: none !important;
+  margin-right: 4px;
+}
+body.witcher-ttrpg-death-march #ui-right #chat-controls .wou-chat-modes .wou-mode {
+  width: auto !important;
+  height: 22px !important;
+  min-height: 0 !important;
+  padding: 0 6px !important;
+  background: none !important;
+  border: 1px solid rgba(140,133,121,0.18) !important;
+  border-radius: 0 !important;
+  color: var(--wdm-ink-dim) !important;
+  font-family: var(--wdm-font-display) !important;
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  cursor: pointer;
+  box-shadow: none !important;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur), background var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #ui-right #chat-controls .wou-chat-modes .wou-mode:hover {
+  color: var(--wdm-amber-hi) !important;
+  border-color: var(--wdm-amber-dim) !important;
+}
+body.witcher-ttrpg-death-march #ui-right #chat-controls .wou-chat-modes .wou-mode[aria-pressed="true"] {
+  color: var(--wdm-amber-bright) !important;
+  border-color: var(--wdm-amber) !important;
+  background: rgba(184,148,100,0.12) !important;
+}
+
+/* Clean icon-only chips for ALL chat-controls buttons (roll-mode + GM convenience). */
+body.witcher-ttrpg-death-march #ui-right #chat-controls button {
+  width: 28px !important;
+  height: 28px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: 1px solid rgba(140,133,121,0.18) !important;
+  border-radius: 0 !important;
+  color: var(--wdm-ink-dim) !important;
+  font-size: 12px !important;
+  box-shadow: none !important;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur), background var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #ui-right #chat-controls button:hover {
+  color: var(--wdm-amber-hi) !important;
+  border-color: var(--wdm-amber-dim) !important;
+}
+body.witcher-ttrpg-death-march #ui-right #chat-controls button[aria-pressed="true"] {
+  color: var(--wdm-amber-bright) !important;
+  border-color: var(--wdm-amber) !important;
+  background: rgba(184,148,100,0.15) !important;
+  box-shadow: inset 0 0 0 1px var(--wdm-amber-dim) !important;
+}
+
+/* =============================================================================
+   WITCHER SYSTEM CHAT CARDS (.attack-message / .defense-message / .damage-message)
+   These are rendered by the Witcher TRPG system as raw HTML inside .message-content.
+   Without intervention, the system's <h1> inherits Foundry's massive default
+   heading size and the action <button>s are dark-on-dark unreadable.
+   ============================================================================= */
+
+/* Tame headings inside chat cards. Witcher TRPG stuffs full UI (h1, img,
+   buttons) into `message.flavor`, which renders in <span class="flavor-text">
+   — so the cards live there, NOT in .message-content. We target both paths
+   so the rules cover any future system layout. */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text h1,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text h2,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text h3,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text h4,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content h1,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content h2,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content h3,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content h4 {
+  font-family: var(--wdm-font-display) !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.10em !important;
+  color: var(--wdm-amber-hi) !important;
+  margin: 4px 0 6px !important;
+  padding: 0 !important;
+  border: none !important;
+  line-height: 1.2 !important;
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text h1,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content h1 { font-size: 14px !important; }
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text h2,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content h2 { font-size: 13px !important; }
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text h3,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content h3 { font-size: 12px !important; }
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text h4,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content h4 { font-size: 11px !important; }
+
+/* Inline item image in card titles (weapon icon next to "Attack: …") */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text .item-img,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content .item-img {
+  width: 22px !important;
+  height: 22px !important;
+  border: 1px solid var(--wdm-amber-dim);
+  border-radius: 0;
+  background: rgba(10,9,8,0.5);
+  object-fit: cover;
+  vertical-align: middle;
+  flex: 0 0 22px;
+}
+
+/* Wrapper styling for system attack/defense/damage cards */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text .attack-message,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text .defense-message,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text .damage-message,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content .attack-message,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content .defense-message,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content .damage-message {
+  background: rgba(10,9,8,0.55);
+  border: 1px solid rgba(140,133,121,0.18);
+  border-left: 2px solid var(--wdm-amber);
+  padding: 6px 8px;
+  margin: 3px 0;
+  font-size: 12px;
+  color: var(--wdm-ink);
+  font-style: normal;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text .attack-message > span,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text .defense-message > span,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text .damage-message > span,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content .attack-message > span,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content .defense-message > span,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content .damage-message > span {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--wdm-ink-dim);
+  margin: 2px 0;
+}
+
+/* Action buttons inside chat messages (Damage / Fumble / Apply / etc.) */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text button,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto !important;
+  min-width: 80px;
+  height: 26px !important;
+  min-height: 0 !important;
+  padding: 0 12px !important;
+  margin: 4px 4px 4px 0 !important;
+  background: rgba(10,9,8,0.7) !important;
+  border: 1px solid var(--wdm-amber-dim) !important;
+  border-radius: 0 !important;
+  color: var(--wdm-amber-hi) !important;
+  font-family: var(--wdm-font-display) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.10em !important;
+  text-transform: uppercase !important;
+  cursor: pointer;
+  box-shadow: none !important;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur), background var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text button:hover,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content button:hover {
+  color: var(--wdm-amber-bright) !important;
+  border-color: var(--wdm-amber) !important;
+  background: rgba(184,148,100,0.10) !important;
+}
+/* Fumble button gets the red accent */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text button.fumble,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text button[class*="fumble"],
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content button.fumble,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content button[class*="fumble"] {
+  border-color: var(--wdm-red) !important;
+  color: var(--wdm-red-bright) !important;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text button.fumble:hover,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .flavor-text button[class*="fumble"]:hover,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content button.fumble:hover,
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message .message-content button[class*="fumble"]:hover {
+  color: var(--wdm-ink-bright) !important;
+  background: rgba(140,60,60,0.15) !important;
+}
+
+/* --- chat notifications (transient overlay above input) -------------------- */
+body.witcher-ttrpg-death-march #ui-right #chat-notifications {
+  background: rgba(10,9,8,0.85);
+  border: none;
+  border-top: 1px solid rgba(140,133,121,0.12);
+  padding: 6px 22px 6px 26px;
+}
+body.witcher-ttrpg-death-march #ui-right #chat-notifications .chat-log {
+  gap: 4px;
+}
+body.witcher-ttrpg-death-march #ui-right #chat-notifications .chat-message {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+/* =============================================================================
+   MOCKUP DOM INJECTIONS — header + per-message avatars
+   Owned by scripts/chrome/sidebar-chat.js
+   ============================================================================= */
+
+/* --- header bar at the top of the chat tab --------------------------------- */
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head {
+  flex: 0 0 auto;
+  padding: 14px 14px 10px 14px;
+  display: flex; flex-direction: column;
+  align-items: center;                /* center title + subnav within the header */
+  gap: 8px;
+  position: relative;
+  background: none;
+  pointer-events: auto;               /* defeat #sidebar-content.active-chat { pointer-events: none } */
+}
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head::after {
+  content: '';
+  position: absolute; left: 14px; right: 14px; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 5%, var(--wdm-amber-dim) 25%, transparent 50%, var(--wdm-amber) 70%, transparent 95%);
+  opacity: 0.4;
+}
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .title-row {
+  display: flex; align-items: center; gap: 10px;
+  justify-content: center;            /* center title-mark + title horizontally */
+}
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .title-mark {
+  width: 22px; height: 22px;
+  color: var(--wdm-amber);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .title-mark i { font-size: 15px; }
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .sb-title {
+  font-family: var(--wdm-font-display);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+  margin: 0; padding: 0; border: none;
+  line-height: 1.2;
+}
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .sb-title::before,
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .sb-title::after {
+  content: '·'; color: var(--wdm-amber-dim); margin: 0 6px;
+}
+
+/* subnav chips — torn-parchment active state, matches reference.html */
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .sb-subnav {
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .sub-chip {
+  position: relative;
+  background: none !important;
+  border: 1px solid rgba(140,133,121,0.18) !important;
+  border-radius: 0 !important;
+  cursor: pointer;
+  padding: 4px 10px !important;
+  width: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  display: inline-flex !important;
+  align-items: center; gap: 5px;
+  color: var(--wdm-ink-dim) !important;
+  font-family: var(--wdm-font-display) !important;
+  font-weight: 500 !important;
+  font-size: 10px !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase !important;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur);
+  box-shadow: none !important;
+}
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .sub-chip i { font-size: 10px; color: var(--wdm-ink-dim); transition: color var(--wdm-dur); }
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .sub-chip:hover { color: var(--wdm-ink-bright) !important; border-color: var(--wdm-amber-dim) !important; }
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .sub-chip:hover i { color: var(--wdm-amber-hi); }
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .sub-chip.is-active { color: var(--wdm-ink-ash) !important; border-color: transparent !important; }
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .sub-chip.is-active i { color: var(--wdm-ink-ash); }
+/* Filter: subnav chip sets data-wou-filter on #chat; messages have
+   data-wou-type via the renderChatMessageHTML hook. Hide non-matches. */
+body.witcher-ttrpg-death-march #sidebar #chat[data-wou-filter="rolls"]    .chat-message:not([data-wou-type="rolls"])    { display: none !important; }
+body.witcher-ttrpg-death-march #sidebar #chat[data-wou-filter="ic"]       .chat-message:not([data-wou-type="ic"])       { display: none !important; }
+body.witcher-ttrpg-death-march #sidebar #chat[data-wou-filter="whispers"] .chat-message:not([data-wou-type="whispers"]) { display: none !important; }
+
+/* Recipient backdrops: faint tint + 2px inset left stripe, using box-shadow
+   so we don't disturb the existing padding/avatar layout. */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message[data-wou-recipient="whisper"] {
+  background: rgba(106,138,162,0.05) !important;       /* faint frost */
+  box-shadow: inset 2px 0 0 0 rgba(106,138,162,0.55) !important;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message[data-wou-recipient="gm"] {
+  background: rgba(106,138,162,0.08) !important;       /* stronger frost — to-GM */
+  box-shadow: inset 2px 0 0 0 var(--wdm-frost) !important;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message[data-wou-recipient="blind"] {
+  background: rgba(140,60,60,0.07) !important;          /* faint red — GM-only blind */
+  box-shadow: inset 2px 0 0 0 var(--wdm-red) !important;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message[data-wou-recipient="self"] {
+  background: rgba(168,132,80,0.06) !important;         /* faint amber — self-roll */
+  box-shadow: inset 2px 0 0 0 var(--wdm-amber-dim) !important;
+}
+
+/* Small grey label after the sender name indicating the recipient type. */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message[data-wou-recipient] .message-sender::after {
+  font-family: var(--wdm-font-display);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.10em;
+  text-transform: lowercase;
+  color: var(--wdm-ink-faint);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message[data-wou-recipient="whisper"] .message-sender::after { content: '· whisper'; }
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message[data-wou-recipient="gm"]      .message-sender::after { content: '· to gm'; }
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message[data-wou-recipient="blind"]   .message-sender::after { content: '· blind'; }
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message[data-wou-recipient="self"]    .message-sender::after { content: '· self'; }
+
+/* Foundry renders a `<span class="whisper-to">To: X</span>` for whispers,
+   which now duplicates the inline label. Hide it; the label + backdrop
+   carry the same info more cleanly. */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message[data-wou-recipient] .whisper-to {
+  display: none;
+}
+
+body.witcher-ttrpg-death-march #sidebar #chat #wou-chat-head .sub-chip.is-active::before {
+  content: '';
+  position: absolute; inset: 0; z-index: -1;
+  background:
+    radial-gradient(ellipse at 30% 25%, rgba(228,210,168,0.28), transparent 55%),
+    linear-gradient(165deg, var(--wdm-amber-bright), var(--wdm-amber-hi) 60%, var(--wdm-amber-dim));
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 28' preserveAspectRatio='none'><path d='M2 4 L8 2 L16 4 L24 2 L32 4 L40 2 L48 4 L56 2 L64 4 L72 2 L80 4 L88 2 L96 4 L104 2 L112 4 L118 6 L118 22 L112 25 L104 23 L96 26 L88 23 L80 26 L72 23 L64 26 L56 23 L48 26 L40 23 L32 26 L24 23 L16 26 L8 23 L2 25 L4 18 L4 8 Z' fill='black'/></svg>");
+          mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 28' preserveAspectRatio='none'><path d='M2 4 L8 2 L16 4 L24 2 L32 4 L40 2 L48 4 L56 2 L64 4 L72 2 L80 4 L88 2 L96 4 L104 2 L112 4 L118 6 L118 22 L112 25 L104 23 L96 26 L88 23 L80 26 L72 23 L64 26 L56 23 L48 26 L40 23 L32 26 L24 23 L16 26 L8 23 L2 25 L4 18 L4 8 Z' fill='black'/></svg>");
+  -webkit-mask-size: 100% 100%;
+          mask-size: 100% 100%;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.7);
+}
+
+/* --- per-message avatar bubble ---------------------------------------------
+   Non-invasive overlay: the chat-message keeps its native `display: block`
+   (so Foundry / Dice So Nice / system chat cards aren't reshaped), gets
+   `padding-left` to make room, and the avatar is absolutely positioned in
+   the reserved column. */
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message.wou-has-ava {
+  position: relative;
+  padding-left: 36px;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .chat-message.wou-has-ava .sb-ava {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+body.witcher-ttrpg-death-march #sidebar #chat .sb-ava {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,235,180,0.10), transparent 55%),
+    radial-gradient(circle, #1c1612, #0a0908);
+  border: 1px solid var(--wdm-amber-dim);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--wdm-amber-hi);
+  font-family: var(--wdm-font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0;
+  overflow: hidden;
+  flex: 0 0 28px;
+  position: relative;
+}
+body.witcher-ttrpg-death-march #sidebar #chat .sb-ava img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* =============================================================================
+   COMBAT TAB
+   Foundry's DOM:
+     <section id="combat" class="sidebar-tab combat-sidebar flexcol">
+       <header class="combat-tracker-header">
+         <nav class="encounters">…create / cycle combats / settings…</nav>
+         <div class="encounter-controls [combat]">
+           <div class="control-buttons left">…rollAll / rollNPC (GM)…</div>
+           <strong class="encounter-title">Round X / Not Started / None</strong>
+           <div class="control-buttons right">…context-menu (GM)…</div>
+         </div>
+       </header>
+       <ol class="combat-tracker plain">
+         <li class="combatant [active] [hidden] [defeated]" data-combatant-id="…">
+           <img class="token-image" />
+           <div class="token-name">
+             <strong class="name">…</strong>
+             <div class="combatant-controls">…hide/defeat/ping/pan + token-effects…</div>
+           </div>
+           <div class="token-resource"><span class="resource">…</span></div>
+           <div class="token-initiative">
+             <input class="initiative-input" /> OR <button class="roll" /> (no init yet)
+           </div>
+         </li>
+       </ol>
+       <nav class="combat-controls">…prev-round/prev/end/next/next-round…</nav>
+     </section>
+   ============================================================================= */
+
+/* --- root container --------------------------------------------------------- */
+body.witcher-ttrpg-death-march #sidebar #combat {
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  gap: 0;
+  min-height: 0;
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden;
+}
+
+/* --- header ----------------------------------------------------------------- */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header {
+  flex: 0 0 auto;
+  padding: 14px 12px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  background: none;
+  border: none;
+  position: relative;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header::after {
+  content: '';
+  position: absolute; left: 12px; right: 12px; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 5%, var(--wdm-amber-dim) 25%, transparent 50%, var(--wdm-amber) 70%, transparent 95%);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Encounters nav (GM-only) — small row of icon buttons */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounters {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: none !important;
+  border: none !important;
+  padding: 0;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounters .cycle-combats {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--wdm-font-display);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-dim);
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounters .encounter-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounters .encounter-count .value {
+  color: var(--wdm-amber-hi);
+  font-weight: 700;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounters .encounter-count .separator {
+  color: var(--wdm-ink-faint);
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounters .encounter-count .max {
+  color: var(--wdm-ink-dim);
+}
+
+/* "Create Combat" big button when no combat exists */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounters .combat-control-lg {
+  width: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 8px 14px !important;
+  background: rgba(10,9,8,0.5) !important;
+  border: 1px solid var(--wdm-amber-dim) !important;
+  border-radius: 0 !important;
+  color: var(--wdm-amber-hi) !important;
+  font-family: var(--wdm-font-display) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.20em !important;
+  text-transform: uppercase !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur), background var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounters .combat-control-lg:hover {
+  color: var(--wdm-amber-bright) !important;
+  border-color: var(--wdm-amber) !important;
+  background: rgba(184,148,100,0.10) !important;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounters .combat-control-lg i {
+  font-size: 12px;
+}
+
+/* Inline icon controls (+ create, cycle prev/next, settings gear) */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounters .inline-control {
+  width: 22px !important;
+  height: 22px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: 1px solid transparent !important;
+  border-radius: 0 !important;
+  color: var(--wdm-ink-dim) !important;
+  font-size: 11px !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounters .inline-control:hover:not(:disabled) {
+  color: var(--wdm-amber-hi) !important;
+  border-color: var(--wdm-amber-dim) !important;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounters .inline-control:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Encounter controls row: rollAll/rollNPC + title + context menu */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounter-controls {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounter-controls .control-buttons {
+  display: flex;
+  gap: 4px;
+  background: none !important;
+  border: none !important;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounter-controls .control-buttons .spacer {
+  width: 26px;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounter-controls .inline-control {
+  width: 26px !important;
+  height: 26px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: 1px solid rgba(140,133,121,0.18) !important;
+  border-radius: 0 !important;
+  color: var(--wdm-ink-dim) !important;
+  font-size: 12px !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounter-controls .inline-control:hover:not(:disabled) {
+  color: var(--wdm-amber-hi) !important;
+  border-color: var(--wdm-amber-dim) !important;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounter-controls .inline-control:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Encounter title — the round display */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header .encounter-title {
+  font-family: var(--wdm-font-display);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi);
+  text-align: center;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+  margin: 0;
+}
+
+/* --- combatant list --------------------------------------------------------- */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 0;
+  margin: 0;
+  list-style: none;
+  background: none;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker::-webkit-scrollbar { width: 6px; }
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); border-radius: 3px; }
+
+/* Each combatant row */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px dotted rgba(140,133,121,0.14);
+  background: none !important;
+  cursor: pointer;
+  transition: background var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant:hover {
+  background: rgba(184,148,100,0.04) !important;
+}
+
+/* Active combatant — amber stripe + brighter row */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant.active {
+  background: rgba(184,148,100,0.08) !important;
+  box-shadow: inset 2px 0 0 0 var(--wdm-amber);
+}
+
+/* Hidden combatants (GM-only) — dim */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant.hidden {
+  opacity: 0.5;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant.defeated {
+  opacity: 0.4;
+  filter: grayscale(0.7);
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant.defeated .name {
+  text-decoration: line-through;
+}
+
+/* Token image as circular avatar */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .token-image {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50%;
+  border: 1px solid var(--wdm-amber-dim);
+  background: rgba(10,9,8,0.5);
+  object-fit: cover;
+  display: block;
+}
+
+/* Name + controls column */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .token-name {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .token-name .name {
+  font-family: var(--wdm-font-display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-hi);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+  line-height: 1.2;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant.active .token-name .name {
+  color: var(--wdm-amber-bright);
+}
+
+/* Combatant inline controls — small icon row under the name */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .combatant-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .combatant-controls .inline-control,
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .combatant-controls button {
+  width: 18px !important;
+  height: 18px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  color: var(--wdm-ink-faint) !important;
+  font-size: 10px !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .combatant-controls .inline-control:hover,
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .combatant-controls button:hover {
+  color: var(--wdm-amber-hi) !important;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .combatant-controls .inline-control.active {
+  color: var(--wdm-amber-bright) !important;
+}
+
+/* Token effects — small status icons under the name */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .token-effects {
+  display: flex;
+  gap: 2px;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .token-effects .token-effect {
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 2px;
+  opacity: 0.8;
+}
+
+/* Resource column (HP-like) — small dim number */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .token-resource {
+  text-align: right;
+  font-family: var(--wdm-font-display);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wdm-ink);
+  letter-spacing: 0.04em;
+  padding-right: 4px;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant.active .token-resource {
+  color: var(--wdm-amber-hi);
+}
+
+/* Initiative column — big amber number on the right */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .token-initiative {
+  text-align: right;
+  min-width: 40px;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .token-initiative > span {
+  display: block;
+  font-family: var(--wdm-font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--wdm-amber-bright);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .token-initiative .initiative-input {
+  width: 100%;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  padding: 0 !important;
+  font-family: var(--wdm-font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--wdm-amber-bright) !important;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .token-initiative .initiative-input:focus {
+  color: var(--wdm-ink-bright) !important;
+}
+
+/* Roll-initiative button when no initiative yet */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .token-initiative .roll {
+  width: 30px !important;
+  height: 30px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: 1px solid var(--wdm-amber-dim) !important;
+  border-radius: 50% !important;
+  color: var(--wdm-amber-hi) !important;
+  font-size: 13px !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker .combatant .token-initiative .roll:hover {
+  color: var(--wdm-amber-bright) !important;
+  border-color: var(--wdm-amber) !important;
+  background: rgba(184,148,100,0.10) !important;
+}
+
+/* --- footer (prev/next/end controls) ---------------------------------------- */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px 14px 12px;
+  background: none;
+  border: none;
+  border-top: 1px solid rgba(140,133,121,0.12);
+  position: relative;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-controls::before {
+  content: '';
+  position: absolute; left: 12px; right: 12px; top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 5%, var(--wdm-amber-dim) 25%, transparent 50%, var(--wdm-amber) 70%, transparent 95%);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* Inline prev/next round/turn icon buttons */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-controls .inline-control {
+  width: 28px !important;
+  height: 28px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: 1px solid rgba(140,133,121,0.18) !important;
+  border-radius: 0 !important;
+  color: var(--wdm-ink-dim) !important;
+  font-size: 12px !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur), background var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-controls .inline-control:hover {
+  color: var(--wdm-amber-hi) !important;
+  border-color: var(--wdm-amber-dim) !important;
+  background: rgba(184,148,100,0.06) !important;
+}
+
+/* Big BEGIN / END / End Turn button */
+body.witcher-ttrpg-death-march #sidebar #combat .combat-controls .combat-control-lg {
+  width: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 8px 18px !important;
+  background: rgba(10,9,8,0.5) !important;
+  border: 1px solid var(--wdm-amber-dim) !important;
+  border-radius: 0 !important;
+  color: var(--wdm-amber-hi) !important;
+  font-family: var(--wdm-font-display) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.22em !important;
+  text-transform: uppercase !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur), background var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-controls .combat-control-lg:hover {
+  color: var(--wdm-amber-bright) !important;
+  border-color: var(--wdm-amber) !important;
+  background: rgba(184,148,100,0.12) !important;
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combat-controls .combat-control-lg i {
+  font-size: 12px;
+}
+
+/* =============================================================================
+   DIRECTORY TABS  (Actors / Items / Journal / Tables / Cards / Playlists / Compendium)
+   All share Foundry's DocumentDirectory base. The DOM pattern:
+     <section id="{tab}" class="sidebar-tab {tab}-sidebar flexcol">
+       <header class="directory-header flexcol">
+         <div class="header-actions">
+           <button class="create-entry">+ Type</button>
+           <button class="create-folder">+ Folder</button>
+         </div>
+         <search>
+           <button class="toggle-search-mode" />
+           <input type="search" placeholder="…" />
+           <button class="toggle-sort" />
+           <button class="collapse-all" />
+         </search>
+       </header>
+       <ol class="directory-list plain">
+         <li class="directory-item folder flexcol [expanded]" data-folder-id="…">
+           <header class="folder-header">
+             <i class="fa-folder-open"/><span class="folder-name">Name</span>
+             <button class="create-button create-folder">+</button>
+             <button class="create-button create-entry">+</button>
+           </header>
+           <ol class="subdirectory plain">…recursive…</ol>
+         </li>
+         <li class="directory-item entry document {tabName}" data-entry-id="…">
+           <img class="thumbnail" />            ← if entry has one
+           <a class="entry-name">…</a>
+         </li>
+       </ol>
+     </section>
+   Pack (compendium) and scene partials differ — see specific overrides below.
+   ============================================================================= */
+
+/* --- root containers (Foundry's tab section) -------------------------------- */
+body.witcher-ttrpg-death-march #sidebar #actors,
+body.witcher-ttrpg-death-march #sidebar #items,
+body.witcher-ttrpg-death-march #sidebar #journal,
+body.witcher-ttrpg-death-march #sidebar #tables,
+body.witcher-ttrpg-death-march #sidebar #cards,
+body.witcher-ttrpg-death-march #sidebar #playlists,
+body.witcher-ttrpg-death-march #sidebar #compendium,
+body.witcher-ttrpg-death-march #sidebar #scenes,
+body.witcher-ttrpg-death-march #sidebar #settings {
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  gap: 0;
+  min-height: 0;
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden;
+}
+
+/* --- directory header (search + create buttons) ----------------------------- */
+body.witcher-ttrpg-death-march .directory-header {
+  flex: 0 0 auto;
+  padding: 14px 12px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  background: none !important;
+  border: none !important;
+  position: relative;
+}
+body.witcher-ttrpg-death-march .directory-header::after {
+  content: '';
+  position: absolute; left: 12px; right: 12px; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 5%, var(--wdm-amber-dim) 25%, transparent 50%, var(--wdm-amber) 70%, transparent 95%);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Action buttons row — Create Entry / Create Folder */
+body.witcher-ttrpg-death-march .directory-header .header-actions {
+  display: flex;
+  gap: 6px;
+}
+body.witcher-ttrpg-death-march .directory-header .header-actions button {
+  flex: 1 1 0;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 6px 10px !important;
+  background: rgba(10,9,8,0.5) !important;
+  border: 1px solid var(--wdm-amber-dim) !important;
+  border-radius: 0 !important;
+  color: var(--wdm-amber-hi) !important;
+  font-family: var(--wdm-font-display) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur), background var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march .directory-header .header-actions button:hover {
+  color: var(--wdm-amber-bright) !important;
+  border-color: var(--wdm-amber) !important;
+  background: rgba(184,148,100,0.10) !important;
+}
+body.witcher-ttrpg-death-march .directory-header .header-actions button i {
+  font-size: 11px;
+}
+
+/* Search row */
+body.witcher-ttrpg-death-march .directory-header search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(10,9,8,0.7);
+  border: 1px solid rgba(140,133,121,0.18);
+  padding: 4px 6px;
+  transition: border-color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march .directory-header search:focus-within {
+  border-color: var(--wdm-amber-dim);
+  box-shadow: 0 0 0 1px var(--wdm-amber-dim);
+}
+body.witcher-ttrpg-death-march .directory-header search input[type="search"] {
+  flex: 1 1 auto;
+  background: none !important;
+  border: none !important;
+  outline: none !important;
+  color: var(--wdm-ink-hi) !important;
+  font-family: var(--wdm-font-body) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.02em;
+  padding: 2px 4px;
+  min-width: 0;
+}
+body.witcher-ttrpg-death-march .directory-header search input[type="search"]::placeholder {
+  color: var(--wdm-ink-faint);
+  letter-spacing: 0.04em;
+  font-style: normal;
+}
+body.witcher-ttrpg-death-march .directory-header search .inline-control {
+  width: 22px !important;
+  height: 22px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: 1px solid transparent !important;
+  border-radius: 0 !important;
+  color: var(--wdm-ink-dim) !important;
+  font-size: 11px !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march .directory-header search .inline-control:hover {
+  color: var(--wdm-amber-hi) !important;
+  border-color: var(--wdm-amber-dim) !important;
+}
+
+/* --- directory list (scrolling tree) ---------------------------------------- */
+body.witcher-ttrpg-death-march .directory-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* Zero vertical padding so the first directory item sits flush against
+     the search bar above (no dark cutout showing the page behind). */
+  padding: 0 8px;
+  margin: 0;
+  list-style: none;
+  background: none !important;
+}
+body.witcher-ttrpg-death-march .directory-list::-webkit-scrollbar { width: 6px; }
+body.witcher-ttrpg-death-march .directory-list::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); border-radius: 3px; }
+
+body.witcher-ttrpg-death-march .subdirectory {
+  list-style: none;
+  padding: 0 0 0 10px;
+  margin: 0;
+  border-left: 1px dotted rgba(110,82,36,0.4) !important;
+}
+
+/* --- folders ---------------------------------------------------------------- */
+body.witcher-ttrpg-death-march .directory-item.folder {
+  background: none !important;
+  border: none !important;
+  margin: 0 !important;
+}
+body.witcher-ttrpg-death-march .directory-item.folder > .folder-header {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px !important;
+  /* Default warm-dark background; Foundry's inline `style="background-color: X"`
+     (when a folder color is set) overrides this. The filter below pushes any
+     colored background toward our sepia/amber palette. */
+  background: rgba(10,9,8,0.4);
+  border: none !important;
+  border-left: 2px solid var(--wdm-amber-dim) !important;
+  border-radius: 0 !important;
+  cursor: pointer;
+  transition: filter var(--wdm-dur), border-color var(--wdm-dur);
+  filter: saturate(0.4) sepia(0.55) brightness(0.7) contrast(1.05);
+}
+body.witcher-ttrpg-death-march .directory-item.folder > .folder-header:hover {
+  border-left-color: var(--wdm-amber) !important;
+  filter: saturate(0.5) sepia(0.5) brightness(0.85) contrast(1.05);
+}
+body.witcher-ttrpg-death-march .directory-item.folder > .folder-header i {
+  color: var(--wdm-amber) !important;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+body.witcher-ttrpg-death-march .directory-item.folder > .folder-header .folder-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--wdm-font-display);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi);
+  text-shadow:
+    0 0 2px rgba(0,0,0,0.95),
+    1px 1px 0 rgba(0,0,0,0.95);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.witcher-ttrpg-death-march .directory-item.folder > .folder-header .create-button {
+  width: 20px !important;
+  height: 20px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: 1px solid transparent !important;
+  border-radius: 0 !important;
+  color: var(--wdm-ink-faint) !important;
+  font-size: 9px !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march .directory-item.folder > .folder-header .create-button:hover {
+  color: var(--wdm-amber-hi) !important;
+  border-color: var(--wdm-amber-dim) !important;
+}
+/* Collapsed folder caret hint — uses the folder-open icon already there */
+body.witcher-ttrpg-death-march .directory-item.folder:not(.expanded) > .folder-header > i.fa-folder-open::before {
+  content: "\f07b";              /* fa-folder (closed) */
+}
+
+
+/* --- entries (documents) ---------------------------------------------------- */
+body.witcher-ttrpg-death-march .directory-item.entry {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px !important;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  cursor: pointer;
+  transition: background var(--wdm-dur), color var(--wdm-dur);
+  position: relative;
+}
+body.witcher-ttrpg-death-march .directory-item.entry:hover {
+  background: rgba(184,148,100,0.06) !important;
+}
+body.witcher-ttrpg-death-march .directory-item.entry::before {
+  /* tiny amber bullet on hover */
+  content: '';
+  position: absolute;
+  left: 0; top: 50%;
+  transform: translateY(-50%);
+  width: 2px; height: 0;
+  background: var(--wdm-amber);
+  transition: height var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march .directory-item.entry:hover::before {
+  height: 60%;
+}
+
+body.witcher-ttrpg-death-march .directory-item.entry .thumbnail {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 2px;
+  border: 1px solid var(--wdm-amber-dim);
+  background: rgba(10,9,8,0.5);
+  object-fit: cover;
+  flex: 0 0 28px;
+  display: block;
+}
+
+body.witcher-ttrpg-death-march .directory-item.entry .entry-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--wdm-font-body);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--wdm-ink-hi) !important;
+  letter-spacing: 0.02em;
+  text-decoration: none !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.witcher-ttrpg-death-march .directory-item.entry:hover .entry-name {
+  color: var(--wdm-amber-hi) !important;
+}
+
+/* =============================================================================
+   COMPENDIUM PACK PARTIAL (richer card — banner, title, status icons, source)
+   ============================================================================= */
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry.compendium {
+  display: grid !important;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "icon name status"
+    "icon footer footer";
+  gap: 4px 8px;
+  padding: 8px 10px !important;
+  border: 1px solid rgba(140,133,121,0.14) !important;
+  border-left: 2px solid var(--wdm-amber-dim) !important;
+  background: rgba(10,9,8,0.4) !important;
+  margin: 0 !important;
+}
+/* Collapse adjacent borders so stacked cards read as one continuous rail. */
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry.compendium + .directory-item.entry.compendium {
+  border-top: none !important;
+}
+/* Belt-and-braces: zero every vertical margin on directory items inside
+   the compendium tab.  Foundry V13's core CSS occasionally re-introduces a
+   1-2px margin via a generic selector; this guarantees zero gap regardless. */
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-list,
+body.witcher-ttrpg-death-march #sidebar #compendium .subdirectory,
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item,
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.folder,
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry,
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry.compendium {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+body.witcher-ttrpg-death-march #sidebar #compendium .subdirectory,
+body.witcher-ttrpg-death-march #sidebar #compendium ol[class*="subdirectory"] {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry.compendium:hover {
+  border-color: var(--wdm-amber-dim) !important;
+  border-left-color: var(--wdm-amber) !important;
+  background: rgba(184,148,100,0.06) !important;
+}
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry.compendium .compendium-banner {
+  display: none;                /* hide banner image — keeps cards compact */
+}
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry.compendium .entry-name {
+  grid-area: name;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  text-decoration: none !important;
+}
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry.compendium .entry-name i {
+  grid-area: icon;
+  color: var(--wdm-amber);
+  font-size: 16px;
+  flex: 0 0 auto;
+}
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry.compendium .entry-name strong {
+  font-family: var(--wdm-font-display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-hi);
+}
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry.compendium .status-icons {
+  grid-area: status;
+  display: flex;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  color: var(--wdm-ink-faint);
+}
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry.compendium .status-icons i {
+  font-size: 11px;
+}
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry.compendium .compendium-footer {
+  grid-area: footer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-faint);
+}
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry.compendium .compendium-footer i {
+  font-size: 10px;
+  color: var(--wdm-amber-dim);
+}
+body.witcher-ttrpg-death-march #sidebar #compendium .directory-item.entry.compendium.locked {
+  border-left-color: var(--wdm-amber-dim) !important;
+  opacity: 0.9;
+}
+
+/* =============================================================================
+   SCENES — bigger thumbnail tile + roomier row to fit both visually
+   ============================================================================= */
+body.witcher-ttrpg-death-march #sidebar #scenes .directory-item.entry {
+  padding: 8px 10px !important;
+  gap: 12px !important;
+  align-items: center;
+  min-height: 56px;
+}
+body.witcher-ttrpg-death-march #sidebar #scenes .directory-item.entry .thumbnail {
+  width: 72px !important;
+  height: 44px !important;
+  border-radius: 0;
+  flex: 0 0 72px;
+}
+body.witcher-ttrpg-death-march #sidebar #scenes .directory-item.entry .entry-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: normal;                  /* allow wrap for long scene names */
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+/* =============================================================================
+   PLAYLISTS (Jukebox) — playlist rows, the "Currently Playing" / "Global
+   Volume" global-control panels, per-sound transport buttons, timers and
+   volume sliders. Foundry paints these with its default cool-slate palette
+   (slate headers, blue button accents, blue range sliders); retint to the
+   amber theme so the audio sidebar matches the rest of the chrome.
+   ============================================================================= */
+body.witcher-ttrpg-death-march #sidebar #playlists .directory-item.entry .entry-name strong,
+body.witcher-ttrpg-death-march .playlists-sidebar .playlist-name {
+  color: var(--wdm-amber-hi);
+}
+
+/* Global-control panels (Currently Playing + Global Volume) — header bar */
+body.witcher-ttrpg-death-march .playlists-sidebar .global-control > header {
+  background: rgba(10,9,8,0.5) !important;
+  border-top: 1px solid rgba(110,82,36,0.28) !important;
+  border-bottom: 1px solid rgba(110,82,36,0.28) !important;
+  color: var(--wdm-amber-hi) !important;
+}
+body.witcher-ttrpg-death-march .playlists-sidebar .global-control header strong {
+  font-family: var(--wdm-font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi);
+}
+
+/* Transport buttons (play / stop / loop / forward / pause / add / pin) */
+body.witcher-ttrpg-death-march .playlists-sidebar .global-control button,
+body.witcher-ttrpg-death-march .playlists-sidebar .directory-list button,
+body.witcher-ttrpg-death-march .playlists-sidebar .sound-control {
+  --button-text-color: var(--wdm-ink-dim);
+  --button-hover-text-color: var(--wdm-amber-bright);
+  --button-hover-background-color: transparent;
+  color: var(--wdm-ink-dim) !important;
+  transition: color var(--wdm-dur) !important;
+}
+body.witcher-ttrpg-death-march .playlists-sidebar .global-control button:hover,
+body.witcher-ttrpg-death-march .playlists-sidebar .directory-list button:hover,
+body.witcher-ttrpg-death-march .playlists-sidebar .sound-control:hover {
+  color: var(--wdm-amber-bright) !important;
+}
+/* Playing/active transport (stop square, active loop) — amber, not blue */
+body.witcher-ttrpg-death-march .playlists-sidebar .global-control button.fa-square,
+body.witcher-ttrpg-death-march .playlists-sidebar .directory-list button.fa-square,
+body.witcher-ttrpg-death-march .playlists-sidebar .sound-control.fa-square {
+  --button-text-color: var(--wdm-amber);
+  color: var(--wdm-amber) !important;
+}
+body.witcher-ttrpg-death-march .playlists-sidebar .global-control button.inactive,
+body.witcher-ttrpg-death-march .playlists-sidebar .directory-list button.inactive,
+body.witcher-ttrpg-death-march .playlists-sidebar .sound-control.inactive,
+body.witcher-ttrpg-death-march .playlists-sidebar button:disabled {
+  --button-text-color: var(--wdm-ink-faint);
+  color: var(--wdm-ink-faint) !important;
+}
+
+/* Sound row name + music glyph */
+body.witcher-ttrpg-death-march .playlists-sidebar .sound > header label {
+  color: var(--wdm-ink-hi);
+}
+body.witcher-ttrpg-death-march .playlists-sidebar .sound > header .fa-music {
+  color: var(--wdm-amber-dim);
+}
+
+/* Timer + volume glyph */
+body.witcher-ttrpg-death-march .playlists-sidebar .sound-timer {
+  font-family: var(--wdm-font-mono);
+  color: var(--wdm-ink-dim) !important;
+}
+body.witcher-ttrpg-death-march .playlists-sidebar .sound-timer .current {
+  color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march .playlists-sidebar .volume-icon {
+  color: var(--wdm-ink-dim) !important;
+}
+
+/* Volume sliders — default browser/Foundry accent is blue; tint amber */
+body.witcher-ttrpg-death-march .playlists-sidebar range-picker input[type="range"],
+body.witcher-ttrpg-death-march .playlists-sidebar input[type="range"].sound-volume,
+body.witcher-ttrpg-death-march .playlists-sidebar input[type="range"].global-volume-slider {
+  accent-color: var(--wdm-amber);
+}
+
+/* =============================================================================
+   SETTINGS SIDEBAR TAB  (#settings)
+   ============================================================================= */
+
+/* ---- version/info banner ---------------------------------------------------- */
+body.witcher-ttrpg-death-march #sidebar #settings .info {
+  padding: 16px 14px 12px;
+  border-bottom: var(--wdm-rule-amber);
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+body.witcher-ttrpg-death-march #sidebar #settings .info h1.title {
+  font-family: var(--wdm-font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi);
+  margin-bottom: 4px;
+}
+
+body.witcher-ttrpg-death-march #sidebar #settings .info .subtitle {
+  font-family: var(--wdm-font-body);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--wdm-ink);
+  margin: 0 0 2px;
+}
+
+body.witcher-ttrpg-death-march #sidebar #settings .info .build,
+body.witcher-ttrpg-death-march #sidebar #settings .info .system,
+body.witcher-ttrpg-death-march #sidebar #settings .info .modules {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(140,133,121,0.08);
+}
+
+body.witcher-ttrpg-death-march #sidebar #settings .info .label {
+  color: var(--wdm-ink-dim);
+  font-family: var(--wdm-font-display);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+body.witcher-ttrpg-death-march #sidebar #settings .info .value {
+  color: var(--wdm-ink-hi);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* ---- section wrappers ------------------------------------------------------- */
+body.witcher-ttrpg-death-march #sidebar #settings .settings,
+body.witcher-ttrpg-death-march #sidebar #settings .documentation,
+body.witcher-ttrpg-death-march #sidebar #settings .access {
+  padding: 0 14px 8px;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+/* ---- section headers (h4.divider) ------------------------------------------ */
+body.witcher-ttrpg-death-march #sidebar #settings h4.divider {
+  font-family: var(--wdm-font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-dim);
+  padding: 10px 0 5px;
+  margin: 0;
+  border-bottom: 1px solid rgba(110,82,36,0.28);
+}
+
+/* ---- all action buttons and link-buttons ------------------------------------ */
+body.witcher-ttrpg-death-march #sidebar #settings button,
+body.witcher-ttrpg-death-march #sidebar #settings a.button {
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 7px 10px !important;
+  background: rgba(10,9,8,0.35) !important;
+  border: 1px solid rgba(110,82,36,0.28) !important;
+  border-top: none !important;
+  border-radius: 0 !important;
+  color: var(--wdm-ink-hi) !important;
+  font-family: var(--wdm-font-display) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase !important;
+  text-decoration: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur), background var(--wdm-dur);
+}
+
+/* First button in each group gets the top border restored */
+body.witcher-ttrpg-death-march #sidebar #settings h4.divider + button,
+body.witcher-ttrpg-death-march #sidebar #settings h4.divider + a.button {
+  border-top: 1px solid rgba(110,82,36,0.28) !important;
+}
+
+body.witcher-ttrpg-death-march #sidebar #settings button:hover,
+body.witcher-ttrpg-death-march #sidebar #settings a.button:hover {
+  color: var(--wdm-amber-bright) !important;
+  border-color: var(--wdm-amber-dim) !important;
+  background: rgba(168,132,80,0.08) !important;
+}
+
+body.witcher-ttrpg-death-march #sidebar #settings button i,
+body.witcher-ttrpg-death-march #sidebar #settings a.button i {
+  color: var(--wdm-amber-dim);
+  font-size: 12px;
+  width: 14px;
+  text-align: center;
+  flex: 0 0 auto;
+  transition: color var(--wdm-dur);
+}
+
+body.witcher-ttrpg-death-march #sidebar #settings button:hover i,
+body.witcher-ttrpg-death-march #sidebar #settings a.button:hover i {
+  color: var(--wdm-amber);
+}
+
+/* Update-available notification pip */
+body.witcher-ttrpg-death-march #sidebar #settings .notification-pip {
+  color: var(--wdm-amber) !important;
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+/* === Placeable type-tab strip (Tokens / Tiles / Drawings / Walls / Lights /
+   Sounds / Templates / Regions / Notes — the horizontal nav at the top of
+   the placeables sidebar). Default Foundry lays this out horizontally, but
+   our chrome's `#sidebar nav.tabs` rules used to grab it too and force a
+   flex-column — buttons stacked + overlapped. Now scoped to .faded-ui only;
+   restore the intended horizontal layout here explicitly so a Foundry
+   upgrade can't reintroduce the column accident. */
+body.witcher-ttrpg-death-march .placeables-sidebar nav.tabs {
+  display: flex !important;
+  flex-direction: row !important;
+  flex: 0 0 auto !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px !important;
+  padding: 10px 8px !important;
+  border: none !important;
+  background: none !important;
+  border-bottom: 1px solid rgba(184, 148, 100, 0.18);
+}
+body.witcher-ttrpg-death-march .placeables-sidebar nav.tabs button {
+  width: 30px !important;
+  height: 30px !important;
+  min-height: 0 !important;
+  flex: 0 0 auto !important;
+  border-radius: 2px !important;
+  border: 1px solid transparent !important;
+  background: rgba(10, 9, 8, 0.4) !important;
+  color: var(--wdm-ink-dim) !important;
+  font-size: 14px !important;
+  cursor: pointer;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur), background var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march .placeables-sidebar nav.tabs button:hover {
+  color: var(--wdm-amber-hi) !important;
+  border-color: var(--wdm-amber-dim) !important;
+  background: rgba(184, 148, 100, 0.08) !important;
+}
+body.witcher-ttrpg-death-march .placeables-sidebar nav.tabs button.active,
+body.witcher-ttrpg-death-march .placeables-sidebar nav.tabs button[aria-pressed="true"] {
+  color: var(--wdm-amber-bright) !important;
+  border-color: var(--wdm-amber) !important;
+  background: rgba(184, 148, 100, 0.14) !important;
+}
+
+/* === Placeables search/filter box ===========================================
+   The per-scene filter bar (e.g. "Filter Tokens…") sits in its own <search>
+   at the top of the placeables tab — NOT inside .directory-header, so the
+   directory search styling above doesn't reach it. Foundry leaves the input
+   on its default cool-slate field. Mirror the directory search look so the
+   filter box and its toggle buttons read as part of the amber theme. */
+body.witcher-ttrpg-death-march .placeables-sidebar search {
+  margin: 8px 8px 4px 8px;
+  padding: 4px 6px !important;
+  gap: 4px !important;
+  background: rgba(10,9,8,0.7);
+  border: 1px solid rgba(140,133,121,0.18);
+  transition: border-color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march .placeables-sidebar search:focus-within {
+  border-color: var(--wdm-amber-dim);
+  box-shadow: 0 0 0 1px var(--wdm-amber-dim);
+}
+body.witcher-ttrpg-death-march .placeables-sidebar search input[type="search"] {
+  background: none !important;
+  border: none !important;
+  outline: none !important;
+  color: var(--wdm-ink-hi) !important;
+  font-family: var(--wdm-font-body) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.02em;
+  padding: 2px 4px;
+  min-width: 0;
+}
+body.witcher-ttrpg-death-march .placeables-sidebar search input[type="search"]::placeholder {
+  color: var(--wdm-ink-faint);
+  letter-spacing: 0.04em;
+  font-style: normal;
+}
+body.witcher-ttrpg-death-march .placeables-sidebar search button {
+  width: 22px !important;
+  height: 22px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  border: 1px solid transparent !important;
+  border-radius: 0 !important;
+  color: var(--wdm-ink-dim) !important;
+  font-size: 11px !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: color var(--wdm-dur), border-color var(--wdm-dur), background var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march .placeables-sidebar search button:hover {
+  color: var(--wdm-amber-hi) !important;
+  border-color: var(--wdm-amber-dim) !important;
+}
+body.witcher-ttrpg-death-march .placeables-sidebar search button[aria-pressed="true"] {
+  color: var(--wdm-amber-bright) !important;
+  border-color: var(--wdm-amber) !important;
+  background: rgba(184, 148, 100, 0.14) !important;
+}
+
+/* === Placeables sidebar tabs (Notes / Lights / Sounds / Drawings / etc.) ===
+   v14 introduced the "placeables" sidebar — a per-scene list of placeable
+   objects (notes, ambient lights, etc.) grouped by type. Default Foundry
+   spacing is 4px gaps and 13px text, which under our dark amber theme reads
+   as a cramped wall of identical pills. We add explicit group separators,
+   amber group headers, taller entries with mono labels so categories +
+   entries are scannable at a glance. */
+body.witcher-ttrpg-death-march .placeables-sidebar .placeable-directory {
+  padding: 6px 4px 12px 6px !important;
+  gap: 2px !important;
+}
+body.witcher-ttrpg-death-march .placeables-sidebar .placeable-group {
+  padding: 6px 0 8px 0;
+  border-top: 1px solid rgba(184, 148, 100, 0.18);
+  margin-top: 4px;
+}
+body.witcher-ttrpg-death-march .placeables-sidebar .placeable-group:first-child {
+  border-top: none;
+  margin-top: 0;
+}
+/* Group header — Notes / Lights / Templates / etc. — bigger, amber,
+   display font so it reads as a section title not a row. */
+body.witcher-ttrpg-death-march .placeables-sidebar .group-header {
+  padding: 4px 6px 6px 6px !important;
+  margin-bottom: 4px;
+}
+body.witcher-ttrpg-death-march .placeables-sidebar .group-header .label {
+  font-family: var(--wdm-font-display) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: var(--wdm-track-wide) !important;
+  text-transform: uppercase !important;
+  color: var(--wdm-amber-hi) !important;
+}
+body.witcher-ttrpg-death-march .placeables-sidebar .group-header i {
+  color: var(--wdm-amber-dim) !important;
+  font-size: 10px !important;
+}
+/* Individual placeable row — taller, readable label, soft amber hover. */
+body.witcher-ttrpg-death-march .placeables-sidebar .placeable-entry {
+  min-height: 28px !important;
+  padding: 6px 8px !important;
+  margin: 2px 0 !important;
+  border-radius: 0 !important;
+  border-left: 2px solid transparent;
+  background: rgba(10, 9, 8, 0.35) !important;
+  transition: background var(--wdm-dur), border-left-color var(--wdm-dur);
+}
+body.witcher-ttrpg-death-march .placeables-sidebar .placeable-entry:hover,
+body.witcher-ttrpg-death-march .placeables-sidebar .placeable-entry.hovered {
+  outline: none !important;
+  background: rgba(184, 148, 100, 0.08) !important;
+  border-left-color: var(--wdm-amber-dim) !important;
+}
+body.witcher-ttrpg-death-march .placeables-sidebar .placeable-entry.active {
+  outline: none !important;
+  background: rgba(184, 148, 100, 0.14) !important;
+  border-left-color: var(--wdm-amber) !important;
+}
+body.witcher-ttrpg-death-march .placeables-sidebar .placeable-entry .label {
+  color: var(--wdm-ink-hi) !important;
+  font-family: var(--wdm-font-body) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.02em;
+}
+body.witcher-ttrpg-death-march .placeables-sidebar .placeable-entry .meta-icon {
+  color: var(--wdm-ink-faint) !important;
+  font-size: 11px !important;
+}
+/* Color swatch (lights / drawings / measure templates) — give it a touch
+   of border + tighter sizing so it doesn't dominate the row. */
+body.witcher-ttrpg-death-march .placeables-sidebar .color {
+  height: 12px !important;
+  width: 12px !important;
+  border: 1px solid rgba(0, 0, 0, 0.6) !important;
+  box-shadow: 0 0 0 1px rgba(184, 148, 100, 0.25);
+  border-radius: 1px;
+}
+
+/* === Chat input — ProseMirror menu kill ===========================
+   Foundry v14 switched the chat input from a textarea to a `<prose-mirror>`
+   element. ProseMirror's default rendering puts a formatting menu
+   (bold/italic/headings/etc.) at the top of every editor, sized via
+   `.menu-container { flex: 0 0 var(--menu-height) }`. In the sidebar
+   chat box that toolbar ate the entire visible area — the actual
+   writing region collapsed to a few pixels behind it.
+
+   Chat lines are one-shot text; the formatting buttons are useless and
+   the visible-area collapse is unusable. Hide the menu, force the
+   content region to fill the wrapper, and recover the writing space. */
+body.witcher-ttrpg-death-march #ui-right #chat-message .menu-container,
+body.witcher-ttrpg-death-march #ui-right prose-mirror#chat-message .menu-container {
+  display: none !important;
+}
+body.witcher-ttrpg-death-march #ui-right #chat-message,
+body.witcher-ttrpg-death-march #ui-right prose-mirror#chat-message {
+  display: flex !important;
+  flex-direction: column;
+  min-height: 22px !important;
+  max-height: 120px !important;
+}
+body.witcher-ttrpg-death-march #ui-right #chat-message .editor-container,
+body.witcher-ttrpg-death-march #ui-right prose-mirror#chat-message .editor-container {
+  flex: 1 1 auto !important;
+  min-height: 22px !important;
+  display: flex !important;
+  flex-direction: column;
+  /* Foundry paints this with --color-cool-5 / --color-cool-4 (a purple-tinted
+     slate). Drop it so the .wou-chat-input wrapper's dark surface + amber
+     focus ring show through instead. */
+  background: none !important;
+  border: none !important;
+}
+body.witcher-ttrpg-death-march #ui-right #chat-message .editor-content,
+body.witcher-ttrpg-death-march #ui-right prose-mirror#chat-message .editor-content {
+  flex: 1 1 auto !important;
+  min-height: 22px !important;
+  padding: 0 !important;
+  background: none !important;
+  border: none !important;
+  font-family: var(--wdm-font-body) !important;
+  font-size: 13px !important;
+  color: var(--wdm-ink-hi) !important;
+  caret-color: var(--wdm-amber);
+  overflow-y: auto;
+}
+body.witcher-ttrpg-death-march #ui-right #chat-message .editor-content:focus,
+body.witcher-ttrpg-death-march #ui-right prose-mirror#chat-message .editor-content:focus {
+  outline: none !important;
+}
+body.witcher-ttrpg-death-march #ui-right #chat-message .editor-content p,
+body.witcher-ttrpg-death-march #ui-right prose-mirror#chat-message .editor-content p {
+  margin: 0 !important;
+}
+/* Placeholder text — Foundry sets the placeholder via the
+   `--chat-message-placeholder` CSS variable on a `::before` pseudo. */
+body.witcher-ttrpg-death-march #ui-right #chat-message .editor-content.is-empty::before,
+body.witcher-ttrpg-death-march #ui-right prose-mirror#chat-message .editor-content.is-empty::before {
+  color: var(--wdm-ink-faint) !important;
+  font-family: var(--wdm-font-body) !important;
+  letter-spacing: 0.04em !important;
+  font-style: normal !important;
+}

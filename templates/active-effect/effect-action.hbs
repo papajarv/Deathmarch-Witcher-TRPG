@@ -1,0 +1,187 @@
+{{!-- One action row. The Action <select> picks the type and (via
+      submitOnChange) re-renders the row with that type's fields. A Modify row
+      reads as: <op> <value> TO <target> WHEN <trigger> [condition / cap+lasts].
+      Field names use the flattened flags.<systemId>.actions.<index>.* path so
+      the form round-trips them into the actions array. --}}
+<li class="wdm-change-row wdm-action-row" data-index="{{index}}">
+
+  <div class="wdm-change-field wdm-action-type">
+    <label>{{localize "WITCHER.Effect.ActionType"}}</label>
+    {{!-- Nameless picker mirrored into the hidden type input (see
+          _onChangeForm). A named ".type" select would collide with core
+          ActiveEffectConfig._onChangeForm, which expects a sibling priority
+          input on every ".type" control. --}}
+    <select class="wdm-action-type-picker">
+      {{#each actionTypeOptions as |opt|}}
+        <option value="{{opt.value}}" {{#if (eq opt.value ../type)}}selected{{/if}}>{{opt.label}}</option>
+      {{/each}}
+    </select>
+    <input type="hidden" name="{{typePath}}" value="{{type}}" data-type-input />
+  </div>
+
+  {{#if isModify}}
+    <div class="wdm-change-field wdm-change-op">
+      <label>{{localize "WITCHER.Effect.OpLabel"}}</label>
+      <select name="{{opPath}}">
+        {{#each operationOptions as |opt|}}
+          <option value="{{opt.value}}" {{#if (eq opt.value ../op)}}selected{{/if}}>{{opt.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    <div class="wdm-change-field wdm-change-amount">
+      <label>{{localize "WITCHER.Effect.Amount"}}</label>
+      <input type="text" name="{{valuePath}}" value="{{value}}" placeholder="2 / 1d6"
+             title="{{localize 'WITCHER.Effect.AmountHint'}}" />
+    </div>
+
+    <div class="wdm-change-field wdm-change-target">
+      <label>{{localize "WITCHER.Effect.TargetLabel"}}</label>
+      {{!-- Browse button opens the categorized picker; the field still accepts
+            free text + shared <datalist> autocomplete for any data path. --}}
+      <div class="wdm-target-row">
+        <input type="text" class="wdm-target-input" name="{{targetPath}}" value="{{target}}"
+               list="wdm-effect-targets" placeholder="system.stats.will.modifier"
+               title="{{localize 'WITCHER.Effect.TargetHint'}}" />
+        <button type="button" class="wdm-target-browse" data-action="browseTarget"
+                title="{{localize 'WITCHER.Effect.BrowseTargets'}}"><i class="fa-solid fa-list-ul"></i></button>
+      </div>
+    </div>
+
+    <div class="wdm-change-field wdm-change-when">
+      <label>{{localize "WITCHER.Effect.WhenLabel"}}</label>
+      <select name="{{whenPath}}">
+        {{#each triggerOptions as |opt|}}
+          <option value="{{opt.value}}" {{#if (eq opt.value ../when)}}selected{{/if}}>{{opt.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    {{#if isCondition}}
+      <div class="wdm-change-field wdm-change-condition">
+        <label>{{localize "WITCHER.Effect.ConditionLabel"}}</label>
+        <input type="text" name="{{conditionPath}}" value="{{condition}}"
+               placeholder="@system.stats.toxicity.value > @system.stats.toxicity.max"
+               title="{{localize 'WITCHER.Effect.ConditionHint'}}" />
+      </div>
+    {{/if}}
+
+    {{#if isTickModify}}
+      {{!-- Recurring per-turn modify: same gate dropdown Heal uses. Applied to
+            the target each turn the gate passes; dice values reroll per turn. --}}
+      <div class="wdm-change-field wdm-change-gate">
+        <label>{{localize "WITCHER.Effect.GateLabel"}}</label>
+        <select name="{{gatePath}}">
+          {{#each healConditionOptions as |opt|}}
+            <option value="{{opt.value}}" {{#if (eq opt.value ../gate)}}selected{{/if}}>{{opt.label}}</option>
+          {{/each}}
+        </select>
+      </div>
+    {{/if}}
+
+    {{#if isEventTrigger}}
+      <div class="wdm-change-field wdm-change-firecap">
+        <label>{{localize "WITCHER.Effect.FireCapLabel"}}</label>
+        <input type="number" name="{{fireCapPath}}" value="{{fireCap}}" min="1" placeholder="∞"
+               title="{{localize 'WITCHER.Effect.FireCapHint'}}" />
+      </div>
+      <div class="wdm-change-field wdm-change-lasts">
+        <label>{{localize "WITCHER.Effect.LastsLabel"}}</label>
+        <select name="{{lastsPath}}">
+          <option value="untilEffectEnds" {{#if (eq lasts "untilEffectEnds")}}selected{{/if}}>{{localize "WITCHER.Effect.LastsUntilEnd"}}</option>
+          <option value="permanent" {{#if (eq lasts "permanent")}}selected{{/if}}>{{localize "WITCHER.Effect.LastsPermanent"}}</option>
+        </select>
+      </div>
+    {{/if}}
+  {{/if}}
+
+  {{#if isHeal}}
+    <div class="wdm-change-field">
+      <label>{{localize "WITCHER.Effect.TickHeal"}}</label>
+      <input type="text" name="{{amountPath}}" value="{{amount}}" placeholder="3 / 1d6+2"
+             title="{{localize 'WITCHER.Effect.TickHealHint'}}" />
+    </div>
+    <div class="wdm-change-field">
+      <label>{{localize "WITCHER.Effect.TickHealCondition"}}</label>
+      <select name="{{whenPath}}">
+        {{#each healConditionOptions as |opt|}}
+          <option value="{{opt.value}}" {{#if (eq opt.value ../when)}}selected{{/if}}>{{opt.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+  {{/if}}
+
+  {{#if isDamage}}
+    <div class="wdm-change-field">
+      <label>{{localize "WITCHER.Effect.TickDamage"}}</label>
+      <input type="text" name="{{formulaPath}}" value="{{formula}}" placeholder="5 / 2d6"
+             title="{{localize 'WITCHER.Effect.TickDamageHint'}}" />
+    </div>
+    <div class="wdm-change-field wdm-loc-field">
+      <label>{{localize "WITCHER.Effect.TickLocation"}}</label>
+      {{!-- One checkbox per hit location, styled as a toggle button. Each
+            binds its own boolean flag path; _processFormData folds the
+            checked ones back into the locations[] array. --}}
+      <div class="wdm-loc-grid">
+        {{#each locationOptions as |opt|}}
+          <label class="wdm-loc-btn {{#if opt.selected}}is-on{{/if}}">
+            <input type="checkbox" name="{{opt.path}}" {{#if opt.selected}}checked{{/if}} />
+            <span>{{opt.label}}</span>
+          </label>
+        {{/each}}
+      </div>
+    </div>
+    <p class="wdm-logic-subhint">{{localize "WITCHER.Effect.TickLocationHint"}}</p>
+    <label class="wdm-logic-toggle wdm-logic-through">
+      <input type="checkbox" name="{{throughArmorPath}}" {{#if throughArmor}}checked{{/if}} />
+      <span>{{localize "WITCHER.Effect.TickThroughArmor"}}</span>
+    </label>
+    <div class="wdm-change-field wdm-ablate-field">
+      <label>{{localize "WITCHER.Effect.TickAblateArmor"}}</label>
+      <input type="number" name="{{ablateArmorPath}}" value="{{ablateArmor}}" min="0" step="1"
+             data-dtype="Number" />
+      <p class="wdm-logic-subhint">{{localize "WITCHER.Effect.TickAblateArmorHint"}}</p>
+    </div>
+  {{/if}}
+
+  {{#if isTempHp}}
+    <div class="wdm-change-field">
+      <label>{{localize "WITCHER.Effect.TempHpAmount"}}</label>
+      <input type="text" name="{{amountPath}}" value="{{amount}}" placeholder="5 / 1d6"
+             title="{{localize 'WITCHER.Effect.TempHpHint'}}" />
+    </div>
+  {{/if}}
+
+  {{#if isSuppress}}
+    <div class="wdm-change-field">
+      <label>{{localize "WITCHER.Effect.ActionSuppressWhat"}}</label>
+      <select name="{{whatPath}}">
+        {{#each suppressOptions as |opt|}}
+          <option value="{{opt.value}}" {{#if (eq opt.value ../what)}}selected{{/if}}>{{opt.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+  {{/if}}
+
+  {{#if isImmunity}}
+    <div class="wdm-change-field">
+      <label>{{localize "WITCHER.Effect.ActionImmunityStatus"}}</label>
+      <select name="{{statusPath}}">
+        {{#each immunityOptions as |opt|}}
+          <option value="{{opt.value}}" {{#if (eq opt.value ../status)}}selected{{/if}}>{{opt.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+  {{/if}}
+
+  {{#if isPurge}}
+    <div class="wdm-change-field wdm-change-note">
+      <p class="hint">{{localize "WITCHER.Effect.ActionPurgeHint"}}</p>
+    </div>
+  {{/if}}
+
+  <button type="button" class="wdm-change-del" data-action="deleteAction"
+          title="{{localize 'WITCHER.Effect.RemoveAction'}}">
+    <i class="fa-solid fa-trash"></i>
+  </button>
+</li>
