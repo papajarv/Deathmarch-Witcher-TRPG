@@ -105,7 +105,7 @@ If you have map items in your inventory, you may visualize them.
 
 - Combat is tracked through an action budget off the bottom bar.
 - Weapon sheathing/drawing along with Fast Draw.
-- Manually harvesting mutagens and loot, aswell as dissection bestiary mechanic, off monster remain items.
+- Manually harvesting mutagens and loot, aswell as dissection bestiary mechanic, off monster remain items (When monsters are marked defeated in combat, they create a remains item in the world item bar)
 - Complete list of item classes with two layers, visual and configuration.
 - Custom time and weather engine, can be turned off and used with module ones.
 - Effects go off system time.
@@ -115,12 +115,25 @@ If you have map items in your inventory, you may visualize them.
 - Enhancements were designed to attach to weapons with real changes to their stats.
 - Monsters can be toggled as "mounts", have a control modifier set and have their portrait dragged unto the mount slot of the inventory UI to have access to their bags and gain the modifier as a riding bonus.
 - Dice Poker and Farkle :))))
+- Note Items that can be dragged on scene to look like contract postings, then swiped to player inventories
+- Merchant Actor with complex shop stock system that can be dragged on scene to have a shopfront for players
 
 And many more features! Feel free to explore :) They're genuinely too many to document.
 
-<img width="2558" height="1600" alt="Death March dice poker" src="https://github.com/user-attachments/assets/405b58ba-5e3f-459e-9aad-fa4f6ed59add" />
+<p align="center">
+  <img width="49%" alt="Death March dice poker" src="https://github.com/user-attachments/assets/405b58ba-5e3f-459e-9aad-fa4f6ed59add" />
+  <img width="49%" alt="Death March farkle" src="https://github.com/user-attachments/assets/1d7bd9b4-8359-4bad-94e1-afd209a57cb0" />
+</p>
 
-<img width="2560" height="1600" alt="Death March farkle" src="https://github.com/user-attachments/assets/1d7bd9b4-8359-4bad-94e1-afd209a57cb0" />
+<p align="center">
+  <img width="49%" alt="Death March game screen" src="https://github.com/user-attachments/assets/92681ac1-d26b-41a5-aa85-a503fb6d7766" />
+  <img width="49%" alt="Death March game screen" src="https://github.com/user-attachments/assets/aeb2e39f-3b53-48f7-af78-5dd15134735a" />
+</p>
+
+<p align="center">
+  <img width="49%" alt="Death March game screen" src="https://github.com/user-attachments/assets/ce1cb307-8198-4c7d-aa15-664ca8dada24" />
+</p>
+
 
 ---
 
