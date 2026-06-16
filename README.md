@@ -138,17 +138,4 @@ version, the system version, what you did, and anything in the console (F12).
 Death March is unofficial content released under the Homebrew Content Policy of
 R. Talsorian Games, and it isn't approved or endorsed by RTG. It references
 material owned by R. Talsorian Games and its licensees. *The Witcher* and its
-world are © CD Projekt Red. Art credits are in [`CREDITS.md`](CREDITS.md), and
-the full compliance record is in
-[`docs/compliance/homebrew-policy.md`](docs/compliance/homebrew-policy.md).
-
-The **code** is MIT — see [`LICENSE`](LICENSE). The **compendium content and
-assets** can't be relicensed; they're distributed free under RTG's Homebrew
-Content Policy ([`CONTENT-LICENSE.md`](CONTENT-LICENSE.md)), and the underlying
-IP stays with R. Talsorian Games and CD Projekt Red.
-
-## For tinkerers
-
-No build step — it's plain ESM, so edits take effect on reload. Most of the
-behavior lives in mixins on the actor and item classes; sheets are ApplicationV2
-and data is built on TypeDataModels.
+world are © CD Projekt Red.
