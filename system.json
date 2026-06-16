@@ -207,5 +207,8 @@
         "units": "m"
     },
     "primaryTokenAttribute": "derivedStats.hp",
-    "secondaryTokenAttribute": "derivedStats.sta"
+    "secondaryTokenAttribute": "derivedStats.sta",
+    "url": "https://github.com/papajarv/Deathmarch-Witcher-TRPG",
+    "manifest": "https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/latest/download/system.json",
+    "download": "https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/latest/download/system.zip"
 }
