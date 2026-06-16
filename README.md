@@ -47,10 +47,9 @@ eye button at the far left of the dock:
 - **Session** — roll a skill check for the whole party at once (public, private,
   blind, or your own eyes only) and hand out IP and coin in one go.
 
-**Alchemy, crafting, and gear that connect.** Diagrams, substances and ingredient
-potency, charges on consumables, mutagens, and enhancements — runes, glyphs,
-weapon and armor upgrades — that you attach to an item and that actually change
-its numbers.
+**Alchemy, crafting, and gear that connect.** Diagrams, substance, mutagens, and 
+enhancements — runes, glyphs, weapon and armor upgrades — that you attach to an 
+item and that actually change its numbers.
 
 **Magic that the system can run.** Spells, hexes, and rituals are stored as real
 fields (cast time, defense, duration, components), so casting is something the
