@@ -5,14 +5,26 @@
  *   item.consume()  — decrement quantity (or `time` charges if present).
  *
  * RAW Core p.87: alchemical items are single-use unless noted. Multi-dose
- * items just bump quantity. The witcher-food-and-drink charge / alcohol
- * delegation was removed when we switched to RAW-only mode.
+ * items just bump quantity.
+ *
+ * When the food & drink homebrew is enabled, `mechanics/foodAndDrink.onConsume`
+ * gets first refusal: it posts the food item's `taste` to chat, restores
+ * satiety, ticks per-portion charges on food items, and rolls the Endurance
+ * check for alcoholic items. If it ticks a charge it returns `true` so we
+ * skip the default quantity decrement (the charge counter owns consumption).
  */
+
+import { onConsume as foodAndDrinkConsume } from "../../mechanics/foodAndDrink.mjs";
 
 export const consumeMixin = (Base) => class extends Base {
 
     async consume() {
         const sys = this.system;
+
+        // Homebrew food/drink (self-gated on the toggle) — taste, satiety,
+        // charges, alcohol roll.
+        const handled = await foodAndDrinkConsume(this);
+        if (handled) return;
 
         // Charge-based consumable (legacy `time` field still on some items)
         if (Number.isFinite(sys.time) && sys.time > 0) {

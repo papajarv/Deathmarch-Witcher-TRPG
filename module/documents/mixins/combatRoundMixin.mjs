@@ -17,6 +17,7 @@
 import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 import { AIM_BONUS_CAP, AIM_BONUS_PER_TURN } from "../../setup/config.mjs";
 import { cannotAct, cannotRecover, cannotDefend } from "../../mechanics/statusEngine.mjs";
+import { onCombatStaminaSpend } from "../../mechanics/foodAndDrink.mjs";
 
 const notify = (msg, type = "warn") => ui?.notifications?.[type]?.(msg);
 
@@ -91,6 +92,12 @@ export const combatRoundMixin = (Base) => class extends Base {
         const { value } = this._sta;
         const next = Math.max(0, value - n);
         await this.update({ "system.derivedStats.sta.value": next });
+        // Homebrew (foodAndDrink): in-combat STA expenditure burns satiety
+        // (0.5 per STA, configurable in mechanics/foodAndDrink.mjs). The
+        // helper self-gates on combat state + homebrew toggle so out-of-combat
+        // spends (e.g. casting a spell at camp) skip the drain.
+        try { await onCombatStaminaSpend(this, n); }
+        catch (err) { console.warn("witcher-ttrpg-death-march | satiety drain on STA spend failed", err); }
         return next;
     }
 

@@ -729,6 +729,11 @@ function computeRenderSig(actor) {
       `:${s.isStored ? 1 : 0}:${s.isCarried === false ? 0 : 1}` +
       `:${s.hands ?? ""}:${s.slot ?? ""}:${s.quick ? 1 : 0}:${s.availability ?? ""}` +
       `:${s.substanceType ?? ""}` +
+      // Food-kind + portion counters — without these the tile's charge
+      // badge goes stale after a consume tick (it's read straight off
+      // system.charges in renderItemSlot, but the surrounding rebuild is
+      // gated by this sig).
+      `:${s.kind ?? ""}:${s.charges?.current ?? ""}/${s.charges?.max ?? ""}` +
       `:${(it.effects?.size ?? it.effects?.length ?? 0)}`
     );
     /* NOTE: the applied-oil duration label is deliberately NOT folded into the
@@ -854,6 +859,7 @@ async function refreshInspectionPanel() {
     let mutagenMeta       = null;
     let diagramMeta       = null;
     let bookMeta          = null;
+    let foodMeta          = null;
     let remainsState      = null;
     let descriptionHtml   = "";
     let effectiveMeta       = null;
@@ -1055,17 +1061,28 @@ async function refreshInspectionPanel() {
 
       if (item.type === "diagrams") {
         // Mirror WitcherDiagramsSheet._prepareContext — the hero is the
-        // single craft DC (Alchemy for formulae, Crafting for diagrams),
-        // plus a produced-item preview, ingredient list, and (formulae)
-        // required substances.
+        // single craft DC (Alchemy for formulae, Crafting for diagrams,
+        // Cooking for recipes), plus a produced-item preview, ingredient
+        // list, and (formulae) required substances.
         const sys = rawItem.system ?? {};
         const loc = (k, fb) => (k && game.i18n?.localize ? game.i18n.localize(k) : (fb ?? k));
-        const isFormulae = !!sys.isFormulae;
+        // Tolerant kind lookup so worlds mid-migration still render: prefer
+        // explicit `kind`, fall back to the legacy isFormulae boolean.
+        const rawKind = sys.kind;
+        const kind = (rawKind === "diagram" || rawKind === "formula" || rawKind === "recipe")
+          ? rawKind
+          : (sys.isFormulae ? "formula" : "diagram");
+        const isFormula = kind === "formula";
+        const isRecipe  = kind === "recipe";
+        const isDiagram = kind === "diagram";
+        const isFormulae = isFormula;   // back-compat field surfaced in meta
 
         const levels = cfgMod.DIAGRAM_LEVELS ?? CONFIG?.WITCHER?.crafting?.levels ?? {};
-        const subMap = isFormulae
+        const subMap = isFormula
           ? (cfgMod.FORMULA_SUBTYPES ?? CONFIG?.WITCHER?.crafting?.formulaSubtypes ?? {})
-          : (cfgMod.DIAGRAM_SUBTYPES ?? CONFIG?.WITCHER?.crafting?.diagramSubtypes ?? {});
+          : isRecipe
+            ? (cfgMod.RECIPE_SUBTYPES ?? CONFIG?.WITCHER?.crafting?.recipeSubtypes ?? {})
+            : (cfgMod.DIAGRAM_SUBTYPES ?? CONFIG?.WITCHER?.crafting?.diagramSubtypes ?? {});
 
         // Produced item — prefer the live document image over the cache.
         const assoc = sys.associatedItem ?? {};
@@ -1091,10 +1108,10 @@ async function refreshInspectionPanel() {
           .filter(s => s.qty > 0);
 
         diagramMeta = {
-          isFormulae,
-          dc:      isFormulae ? (Number(sys.alchemyDC) || 0) : (Number(sys.craftingDC) || 0),
-          dcLabel: isFormulae ? "Alchemy DC" : "Crafting DC",
-          kindLabel:    isFormulae ? "Formula" : "Diagram",
+          kind, isFormulae,
+          dc:      isDiagram ? (Number(sys.craftingDC) || 0) : (Number(sys.alchemyDC) || 0),
+          dcLabel: isRecipe  ? "Cooking DC" : isFormula ? "Alchemy DC" : "Crafting DC",
+          kindLabel: isRecipe ? "Recipe" : isFormula ? "Formula" : "Diagram",
           levelLabel:   sys.level ? loc(levels[sys.level], sys.level) : "",
           subtypeLabel: sys.type  ? loc(subMap[sys.type], sys.type)   : "",
           craftingTime: sys.craftingTime || "",
@@ -1133,6 +1150,39 @@ async function refreshInspectionPanel() {
         };
       }
 
+      // Food (homebrew foodAndDrink) — kind label + portion ticker + the
+      // satiety / alcohol stats from the schema, plus pre-computed
+      // portion-scaled weight / cost so the footer matches what the
+      // carry-weight tally actually counts (FoodData.calcWeight scales by
+      // the same ratio).
+      if (item.type === "food") {
+        const sys = rawItem.system ?? {};
+        const kind = sys.kind || "meal";
+        const KIND_LABELS = { meal: "Meal", snack: "Snack", drink: "Drink" };
+        const max = Number(sys.charges?.max) || 0;
+        const cur = Math.max(0, Math.min(max, Number(sys.charges?.current) || 0));
+        const qty = Math.max(0, Number(sys.quantity) || 0);
+        const unitMul = max > 0 ? (qty - 1) + (cur / max) : qty;
+        const w = Number(sys.weight) || 0;
+        const c = Number(sys.cost) || 0;
+        // Round to 2dp for display; values like 0.75kg are common with portions.
+        const round2 = (n) => Math.round(n * 100) / 100;
+        foodMeta = {
+          kind,
+          kindLabel: KIND_LABELS[kind] ?? kind,
+          isDrink:   kind === "drink",
+          hasCharges: max > 0,
+          chargesCurrent: cur,
+          chargesMax:     max,
+          satietyRestore: Number(sys.satietyRestore) || 0,
+          isAlcohol: kind === "drink" && !!sys.drunk?.isAlcohol,
+          drunkDC:   Number(sys.drunk?.dc) || 0,
+          // Portion-scaled totals — what the carry tally actually counts.
+          effectiveWeight: round2(w * unitMul),
+          effectiveCost:   round2(c * unitMul)
+        };
+      }
+
       // Enrich the description HTML (resolves @UUID links + inline rolls).
       // Remains have no description/value/availability — skip enrichment.
       const desc = item.system?.type === "remains" ? null : item.system?.description;
@@ -1155,6 +1205,7 @@ async function refreshInspectionPanel() {
         mutagenMeta,
         diagramMeta,
         bookMeta,
+        foodMeta,
         remainsState,
         descriptionHtml,
         effective: effectiveMeta,
@@ -2247,11 +2298,35 @@ function itemSlotHTML(item) {
   // right-clicks here.  `draggable="true"` enables HTML5 drag-to-equip.
   const cls = ["wou-slot", "item", equipped ? "is-active" : ""].filter(Boolean).join(" ");
 
-  // witcher-food-and-drink stores per-bottle charge counters in a flag
-  // (current/max sips/servings).  Prefer that badge over plain quantity
-  // for chargeable items so users can see how full a bottle is.
-  const wfd = item.flags?.["witcher-food-and-drink"]?.charges;
-  const isCharged = wfd && Number(wfd.max) > 0;
+  // Charge counters — three sources, in order of preference:
+  //   1. Native food-type schema: `system.charges.{current,max}` (the new
+  //      foodAndDrink homebrew). Category from `system.kind` (drink|meal|snack).
+  //   2. Legacy witcher-food-and-drink module flag (pre-port data).
+  //   3. (handled below) plain quantity.
+  // We prefer the charge badge over plain quantity for chargeable items so
+  // users can see how full a bottle / wheel / bowl is.
+  let fdCharges = null;          // { current, max, cat }
+  if (item.type === "food") {
+    const sc = item.system?.charges;
+    if (sc && Number(sc.max) > 0) {
+      fdCharges = {
+        current: Number(sc.current ?? 0),
+        max:     Number(sc.max),
+        cat:     item.system?.kind === "drink" ? "drink" : "food"
+      };
+    }
+  }
+  if (!fdCharges) {
+    const wfd = item.flags?.["witcher-food-and-drink"]?.charges;
+    if (wfd && Number(wfd.max) > 0) {
+      fdCharges = {
+        current: Number(wfd.current ?? 0),
+        max:     Number(wfd.max),
+        cat:     wfd.category || "drink"
+      };
+    }
+  }
+  const isCharged = !!fdCharges;
   const isRemains = item.type === "valuable" && item.system?.type === "remains";
   const REMAINS_MAX = 3;
   let badgeHTML = "";
@@ -2259,10 +2334,8 @@ function itemSlotHTML(item) {
     const cur = item.flags?.[MODULE_ID]?.remainsCharges ?? REMAINS_MAX;
     badgeHTML = `<span class="count charges is-remains" title="${cur}/${REMAINS_MAX} charges remaining">${cur}/${REMAINS_MAX}</span>`;
   } else if (isCharged) {
-    const cur = Number(wfd.current ?? 0);
-    const max = Number(wfd.max);
-    const cat = wfd.category || "drink";
-    badgeHTML = `<span class="count charges ${cat === "food" ? "is-food" : "is-drink"}" title="${cur}/${max} charges">${cur}/${max}</span>`;
+    const { current, max, cat } = fdCharges;
+    badgeHTML = `<span class="count charges ${cat === "food" ? "is-food" : "is-drink"}" title="${current}/${max} charges">${current}/${max}</span>`;
   } else if (qty > 1) {
     badgeHTML = `<span class="count">${qty}</span>`;
   }

@@ -19,6 +19,25 @@
  *                          it crosses the 1-10 source clamp (prepareDerivedData
  *                          folds modifier into the prepared value).
  *
+ *   mods.skills {statKey:{skillKey:n}}
+ *                          flat per-skill modifier, emitted as a
+ *                          `system.skills.<stat>.<skill>.modifier` AE change.
+ *                          Use this when you want to debuff ONE skill under a
+ *                          stat without touching the stat itself (e.g. drunk
+ *                          IV-VI debuff Resist Coercion / Magic alone).
+ *
+ *   mods.derived {staMaxFraction, recBonus}
+ *                          aggregates read by CharacterData.prepareDerivedData
+ *                          through statusEngine.derivedMods(actor):
+ *                            staMaxFraction  multiplicative reduction of sta.max
+ *                                            (-0.2 = 20 % cut). Sums across
+ *                                            active statuses, clamps the floor
+ *                                            so sta.max never goes below 0.
+ *                            recBonus        flat REC add (gorged: +2).
+ *                          NOT emitted as AE changes — derived numbers are
+ *                          recomputed every prepare cycle, so the status engine
+ *                          is the single read at derive time.
+ *
  *   mods.roll   {...}      flat roll modifiers, summed live at roll time:
  *                            attack     — to-hit rolls
  *                            defense    — defense reactions
@@ -72,6 +91,40 @@
  *   periodic {everyRounds, rollUnder}
  *                          recurring save (nausea: every 3 rounds roll under the
  *                          named stat or lose the round to retching).
+ *
+ *   onApply.stress  n      one-shot stress delta applied to the bearer THE
+ *                          MOMENT the ActiveEffect carrying this status is
+ *                          created. Positive = gain stress (may trigger the
+ *                          WILL save via stress.mjs); negative = relieve. Fires
+ *                          only on AE create, not on re-renders or re-applies of
+ *                          an already-present status. Used by the homebrew
+ *                          food-and-drink statuses (drunk III-VI relieve, hunger
+ *                          Hungry/Famished gain, Gorged relieves 2) but is a
+ *                          universal primitive — a GM can paste it onto any
+ *                          status via the editor.
+ *                          GATED: the engine skips this delta entirely if the
+ *                          `stress` homebrew toggle is off.
+ *
+ *   stressNote   string    Player-facing description fragment that only renders
+ *                          when the `stress` homebrew is enabled. Appended to
+ *                          `description` by descriptionFor(); the base
+ *                          description never mentions stress so a pure-stress-
+ *                          off world reads clean. Mirrors how the engine
+ *                          handler gates onApply.stress — keeps mechanics and
+ *                          flavor in sync.
+ *
+ *   hangover {recPenaltyFrom, daysFrom}
+ *                          marks the status as the post-binge hangover. The
+ *                          food-and-drink mechanic sets `daysRemaining` and the
+ *                          REC penalty when it creates the effect; this clause
+ *                          field just identifies the status to the day-tick
+ *                          handler.
+ *
+ *   drunk {unconsciousDC, deathChance, level}
+ *                          metadata for the drunk tier ladder read by the food-
+ *                          and-drink mechanic's Endurance / blackout handler.
+ *                          Lives on the clause so the GM can retune the DC and
+ *                          death-chance from the Status Effects editor.
  *
  * Statuses with no mechanical clause (aim, fastDraw — both handled procedurally
  * in the attack/round mixins) carry only a description so the panel can list
@@ -186,6 +239,117 @@ export const STATUS_CLAUSES = {
     },
     aim: {
         description: "Aim N: a full-round action grants +1 to your next ranged attack, stacking to +3 over consecutive rounds. Applied automatically and cleared when you fire."
+    },
+
+    /* ── Homebrew: food & drink (gated registration in statusEffects.mjs) ──
+     *
+     * Drunk tiers I-VIII. Stat penalties target `.modifier` (uncapped) so
+     * tier V's -4 INT can take INT below 1. EMP / CRA buffs on tiers I-III
+     * propagate to all skills under those stats via stat+rank+modifier.
+     * Tiers III-VI relieve 1 stress on entry (`onApply.stress: -1`); VII-VIII
+     * are past the relief sweet spot. The save / blackout / death-chance
+     * metadata sits on `drunk.*` and is read by mechanics/foodAndDrink.mjs.
+     */
+    "drunk-1": {
+        description: "Drunk I — Tipsy. +1 EMP and CRA (all skills under them rise with the stat), +2 Melee Damage.",
+        mods: { stats: { emp: 1, cra: 1 } },
+        drunk: { level: 1, meleeBonus: 2 }
+    },
+    "drunk-2": {
+        description: "Drunk II — Buzzed. −1 REF, −1 DEX, +2 EMP, +2 CRA, +2 Melee Damage.",
+        mods: { stats: { ref: -1, dex: -1, emp: 2, cra: 2 } },
+        drunk: { level: 2, meleeBonus: 2 }
+    },
+    "drunk-3": {
+        description: "Drunk III — Drunk. −2 REF, −2 DEX, −2 INT, +3 EMP.",
+        stressNote: " Loosens the chest: clears 1 STRESS on apply.",
+        mods: { stats: { ref: -2, dex: -2, int: -2, emp: 3 } },
+        onApply: { stress: -1 },
+        drunk: { level: 3 }
+    },
+    "drunk-4": {
+        description: "Drunk IV — Hammered. −3 REF, −3 DEX, −3 SPD, −3 INT, −2 Resist Coercion / Magic.",
+        stressNote: " Clears 1 STRESS on apply.",
+        mods: { stats: { ref: -3, dex: -3, spd: -3, int: -3 },
+                skills: { will: { resistcoerc: -2, resistmagic: -2 } } },
+        onApply: { stress: -1 },
+        drunk: { level: 4 }
+    },
+    "drunk-5": {
+        description: "Drunk V — Wrecked. −4 REF, −4 DEX, −4 SPD, −4 INT, −4 Resist Coercion / Magic.",
+        stressNote: " Clears 1 STRESS on apply.",
+        mods: { stats: { ref: -4, dex: -4, spd: -4, int: -4 },
+                skills: { will: { resistcoerc: -4, resistmagic: -4 } } },
+        onApply: { stress: -1 },
+        drunk: { level: 5 }
+    },
+    "drunk-6": {
+        description: "Drunk VI — Blackout territory. Same penalties as Drunk V. Endurance DC 20 or unconscious for 2d6 hours.",
+        stressNote: " Clears 1 STRESS on apply.",
+        mods: { stats: { ref: -4, dex: -4, spd: -4, int: -4 },
+                skills: { will: { resistcoerc: -4, resistmagic: -4 } } },
+        onApply: { stress: -1 },
+        drunk: { level: 6, unconsciousDC: 20 }
+    },
+    "drunk-7": {
+        description: "Drunk VII — Lethal. Same penalties as Drunk V. Endurance DC 24 or unconscious for 2d6 hours; 25% chance to drop into the Death state instead.",
+        mods: { stats: { ref: -4, dex: -4, spd: -4, int: -4 },
+                skills: { will: { resistcoerc: -4, resistmagic: -4 } } },
+        drunk: { level: 7, unconsciousDC: 24, deathChance: 25 }
+    },
+    "drunk-8": {
+        description: "Drunk VIII — Lethal. Same penalties as Drunk V. Endurance DC 30 or unconscious for 2d6 hours; 50% chance to drop into the Death state instead.",
+        mods: { stats: { ref: -4, dex: -4, spd: -4, int: -4 },
+                skills: { will: { resistcoerc: -4, resistmagic: -4 } } },
+        drunk: { level: 8, unconsciousDC: 30, deathChance: 50 }
+    },
+
+    /* Hangover (post-binge). Registered status; the actual REC penalty and
+     * `daysRemaining` are set per-actor when the effect is CREATED (peak ÷ 2
+     * floor, ceil(peak/3) days) by mechanics/foodAndDrink.mjs#onSoberZero —
+     * those numbers live on the AE itself so two actors with different peaks
+     * carry different penalties. The clause just marks it for the day-tick
+     * handler and carries the player-facing description. */
+    hangover: {
+        description: "Hangover — recovery from a binge. Reduces REC by half your peak drunk level (floor), for a third of your peak drunk level in days (ceil).",
+        hangover: { tickPerDay: true }
+    },
+
+    /* Hunger tiers. Numbers are SATIETY ranges:
+     *   gorged    101-125
+     *   full       76-100   (no clause — pure flavor tier)
+     *   fed        51- 75   (no clause)
+     *   peckish    26- 50   (no clause — warning)
+     *   hungry      1- 25
+     *   famished    ≤ 0
+     * Tier-cross stress is one-shot via `onApply.stress`.
+     */
+    gorged: {
+        description: "Gorged — overfull. −1 REF, −1 DEX (sluggish), +2 REC.",
+        stressNote: " The heavy meal clears 2 STRESS on apply.",
+        mods: { stats: { ref: -1, dex: -1 }, derived: { recBonus: 2 } },
+        onApply: { stress: -2 }
+    },
+    full: {
+        description: "Full — well-fed. No mechanical effect."
+    },
+    fed: {
+        description: "Fed — comfortable. No mechanical effect."
+    },
+    peckish: {
+        description: "Peckish — getting hungry. No mechanical effect yet, but Hungry is one tick away."
+    },
+    hungry: {
+        description: "Hungry — running on fumes. Max STA reduced by one-fifth.",
+        stressNote: " You take +1 STRESS on entry.",
+        mods: { derived: { staMaxFraction: -0.2 } },
+        onApply: { stress: 1 }
+    },
+    famished: {
+        description: "Famished — starving. Max STA reduced by two-fifths, −1 to every roll.",
+        stressNote: " +1 STRESS on entry.",
+        mods: { derived: { staMaxFraction: -0.4 }, roll: { all: -1 } },
+        onApply: { stress: 1 }
     }
 };
 

@@ -128,6 +128,21 @@
             <span class="wcs-track-cap">/ {{system.stats.luck.max}}</span>
             <a data-action="refillLuck" title="Refill pool to LUCK (session start)"><i class="fa-solid fa-rotate-left"></i></a>
           </span>
+          {{#if satiety}}
+            {{!-- Compact form: icon + value + tier — the "Satiety" label is
+                 dropped because the utensils icon is the only one of its kind
+                 in this strip, and the text was tipping the row over the
+                 flex-wrap threshold (forcing the tracker onto a new line).
+                 The textual label still surfaces in the title tooltip. --}}
+            <span class="wcs-track" style="white-space:nowrap;"
+                  title="Satiety {{satiety.value}} — {{satiety.tierLabel}} (GM-edited only).">
+              <i class="fa-solid fa-utensils"></i>
+              <input type="number"
+                     {{#if satiety.isGM}}name="system.satiety"{{else}}readonly{{/if}}
+                     value="{{satiety.value}}" min="-100" max="125" />
+              <span class="wcs-track-cap">· {{satiety.tierLabel}}</span>
+            </span>
+          {{/if}}
           {{#if (homebrew "stress")}}
             <span class="wcs-track">
               <i class="fa-solid fa-brain"></i>Stress

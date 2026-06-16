@@ -56,9 +56,10 @@ export function isOil(item) {
 }
 
 /* Effects on these items stay dormant on the carrier: consumables apply on
- * use, oils apply to a weapon. Everything else transfers as Foundry defaults. */
+ * use, oils apply to a weapon, foods apply on consume (homebrew foodAndDrink).
+ * Everything else transfers as Foundry defaults. */
 function effectsStayDormant(item) {
-  return isConsumable(item) || isOil(item);
+  return isConsumable(item) || isOil(item) || item?.type === "food";
 }
 
 /* The dice/number formula an effect rolls for its duration each consume, or "". */

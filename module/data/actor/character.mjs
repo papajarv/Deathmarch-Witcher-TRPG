@@ -18,6 +18,7 @@ import { countersSchema }     from "./templates/counters.mjs";
 import { combatRoundSchema }  from "./templates/combatRound.mjs";
 import { combatModsSchema }   from "./templates/combatMods.mjs";
 import { applyConditionActions, applyEventLedger } from "../../setup/config.mjs";
+import { derivedMods } from "../../mechanics/statusEngine.mjs";
 
 const fields = foundry.data.fields;
 
@@ -45,6 +46,16 @@ export class CharacterData extends foundry.abstract.TypeDataModel {
             // sheet renders the stress tab + accumulation logic gates on
             // isHomebrewEnabled("stress").
             stress: new fields.NumberField({ initial: 0, integer: true, min: 0 }),
+
+            // Homebrew (ADR 0003): food & drink — current satiety pool. Range
+            // is conceptually -100 … 125 (the food-and-drink mechanic clamps
+            // updates). Default 100 = Full. Fractional values are valid (combat
+            // STA→satiety drain hands out -0.5 per STA), so this is NOT an
+            // integer field. The hunger TIER is NOT stored — it derives from
+            // satiety every reconcile cycle (mechanics/foodAndDrink.mjs).
+            // Schema always present; the tick / display / consume flow gates
+            // on isHomebrewEnabled("foodAndDrink").
+            satiety: new fields.NumberField({ initial: 100, min: -100, max: 125 }),
 
             // Per-character bestiary knowledge tracking. Bestiary research is
             // always on (no toggle). NOTE: the live chrome bestiary stores
@@ -254,6 +265,20 @@ export class CharacterData extends foundry.abstract.TypeDataModel {
 
         this.derivedStats.hp.max         = bwHalf * 5;
         this.derivedStats.sta.max        = bwHalf * 5;
+        // Engine-driven derived modifiers (mechanics/statusEngine.derivedMods).
+        // Sums every active status's `mods.derived.*` aggregate — currently:
+        //   staMaxFraction  shrinks sta.max multiplicatively (hungry: -0.2,
+        //                   famished: -0.4). Floor at 0 so a stacked debuff
+        //                   never goes negative.
+        //   recBonus        flat REC add (gorged: +2). Composed with the BODY/
+        //                   WILL base below.
+        // This is the food-and-drink (hunger / gorged) hook. Any other future
+        // status can declare the same clause fields to ride the same pipe.
+        const sMods = derivedMods(this.parent);
+        if (sMods.staMaxFraction !== 0) {
+            this.derivedStats.sta.max = Math.max(0,
+                Math.floor(this.derivedStats.sta.max * (1 + sMods.staMaxFraction)));
+        }
         this.derivedStats.resolve        = wiHalf * 5;
         // Investigation Focus pool (A Witcher's Journal p.145): max is derived,
         // value is player-set and drained by failed Evidence checks / obstacles.
@@ -269,7 +294,8 @@ export class CharacterData extends foundry.abstract.TypeDataModel {
         // "all stats (both primary & derived) fall to 1/3" (p.158). This stays
         // the canonical value — final-phase AEs (DERIVED_STAT_TARGETS) fold on
         // top of it, so REC remains modifiable by effects/items.
-        this.derivedStats.rec            = applyDeath ? Math.floor(baseWoundThreshold / 3) : baseWoundThreshold;
+        this.derivedStats.rec            = (applyDeath ? Math.floor(baseWoundThreshold / 3) : baseWoundThreshold)
+                                            + (sMods.recBonus || 0);
         this.derivedStats.woundThreshold = bwHalf;
         this.derivedStats.enc            = body * 10;
         this.derivedStats.run            = spd * 3;

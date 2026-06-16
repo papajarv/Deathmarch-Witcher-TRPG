@@ -3,6 +3,11 @@
     "title": "Death March — an unofficial system for The Witcher TRPG",
     "description": "Death March is a unified, stand-alone Foundry VTT game system for tabletop play in the world of The Witcher. Death March is unofficial content provided under the Homebrew Content Policy of R. Talsorian Games and is not approved or endorsed by RTG. This content references materials that are the property of R. Talsorian Games and its licensees.",
     "version": "1.0.0",
+    "authors": [
+        {
+            "name": "papajarv"
+        }
+    ],
     "compatibility": {
         "minimum": "14",
         "verified": "14.363"
@@ -202,8 +207,5 @@
         "units": "m"
     },
     "primaryTokenAttribute": "derivedStats.hp",
-    "secondaryTokenAttribute": "derivedStats.sta",
-    "url": "",
-    "manifest": "",
-    "download": ""
+    "secondaryTokenAttribute": "derivedStats.sta"
 }

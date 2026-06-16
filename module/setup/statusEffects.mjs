@@ -18,12 +18,15 @@
  * truth for the mechanics.
  *
  * Toxicity is a SINGLE number stat per RAW (Core p.84) — its threshold
- * statuses are added separately (alchemyConsts.mjs). Drunk levels were a
- * food-and-drink homebrew extension, gated on that toggle (drunkStatuses.mjs).
+ * statuses are added separately (alchemyConsts.mjs). Food & drink homebrew
+ * statuses (drunk-1..8, hunger ladder, hangover) are registered at the bottom
+ * of this file, gated on `isHomebrewEnabled('foodAndDrink')`; their mechanics
+ * live in setup/statusClauses.mjs.
  */
 
 import { statusChanges, descriptionFor } from "../mechanics/statusEngine.mjs";
 import { readStatusOverride } from "../mechanics/statusOverrides.mjs";
+import { isHomebrewEnabled } from "../api/homebrew.mjs";
 
 /* Fallback icon for a GM-added custom status that doesn't specify one. */
 const DEFAULT_STATUS_ICON = "icons/svg/aura.svg";
@@ -72,9 +75,49 @@ const AIM = [1, 2, 3].map(n => ({
     family: "aim"
 }));
 
-/* The default presentation layer (id / name / icon) before any GM override. */
-const DEFAULT_PRESENTATION = [...BASELINE, ...AIM];
-const DEFAULT_STATUS_IDS = new Set(DEFAULT_PRESENTATION.map(s => s.id));
+/* Food & drink homebrew (ADR 0003) — drunk ladder, hunger ladder, hangover.
+ * Mechanics live in statusClauses.mjs; only the presentation layer is here.
+ * Registration is gated on `isHomebrewEnabled('foodAndDrink')` so a pure-RAW
+ * world doesn't see them in the token HUD or trigger their clauses (no AE
+ * carrying a status can be applied if the status isn't registered). The
+ * setting is requiresReload, so toggling rebuilds CONFIG.statusEffects from
+ * a clean init — no live editing of the registry needed. */
+const FOOD_DRINK_DRUNK = [1,2,3,4,5,6,7,8].map(n => ({
+    id:    `drunk-${n}`,
+    name:  `Drunk ${["", "I","II","III","IV","V","VI","VII","VIII"][n]}`,
+    img:   n >= 7 ? "icons/svg/skull.svg" : "icons/svg/tankard.svg",
+    family: "drunk",
+    tier:   n
+}));
+/* Hunger ladder — only IMPACTFUL tiers register as statuses. The "sated"
+ * baseline (full / fed / peckish) has no mechanical effect per spec, so it
+ * never lands as an AE; the satiety widget on the actor sheet still shows
+ * those names as TIER LABELS (tierForSatiety in foodAndDrink.mjs computes
+ * the full 6-tier map for display). */
+const FOOD_DRINK_HUNGER = [
+    { id: "gorged",   name: "Gorged",   img: "icons/svg/regen.svg", family: "hunger", tier: 5 },
+    { id: "hungry",   name: "Hungry",   img: "icons/svg/degen.svg", family: "hunger", tier: 1 },
+    { id: "famished", name: "Famished", img: "icons/svg/skull.svg", family: "hunger", tier: 0 }
+];
+const FOOD_DRINK_HANGOVER = [
+    { id: "hangover", name: "Hangover", img: "icons/svg/sleep.svg", family: "hangover" }
+];
+const FOOD_DRINK = [...FOOD_DRINK_DRUNK, ...FOOD_DRINK_HUNGER, ...FOOD_DRINK_HANGOVER];
+
+/* The default presentation layer (id / name / icon) before any GM override.
+ * Food & Drink statuses are appended only when the homebrew toggle is on —
+ * checked at buildStatusEffects() time, since registerSettings has already
+ * run by then. */
+const PURE_RAW_PRESENTATION = [...BASELINE, ...AIM];
+function defaultPresentation() {
+    const list = [...PURE_RAW_PRESENTATION];
+    if (isHomebrewEnabled?.("foodAndDrink")) list.push(...FOOD_DRINK);
+    return list;
+}
+/* Used by override-merge as "is this a default id" — we want the union of
+ * RAW + every homebrew family, because turning off a toggle shouldn't make a
+ * GM's custom override re-appear as a brand-new status. */
+const ALL_DEFAULT_IDS = new Set([...PURE_RAW_PRESENTATION, ...FOOD_DRINK].map(s => s.id));
 
 /* Attach a status entry's mechanics: stat-debuff `changes` (from the active
  * clause) and the RAW/overridden `description`, both read THROUGH the engine
@@ -100,13 +143,13 @@ function finishStatusEntry(s) {
 export function buildStatusEffects() {
     const override = readStatusOverride();
     const list = [];
-    for (const s of DEFAULT_PRESENTATION) {
+    for (const s of defaultPresentation()) {
         const o = override[s.id];
         if (o?.removed) continue;
         list.push(finishStatusEntry({ ...s, name: o?.name ?? s.name, img: o?.img ?? s.img }));
     }
     for (const [id, o] of Object.entries(override)) {
-        if (DEFAULT_STATUS_IDS.has(id) || !o || o.removed) continue;
+        if (ALL_DEFAULT_IDS.has(id) || !o || o.removed) continue;
         const name = o.name || id;
         list.push(finishStatusEntry({ id, name, label: name, img: o.img || DEFAULT_STATUS_ICON }));
     }
@@ -114,7 +157,8 @@ export function buildStatusEffects() {
 }
 
 /* Default (no-override) registry — the seed used when the setting hasn't been
- * read yet. CONFIG.statusEffects is rebuilt from buildStatusEffects() at init. */
+ * read yet. CONFIG.statusEffects is rebuilt from buildStatusEffects() at init,
+ * AFTER settings register, so the homebrew gate is honored from then on. */
 export const STATUS_EFFECTS = Object.freeze(
-    DEFAULT_PRESENTATION.map(finishStatusEntry)
+    PURE_RAW_PRESENTATION.map(finishStatusEntry)
 );

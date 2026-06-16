@@ -11,7 +11,7 @@
     <div class="wdm-w3-titles">
       <h1 class="wdm-w3-title">{{item.name}}</h1>
       <div class="wdm-w3-subtitle">
-        {{#if (eq type "weapon")}}{{#if item.system.weaponType}}{{localize (lookup config.weapon.types item.system.weaponType)}}{{/if}}{{#if item.system.hands}} · {{#unless (eq item.system.hands "two")}}{{#if item.system.quick}}Quick {{/if}}{{/unless}}{{localize (lookup config.weapon.hands item.system.hands)}}{{/if}}{{else if (eq type "armor")}}{{#if item.system.armorType}}{{localize (lookup config.armor.types item.system.armorType)}}{{/if}}{{else if (eq type "alchemical")}}{{alchemyMeta.typeLabel}}{{else if (eq type "component")}}{{#if componentMeta.isSubstance}}Alchemical Substance{{else}}Crafting Material{{/if}}{{else if (eq type "container")}}Container{{else if (eq type "mutagen")}}{{#if mutagenMeta.typeLabel}}{{mutagenMeta.typeLabel}} {{/if}}Mutagen{{else if (eq type "diagrams")}}{{#if diagramMeta.levelLabel}}{{diagramMeta.levelLabel}} · {{/if}}{{diagramMeta.kindLabel}}{{#if diagramMeta.subtypeLabel}} · {{diagramMeta.subtypeLabel}}{{/if}}{{else}}{{type}}{{/if}}
+        {{#if (eq type "weapon")}}{{#if item.system.weaponType}}{{localize (lookup config.weapon.types item.system.weaponType)}}{{/if}}{{#if item.system.hands}} · {{#unless (eq item.system.hands "two")}}{{#if item.system.quick}}Quick {{/if}}{{/unless}}{{localize (lookup config.weapon.hands item.system.hands)}}{{/if}}{{else if (eq type "armor")}}{{#if item.system.armorType}}{{localize (lookup config.armor.types item.system.armorType)}}{{/if}}{{else if (eq type "alchemical")}}{{alchemyMeta.typeLabel}}{{else if (eq type "component")}}{{#if componentMeta.isSubstance}}Alchemical Substance{{else}}Crafting Material{{/if}}{{else if (eq type "container")}}Container{{else if (eq type "mutagen")}}{{#if mutagenMeta.typeLabel}}{{mutagenMeta.typeLabel}} {{/if}}Mutagen{{else if (eq type "diagrams")}}{{#if diagramMeta.levelLabel}}{{diagramMeta.levelLabel}} · {{/if}}{{diagramMeta.kindLabel}}{{#if diagramMeta.subtypeLabel}} · {{diagramMeta.subtypeLabel}}{{/if}}{{else if (eq type "food")}}{{foodMeta.kindLabel}}{{#if foodMeta.isAlcohol}} · Alcoholic{{/if}}{{else}}{{type}}{{/if}}
       </div>
     </div>
   </header>
@@ -384,6 +384,34 @@
     </div>
   {{/if}}
 
+  {{#if (eq type "food")}}
+    {{!-- Food / drink: portion ticker + satiety restore + alcohol DC.
+         The drunk DC only shows when the kind is drink AND the item is
+         flagged alcoholic — meals can't carry alcohol metadata. --}}
+    {{#if (or foodMeta.hasCharges foodMeta.satietyRestore foodMeta.isAlcohol)}}
+      <ul class="wdm-w3-stats">
+        {{#if foodMeta.hasCharges}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{foodMeta.chargesCurrent}}/{{foodMeta.chargesMax}}</span>
+            <span class="lbl">Portions</span>
+          </li>
+        {{/if}}
+        {{#if foodMeta.satietyRestore}}
+          <li class="wdm-w3-stat">
+            <span class="val">+{{foodMeta.satietyRestore}}</span>
+            <span class="lbl">Satiety / portion</span>
+          </li>
+        {{/if}}
+        {{#if foodMeta.isAlcohol}}
+          <li class="wdm-w3-stat">
+            <span class="val">DC {{foodMeta.drunkDC}}</span>
+            <span class="lbl">Endurance vs drunk</span>
+          </li>
+        {{/if}}
+      </ul>
+    {{/if}}
+  {{/if}}
+
   {{#if (eq type "valuable")}}
     {{#if (eq item.system.type "remains")}}
       {{!-- Remains: track what's been done to the carcass — no description/value/availability. --}}
@@ -478,6 +506,22 @@
         <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
       </div>
     {{/if}}
+  {{/if}}
+
+  {{#if (eq type "food")}}
+    {{!-- Footer numbers are PORTION-SCALED: a half-eaten loaf weighs half
+         what a full one weighs, and is worth half. The "per unit" raw
+         numbers stay editable on the sheet — this view is what the carry
+         tally actually counts. --}}
+    <div class="wdm-w3-footer">
+      <span class="wdm-w3-foot-cell" title="Effective weight (kg) — portion-scaled"><i class="fa-solid fa-weight-hanging"></i>{{foodMeta.effectiveWeight}}</span>
+      {{#unless (eq item.system.quantity 1)}}
+        <span class="wdm-w3-foot-cell" title="Quantity (full units in the stack)"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
+      {{/unless}}
+      <span class="wdm-w3-foot-spacer"></span>
+      <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup config.availability item.system.availability)}}</span>
+      <span class="wdm-w3-foot-cell wdm-w3-price" title="Effective value (crowns) — portion-scaled"><i class="fa-solid fa-coins"></i>{{foodMeta.effectiveCost}}</span>
+    </div>
   {{/if}}
 
 </div>

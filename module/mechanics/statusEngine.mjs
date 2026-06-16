@@ -20,6 +20,16 @@
  */
 
 import { getActiveClauses } from "./statusOverrides.mjs";
+// NOTE: `stress.mjs` is intentionally NOT imported at the top of this module.
+// stress.mjs → api/homebrew.mjs → setup/config.mjs → setup/statusEffects.mjs
+// → setup/statusOverrides.mjs and back here, forming a cycle that re-enters
+// statusEffects.mjs mid-evaluation. When statusEffects.mjs then runs its
+// top-level `PURE_RAW_PRESENTATION.map(finishStatusEntry)`, finishStatusEntry
+// calls statusChanges() → `change(...)`, but the `change` const below has not
+// yet been initialized in this module's evaluation pass, throwing a TDZ
+// ReferenceError that hard-aborts boot. `grantStress` is only ever needed at
+// hook-fire time (well after every module has finished initializing), so we
+// dynamic-import it inside the handler instead.
 
 const SYSTEM_ID = "witcher-ttrpg-death-march";
 
@@ -35,9 +45,28 @@ export function clauseFor(id) {
 }
 
 /** A status id's RAW (or overridden) description, with the same family
- *  fallback `clauseFor` applies. "" when the status carries no clause. */
+ *  fallback `clauseFor` applies. "" when the status carries no clause.
+ *
+ *  When the `stress` homebrew is enabled, the clause's `stressNote` (if any)
+ *  is appended — keeps the player-facing copy aligned with the mechanic, so a
+ *  pure-stress-off world reads no mention of stress on a drunk / hunger /
+ *  gorged tile even though the schema still carries the field.
+ *
+ *  Note: we MUST read `game.settings` directly here, not `game.system.api`.
+ *  `game.system.api` is wired in the `ready` hook, but this function runs at
+ *  `init` time (buildStatusEffects bakes descriptions into CONFIG.statusEffects
+ *  during init, BEFORE ready) — relying on the api there silently dropped the
+ *  stressNote even when the toggle was on. settings.get is safe at init
+ *  because registerSettings runs first in the init sequence. */
 export function descriptionFor(id) {
-    return clauseFor(id)?.description ?? "";
+    const c = clauseFor(id);
+    if (!c) return "";
+    const base = c.description ?? "";
+    if (!c.stressNote) return base;
+    let stressOn = false;
+    try { stressOn = !!game.settings?.get?.(SYSTEM_ID, "homebrew.stress"); }
+    catch { /* settings not yet registered — treat as off */ }
+    return stressOn ? base + c.stressNote : base;
 }
 
 /* The AE change shape this system's effect data model understands
@@ -46,17 +75,58 @@ const change = (key, value) =>
     ({ key, value: String(value), type: "add", phase: "initial", priority: 0 });
 
 /**
- * Build the ActiveEffect changes[] for a status's stat clause. Stat debuffs
- * target the UNBOUNDED `.modifier` field (folded into the prepared value by
- * prepareDerivedData) so a −3 SPD can cross the 1-10 source clamp instead of
- * being silently floored. Returns [] for statuses with no stat clause.
+ * Build the ActiveEffect changes[] for a status's stat / skill clauses. Stat
+ * debuffs target the UNBOUNDED `.modifier` field (folded into the prepared
+ * value by prepareDerivedData) so a −3 SPD can cross the 1-10 source clamp
+ * instead of being silently floored. Skill debuffs target each skill's own
+ * `.modifier` field (one AE change per affected skill). Returns [] for
+ * statuses with no stat or skill clause.
+ *
+ * NOT included: derived-stat aggregates (`mods.derived.*`) — those are read
+ * live during prepareDerivedData via `derivedMods()` so they recompute every
+ * prepare cycle from current active statuses, not from a baked-in AE change.
  */
 export function statusChanges(id) {
+    const out = [];
     const stats = clauseFor(id)?.mods?.stats;
-    if (!stats) return [];
-    return Object.entries(stats)
-        .filter(([, n]) => Number(n))
-        .map(([k, n]) => change(`system.stats.${k}.modifier`, Number(n)));
+    if (stats) {
+        for (const [k, n] of Object.entries(stats)) {
+            if (Number(n)) out.push(change(`system.stats.${k}.modifier`, Number(n)));
+        }
+    }
+    const skills = clauseFor(id)?.mods?.skills;
+    if (skills) {
+        for (const [statKey, group] of Object.entries(skills)) {
+            if (!group || typeof group !== "object") continue;
+            for (const [skillKey, n] of Object.entries(group)) {
+                if (Number(n)) out.push(change(`system.skills.${statKey}.${skillKey}.modifier`, Number(n)));
+            }
+        }
+    }
+    return out;
+}
+
+/**
+ * Sum the `mods.derived.*` numbers across every active status on `actor`.
+ * Read live by CharacterData.prepareDerivedData (and any other derive-time
+ * consumer) so a GM tuning a clause in the editor flows in without an AE
+ * reapply.
+ *
+ *   staMaxFraction  multiplicative cut applied to sta.max (negative shrinks).
+ *                   Floors at -1 so max never goes below 0.
+ *   recBonus        flat REC add. No clamp here — the consumer floors at 0.
+ */
+export function derivedMods(actor) {
+    const out = { staMaxFraction: 0, recBonus: 0 };
+    if (!actor?.statuses) return out;
+    for (const id of actor.statuses) {
+        const d = clauseFor(id)?.mods?.derived;
+        if (!d) continue;
+        if (typeof d.staMaxFraction === "number") out.staMaxFraction += d.staMaxFraction;
+        if (typeof d.recBonus === "number")        out.recBonus       += d.recBonus;
+    }
+    out.staMaxFraction = Math.max(-1, out.staMaxFraction);
+    return out;
 }
 
 /**
@@ -360,6 +430,59 @@ export async function promptStatusEndChecks(actor) {
                 });
             }
         }
+    }
+}
+
+/**
+ * Hook handler for `createActiveEffect`. If the new effect carries any status
+ * whose clause has an `onApply.stress` delta, apply the sum to the bearer's
+ * stress in one shot. Active-GM-only so multi-client sessions don't double up.
+ *
+ * NOT idempotent across reapplies of the SAME status: by design, every fresh
+ * AE counts as a fresh apply. Crossing into Hungry, sating, then crossing back
+ * into Hungry pays the +1 stress again — which is what the spec wants.
+ *
+ * Wired in setup/hooks.mjs.
+ */
+export async function onCreateActiveEffectStatus(effect, options /*, userId */) {
+    try {
+        if (!game.user?.isActiveGM) return;
+        // Callers that own DIRECTIONAL semantics (sobering through a relief
+        // tier; eating back across a stress-on-entry tier) pass
+        // `wdmSkipOnApply: true` in createEmbeddedDocuments options to opt this
+        // AE out — the one-shot was intended for ascending the ladder only.
+        if (options?.wdmSkipOnApply) return;
+        const actor = effect?.parent;
+        if (!actor || actor.documentName !== "Actor") return;
+        // Stress lives on characters only — monsters don't carry the schema
+        // field. A relief delta on a monster would silently fail; a gain delta
+        // would write a stray field. Cheaper to bail.
+        if (actor.type !== "character") return;
+        // If the stress homebrew is off, onApply.stress is a no-op even though
+        // the clause field is present. The player-facing description likewise
+        // hides its `stressNote` (see descriptionFor) so flavor and mechanic
+        // stay aligned in a pure-stress-off world. Read settings directly so
+        // a hook fired before `ready` (where game.system.api is wired) still
+        // gets the right answer.
+        let stressOn = false;
+        try { stressOn = !!game.settings?.get?.(SYSTEM_ID, "homebrew.stress"); }
+        catch { /* settings not yet registered */ }
+        if (!stressOn) return;
+        const statuses = effect.statuses;
+        if (!statuses?.size) return;
+
+        let stressDelta = 0;
+        for (const id of statuses) {
+            const oa = clauseFor(id)?.onApply;
+            if (!oa) continue;
+            if (typeof oa.stress === "number") stressDelta += oa.stress;
+        }
+        if (stressDelta !== 0) {
+            const { grantStress } = await import("./stress.mjs");
+            await grantStress(actor, stressDelta);
+        }
+    } catch (err) {
+        console.warn("witcher-ttrpg-death-march | onCreateActiveEffect onApply failed", err);
     }
 }
 

@@ -1,11 +1,13 @@
 {{!-- Diagrams item sheet — two-layer (Core p.127-146):
         DISPLAY → Witcher 3 in-game tooltip (player reads the recipe)
         CONFIG  → editable form (GM / owner with cog toggle)
-      A diagram is a crafting blueprint (specific ingredients) or, when
-      isFormulae is set, an alchemical formula (the nine substances). The
-      hero is the single craft DC — Crafting roll for diagrams, Alchemy
-      roll for formulae. Output item + ingredients are linked by dropping
-      Items onto the config zones (see WitcherDiagramsSheet). --}}
+      `kind` chooses how the schema is read:
+        - "diagram"  : crafting blueprint, rolled vs Crafting
+        - "formula"  : alchemical formula (nine substances), rolled vs Alchemy
+        - "recipe"   : cooking recipe (homebrew), rolled vs Cooking
+      The hero is the single craft DC, relabeled to match the kind. Output item
+      + ingredients are linked by dropping Items onto the config zones (see
+      WitcherDiagramsSheet). --}}
 
 <div class="wdm-item-sheet wdm-item-v2 is-diagrams" data-mode="{{mode}}">
 
@@ -28,7 +30,7 @@
           <h1 class="wdm-w3-title">{{item.name}}</h1>
           <div class="wdm-w3-subtitle">
             {{#if levelLabel}}{{levelLabel}}{{/if}}
-            {{#if isFormulae}} · Formula{{else}} · Diagram{{/if}}
+             · {{kindLabel}}
             {{#if subtypeLabel}} · {{subtypeLabel}}{{/if}}
           </div>
         </div>
@@ -124,9 +126,13 @@
 
       <div class="wdm-cfg-section">Classification</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row is-checkbox" title="Alchemical formula (uses the nine substances). Off = crafting diagram (specific ingredients).">
-          <span>Alchemical Formula</span>
-          <input type="checkbox" name="system.isFormulae" {{#if source.isFormulae}}checked{{/if}} />
+        <label class="wdm-cfg-row" title="What this entry represents. Diagram → Crafting roll. Formula → Alchemy roll (uses the nine substances). Recipe → Cooking roll (homebrew food & drink).">
+          <span>Kind</span>
+          <select name="system.kind">
+            {{#each kindOptions}}
+              <option value="{{@key}}" {{#if (eq @key ../kind)}}selected{{/if}}>{{this}}</option>
+            {{/each}}
+          </select>
         </label>
         <label class="wdm-cfg-row"><span>Level</span>
           <select name="system.level">
@@ -149,14 +155,14 @@
       <div class="wdm-cfg-grid">
         <label class="wdm-cfg-row"><span>{{dcLabel}}</span>
           <input type="number" min="0" name="{{dcField}}" value="{{dc}}"
-                 title="Difficulty of the {{#if isFormulae}}Alchemy{{else}}Crafting{{/if}} roll." />
+                 title="Difficulty of the {{dcLabel}} roll." />
         </label>
-        {{#unless isFormulae}}
+        {{#if isDiagram}}
         <label class="wdm-cfg-row is-checkbox" title="Metalwork — crafting this needs a Forge rather than a portable Crafting kit. Drives the tool requirement on the crafting panel.">
           <span>Requires Forge</span>
           <input type="checkbox" name="system.requiresForge" {{#if source.requiresForge}}checked{{/if}} />
         </label>
-        {{/unless}}
+        {{/if}}
         <label class="wdm-cfg-row"><span>Crafting Time</span>
           <input type="text" name="system.craftingTime" value="{{source.craftingTime}}" placeholder="1 Hour / 2 Days" />
         </label>
@@ -196,7 +202,7 @@
         <div class="wdm-drop-hint"><i class="fa-solid fa-plus"></i> Drop ingredient items here</div>
       </div>
 
-      {{#if isFormulae}}
+      {{#if isFormula}}
         <div class="wdm-cfg-section">Substances Required</div>
         <div class="wdm-sub-grid">
           {{#each substances}}

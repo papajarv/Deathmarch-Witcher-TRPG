@@ -21,6 +21,8 @@ import { WitcherActorSheet } from "./base.mjs";
 import { healSheetMixin } from "./mixins/healSheetMixin.mjs";
 import { openFumbleDialog }   from "../../chrome/chrome/fumble-dialog.js";
 import { openCriticalDialog } from "../../chrome/chrome/critical-roll.js";
+import { tierForSatiety } from "../../mechanics/foodAndDrink.mjs";
+import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 
 // Statblock cell order + 3-letter abbreviations (BOD / WIL match the
 // printed sheet). LUCK and REP are appended as special cells.
@@ -208,6 +210,27 @@ export class WitcherCharacterSheet extends healSheetMixin(WitcherActorSheet) {
         // ── Player-set counters surfaced in the trackers row. `bodyValue`
         //    caps the adrenaline stepper (RAW p.153).
         ctx.bodyValue = Number(sys.stats?.body?.value) || 0;
+
+        // ── Satiety (homebrew foodAndDrink). Rendered as a tracker in the
+        //    main HUD strip alongside Stress when the toggle is on. Editable
+        //    by GMs only (preUpdateActor in mechanics/foodAndDrink.mjs strips
+        //    player writes server-side; the input here matches that with a
+        //    readonly attribute so the UI signals it). The tier label sits
+        //    below the value as a sub-line so the player sees a name, not
+        //    just a number.
+        const satietyOn = isHomebrewEnabled("foodAndDrink");
+        if (satietyOn) {
+            const satVal = Number(sys.satiety) || 0;
+            const tier = tierForSatiety(satVal);
+            ctx.satiety = {
+                value:   satVal,
+                tier,
+                tierLabel: tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : "",
+                isGM:    !!game.user?.isGM
+            };
+        } else {
+            ctx.satiety = null;
+        }
 
         // ── Profession skill tree (defining skill + 3 advancement paths).
         //    Each rank input edits the embedded profession item's `.level`

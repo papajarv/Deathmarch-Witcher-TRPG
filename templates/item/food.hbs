@@ -1,8 +1,17 @@
-{{!-- Food item sheet — edible/drinkable provisions. Two-layer:
+{{!-- Food item sheet — edible/drinkable provisions for the food & drink
+      homebrew. Two-layer:
         DISPLAY  → Witcher 3 in-game tooltip aesthetic (player reads)
         CONFIG   → editable form (cog toggle, owners only)
-      Simple gear for now: name, value (cost), weight, rarity (availability),
-      description. --}}
+
+      Fields:
+        cost / weight / availability / description → universal item fields,
+            always rendered.
+        taste                  → posted to chat on consume; never on the
+                                 display layer per spec — config-only input.
+        charges {current, max} → portion ticker; gated on foodAndDrinkOn.
+        satietyRestore         → satiety regained per portion; gated.
+        drunk.*                → alcoholic metadata (DC, level jump, flavor
+                                 verb, witcher-resist bypass, icon); gated. --}}
 
 <div class="wdm-item-sheet wdm-item-v2" data-mode="{{mode}}">
 
@@ -23,9 +32,35 @@
         <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
         <div class="wdm-w3-titles">
           <h1 class="wdm-w3-title">{{item.name}}</h1>
-          <div class="wdm-w3-subtitle">Food</div>
+          <div class="wdm-w3-subtitle">
+            {{kindLabel}}{{#if (and foodAndDrinkOn isDrink source.drunk.isAlcohol)}} · Alcoholic{{/if}}
+          </div>
         </div>
       </header>
+
+      {{!-- Charges + satiety + alcohol DC stripe (homebrew-only). --}}
+      {{#if foodAndDrinkOn}}
+        <ul class="wdm-w3-stats">
+          {{#if source.charges.max}}
+            <li class="wdm-w3-stat">
+              <span class="val">{{source.charges.current}}/{{source.charges.max}}</span>
+              <span class="lbl">Portions</span>
+            </li>
+          {{/if}}
+          {{#unless (eq source.satietyRestore 0)}}
+            <li class="wdm-w3-stat">
+              <span class="val">+{{source.satietyRestore}}</span>
+              <span class="lbl">Satiety / portion</span>
+            </li>
+          {{/unless}}
+          {{#if source.drunk.isAlcohol}}
+            <li class="wdm-w3-stat">
+              <span class="val">DC {{source.drunk.dc}}</span>
+              <span class="lbl">Endurance vs drunk</span>
+            </li>
+          {{/if}}
+        </ul>
+      {{/if}}
 
       {{#if source.description}}
         <div class="wdm-w3-description">{{{source.description}}}</div>
@@ -59,6 +94,14 @@
 
       <div class="wdm-cfg-section">Details</div>
       <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row" title="Display category. Drinks are the only kind that can carry alcohol metadata.">
+          <span>Kind</span>
+          <select name="system.kind">
+            {{#each kindOptions}}
+              <option value="{{@key}}" {{#if (eq @key ../kind)}}selected{{/if}}>{{this}}</option>
+            {{/each}}
+          </select>
+        </label>
         <label class="wdm-cfg-row"><span title="Crowns per unit">Value</span>
           <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
         </label>
@@ -75,6 +118,96 @@
       </div>
 
       {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      {{!-- Food & Drink homebrew fields. Schema is always present (ADR 0003),
+           but the UI surface hides when the toggle is off so a pure-RAW world
+           doesn't see fields it can't actually use. Flipping it back on keeps
+           previously-authored data intact. --}}
+      {{#if foodAndDrinkOn}}
+        <div class="wdm-cfg-section">Portions &amp; Satiety</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row" title="Portions left in THIS unit. When 0, consuming drops quantity by 1 and resets to max (or deletes the item).">
+            <span>Current Portion</span>
+            <input type="number" min="0" name="system.charges.current" value="{{source.charges.current}}" />
+          </label>
+          <label class="wdm-cfg-row" title="Total portions per unit (0 = no portion ticker, consume just decrements quantity).">
+            <span>Max Portions</span>
+            <input type="number" min="0" name="system.charges.max" value="{{source.charges.max}}" />
+          </label>
+          <label class="wdm-cfg-row" title="Satiety restored per portion eaten (0–125).">
+            <span>Satiety Restore</span>
+            <input type="number" min="0" name="system.satietyRestore" value="{{source.satietyRestore}}" />
+          </label>
+        </div>
+
+        <div class="wdm-cfg-section">Taste</div>
+        <textarea class="wdm-cfg-textarea" name="system.taste"
+                  placeholder="Short flavor line — printed in chat each time a portion is consumed (never on the display tooltip).">{{source.taste}}</textarea>
+
+        {{!-- Alcohol block — only drinks can carry alcohol metadata.
+             The schema accepts the values for any kind so authoring a meal
+             with alcohol fields by mistake doesn't lose data; the UI just
+             stops surfacing them. --}}
+        {{#if isDrink}}
+        <div class="wdm-cfg-section">Alcohol</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row is-checkbox" title="When ON, consuming triggers an Endurance check; failure raises the drinker's drunk level.">
+            <span>Alcoholic</span>
+            <input type="checkbox" name="system.drunk.isAlcohol" {{#if source.drunk.isAlcohol}}checked{{/if}} />
+          </label>
+          <label class="wdm-cfg-row" title="DC of the Endurance check the drinker rolls to avoid getting more drunk.">
+            <span>Endurance DC</span>
+            <input type="number" min="0" name="system.drunk.dc" value="{{source.drunk.dc}}" />
+          </label>
+          <label class="wdm-cfg-row" title="How many drunk tiers to advance on a failed save (usually 1).">
+            <span>Level Jump</span>
+            <input type="number" min="0" name="system.drunk.levelJump" value="{{source.drunk.levelJump}}" />
+          </label>
+          <label class="wdm-cfg-row is-checkbox" title="When ON, witcher actors don't get the roll-twice-take-best they'd normally enjoy against alcohol.">
+            <span>Bypass Witcher Resist</span>
+            <input type="checkbox" name="system.drunk.bypassWitcherResist" {{#if source.drunk.bypassWitcherResist}}checked{{/if}} />
+          </label>
+          <label class="wdm-cfg-row" title="Verb used in chat: 'drinks', 'sips', 'guzzles', 'downs'…">
+            <span>Flavor Verb</span>
+            <input type="text" name="system.drunk.flavorVerb" value="{{source.drunk.flavorVerb}}" placeholder="drinks" />
+          </label>
+        </div>
+        {{/if}}
+      {{/if}}
+
+      {{!-- Active Effects — copy onto the consumer when eaten. With duration
+           the effect lingers and expires; without, it sits as a permanent
+           buff/debuff (author can delete later). Effects on the food itself
+           are transfer:false (handled by the sheet) so merely carrying the
+           item never applies them. --}}
+      {{#if foodAndDrinkOn}}
+        <div class="wdm-cfg-section">Effects <span class="wdm-cfg-sub">(applied on consume)</span></div>
+        <div class="wdm-cfg-effects">
+          {{#if effects.length}}
+            <ul class="wdm-effect-list">
+              {{#each effects}}
+                <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                  <div class="wdm-effect-head">
+                    <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                    <span class="wdm-effect-name">{{this.name}}</span>
+                    {{#if this.duration.label}}<span class="wdm-effect-duration">{{this.duration.label}}</span>{{/if}}
+                    <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                      <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                    </a>
+                    <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
+                    <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                  </div>
+                </li>
+              {{/each}}
+            </ul>
+          {{else}}
+            <p class="wdm-empty">No effects configured.</p>
+          {{/if}}
+          <button type="button" class="wdm-add-effect" data-action="createEffect">
+            <i class="fa-solid fa-plus"></i> Add Effect
+          </button>
+        </div>
+      {{/if}}
 
       <div class="wdm-cfg-section">Description</div>
       <textarea class="wdm-cfg-textarea is-tall" name="system.description"

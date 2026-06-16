@@ -30,6 +30,7 @@
 
 import { getAssignedActor, VIEWER_OVERRIDE_HOOK } from "../lib/actor.js";
 import { renderViewAsPicker, wireViewAsPicker } from "../lib/view-as.js";
+import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 
 const MODULE_ID = "witcher-ttrpg-death-march";
 const PANEL_ID  = "wou-crafting";
@@ -98,21 +99,34 @@ let activeSubstance = null;             // selected substance node on the compas
 let activeBaseId = null;                 // id of the selected base item
 let selectedIngredients = new Map();     // itemId -> qty selected for the brew
 let activeCraftingDiagramId = null;      // id of the selected crafting diagram
+let activeRecipeId = null;               // id of the selected cooking recipe
 /* RAW: crafting without the proper tools is at −4 (we model it as +4 to the
  * craft DC). The tool depends on the job: Alchemy set for formulae, a Forge for
  * flagged metalwork, a Crafting kit otherwise — AUTO-DETECTED from the actor's
  * inventory. Read-only: you either carry the tool or you take the penalty. */
 const TOOL_PENALTY = 4;
 
+/* Resolve a diagram's kind. Old data may carry only `isFormulae`; treat true
+ * as "formula" and absent/false as "diagram". Recipes are a strict opt-in via
+ * the `kind` field. */
+function diagramKind(diagram) {
+  const k = diagram?.system?.kind;
+  if (k === "diagram" || k === "formula" || k === "recipe") return k;
+  return diagram?.system?.isFormulae ? "formula" : "diagram";
+}
 /* Human label for the required tool. */
 function craftToolLabel(diagram) {
-  if (diagram?.system?.isFormulae)    return "Alchemy set";
+  const k = diagramKind(diagram);
+  if (k === "formula") return "Alchemy set";
+  if (k === "recipe")  return "Cooking pot";
   if (diagram?.system?.requiresForge) return "Forge";
   return "Crafting tools";
 }
 /* The inventory ITEM name that satisfies the requirement. */
 function craftToolItemName(diagram) {
-  if (diagram?.system?.isFormulae)    return "Alchemy Set";
+  const k = diagramKind(diagram);
+  if (k === "formula") return "Alchemy Set";
+  if (k === "recipe")  return "Cooking Pot";
   if (diagram?.system?.requiresForge) return "Tinker's Forge";
   return "Crafting Tools";
 }
@@ -405,23 +419,37 @@ function getFormulae() {
   const actor = getActor();
   if (!actor) return [];
   const pool = [...actor.items].filter(
-    i => i.type === "diagrams" && (i.system?.isFormulae === true || i.system?.type === "bomb")
+    i => i.type === "diagrams" && (diagramKind(i) === "formula" || i.system?.type === "bomb")
   );
   return dedupeMemorizedRows(pool);
 }
 
-/** All crafting diagrams (non-formulae, non-bomb) available on the actor. */
+/** All crafting diagrams (non-formula, non-recipe, non-bomb). */
 function getCraftingDiagrams() {
   const actor = getActor();
   if (!actor) return [];
   const pool = [...actor.items].filter(
-    i => i.type === "diagrams" && !i.system?.isFormulae && i.system?.type !== "bomb"
+    i => i.type === "diagrams" && diagramKind(i) === "diagram" && i.system?.type !== "bomb"
   );
   return dedupeMemorizedRows(pool);
 }
 
-/** Which skill to roll for a crafting diagram. */
+/** All cooking recipes (homebrew food & drink). The cooking screen is added
+ *  elsewhere; this is the data hook. */
+function getRecipes() {
+  const actor = getActor();
+  if (!actor) return [];
+  const pool = [...actor.items].filter(
+    i => i.type === "diagrams" && diagramKind(i) === "recipe"
+  );
+  return dedupeMemorizedRows(pool);
+}
+
+/** Which skill to roll for a diagram of any kind. */
 function craftingSkillFor(diagram) {
+  const k = diagramKind(diagram);
+  if (k === "formula") return "alchemy";
+  if (k === "recipe")  return "cooking";
   return diagram.system?.type === "traps" ? "trapcraft" : "crafting";
 }
 
@@ -439,7 +467,7 @@ function craftReadinessCrafting(diagram) {
  *  over associatedItem.uuid which may point to a module compendium pack. */
 function resolveOutputItem(diagram) {
   const candidates = [];
-  if (diagram.system?.isFormulae) {
+  if (diagramKind(diagram) === "formula") {
     const n = diagram.flags?.["witcher-alchemy-craft"]?.outputNormal;
     if (n) candidates.push(n);
   }
@@ -830,9 +858,24 @@ async function render() {
   }
   const craftingActive = craftingDiagrams.find(d => d.id === activeCraftingDiagramId) ?? null;
 
+  /* Cooking (homebrew foodAndDrink): same dance for the recipe pool. The
+   * panel uses the SAME left-list scroll preservation as alchemy / crafting
+   * since they share the .wou-crf-formulae-list class. */
+  const recipes = getRecipes();
+  if (!recipes.find(r => r.id === activeRecipeId)) {
+    activeRecipeId = recipes[0]?.id ?? null;
+  }
+  const recipeActive = recipes.find(r => r.id === activeRecipeId) ?? null;
+
+  // If the homebrew toggle gets flipped off while the cooking view is active,
+  // fall back to alchemy so we don't render a dead tab as the live view.
+  if (activeView === "cooking" && !isHomebrewEnabled("foodAndDrink")) {
+    activeView = "alchemy";
+  }
+
   const savedScroll = panelEl.querySelector(".wou-crf-formulae-list")?.scrollTop ?? 0;
 
-  panelEl.innerHTML = renderShellHTML(active, craftingActive);
+  panelEl.innerHTML = renderShellHTML(active, craftingActive, recipeActive);
 
   const listEl = panelEl.querySelector(".wou-crf-formulae-list");
   if (listEl && savedScroll) listEl.scrollTop = savedScroll;
@@ -841,10 +884,13 @@ async function render() {
   fitIngredientNames();
 }
 
-function renderShellHTML(active, craftingActive) {
+function renderShellHTML(active, craftingActive, recipeActive) {
   const actor = getActor();
   const memCount = getMemorizedIds().size;
   const intStat  = getInt();
+  // Cooking is a homebrew (foodAndDrink) tab — hide the button entirely when
+  // the toggle is off so the panel matches the pure-RAW look.
+  const cookingOn = isHomebrewEnabled("foodAndDrink");
 
   return `
     <button class="wou-crf-close" type="button" aria-label="Close" title="Collapse">
@@ -855,7 +901,7 @@ function renderShellHTML(active, craftingActive) {
       <nav class="wou-crf-maintabs">
         ${renderMaintab("alchemy",  "fa-flask",    "Alchemy")}
         ${renderMaintab("crafting", "fa-hammer",   "Crafting")}
-        ${renderMaintab("cooking",  "fa-utensils", "Cooking")}
+        ${cookingOn ? renderMaintab("cooking", "fa-utensils", "Cooking") : ""}
       </nav>
       ${game.user?.isGM ? renderViewAsPicker() : ""}
     </header>
@@ -869,6 +915,8 @@ function renderShellHTML(active, craftingActive) {
         ? renderAlchemyView(active)
         : activeView === "crafting"
         ? renderCraftingView(craftingActive)
+        : activeView === "cooking" && cookingOn
+        ? renderCookingView(recipeActive)
         : renderPlaceholderView(activeView)}
     </div>
   `;
@@ -1072,6 +1120,133 @@ function renderCraftingDetail(diagram) {
       </div>
       <div class="wou-crf-sub-kicker" style="margin-top:4px;">
         ${escapeText(skillLabel)} · DC ${dc}
+      </div>
+    </div>
+    ${renderComponentStrip(components)}
+    ${desc ? `<div class="wou-crf-stats-flavor" style="margin-top:8px;font-style:italic;opacity:0.7;">${escapeText(desc)}</div>` : ""}
+  `;
+}
+
+/* =========================================================================
+   COOKING VIEW (homebrew foodAndDrink)
+   -------------------------------------------------------------------------
+   Mirrors the crafting view's three-panel layout: recipe list on the left,
+   Cook button + DC on the centre, ingredients + flavor on the right. Differs
+   from crafting in three places:
+     - DC field        recipes piggyback on `alchemyDC` for the Cooking DC
+                       (sheet relabels — see DiagramsData)
+     - skill           always `cooking`
+     - tool item       "Cooking Pot" (craftToolItemName resolves it)
+   Memorization, salvage, modifier prompt all reuse the existing helpers; the
+   only bespoke piece is the cook-action handler at the bottom of this block.
+   ========================================================================= */
+
+function renderCookingView(active) {
+  const recipes = getRecipes();
+  if (!recipes.length) {
+    return `<div class="wou-crf-empty">— no recipes in your inventory —</div>`;
+  }
+  return `
+    <div class="wou-crf-view is-active">
+      <section class="wou-crf-formulae">
+        <div class="wou-crf-formulae-header">
+          <i class="fa-solid fa-utensils"></i>Recipes
+        </div>
+        <div class="wou-crf-formulae-list">
+          ${renderCookingList(recipes)}
+        </div>
+      </section>
+
+      <section class="wou-crf-compass">
+        ${renderCookingCenter(active)}
+      </section>
+
+      <aside class="wou-crf-detail">
+        ${renderCookingDetail(active)}
+      </aside>
+    </div>
+  `;
+}
+
+/* Recipe groupings — uses the same RECIPE_SUBTYPES map exported by config
+ * (meal / drink / snack). Recipes with no sub-type fall into "Misc" so they
+ * stay reachable. The match callback matches case-insensitively so authors
+ * don't have to remember exact casing. */
+const RECIPE_GROUPS = [
+  { key: "meal",  label: "Meals",   icon: "fa-bowl-food",    match: (t) => t === "meal"  },
+  { key: "drink", label: "Drinks",  icon: "fa-wine-glass",   match: (t) => t === "drink" },
+  { key: "snack", label: "Snacks",  icon: "fa-cookie-bite",  match: (t) => t === "snack" },
+  { key: "misc",  label: "Misc",    icon: "fa-utensils",     match: (t) => !t || !["meal","drink","snack"].includes(t) }
+];
+
+function renderCookingList(recipes) {
+  const sections = [];
+  for (const grp of RECIPE_GROUPS) {
+    const items = recipes.filter(r => grp.match(String(r.system?.type ?? "").toLowerCase()));
+    if (!items.length) continue;
+    const rows = items.map(r =>
+      renderDiagramRow(r, isMemorizedDiagram(r), r.id === activeRecipeId, "data-recipe-id")
+    ).join("");
+    sections.push(`
+      <div class="wou-crf-formulae-section">
+        <div class="wou-crf-formulae-section-head">
+          <i class="fa-solid ${grp.icon}"></i>${escapeText(grp.label)}
+        </div>
+        ${rows}
+      </div>
+    `);
+  }
+  return sections.join("");
+}
+
+function renderCookingCenter(recipe) {
+  if (!recipe) {
+    return `<div class="wou-crf-compass-empty">— select a recipe —</div>`;
+  }
+  // Recipes piggyback on `alchemyDC` for storage — sheet relabels to "Cooking
+  // DC" — so the chrome panel reads the same field. Tool penalty applies the
+  // same +4 hit as other crafts when the Cooking Pot is missing.
+  const baseDC = Number(recipe.system?.alchemyDC) || 0;
+  const dc     = baseDC + craftToolPenalty(recipe);
+  const ready  = craftReadinessCrafting(recipe);
+  return `
+    <div class="wou-crf-compass-head">
+      ${renderOutputPreview(recipe)}
+    </div>
+    <div class="wou-crf-hex-wrap" style="display:flex;align-items:center;justify-content:center;">
+      <button class="wou-crf-hex-center${ready.ready ? "" : " is-disabled"}"
+              type="button" data-action="cook-recipe"
+              ${ready.ready ? "" : "disabled"}
+              title="${escapeAttr(ready.ready ? "Cook this recipe" : `Cannot cook: ${ready.reason}`)}">
+        <span class="hex-label">
+          <i class="fa-solid fa-utensils"></i>
+          Cook
+        </span>
+      </button>
+    </div>
+    <div class="wou-crf-compass-foot">
+      <span>DC <span class="key">${dc}</span> <span class="dim">Cooking${dc !== baseDC ? ` · raw ${baseDC}` : ""}</span></span>
+    </div>
+    ${toolsToggleHTML(recipe)}
+  `;
+}
+
+function renderCookingDetail(recipe) {
+  if (!recipe) {
+    return `<div class="wou-crf-detail-empty">— select a recipe —</div>`;
+  }
+  const components = resolveCraftingComponents(recipe);
+  const dc         = Number(recipe.system?.alchemyDC) || 0;
+  const desc       = stripHtml(recipe.system?.description ?? "");
+  return `
+    <div class="wou-crf-detail-head">
+      <div class="wou-crf-sub-kicker">Cooking recipe</div>
+      <div class="wou-crf-sub-title">
+        <span class="glyph"><i class="fa-solid fa-utensils"></i></span>
+        ${escapeText(recipe.name.replace(/^Recipe:\s*/i, ""))}
+      </div>
+      <div class="wou-crf-sub-kicker" style="margin-top:4px;">
+        Cooking · DC ${dc}
       </div>
     </div>
     ${renderComponentStrip(components)}
@@ -1772,6 +1947,26 @@ function wireShell() {
     if (!ready.ready) { ui.notifications?.warn(`Cannot craft: ${ready.reason}.`); return; }
     await craftDiagram(actor, active);
   });
+
+  /* Cooking recipe row click → select recipe */
+  panelEl.querySelectorAll("[data-recipe-id]").forEach(row => {
+    row.addEventListener("click", (e) => {
+      if (e.target.closest("[data-mem-toggle]")) return; /* brain has own handler */
+      activeRecipeId = row.dataset.recipeId;
+      render();
+    });
+  });
+
+  /* Cook button → roll Cooking + consume ingredients + produce food item */
+  panelEl.querySelector('[data-action="cook-recipe"]')?.addEventListener("click", async () => {
+    const actor   = getActor();
+    const recipes = getRecipes();
+    const active  = recipes.find(r => r.id === activeRecipeId);
+    if (!actor || !active) { ui.notifications?.warn("Pick a recipe first."); return; }
+    const ready = craftReadinessCrafting(active);
+    if (!ready.ready) { ui.notifications?.warn(`Cannot cook: ${ready.reason}.`); return; }
+    await cookRecipe(actor, active);
+  });
 }
 
 /* =========================================================================
@@ -2115,6 +2310,74 @@ async function craftDiagram(actor, diagram) {
         } else {
           ui.notifications?.warn("Salvage failed — all materials lost.");
         }
+      }
+    }
+  }
+
+  render();
+}
+
+/* Cooking recipe execution. Same skeleton as craftDiagram but always rolls
+ * the Cooking skill against `alchemyDC` (recipes piggyback on that field —
+ * see DiagramsData). On success the recipe's associatedItem is added to the
+ * actor's inventory (typically a food item carrying its own taste / charges
+ * / satietyRestore / drunk metadata, so the new portion just works in the
+ * consume flow). On failure the same half-material salvage prompt as
+ * crafting fires — felt natural to share. */
+async function cookRecipe(actor, recipe) {
+  const dc            = (Number(recipe.system?.alchemyDC) || 0) + craftToolPenalty(recipe);
+  const requiredComps = (recipe.system?.craftingComponents ?? []).filter(c => Number(c.quantity) > 0);
+
+  const mods = await promptCraftModifier("Cooking", actor);
+  if (mods == null) return;
+
+  let roll;
+  try { roll = await actor.rollSkillCheck?.("cooking", dc, mods); } catch { return; }
+  if (!roll) return;
+  const pass = roll.total >= dc;
+
+  for (const comp of requiredComps) await _consumeComponent(actor, comp);
+
+  let itemName = "", itemImg = "";
+  if (pass) {
+    const outputUuid = recipe.system?.associatedItem?.uuid;
+    if (outputUuid) {
+      try {
+        const output = await fromUuid(outputUuid);
+        if (output) {
+          await actor.addItem(output, 1);
+          itemName = output.name;
+          itemImg  = output.img;
+        }
+      } catch (err) {
+        console.warn("[witcher-ttrpg-death-march] cookRecipe: could not resolve output item", err);
+      }
+    }
+  }
+
+  postCraftResult({ actor, label: "Cooking", pass, dc, total: roll.total, itemName, itemImg });
+
+  if (!pass && requiredComps.length) {
+    const attempt = await askConfirm(
+      "Salvage Ingredients?",
+      `Cooking failed. Attempt a salvage roll (Cooking DC ${dc}) to recover half your ingredients?`
+    );
+    if (attempt) {
+      let salvage;
+      try { salvage = await actor.rollSkillCheck?.("cooking", dc, mods); } catch { /* dismissed */ }
+      if (salvage && salvage.total >= dc) {
+        const recovered = [];
+        for (const comp of requiredComps) {
+          const returnQty = Math.ceil(Number(comp.quantity) / 2);
+          await _returnComponent(actor, comp, returnQty);
+          recovered.push(`${comp.name} ×${returnQty}`);
+        }
+        ChatMessage.create({
+          content: `<b>${actor.name}</b> salvaged half their ingredients: ${recovered.join(", ")}.`,
+          speaker: ChatMessage.getSpeaker({ actor })
+        });
+      } else {
+        ui.notifications?.warn("Salvage failed — all ingredients lost.");
       }
     }
   }

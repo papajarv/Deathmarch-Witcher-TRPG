@@ -62,6 +62,14 @@ export function registerHandlebars() {
             return args.some(Boolean);
         });
     }
+    /* `and a b [c ...]` — truthy only when every argument is truthy. Same
+     * options-hash strip as `or`. */
+    if (!Handlebars.helpers.and) {
+        Handlebars.registerHelper("and", function (...args) {
+            args.pop();
+            return args.every(Boolean);
+        });
+    }
     /* `homebrew "key"` — true if the named homebrew toggle is on (ADR
      * 0003). Subexpression form `{{#if (homebrew "stress")}}` needs a
      * real registered helper (a context-only function isn't resolved as

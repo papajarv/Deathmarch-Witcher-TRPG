@@ -13,6 +13,7 @@
  */
 
 import { MODULE_ID } from "../setup/settings.js";
+import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 
 const POPOVER_ID = "wou-skills-pop";
 /* Luck and Speed are intentionally not in STATS: no skills hang off them in
@@ -52,6 +53,10 @@ function buildSkillCatalog() {
   for (const [key, entry] of Object.entries(skillMap)) {
     const stat = entry?.statKey;
     if (!stat || !(stat in out)) continue;
+    // Homebrew-tagged skills (e.g. `cooking` on the `foodAndDrink` toggle)
+    // hide from the panel when their owning subsystem is off — schema field
+    // stays put, just no UI surface. ADR 0003 compatible.
+    if (entry?.homebrew && !isHomebrewEnabled(entry.homebrew)) continue;
     const i18nKey = labelFor ? labelFor(key) : key;
     out[stat].push({
       key,                                                /* skillMap key — pass to actor.rollSkill */

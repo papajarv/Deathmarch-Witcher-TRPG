@@ -1274,9 +1274,9 @@ async function runPeaceSignAction(action, actor) {
     }
     case "sober-up": {
       if (!isHomebrewEnabled("foodAndDrink")) return;
-      const api = game.witcherFoodAndDrink?.drunk;
+      const api = game.system?.api?.mechanics?.foodAndDrink;
       if (!api?.soberUp) {
-        ui.notifications?.warn("witcher-food-and-drink is not active.");
+        ui.notifications?.warn("Food & drink API unavailable.");
         return;
       }
       await api.soberUp(actor);
@@ -2055,9 +2055,9 @@ export function rebindDock() {
     soberSign.style.display = "none";
   } else if (soberSign) {
     soberSign.style.display = "";
-    const drunkApi = game.witcherFoodAndDrink?.drunk;
-    const level = (actor && drunkApi?.getLevel)
-      ? Number(drunkApi.getLevel(actor)) || 0
+    const fdApi = game.system?.api?.mechanics?.foodAndDrink;
+    const level = (actor && fdApi?.getDrunkLevel)
+      ? Number(fdApi.getDrunkLevel(actor)) || 0
       : 0;
     const badge = soberSign.querySelector('[data-bind="sober-rank"]');
     if (level > 0) {

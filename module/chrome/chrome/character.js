@@ -30,6 +30,7 @@ import {
   decrementArmorSP,
 } from "./dock.js";
 import { drainHp } from "../../setup/config.mjs";
+import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 
 const MODULE_ID = "witcher-ttrpg-death-march";
 const PANEL_ID  = "wou-character";
@@ -665,6 +666,10 @@ function renderTrackersColumn(actor, data) {
         ${data.adrenaline ? renderTracker("adrenaline", "Adrenaline", "fa-bolt", data.adrenaline) : ""}
         ${renderTracker("shield",     "Shield",      "fa-shield-halved",  data.shield)}
         ${data.focus?.max ? renderTracker("focus", "Focus", "fa-magnifying-glass", data.focus) : ""}
+        ${data.satiety ? renderTracker("satiety", "Satiety", "fa-utensils", data.satiety, "", {
+            min:      -100,
+            readonly: !game.user?.isGM
+          }) : ""}
         ${renderTracker("deathSaves", "Death Saves", "fa-skull",          { cur: deathCount, max: 10 }, deathState)}
       </div>
       ${renderDerivedStatsRow(actor)}
@@ -709,11 +714,34 @@ function renderDerivedStatsRow(actor) {
   return `<div class="wou-chr-derived">${cells}</div>`;
 }
 
-function renderTracker(kind, label, icon, pool, extraClass = "") {
+function renderTracker(kind, label, icon, pool, extraClass = "", opts = {}) {
   /* Prefer the in-flight optimistic value so a mid-burst re-render doesn't
    * snap the visible number back to the actor's last-committed value. */
   const shown = pendingValue(`tracker.${kind}`) ?? pool.cur;
+  // Numeric bounds — when min is unspecified, default to 0 to preserve the
+  // existing tracker contract. Satiety passes min=-100 to allow Famished.
+  const minAttr = `min="${Number.isFinite(opts.min) ? opts.min : 0}"`;
   const maxAttr = pool.max > 0 ? `max="${pool.max}"` : "";
+  const subLabel = opts.subLabel
+    ? `<span class="wou-chr-tracker-sub" title="${escapeAttr(opts.subTooltip || "")}">${escapeText(opts.subLabel)}</span>`
+    : "";
+  // readonly: hide the +/- buttons and lock the input. The bump handler also
+  // gates on this server-side (preUpdateActor in foodAndDrink.mjs); the UI
+  // gate is cosmetic but matters so players don't see writable-looking
+  // controls they can't actually commit. Used by satiety (GM-only edit).
+  if (opts.readonly) {
+    return `
+      <div class="wou-chr-tracker is-readonly${extraClass ? ` ${extraClass}` : ""}" data-kind="${kind}">
+        <span class="wou-chr-tracker-lbl"><i class="fa-solid ${icon}" aria-hidden="true"></i>${escapeText(label)}</span>
+        <input class="wou-chr-tracker-val"
+               type="number"
+               readonly
+               value="${shown}"
+               aria-label="${escapeAttr(label)}" />
+        ${subLabel}
+      </div>
+    `;
+  }
   return `
     <div class="wou-chr-tracker${extraClass ? ` ${extraClass}` : ""}" data-kind="${kind}">
       <span class="wou-chr-tracker-lbl"><i class="fa-solid ${icon}" aria-hidden="true"></i>${escapeText(label)}</span>
@@ -722,13 +750,14 @@ function renderTracker(kind, label, icon, pool, extraClass = "") {
               aria-label="Decrease ${escapeAttr(label)}">${"−"}</button>
       <input class="wou-chr-tracker-val"
              type="number"
-             min="0" ${maxAttr}
+             ${minAttr} ${maxAttr}
              value="${shown}"
              data-tracker="${kind}"
              aria-label="${escapeAttr(label)}" />
       <button class="wou-chr-tracker-step" type="button"
               data-action="bump-tracker" data-tracker="${kind}" data-delta="+1"
               aria-label="Increase ${escapeAttr(label)}">+</button>
+      ${subLabel}
     </div>
   `;
 }
@@ -955,6 +984,13 @@ function renderStatsAndSkills(actor) {
     const statVal = Number(actor.system?.stats?.[s.key]?.value) || 0;
     const rows = Object.entries(block)
       .filter(([, sk]) => sk && typeof sk === "object" && typeof sk.value === "number")
+      // Skip homebrew-tagged skills whose subsystem is currently off (e.g.
+      // `cooking` is hidden when foodAndDrink is disabled). Schema field still
+      // exists per ADR 0003 — the row is just not rendered.
+      .filter(([skKey]) => {
+        const tag = skillMap[skKey]?.homebrew;
+        return !tag || isHomebrewEnabled(tag);
+      })
       .map(([skKey, sk]) => {
         const lvl = Number(sk.value) || 0;
         const isProf = sk.category === "profession";
@@ -3387,6 +3423,16 @@ function trackerConfig(actor, kind) {
       currentValue: Number(actor.system?.derivedStats?.focus?.value) || 0,
       write: (v) => actor.update({ "system.derivedStats.focus.value": v }),
       clamp: (v) => Math.max(0, Math.min(v, Number(actor.system?.derivedStats?.focus?.max) || 0)),
+    };
+    case "satiety":    return {
+      // Homebrew food & drink — GM-only writes (foodAndDrink.mjs's
+      // preUpdateActor hook strips player writes server-side). The +/- buttons
+      // and editable input are already hidden for non-GMs by renderTracker's
+      // readonly path, so the bump handler shouldn't be reachable; this clamp
+      // / write pair is here for GM interactions only.
+      currentValue: Number(actor.system?.satiety) || 0,
+      write: (v) => actor.update({ "system.satiety": v }),
+      clamp: (v) => Math.max(-100, Math.min(125, v)),
     };
     default: return null;
   }

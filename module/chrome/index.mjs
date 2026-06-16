@@ -47,6 +47,7 @@ import { installCritWoundAutoheal } from "./policy/crit-wound-autoheal.js";
 import { installTickEffects } from "./policy/tick-effects.js";
 import { installConsumableConfigFix } from "./policy/consumable-config-fix.js";
 import { installConsumeFeature } from "./policy/consume-item.js";
+import { installFoodConsumeFeature } from "./policy/food-consume.js";
 import { registerActorContextMenu } from "./chrome/context-menu-actor.js";
 import { registerItemContextMenu } from "./chrome/context-menu-item.js";
 import { registerMonsterRemainsHooks } from "./chrome/monster-remains.js";
@@ -92,6 +93,7 @@ export function wireChromeInit() {
     installTickEffects();
     installConsumableConfigFix();
     installConsumeFeature();
+    installFoodConsumeFeature();
     registerActorContextMenu();
     registerItemContextMenu();
     registerMonsterRemainsHooks();

@@ -115,6 +115,7 @@ export function getDockData(actor) {
       tox: { ...NULL_POOL },
       adrenaline: { cur: 0, max: 3 },
       stress:     { cur: 0, max: 0 },
+      satiety:    null,
       shield:     { cur: 0, max: 0 },
       vigor:      0,
       combatRound: null
@@ -157,6 +158,13 @@ export function getDockData(actor) {
   const stressOn = safe(() => game.system?.api?.homebrew?.isEnabled?.("stress"), false);
   const strCur = safe(() => Number(s.stress) || 0, 0);
   const strMax = safe(() => s.stats?.will?.value, 0);
+  // Satiety (homebrew food & drink). Range conceptually -100 … 125; the field
+  // is editable BY THE GM ONLY (preUpdateActor hook in foodAndDrink.mjs drops
+  // player writes). The character sheet uses both `cur` and `tier` to render
+  // — tier is the engine-derived hunger ladder label.
+  const fdOn   = safe(() => game.system?.api?.homebrew?.isEnabled?.("foodAndDrink"), false);
+  const satCur = safe(() => Number(s.satiety) || 0, 0);
+  const satTier = safe(() => game.system?.api?.mechanics?.foodAndDrink?.tierForSatiety?.(satCur) ?? "", "");
   const shdCur = safe(() => Number(s.derivedStats?.shield) || 0, 0);
   const shdMax = shdCur; // single-number stat; renderer uses (cur, max) shape so mirror it
 
@@ -210,6 +218,7 @@ export function getDockData(actor) {
     tox: pool(toxCur, toxMax),
     adrenaline: adrOn ? { cur: Number(adrCur) || 0, max: adrMax } : null,
     stress:     stressOn ? { cur: Number(strCur) || 0, max: Number(strMax) || 0 } : null,
+    satiety:    fdOn ? { cur: satCur, tier: satTier, max: 125 } : null,
     shield:     { cur: Number(shdCur) || 0, max: Number(shdMax) || 0 },
     focus:      { cur: Number(focCur) || 0, max: Number(focMax) || 0 },
     vigor,

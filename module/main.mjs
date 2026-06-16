@@ -31,6 +31,7 @@ import { isHomebrewEnabled } from "./api/homebrew.mjs";
 import { runLegacyMigration } from "./migrate/migrateLegacyFlags.mjs";
 import { readBook } from "./mechanics/bookSystem.mjs";
 import { stressApi }        from "./mechanics/stress.mjs";
+import { foodAndDrinkApi }  from "./mechanics/foodAndDrink.mjs";
 import { weatherApi }       from "./mechanics/weather.mjs";
 import { weatherModifierApi } from "./mechanics/weather-modifiers.mjs";
 import { manualWeatherApi }   from "./mechanics/manual-weather.mjs";
@@ -141,6 +142,7 @@ Hooks.once("ready", async () => {
         mechanics: {
             readBook,
             stress: stressApi,
+            foodAndDrink: foodAndDrinkApi,
             weather: Object.freeze({ ...weatherApi, ...weatherModifierApi, ...manualWeatherApi, ...weatherMapApi, ...weatherConditionApi }),
             terrain: terrainApi,
             sceneFx: sceneFxApi

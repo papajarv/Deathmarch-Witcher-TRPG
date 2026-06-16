@@ -16,6 +16,7 @@
 import { buildEnhancementSlots, wireEnhancementSlots, detachEnhancement } from "./enhancementSlots.mjs";
 import { buildComponentLinks, wireComponentDrop, removeComponent } from "./hexComponents.mjs";
 import { effectStatTargets, statusImmunityOptions } from "../../setup/config.mjs";
+import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 const { ItemSheetV2 } = foundry.applications.sheets;
@@ -1583,19 +1584,57 @@ export class WitcherDiagramsSheet extends WitcherItemSheet {
         const src = ctx.source ?? this.item.toObject().system;
         const W   = CONFIG.WITCHER;
 
-        const isFormulae = !!src?.isFormulae;
-        ctx.isFormulae = isFormulae;
+        // Three-way kind dropdown (diagram | formula | recipe). The DC field
+        // routing splits formula+recipe (alchemyDC, also reused as the
+        // Cooking DC) from diagram (craftingDC) so a recipe and a formula can
+        // share storage and the UI just relabels.
+        const kind = src?.kind || (src?.isFormulae ? "formula" : "diagram");
+        ctx.kind = kind;
+        const isFormula = kind === "formula";
+        const isRecipe  = kind === "recipe";
+        const isDiagram = kind === "diagram";
+        ctx.isFormula = isFormula;
+        ctx.isRecipe  = isRecipe;
+        ctx.isDiagram = isDiagram;
+        // Back-compat for partials still reading isFormulae; remove once every
+        // template uses kind.
+        ctx.isFormulae = isFormula;
+        // Recipe is the homebrew-food-and-drink branch; it's hidden from the
+        // dropdown when foodAndDrink is off — UNLESS the current item is
+        // already authored as a recipe (we always keep the active value
+        // selectable so toggling the homebrew off doesn't silently rewrite
+        // existing data on save). Every other kind is RAW and always shown.
+        const kindCatalog = {
+            diagram: "WITCHER.Crafting.KindDiagram",
+            formula: "WITCHER.Crafting.KindFormula",
+            recipe:  "WITCHER.Crafting.KindRecipe"
+        };
+        const recipeAllowed = isRecipe || isHomebrewEnabled("foodAndDrink");
+        ctx.kindOptions = Object.fromEntries(
+            Object.entries(kindCatalog)
+                .filter(([k]) => k !== "recipe" || recipeAllowed)
+                .map(([k, v]) => [k, game.i18n.localize(v)])
+        );
+        ctx.kindLabel = ctx.kindOptions[kind] ?? kind;
 
-        // One DC, bound to whichever roll this recipe drives.
-        ctx.dc      = isFormulae ? (Number(src?.alchemyDC) || 0) : (Number(src?.craftingDC) || 0);
-        ctx.dcLabel = isFormulae ? "Alchemy DC" : "Crafting DC";
-        ctx.dcField = isFormulae ? "system.alchemyDC" : "system.craftingDC";
+        // One DC, bound to whichever roll this recipe drives. Recipes piggy-
+        // back on alchemyDC storage (renamed in the UI to "Cooking DC") so the
+        // schema doesn't need a third number field; if a GM later wants to
+        // separate them, both fields are still in place.
+        const dcField = isDiagram ? "system.craftingDC" : "system.alchemyDC";
+        const dc      = isDiagram ? (Number(src?.craftingDC) || 0) : (Number(src?.alchemyDC) || 0);
+        const dcLabel = isRecipe  ? "Cooking DC"
+                      : isFormula ? "Alchemy DC"
+                                  : "Crafting DC";
+        ctx.dc = dc; ctx.dcField = dcField; ctx.dcLabel = dcLabel;
 
         // Classification labels + the subtype option set for config.
         const levels = W.crafting?.levels ?? {};
         ctx.levels      = levels;
         ctx.levelLabel  = src?.level ? game.i18n.localize(levels[src.level] ?? src.level) : "";
-        const subMap    = isFormulae ? (W.crafting?.formulaSubtypes ?? {}) : (W.crafting?.diagramSubtypes ?? {});
+        const subMap    = isFormula ? (W.crafting?.formulaSubtypes ?? {})
+                        : isRecipe  ? (W.crafting?.recipeSubtypes  ?? {})
+                                    : (W.crafting?.diagramSubtypes ?? {});
         ctx.subtypeOptions = subMap;
         ctx.subtypeLabel   = src?.type ? game.i18n.localize(subMap[src.type] ?? src.type) : "";
 
@@ -1731,17 +1770,20 @@ export class WitcherDiagramsSheet extends WitcherItemSheet {
 
     /* Reassemble the substance map from the nine steppers (data-substance-key,
      * not form-named) so the ObjectField writes whole. Only runs when the
-     * substance grid is actually rendered (formulae), so toggling off
-     * isFormulae doesn't wipe a formula's saved requirements. */
+     * substance grid is actually rendered (kind === "formula"), so switching
+     * to a different kind doesn't wipe a formula's saved requirements — the
+     * grid simply isn't present to read. */
     _prepareSubmitData(event, form, formData) {
         const data = super._prepareSubmitData(event, form, formData);
         if (!form) return data;
-        // A crafting diagram has no substance requirements — clear them so
-        // unchecking "Alchemical Formula" drops the stale map (otherwise it
-        // lingers because the grid is no longer rendered to reassemble from).
-        const isFormulae = !!form.querySelector('input[name="system.isFormulae"]')?.checked;
+        // Read the active kind from the dropdown so a non-formula kind drops
+        // the substance map (otherwise it lingers because the grid is no
+        // longer rendered to reassemble from).
+        const kind = form.querySelector('select[name="system.kind"]')?.value
+                  || form.querySelector('input[name="system.kind"]')?.value
+                  || "diagram";
         const map = {};
-        if (isFormulae) {
+        if (kind === "formula") {
             form.querySelectorAll("input[data-substance-key]").forEach(inp => {
                 const key = inp.dataset.substanceKey;
                 const q = Math.max(0, Math.floor(Number(inp.value) || 0));
@@ -1749,8 +1791,8 @@ export class WitcherDiagramsSheet extends WitcherItemSheet {
             });
         }
         // Force-replace: a plain ObjectField update diffs only keys present
-        // in the new map, so clearing it (unchecking the formula) or zeroing
-        // a substance would otherwise leave stale keys behind.
+        // in the new map, so clearing it (switching to a non-formula kind) or
+        // zeroing a substance would otherwise leave stale keys behind.
         const { ForcedReplacement } = foundry.data.operators;
         foundry.utils.setProperty(data, "system.alchemyComponents", ForcedReplacement.create(map));
         return data;
@@ -1887,4 +1929,35 @@ export class WitcherDieSheet extends WitcherItemSheet {
         return ctx;
     }
 }
-export class WitcherFoodSheet          extends WitcherItemSheet { static PARTS = partsFor("food"); }
+export class WitcherFoodSheet extends WitcherItemSheet {
+    static PARTS = partsFor("food");
+
+    /* Food carries its own ActiveEffects (consumed on Eat / Drink). They
+     * must stay DORMANT while the item is merely held — the consume flow
+     * copies them onto the consumer with transfer:false. The base class's
+     * default is transfer:true (auto-apply to carrier), which would mean
+     * carrying a buff-laden pie permanently buffs the holder. */
+    get effectsTransfer() { return false; }
+
+    /* Add the homebrew-gate flag the food.hbs template uses to hide the
+     * taste / charges / satiety / drunk blocks when foodAndDrink is off,
+     * plus the localized kind dropdown options and a `kind`-on-source
+     * shortcut so the template can `{{#if (eq kind "drink")}}` without
+     * re-reading source.kind. The schema fields are always present (ADR
+     * 0003); only the UI surface is gated, so flipping the toggle doesn't
+     * churn data. */
+    async _prepareContext(options) {
+        const ctx = await super._prepareContext(options);
+        ctx.foodAndDrinkOn = isHomebrewEnabled("foodAndDrink");
+        const src = ctx.source ?? this.item.toObject().system;
+        ctx.kind = src?.kind || "meal";
+        ctx.kindOptions = {
+            meal:  game.i18n.localize("WITCHER.Food.KindMeal"),
+            snack: game.i18n.localize("WITCHER.Food.KindSnack"),
+            drink: game.i18n.localize("WITCHER.Food.KindDrink")
+        };
+        ctx.kindLabel = ctx.kindOptions[ctx.kind] ?? ctx.kind;
+        ctx.isDrink = ctx.kind === "drink";
+        return ctx;
+    }
+}

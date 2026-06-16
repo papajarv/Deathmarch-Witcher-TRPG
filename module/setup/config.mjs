@@ -25,14 +25,20 @@ export const STATS_WITH_SKILLS = Object.freeze([
     "int", "ref", "dex", "body", "emp", "will", "cra"
 ]);
 
-const skill = (statKey, costMultiplier = 1) => Object.freeze({
+/* `homebrew` tags a skill as belonging to a homebrew subsystem (ADR 0003).
+ * The schema field is ALWAYS present so the data doesn't churn when the GM
+ * flips the toggle; renderers check the tag against `isHomebrewEnabled()` to
+ * skip the row when the subsystem is off. Untagged skills are RAW and always
+ * visible. */
+const skill = (statKey, costMultiplier = 1, opts = {}) => Object.freeze({
     statKey,
-    costMultiplier
+    costMultiplier,
+    ...(opts.homebrew ? { homebrew: opts.homebrew } : {})
 });
 
 /**
  * Map of skill key → metadata. The shape is { statKey, costMultiplier,
- * label }. The label is computed lazily by the consumer via
+ * label, homebrew? }. The label is computed lazily by the consumer via
  * `WITCHER.skillLabel(key)` → resolves to an i18n key string.
  *
  * Source of truth for the 39-skill list (see docs/compatibility.md §2).
@@ -90,6 +96,7 @@ export const SKILL_MAP = Object.freeze({
     ritcraft:      skill("will", 2),
 
     alchemy:       skill("cra", 2),
+    cooking:       skill("cra", 1, { homebrew: "foodAndDrink" }),
     crafting:      skill("cra"),
     disguise:      skill("cra"),
     firstaid:      skill("cra"),
@@ -230,6 +237,15 @@ export const DIAGRAM_SUBTYPES = Object.freeze({
     ammunition:          "WITCHER.Crafting.SubAmmunition",
     traps:               "WITCHER.Crafting.SubTraps",
     ingredients:         "WITCHER.Crafting.SubIngredients"
+});
+
+/* Cooking-recipe sub-types — homebrew food & drink. The screen group is
+ * minimal for now; a GM can drop more entries here as a recipe library
+ * grows. Recipes whose `type` is "" land in an unsorted bucket. */
+export const RECIPE_SUBTYPES = Object.freeze({
+    meal:   "WITCHER.Crafting.SubMeal",
+    drink:  "WITCHER.Crafting.SubDrink",
+    snack:  "WITCHER.Crafting.SubSnack"
 });
 
 /* Concealment levels per the weapon table's `Conc.` column. Stored as
@@ -1414,7 +1430,8 @@ export const WITCHER = Object.freeze({
     crafting: Object.freeze({
         levels:          DIAGRAM_LEVELS,
         formulaSubtypes: FORMULA_SUBTYPES,
-        diagramSubtypes: DIAGRAM_SUBTYPES
+        diagramSubtypes: DIAGRAM_SUBTYPES,
+        recipeSubtypes:  RECIPE_SUBTYPES
     }),
     damageTypes:  DAMAGE_TYPES,
     attack: Object.freeze({
