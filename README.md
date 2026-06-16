@@ -7,9 +7,8 @@ modules held together with hope. This is all of it in one place: the rules, the
 interface, the GM tools, and a good amount of homebrew. If you'd rather run it
 closer to the book, almost all of the homebrew can be switched off.
 
-It's a beta and it's still moving. It runs on Foundry v14 (built and tested
-against 14.363), it's English-only for now, and there's no build step — drop it
-in and it works.
+It runs on Foundry v14 (built and tested against 14.363), it's English-only for 
+now, and there's no build step — drop it in and it works.
 
 ## What's in it
 
