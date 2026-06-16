@@ -7,9 +7,8 @@ modules held together with hope. This is all of it in one place: the rules, the
 interface, the GM tools, and a good amount of homebrew. If you'd rather run it
 closer to the book, almost all of the homebrew can be switched off.
 
-It's a beta and it's still moving. It runs on Foundry v14 (built and tested
-against 14.363), it's English-only for now, and there's no build step — drop it
-in and it works.
+It runs on Foundry v14 (built and tested against 14.363), it's English-only for 
+now, and there's no build step — drop it in and it works.
 
 ## What's in it
 
@@ -48,10 +47,9 @@ eye button at the far left of the dock:
 - **Session** — roll a skill check for the whole party at once (public, private,
   blind, or your own eyes only) and hand out IP and coin in one go.
 
-**Alchemy, crafting, and gear that connect.** Diagrams, substances and ingredient
-potency, charges on consumables, mutagens, and enhancements — runes, glyphs,
-weapon and armor upgrades — that you attach to an item and that actually change
-its numbers.
+**Alchemy, crafting, and gear that connect.** Diagrams, substance, mutagens, and 
+enhancements — runes, glyphs, weapon and armor upgrades — that you attach to an 
+item and that actually change its numbers.
 
 **Magic that the system can run.** Spells, hexes, and rituals are stored as real
 fields (cast time, defense, duration, components), so casting is something the
@@ -138,17 +136,4 @@ version, the system version, what you did, and anything in the console (F12).
 Death March is unofficial content released under the Homebrew Content Policy of
 R. Talsorian Games, and it isn't approved or endorsed by RTG. It references
 material owned by R. Talsorian Games and its licensees. *The Witcher* and its
-world are © CD Projekt Red. Art credits are in [`CREDITS.md`](CREDITS.md), and
-the full compliance record is in
-[`docs/compliance/homebrew-policy.md`](docs/compliance/homebrew-policy.md).
-
-The **code** is MIT — see [`LICENSE`](LICENSE). The **compendium content and
-assets** can't be relicensed; they're distributed free under RTG's Homebrew
-Content Policy ([`CONTENT-LICENSE.md`](CONTENT-LICENSE.md)), and the underlying
-IP stays with R. Talsorian Games and CD Projekt Red.
-
-## For tinkerers
-
-No build step — it's plain ESM, so edits take effect on reload. Most of the
-behavior lives in mixins on the actor and item classes; sheets are ApplicationV2
-and data is built on TypeDataModels.
+world are © CD Projekt Red.
