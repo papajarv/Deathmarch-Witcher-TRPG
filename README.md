@@ -211,6 +211,11 @@ I am more than willing to answer questions and troubleshoot with you :)
 
 ---
 
+## Credits
+Medallion art in system's /assets: https://www.deviantart.com/ari-m94 
+
+---
+
 ## The legal bit
 
 Death March is unofficial content released under the Homebrew Content Policy of R. Talsorian Games, and it isn't approved or endorsed by RTG.
