@@ -45,8 +45,24 @@
 
 import { MODULE_ID } from "../setup/settings.js";
 import { postNoteToScene } from "./parchments.js";
+import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 import { registerItemAction, buildItemActionEntries, installSheetContextMenuExtra, installSheetContextMenuOverride } from "./context-menu-item.js";
 import { isBookCompleted } from "../sheets/valuable-study.js";
+import {
+  getFreshnessState,
+  getFreshnessDaysRemaining,
+  FRESHNESS_STALE_THRESHOLD
+} from "../../mechanics/foodAndDrink.mjs";
+
+/* Used by the transition detector below so the worldTime listener can
+ * compare "state at the start of the window" vs "state now" without two
+ * full getFreshnessState calls. Reuses the single source-of-truth threshold
+ * imported above so the local detector can't drift from the mechanic. */
+function ratioToState(ratio) {
+  if (ratio >= 1)                         return "spoiled";
+  if (ratio >= FRESHNESS_STALE_THRESHOLD) return "stale";
+  return "fresh";
+}
 import { getAssignedActor, VIEWER_OVERRIDE_HOOK, isActorInActiveCombat } from "../lib/actor.js";
 import { renderViewAsPicker, wireViewAsPicker } from "../lib/view-as.js";
 import { describeDuration } from "./dock-statuses.js";
@@ -116,17 +132,16 @@ function getPatchedItemContextMenu() {
 const CURRENCY_KEYS  = ["bizant", "ducat", "lintar", "floren", "crown", "oren"];
 const CURRENCY_LABEL = { bizant: "B", ducat: "D", lintar: "L", floren: "F", crown: "C", oren: "O" };
 
-/** "Parchment-flavored" items — letters/notes, diagrams/recipes, and the
- *  map / book valuable subtypes.  Maps and books are stored as `valuable`
- *  with `system.type === "map"` / `"book"` (see scripts/sheets/valuable-map.js).
- *  Match case-insensitively + ignore separator just in case different worlds
- *  have variants. */
+/** "Parchment-flavored" items — letters/notes, diagrams/recipes, the new
+ *  first-class `map` item type, and the `book` valuable subtype. Maps used
+ *  to be a valuable subtype (system.type === "map") but were promoted to
+ *  their own item type; the categorizer matches the document type now. */
 function isParchmentLike(item) {
   if (!item) return false;
   if (item.type === "note" || item.type === "diagrams") return true;
+  if (item.type === "map") return true;
   if (item.type === "valuable") {
     const sub = String(item.system?.type ?? "").trim().toLowerCase().replace(/[\s_]+/g, "-");
-    if (sub === "map")  return true;
     if (sub === "book") return true;
   }
   return false;
@@ -148,12 +163,14 @@ function isFoodOrDrink(item) {
   return false;
 }
 
-/** Valuables that AREN'T claimed by a more specific tab. Food-drink goes to
- *  the Food and Drink tab; map / book valuables go to Notes (via
- *  isParchmentLike). Without this carve-out those would show twice — once in
- *  their dedicated tab, once under Valuables. */
+/** Items that land in the Valuables tab: generic `valuable` items PLUS the
+ *  new first-class `remains` item type (monster carcasses sort here per
+ *  spec). Food-drink and parchment-flavored items (maps, books) are claimed
+ *  by their own tabs and carved out here so they don't appear twice. */
 function isPlainValuable(item) {
-  if (item?.type !== "valuable") return false;
+  if (!item) return false;
+  if (item.type === "remains") return true;
+  if (item.type !== "valuable") return false;
   if (isFoodOrDrink(item)) return false;
   if (isParchmentLike(item)) return false;
   return true;
@@ -384,6 +401,40 @@ export function injectInventoryOverlay() {
      * transitions flip the label wall-clock⇄rounds and are rare, so those still
      * do a real rebuild to re-derive every tile. */
     Hooks.on("updateWorldTime", tickOilLabels);
+    // Freshness is derived from worldTime, so a time advance can change the
+    // displayed state without any document update. Only re-render when a
+    // transition actually fires (state crossing OR the integer "days left"
+    // count drops) — not on every clock tick.
+    Hooks.on("updateWorldTime", (worldTime, delta) => {
+      if (!isHomebrewEnabled("foodAndDrink")) return;
+      if (!(Number(delta) > 0)) return;
+      const actor = getAssignedActor();
+      if (!actor) return;
+      const SPD = Number(CONFIG.time?.calendar?.secondsPerDay) || 86400;
+      const before = Number(worldTime) - Number(delta);
+      let transition = false;
+      for (const item of actor.items) {
+        if (item.type !== "food") continue;
+        const days = Number(item.system?.freshness?.shelfLifeDays) || 0;
+        if (days <= 0) continue;
+        const anchorRaw = item.system?.freshness?.anchorTime;
+        if (anchorRaw == null) continue;
+        const anchor = Number(anchorRaw);
+        if (!Number.isFinite(anchor)) continue;
+        const wasRatio = (before - anchor) / SPD / days;
+        const nowRatio = (Number(worldTime) - anchor) / SPD / days;
+        const wasState = ratioToState(wasRatio);
+        const nowState = ratioToState(nowRatio);
+        if (wasState !== nowState) { transition = true; break; }
+        // Integer-day drop on the displayed countdown.
+        const wasLeft = Math.max(0, Math.ceil(days - Math.max(0, before        - anchor) / SPD));
+        const nowLeft = Math.max(0, Math.ceil(days - Math.max(0, Number(worldTime) - anchor) / SPD));
+        if (wasLeft !== nowLeft) { transition = true; break; }
+      }
+      if (!transition) return;
+      invalidateRenderSig();
+      scheduleRender();
+    });
     Hooks.on("createCombat",    scheduleRender);
     Hooks.on("deleteCombat",    scheduleRender);
     Hooks.on("updateCombat",    scheduleRender);
@@ -1137,10 +1188,10 @@ async function refreshInspectionPanel() {
         } catch (_) { /* chrome book module unavailable — skip */ }
       }
 
-      // Remains valuables: surface what's been DONE to the carcass
+      // Remains items: surface what's been DONE to the carcass
       // (harvested / mutagen extracted / charges left), not the identity —
       // the name + icon already say what it is.
-      if (item.type === "valuable" && item.system?.type === "remains") {
+      if (item.type === "remains") {
         const f = item.flags?.[MODULE_ID] ?? {};
         remainsState = {
           harvested:  !!f.harvested,
@@ -1154,11 +1205,12 @@ async function refreshInspectionPanel() {
       // satiety / alcohol stats from the schema, plus pre-computed
       // portion-scaled weight / cost so the footer matches what the
       // carry-weight tally actually counts (FoodData.calcWeight scales by
-      // the same ratio).
-      if (item.type === "food") {
+      // the same ratio). Gated on the toggle so a pure-RAW world sees a
+      // plain item card with no portion/satiety/alcohol UI.
+      if (item.type === "food" && isHomebrewEnabled("foodAndDrink")) {
         const sys = rawItem.system ?? {};
         const kind = sys.kind || "meal";
-        const KIND_LABELS = { meal: "Meal", snack: "Snack", drink: "Drink" };
+        const KIND_LABELS = { meal: "Meal", drink: "Drink" };
         const max = Number(sys.charges?.max) || 0;
         const cur = Math.max(0, Math.min(max, Number(sys.charges?.current) || 0));
         const qty = Math.max(0, Number(sys.quantity) || 0);
@@ -1167,6 +1219,21 @@ async function refreshInspectionPanel() {
         const c = Number(sys.cost) || 0;
         // Round to 2dp for display; values like 0.75kg are common with portions.
         const round2 = (n) => Math.round(n * 100) / 100;
+        // Freshness chip: same shape the food sheet builds so the
+        // inspection card can render the chip with one template branch
+        // (foodMeta.freshness.tracked). Untracked items collapse to
+        // `tracked: false`, hiding the chip.
+        const freshState = getFreshnessState(item);
+        const freshRemaining = getFreshnessDaysRemaining(item);
+        const FRESH_LABELS = { fresh: "Fresh", stale: "Stale", spoiled: "Spoiled" };
+        const FRESH_ICONS  = { fresh: "fa-leaf", stale: "fa-leaf", spoiled: "fa-skull" };
+        const freshness = {
+          tracked: freshState !== "untracked",
+          state: freshState,
+          stateLabel: FRESH_LABELS[freshState] ?? "Fresh",
+          icon: FRESH_ICONS[freshState] ?? "fa-leaf",
+          remaining: freshRemaining != null ? freshRemaining.toFixed(1) : ""
+        };
         foodMeta = {
           kind,
           kindLabel: KIND_LABELS[kind] ?? kind,
@@ -1179,13 +1246,14 @@ async function refreshInspectionPanel() {
           drunkDC:   Number(sys.drunk?.dc) || 0,
           // Portion-scaled totals — what the carry tally actually counts.
           effectiveWeight: round2(w * unitMul),
-          effectiveCost:   round2(c * unitMul)
+          effectiveCost:   round2(c * unitMul),
+          freshness
         };
       }
 
       // Enrich the description HTML (resolves @UUID links + inline rolls).
       // Remains have no description/value/availability — skip enrichment.
-      const desc = item.system?.type === "remains" ? null : item.system?.description;
+      const desc = item.type === "remains" ? null : item.system?.description;
       if (desc) descriptionHtml = await enrichHtml(desc);
     } catch (e) {
       console.warn(`${MODULE_ID} | inspection ctx prep failed`, e);
@@ -2072,13 +2140,12 @@ function mountItemSlotHTML(item) {
  *  rail. Header carries a weight-vs-capacity chip (mount carry = BODY×10,
  *  scalar system.derivedStats.enc).  Drop-target for items & containers. */
 /** A mount only carries pack goods: bulk-storage containers and butchered
- *  remains (valuables whose system.type === "remains"). Everything else a
- *  character tries to load onto the mount is refused. */
+ *  remains (first-class `remains` item type). Everything else a character
+ *  tries to load onto the mount is refused. */
 function mountAcceptsItem(item) {
   if (!item) return false;
   if (item.type === "container") return true;
-  return item.type === "valuable"
-      && String(item.system?.type ?? "").trim().toLowerCase() === "remains";
+  return item.type === "remains";
 }
 
 /** The item currently under the cursor mid-drag, resolved from the drag
@@ -2272,19 +2339,46 @@ function substanceCornerHTML(element) {
   return `<img class="wou-slot-sub" src="${escapeAttr(src)}" alt="" draggable="false" />`;
 }
 
-/** Tiny glyph pinned to a valuable slot's top-left corner that tells the
- *  player what kind of valuable it is. Books and maps share the single
- *  "Valuables" tab (they're not split into their own categories), so the
- *  glyph is the only at-a-glance subtype cue. Remains already carry a charge
- *  badge, and generic valuables get no glyph. */
+/** Tiny glyph pinned to a slot's top-left corner that tells the player what
+ *  flavor of item it is at a glance:
+ *    - Book valuables (`valuable` with system.type === "book") get the book glyph
+ *      because they share the Valuables tab with generic valuables.
+ *    - Maps are their own item type and live under the Notes tab next to
+ *      diagrams; a glyph in the Notes tab helps distinguish them from
+ *      letters / recipes.
+ *  Remains already carry a charge badge so no glyph there; generic valuables
+ *  get no glyph. */
 function valuableSubtypeCornerHTML(item) {
-  if (item?.type !== "valuable") return "";
-  const meta = {
-    book: { icon: "fa-book",       title: "Book" },
-    map:  { icon: "fa-map",        title: "Map"  }
-  }[String(item.system?.type ?? "")];
-  if (!meta) return "";
-  return `<span class="wou-slot-subtype" data-subtype="${escapeAttr(item.system.type)}" title="${escapeAttr(meta.title)}"><i class="fa-solid ${meta.icon}"></i></span>`;
+  if (!item) return "";
+  if (item.type === "map") {
+    return `<span class="wou-slot-subtype" data-subtype="map" title="Map"><i class="fa-solid fa-map"></i></span>`;
+  }
+  if (item.type === "valuable" && item.system?.type === "book") {
+    return `<span class="wou-slot-subtype" data-subtype="book" title="Book"><i class="fa-solid fa-book"></i></span>`;
+  }
+  return "";
+}
+
+/** Corner badge for food items showing their freshness state: nothing if the
+ *  GM didn't author a shelf life or the item hasn't been acquired, a yellow
+ *  warning leaf for stale food, a red skull for spoiled. Gated on the
+ *  foodAndDrink toggle so a RAW world never paints the glyph. The tooltip
+ *  carries a remaining-days readout so the player can plan their pantry. */
+function freshnessCornerHTML(item) {
+  if (!item || item.type !== "food") return "";
+  if (!isHomebrewEnabled("foodAndDrink")) return "";
+  const state = getFreshnessState(item);
+  if (state === "fresh" || state === "untracked") return "";
+  const remaining = getFreshnessDaysRemaining(item);
+  const days = remaining != null ? remaining.toFixed(1) : "";
+  if (state === "stale") {
+    const title = days ? `Stale — about ${days} day${days === "1.0" ? "" : "s"} until spoiled` : "Stale — eat soon";
+    return `<span class="wou-slot-freshness is-stale" title="${title}"><i class="fa-solid fa-leaf"></i></span>`;
+  }
+  if (state === "spoiled") {
+    return `<span class="wou-slot-freshness is-spoiled" title="Spoiled — risky to eat"><i class="fa-solid fa-skull"></i></span>`;
+  }
+  return "";
 }
 
 function itemSlotHTML(item) {
@@ -2304,9 +2398,12 @@ function itemSlotHTML(item) {
   //   2. Legacy witcher-food-and-drink module flag (pre-port data).
   //   3. (handled below) plain quantity.
   // We prefer the charge badge over plain quantity for chargeable items so
-  // users can see how full a bottle / wheel / bowl is.
+  // users can see how full a bottle / wheel / bowl is. ENTIRELY GATED on the
+  // foodAndDrink toggle — a pure-RAW world should never see portion badges
+  // even on items that happen to have charges configured on their schema.
+  const foodAndDrinkOn = isHomebrewEnabled("foodAndDrink");
   let fdCharges = null;          // { current, max, cat }
-  if (item.type === "food") {
+  if (foodAndDrinkOn && item.type === "food") {
     const sc = item.system?.charges;
     if (sc && Number(sc.max) > 0) {
       fdCharges = {
@@ -2316,7 +2413,7 @@ function itemSlotHTML(item) {
       };
     }
   }
-  if (!fdCharges) {
+  if (foodAndDrinkOn && !fdCharges) {
     const wfd = item.flags?.["witcher-food-and-drink"]?.charges;
     if (wfd && Number(wfd.max) > 0) {
       fdCharges = {
@@ -2327,7 +2424,7 @@ function itemSlotHTML(item) {
     }
   }
   const isCharged = !!fdCharges;
-  const isRemains = item.type === "valuable" && item.system?.type === "remains";
+  const isRemains = item.type === "remains";
   const REMAINS_MAX = 3;
   let badgeHTML = "";
   if (isRemains) {
@@ -2335,7 +2432,14 @@ function itemSlotHTML(item) {
     badgeHTML = `<span class="count charges is-remains" title="${cur}/${REMAINS_MAX} charges remaining">${cur}/${REMAINS_MAX}</span>`;
   } else if (isCharged) {
     const { current, max, cat } = fdCharges;
-    badgeHTML = `<span class="count charges ${cat === "food" ? "is-food" : "is-drink"}" title="${current}/${max} charges">${current}/${max}</span>`;
+    // Food with both partial portions AND a stack of multiple units → show
+    // each value separately: the portion ticker lives in the top-right
+    // corner via .count.charges, and a plain `.count` chip rides in the
+    // bottom-right (same styling every other stackable item uses for its
+    // quantity badge — just the number, no "×" prefix).
+    const portionChip = `<span class="count charges ${cat === "food" ? "is-food" : "is-drink"}" title="${current}/${max} portions">${current}/${max}</span>`;
+    const stackChip   = qty > 1 ? `<span class="count" title="${qty} in stack">${qty}</span>` : "";
+    badgeHTML = portionChip + stackChip;
   } else if (qty > 1) {
     badgeHTML = `<span class="count">${qty}</span>`;
   }
@@ -2357,6 +2461,7 @@ function itemSlotHTML(item) {
       ${iconHTML}
       ${substanceCornerHTML(element)}
       ${valuableSubtypeCornerHTML(item)}
+      ${freshnessCornerHTML(item)}
       ${weaponQuickCornerHTML(item)}
       ${oilBadgeHTML(item)}
       ${badgeHTML}
@@ -2452,6 +2557,8 @@ function fallbackIconFor(type) {
     case "enhancement": return "fa-gem";
     case "die":         return "fa-dice";
     case "valuable":    return "fa-coins";
+    case "map":         return "fa-map";
+    case "remains":     return "fa-skull";
     case "food":        return "fa-utensils";
     case "note":        return "fa-feather";
     case "container":   return "fa-box";

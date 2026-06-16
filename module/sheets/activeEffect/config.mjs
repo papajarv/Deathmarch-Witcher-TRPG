@@ -122,6 +122,8 @@ export class WitcherActiveEffectConfig extends ActiveEffectConfig {
             isSuppress: type === "suppress",
             isImmunity: type === "immunity",
             isPurge:    type === "purge",
+            isAlcoholRollAdvantage: type === "alcoholRollAdvantage",
+            isClearHangover:        type === "clearHangover",
             // modify: <op> <value> TO <target> WHEN <when>
             targetPath: `${base}.target`, target: a?.target ?? a?.key ?? "",
             opPath:     `${base}.op`,     op:     a?.op ?? a?.mode ?? "add",

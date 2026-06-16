@@ -32,7 +32,8 @@ const OIL_FLAG_SCOPE = "witcher-ttrpg-death-march";
 // right-click menu. Containers themselves are excluded (no nesting).
 const STORABLE_TYPES = new Set([
     "weapon", "shield", "armor", "alchemical", "mutagen", "component",
-    "diagrams", "enhancement", "food", "die", "valuable", "note"
+    "diagrams", "enhancement", "food", "die", "valuable", "note",
+    "map", "remains"
 ]);
 
 // Field paths whose template siblings are COMPUTED (modified-stat column,
@@ -589,6 +590,24 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
             const w = i.system?.weight;
             return w != null ? `${w} kg` : "";
         };
+        // Food meta: portions (when configured), stack count, weight. Each
+        // section is optional so a quantity-1 unportioned food just shows its
+        // weight. The stack count is intentionally separate from the portion
+        // ticker — the spec was the "stack number" used to be hidden by the
+        // portion display; surfacing it next to portions keeps both legible.
+        const tagFood = i => {
+            const parts = [];
+            const max = Number(i.system?.charges?.max) || 0;
+            if (max > 0) {
+                const cur = Math.max(0, Math.min(max, Number(i.system?.charges?.current) || 0));
+                parts.push(`${cur}/${max} portions`);
+            }
+            const qty = Number(i.system?.quantity) || 1;
+            if (qty > 1) parts.push(`×${qty}`);
+            const w = i.system?.weight;
+            if (w != null && w !== 0) parts.push(`${w} kg`);
+            return parts.join(" · ");
+        };
         // Inventory-row meta for stowed gear. Weapons advertise their hand
         // trait and Quick eligibility so the player sees how a draw will land
         // before equipping; armor advertises type / shield.
@@ -621,10 +640,13 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
             { key: "components",  label: "Substances",   items: inventoryItems(i => i.type === "component",  tagWeight) },
             { key: "diagrams",    label: "Diagrams",     items: inventoryItems(i => i.type === "diagrams",   tagWeight) },
             { key: "enhancements",label: "Enhancements", items: inventoryItems(i => i.type === "enhancement",tagWeight) },
-            { key: "food",        label: "Food & Drink", items: inventoryItems(i => i.type === "food",       tagWeight) },
+            { key: "food",        label: "Food & Drink", items: inventoryItems(i => i.type === "food",       tagFood) },
             { key: "dice",        label: "Dice",         items: inventoryItems(i => i.type === "die",        tagWeight) },
-            { key: "valuables",   label: "Valuables",    items: inventoryItems(i => i.type === "valuable",   tagWeight) },
-            { key: "notes",       label: "Notes",        items: inventoryItems(i => i.type === "note",       () => "") }
+            // Remains sort into Valuables alongside generic valuables — they're
+            // monster carcasses (own item type) and the inventory tab keeps the
+            // same bucket for both. Maps sort into Notes for the same reason.
+            { key: "valuables",   label: "Valuables",    items: inventoryItems(i => i.type === "valuable" || i.type === "remains", tagWeight) },
+            { key: "notes",       label: "Notes",        items: inventoryItems(i => i.type === "note" || i.type === "map", () => "") }
         ];
 
         // Nested container view. Containers render as their own section with

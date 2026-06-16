@@ -89,20 +89,27 @@ const FOOD_DRINK_DRUNK = [1,2,3,4,5,6,7,8].map(n => ({
     family: "drunk",
     tier:   n
 }));
-/* Hunger ladder — only IMPACTFUL tiers register as statuses. The "sated"
- * baseline (full / fed / peckish) has no mechanical effect per spec, so it
- * never lands as an AE; the satiety widget on the actor sheet still shows
- * those names as TIER LABELS (tierForSatiety in foodAndDrink.mjs computes
- * the full 6-tier map for display). */
+/* Hunger ladder — the IMPACTFUL tiers plus Peckish (a heads-up warning that
+ * carries no stats but lands on the token so the player sees Hungry is one
+ * tick away). The "sated" baseline (full / fed) is intentionally NOT
+ * registered — those names still show as TIER LABELS on the satiety widget
+ * via tierForSatiety, just without an active effect. */
 const FOOD_DRINK_HUNGER = [
     { id: "gorged",   name: "Gorged",   img: "icons/svg/regen.svg", family: "hunger", tier: 5 },
+    { id: "peckish",  name: "Peckish",  img: "icons/svg/down.svg",  family: "hunger", tier: 2 },
     { id: "hungry",   name: "Hungry",   img: "icons/svg/degen.svg", family: "hunger", tier: 1 },
     { id: "famished", name: "Famished", img: "icons/svg/skull.svg", family: "hunger", tier: 0 }
 ];
 const FOOD_DRINK_HANGOVER = [
     { id: "hangover", name: "Hangover", img: "icons/svg/sleep.svg", family: "hangover" }
 ];
-const FOOD_DRINK = [...FOOD_DRINK_DRUNK, ...FOOD_DRINK_HUNGER, ...FOOD_DRINK_HANGOVER];
+/* Food sickness — applied when an actor eats SPOILED food and fails the
+ * Endurance save (mechanics/foodAndDrink.mjs#applySpoiledHazard). 1-day
+ * native duration; cleared automatically on expiry. */
+const FOOD_DRINK_SICKNESS = [
+    { id: "food-sickness", name: "Food Sickness", img: "icons/svg/poison.svg", family: "sickness" }
+];
+const FOOD_DRINK = [...FOOD_DRINK_DRUNK, ...FOOD_DRINK_HUNGER, ...FOOD_DRINK_HANGOVER, ...FOOD_DRINK_SICKNESS];
 
 /* The default presentation layer (id / name / icon) before any GM override.
  * Food & Drink statuses are appended only when the homebrew toggle is on —

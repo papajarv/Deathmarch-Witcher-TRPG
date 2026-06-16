@@ -23,6 +23,8 @@ import { ComponentData }     from "../data/item/component.mjs";
 import { MutagenData }       from "../data/item/mutagen.mjs";
 import { DiagramsData }      from "../data/item/diagrams.mjs";
 import { ValuableData }      from "../data/item/valuable.mjs";
+import { MapData }           from "../data/item/map.mjs";
+import { RemainsData }       from "../data/item/remains.mjs";
 import { DieData }           from "../data/item/die.mjs";
 import { FoodData }          from "../data/item/food.mjs";
 import { CriticalWoundData } from "../data/item/criticalWound.mjs";
@@ -62,6 +64,8 @@ export function registerDataModels() {
     CONFIG.Item.dataModels.mutagen       = MutagenData;
     CONFIG.Item.dataModels.diagrams      = DiagramsData;
     CONFIG.Item.dataModels.valuable      = ValuableData;
+    CONFIG.Item.dataModels.map           = MapData;
+    CONFIG.Item.dataModels.remains       = RemainsData;
     CONFIG.Item.dataModels.die           = DieData;
     CONFIG.Item.dataModels.food          = FoodData;
     CONFIG.Item.dataModels.criticalWound = CriticalWoundData;

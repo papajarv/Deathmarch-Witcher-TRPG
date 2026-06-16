@@ -892,9 +892,14 @@ body.witcher-ttrpg-death-march .wou-slot .count {
     0 1px 2px rgba(0,0,0,1);
   z-index: 2;
 }
-/* witcher-food-and-drink charges (current/max) — slightly tinted so they
-   read distinctly from plain quantity counts. */
+/* Portion ticker (current/max) — TOP-RIGHT, distinct from the bottom-right
+   stack count so a multi-bottle stack with partial portions on the top unit
+   shows both numbers without overlap. Tinted by category so drink / food /
+   remains read at a glance. */
 body.witcher-ttrpg-death-march .wou-slot .count.charges {
+  position: absolute;
+  top: 2px; right: 2px;
+  bottom: auto; left: auto;
   font-size: 9px;
   font-weight: 700;
   background: rgba(10, 9, 8, 0.85);
@@ -902,7 +907,7 @@ body.witcher-ttrpg-death-march .wou-slot .count.charges {
   border-radius: 2px;
   padding: 0 3px;
   text-shadow: none;
-  bottom: 2px; right: 2px;
+  z-index: 2;
 }
 body.witcher-ttrpg-death-march .wou-slot .count.charges.is-drink   { color: var(--wdm-frost); }
 body.witcher-ttrpg-death-march .wou-slot .count.charges.is-food    { color: var(--wdm-poison); }
@@ -977,6 +982,36 @@ body.witcher-ttrpg-death-march .wou-slot .wou-slot-quick {
 }
 body.witcher-ttrpg-death-march .wou-slot .wou-slot-quick i {
   font-size: 8px;
+}
+
+/* Freshness glyph for food items — top-left corner so it stacks above the
+   stale-warning leaf next to (but never under) the corner subtype badge.
+   Foods don't get the subtype glyph, so the corner is free. Stale = warm
+   amber leaf; spoiled = rust-red skull. */
+body.witcher-ttrpg-death-march .wou-slot .wou-slot-freshness {
+  position: absolute;
+  top: 2px; left: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px; height: 13px;
+  background: rgba(10, 9, 8, 0.85);
+  border: 1px solid var(--wdm-amber-dim);
+  border-radius: 2px;
+  color: var(--wdm-amber-hi);
+  z-index: 3;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march .wou-slot .wou-slot-freshness i {
+  font-size: 8px;
+}
+body.witcher-ttrpg-death-march .wou-slot .wou-slot-freshness.is-stale {
+  color: #d4a04a;
+  border-color: #d4a04a;
+}
+body.witcher-ttrpg-death-march .wou-slot .wou-slot-freshness.is-spoiled {
+  color: #a83232;
+  border-color: #a83232;
 }
 
 /* Applied-oil section in the inspection panel */

@@ -1,7 +1,7 @@
 /**
  * Item context-menu — adds "[1 charge] Harvest Materials",
  * "[1 charge] Extract Mutagen", and "[1 charge] Dissect" entries on
- * remains items (valuable with system.type === "remains").
+ * remains items (first-class `remains` item type).
  *
  * Follows the same pattern as witcher-food-and-drink/charges.mjs:
  *   - installSheetContextMenuExtra(builder)  installs a single shared
@@ -53,7 +53,7 @@ const SYSTEM_ENTRY_METHODS = [
 ];
 
 export function isRemains(item) {
-    return item?.type === "valuable" && item?.system?.type === "remains";
+    return item?.type === "remains";
 }
 
 export function getCharges(item) {
@@ -364,12 +364,9 @@ async function takeTrophy(item, actor = null) {
             weight:      trophyWeight,
             availability: availability,
             cost:        0,
-            quantity:    "1",
-            monsterUuid: flags[MONSTER_UUID_FLAG] ?? item.system?.monsterUuid ?? "",
+            quantity:    1,
             description: "",
-            isHidden:    false,
             isStored:    false,
-            isCarried:   true,
         },
         ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER },
     };
@@ -835,8 +832,7 @@ async function openChargeConfig(item) {
 
 function injectRemainsSheetCog(sheet, html) {
     if (!game.user.isGM) return;
-    if (sheet.document?.type !== "valuable") return;
-    if (sheet.document?.system?.type !== "remains") return;
+    if (sheet.document?.type !== "remains") return;
 
     const root = html instanceof HTMLElement ? html : (html?.[0] ?? html);
     if (!root?.querySelector) return;
@@ -881,12 +877,18 @@ function injectSidebarBadges(html) {
 }
 
 /* ============================================================
-   The system's character sheet filters valuables into named
-   subsections (general, foodAndDrinks, toolkits, …) but doesn't
-   include `system.type === "remains"` in any of them, so a
-   carcass dropped on a character is invisible in the inventory
-   tab. Patch _prepareValuables on first render to append remains
-   to the General list so they surface under Valuables.
+   Legacy hook into an upstream character sheet that bucketed
+   valuables into named subsections (general / foodAndDrinks /
+   toolkits) and dropped books out of General. The Death March
+   character sheet doesn't define `_prepareValuables`, so this
+   patch silently bails on this codebase — kept only as a safety
+   net if a future sheet variant reintroduces the method.
+
+   Remains are no longer a valuable subtype, so the previous
+   carcass-injection responsibility has moved entirely to the
+   chrome inventory categorizer (`isPlainValuable` matches
+   `item.type === "remains"` alongside plain valuables, so the
+   Valuables tab catches them automatically).
    ============================================================ */
 
 let _valuablesPatched = false;
@@ -904,7 +906,7 @@ function patchPrepareValuables(app) {
     proto._prepareValuables = function (context) {
         original.call(this, context);
         const extras = (context.valuables ?? []).filter(
-            i => i.system?.type === "remains" || i.system?.type === "book"
+            i => i.system?.type === "book"
         );
         if (extras.length) {
             context.general = [...(context.general ?? []), ...extras];

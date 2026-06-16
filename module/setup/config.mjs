@@ -244,8 +244,7 @@ export const DIAGRAM_SUBTYPES = Object.freeze({
  * grows. Recipes whose `type` is "" land in an unsorted bucket. */
 export const RECIPE_SUBTYPES = Object.freeze({
     meal:   "WITCHER.Crafting.SubMeal",
-    drink:  "WITCHER.Crafting.SubDrink",
-    snack:  "WITCHER.Crafting.SubSnack"
+    drink:  "WITCHER.Crafting.SubDrink"
 });
 
 /* Concealment levels per the weapon table's `Conc.` column. Stored as
@@ -1021,6 +1020,27 @@ export function effectTargetGroups() {
         { key: "system.derivedStats.aimMod",      label: L("WITCHER.Effect.TargetAimMod") },
         { key: "system.adrenaline.value",         label: L("WITCHER.Effect.PoolAdrenaline") }
     ];
+    // Homebrew-gated targets — only show in the editor when the owning
+    // subsystem is enabled, since changing them in a pure-RAW world has no
+    // effect anyway. Read game.settings directly (not the api shim) so this
+    // works even before the ready hook wires game.system.api. Skipped at edit
+    // time if the toggle is off; existing AEs targeting these paths keep
+    // working regardless (the schema field is always present).
+    const safeGetSetting = (key) => {
+        try { return !!game.settings?.get?.("witcher-ttrpg-death-march", key); }
+        catch { return false; }
+    };
+    if (safeGetSetting("homebrew.foodAndDrink")) {
+        derived.push({ key: "system.satiety", label: L("WITCHER.Effect.TargetSatiety") });
+        // Per-actor satiety drain modifiers — wired to hourlySatietyLoss and
+        // onCombatStaminaSpend. Multiply the scale (default 1) to slow or
+        // accelerate drain; add to flatPerHour for a constant additive shift.
+        derived.push({ key: "system.satietyDrain.scale",       label: L("WITCHER.Effect.TargetSatietyDrainScale") });
+        derived.push({ key: "system.satietyDrain.flatPerHour", label: L("WITCHER.Effect.TargetSatietyDrainFlat") });
+    }
+    if (safeGetSetting("homebrew.stress")) {
+        derived.push({ key: "system.stress",  label: L("WITCHER.Effect.TargetStress") });
+    }
     const combat  = COMBAT_MOD_TARGETS.map(o => ({ key: o.key, label: L(o.labelKey) }));
     return [
         { label: L("WITCHER.Effect.GroupStats"),   options: stats },
@@ -1058,7 +1078,20 @@ export const EFFECT_ACTION_TYPES = Object.freeze([
     { type: "tempHp",   labelKey: "WITCHER.Effect.ActionTempHp",   kind: "oneshot" },
     { type: "suppress", labelKey: "WITCHER.Effect.ActionSuppress", kind: "gate" },
     { type: "immunity", labelKey: "WITCHER.Effect.ActionImmunity", kind: "immunity" },
-    { type: "purge",    labelKey: "WITCHER.Effect.ActionPurge",    kind: "purge" }
+    { type: "purge",    labelKey: "WITCHER.Effect.ActionPurge",    kind: "purge" },
+    // Alcohol roll advantage — flat marker action. Carrying any effect with
+    // this action makes the bearer roll their Endurance vs alcohol TWICE and
+    // keep the best (the witcher-resistance perk, now data-driven so the GM
+    // can wire it to the Witcher race / a perk / a magical token instead of
+    // being hard-coded to a profession-name regex). Read by
+    // mechanics/foodAndDrink.handleEnduranceRoll.
+    { type: "alcoholRollAdvantage", labelKey: "WITCHER.Effect.ActionAlcoholRollAdvantage", kind: "marker" },
+    // Clear hangover — one-shot. When an effect carrying this action lands
+    // on an actor, every hangover AE the bearer has gets deleted. Used by
+    // "hair of the dog" potions, restorative meals, the cleric's Cure
+    // Hangover invocation, etc. Source effect is left in place; rely on
+    // its own duration / removal for cleanup.
+    { type: "clearHangover", labelKey: "WITCHER.Effect.ActionClearHangover", kind: "oneshot" }
 ]);
 
 export function effectActionTypeOptions() {

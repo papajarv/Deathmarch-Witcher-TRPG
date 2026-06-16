@@ -57,6 +57,18 @@ export class CharacterData extends foundry.abstract.TypeDataModel {
             // on isHomebrewEnabled("foodAndDrink").
             satiety: new fields.NumberField({ initial: 100, min: -100, max: 125 }),
 
+            // Per-actor satiety drain modifiers. ActiveEffects target these
+            // paths via the standard AE change pipeline — e.g. an "Iron
+            // Stomach" perk multiplies `scale` by 0.5 to halve the per-hour
+            // and per-combat-STA drain; a "Cursed Appetite" effect ADDs 3
+            // to `flatPerHour` to make the actor lose extra satiety on top
+            // of the normal formula. Schema is always present (ADR 0003);
+            // only the reading code paths gate on foodAndDrink.
+            satietyDrain: new fields.SchemaField({
+                scale:       new fields.NumberField({ initial: 1, min: 0 }),
+                flatPerHour: new fields.NumberField({ initial: 0 })
+            }),
+
             // Per-character bestiary knowledge tracking. Bestiary research is
             // always on (no toggle). NOTE: the live chrome bestiary stores
             // per-character progress in flags[SYSTEM_ID].bestiary, not here;

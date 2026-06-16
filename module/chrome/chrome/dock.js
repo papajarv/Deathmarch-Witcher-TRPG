@@ -1876,7 +1876,12 @@ export function rebindDock() {
    * spell would otherwise no-op the rebind.  Fold both in. */
   const armorSig = JSON.stringify(getLocationSP(actor));
   const pinSig   = JSON.stringify(actor?.flags?.["witcher-ttrpg-death-march"]?.pinnedSpells ?? []);
-  const sig = JSON.stringify(data) + "|" + weaponListSig(actor) + "|" + armorSig + "|" + pinSig;
+  // Status set — drunk badge (and any future status-driven readout) live
+  // outside `data`, so changes to the actor's effects wouldn't otherwise
+  // shift the sig and the sober-up roman numeral stayed stale until a
+  // separate dock-touching event hit. Sorted for determinism.
+  const statusSig = JSON.stringify([...(actor?.statuses ?? [])].sort());
+  const sig = JSON.stringify(data) + "|" + weaponListSig(actor) + "|" + armorSig + "|" + pinSig + "|" + statusSig;
   if (sig === _lastRebindSig) return;
   _lastRebindSig = sig;
 

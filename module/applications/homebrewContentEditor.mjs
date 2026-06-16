@@ -69,12 +69,26 @@ export class HomebrewContentEditor extends HandlebarsApplicationMixin(Applicatio
     static async #onSubmit(event, form, formData) {
         const data = foundry.utils.expandObject(formData.object);
         const enabled = data.enabled || {};
+        let anyChanged = false;
         for (const key of CONTENT_KEYS) {
             const next = !!enabled[key];
             if (next !== game.settings.get(SYSTEM_ID, `homebrew.${key}`)) {
                 await game.settings.set(SYSTEM_ID, `homebrew.${key}`, next);
+                anyChanged = true;
             }
         }
         ui.notifications.info("Homebrew content saved.");
+        // Each homebrew.<key> setting is `requiresReload: true`, but Foundry's
+        // automatic reload prompt only fires from the native Configure Settings
+        // panel — custom editors have to call it themselves. Without this the
+        // GM would flip a toggle, save, see no immediate effect, and not
+        // realize a reload is needed for CONFIG.statusEffects + the
+        // homebrew-gated UI surfaces to rebuild.
+        if (anyChanged) {
+            const SettingsConfig = foundry.applications?.settings?.SettingsConfig
+                                ?? globalThis.SettingsConfig;
+            try { await SettingsConfig?.reloadConfirm?.({ world: true }); }
+            catch (err) { console.warn("witcher-ttrpg-death-march | reload prompt failed", err); }
+        }
     }
 }

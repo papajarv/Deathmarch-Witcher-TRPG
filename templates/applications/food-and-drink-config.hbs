@@ -1,0 +1,121 @@
+{{!-- Food & Drink configuration form. Three sections — Decay, Hunger tier
+      thresholds, Drunk tier metadata. The outer `wdm-fdc-scroll` is the
+      scrollable region so the dialog can grow taller than the window without
+      hiding the footer / Save button. Styling lives in
+      styles/food-and-drink-config.css. --}}
+
+<div class="wdm-fdc">
+
+  <header class="wdm-fdc-head">
+    <h2><i class="fa-solid fa-utensils"></i> Food &amp; Drink Configuration</h2>
+    <p class="wdm-fdc-blurb">
+      Numeric knobs for the food &amp; drink homebrew. Changes require a world
+      reload (the prompt fires on save). Defaults match the original spec —
+      reset by clearing a field (it falls back to the default on save).
+    </p>
+  </header>
+
+  <div class="wdm-fdc-scroll">
+
+    <section class="wdm-fdc-section">
+      <div class="wdm-fdc-section-head">
+        <h3><i class="fa-solid fa-droplet-slash"></i> Satiety Decay</h3>
+        <p class="wdm-fdc-section-hint">
+          Per-hour drain: <code>base + ⌈BODY / divisor⌉</code>. Default is
+          1 + ⌈BODY/4⌉, so a BODY-7 character loses 3 satiety per hour.
+        </p>
+      </div>
+      <div class="wdm-fdc-grid">
+        <label class="wdm-fdc-cell">
+          <span class="wdm-fdc-label">Base / hour</span>
+          <input type="number" name="decay.base" value="{{decay.base}}" min="0" step="1" />
+        </label>
+        <label class="wdm-fdc-cell">
+          <span class="wdm-fdc-label">BODY divisor</span>
+          <input type="number" name="decay.bodyDivisor" value="{{decay.bodyDivisor}}" min="1" step="1" />
+        </label>
+        <label class="wdm-fdc-cell">
+          <span class="wdm-fdc-label">Satiety per STA spent (combat)</span>
+          <input type="number" name="decay.combatStaPerUnit" value="{{decay.combatStaPerUnit}}" min="0" step="0.05" />
+        </label>
+      </div>
+    </section>
+
+    <section class="wdm-fdc-section">
+      <div class="wdm-fdc-section-head">
+        <h3><i class="fa-solid fa-bowl-food"></i> Hunger Tier Thresholds</h3>
+        <p class="wdm-fdc-section-hint">
+          Minimum satiety value the tier kicks in at (read top-down). Famished
+          has no minimum — anything below Hungry lands there. Range −100 to 125.
+        </p>
+      </div>
+      <table class="wdm-fdc-table">
+        <thead>
+          <tr><th>Tier</th><th class="wdm-fdc-num">Satiety ≥</th></tr>
+        </thead>
+        <tbody>
+          {{#each hungerTiers}}
+            <tr>
+              <td>{{this.label}}</td>
+              <td class="wdm-fdc-num">
+                <input type="number" name="hungerTiers.{{this.key}}" value="{{this.min}}" min="-100" max="125" step="1" />
+              </td>
+            </tr>
+          {{/each}}
+          <tr class="wdm-fdc-readonly">
+            <td>Famished</td>
+            <td class="wdm-fdc-num"><span class="wdm-fdc-na">(below Hungry)</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="wdm-fdc-section">
+      <div class="wdm-fdc-section-head">
+        <h3><i class="fa-solid fa-glass-water"></i> Drunk Tier Metadata</h3>
+        <p class="wdm-fdc-section-hint">
+          Per-tier defaults the alcohol Endurance roll references. Tiers VI–VIII
+          can knock the bearer unconscious; VII–VIII carry a death-chance percent
+          on KO. Per-tier stat changes / descriptions live in
+          <em>Status Effects → Edit Status Effects</em>.
+        </p>
+      </div>
+      <table class="wdm-fdc-table wdm-fdc-table-drunk">
+        <thead>
+          <tr>
+            <th>Tier</th>
+            <th class="wdm-fdc-num">Default DC</th>
+            <th class="wdm-fdc-num">Level Jump</th>
+            <th class="wdm-fdc-num">Unconscious DC</th>
+            <th class="wdm-fdc-num">Death %</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each drunkTiers}}
+            <tr>
+              <td><strong>Drunk {{this.roman}}</strong></td>
+              <td class="wdm-fdc-num"><input type="number" name="drunkTiers.{{this.level}}.defaultDC" value="{{this.defaultDC}}" min="0" step="1" /></td>
+              <td class="wdm-fdc-num"><input type="number" name="drunkTiers.{{this.level}}.levelJump" value="{{this.levelJump}}" min="0" step="1" /></td>
+              <td class="wdm-fdc-num">
+                {{#if this.isLethal}}
+                  <input type="number" name="drunkTiers.{{this.level}}.unconsciousDC" value="{{this.unconsciousDC}}" min="0" step="1" />
+                {{else}}
+                  <span class="wdm-fdc-na">—</span>
+                {{/if}}
+              </td>
+              <td class="wdm-fdc-num">
+                {{#if this.hasDeathChance}}
+                  <input type="number" name="drunkTiers.{{this.level}}.deathChance" value="{{this.deathChance}}" min="0" max="100" step="1" />
+                {{else}}
+                  <span class="wdm-fdc-na">—</span>
+                {{/if}}
+              </td>
+            </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </section>
+
+  </div>
+
+</div>

@@ -156,16 +156,21 @@ async function migrateItem(item) {
         count++;
     }
 
-    // Map image on valuable maps → system.mapImage
+    // Map image legacy flag → system.mapImage on the new first-class `map`
+    // item type (it used to live on valuables of subtype "map"; that subtype
+    // was retired). Skipped silently for plain valuables — they no longer
+    // carry the field.
     const mapImage = item.getFlag(OUI, "mapImage");
-    if (mapImage && item.type === "valuable") {
+    if (mapImage && item.type === "map") {
         updates["system.mapImage"] = mapImage;
         count++;
     }
 
-    // Source-monster uuid on remains valuables → system.monsterUuid
+    // Source-monster uuid legacy flag → system.monsterUuid on the new
+    // first-class `remains` item type. Same retired-subtype story as
+    // mapImage above.
     const monsterUuid = item.getFlag(OUI, "monsterUuid");
-    if (monsterUuid && item.type === "valuable") {
+    if (monsterUuid && item.type === "remains") {
         updates["system.monsterUuid"] = monsterUuid;
         count++;
     }
@@ -233,10 +238,12 @@ async function fixHexEffectTransferAcrossWorld() {
 }
 
 /**
- * Lift valuable subtype fields off `flags[SYSTEM_ID]` into the system schema.
- * Only fills a system field that is still empty/default — a value already
- * written by the bespoke sheet (system.*) always wins over the stale flag.
- * Returns the count of items touched.
+ * Lift legacy subtype fields off `flags[SYSTEM_ID]` into the system schema.
+ * Subtypes now span multiple item types after the map/remains extraction:
+ * mapImage lands on `map` items, monsterUuid on `remains` items, bookConfig
+ * on `valuable` items. Only fills a system field that is still empty/default
+ * — a value already written by the bespoke sheet (system.*) always wins over
+ * the stale flag. Returns the count of items touched.
  */
 async function migrateValuableFlagBagAcrossWorld() {
     let count = 0;
@@ -249,18 +256,21 @@ async function migrateValuableFlagBagAcrossWorld() {
         );
 
     const fixItem = async (item) => {
-        if (item.type !== "valuable") return 0;
         const bag = item.flags?.[SYSTEM_ID];
         if (!bag || typeof bag !== "object") return 0;
         const updates = {};
 
-        if (bag.mapImage && !item.system?.mapImage) {
+        // Subtype-driven targets after the map/remains extraction: the
+        // mapImage and monsterUuid schema fields no longer exist on plain
+        // valuables. The legacy flag bag is migrated to the new first-class
+        // types instead. bookConfig stays on valuables (book subtype).
+        if (item.type === "map" && bag.mapImage && !item.system?.mapImage) {
             updates["system.mapImage"] = bag.mapImage;
         }
-        if (bag.monsterUuid && !item.system?.monsterUuid) {
+        if (item.type === "remains" && bag.monsterUuid && !item.system?.monsterUuid) {
             updates["system.monsterUuid"] = bag.monsterUuid;
         }
-        if (bag.bookConfig?.bookType && bookConfigIsUnset(item.system?.bookConfig)) {
+        if (item.type === "valuable" && bag.bookConfig?.bookType && bookConfigIsUnset(item.system?.bookConfig)) {
             updates["system.bookConfig"] = bag.bookConfig;
         }
 

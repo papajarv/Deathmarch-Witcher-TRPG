@@ -6,9 +6,9 @@
  * endurance roll, taste-in-chat). So enabling, disabling, then re-enabling
  * the toggle never loses authored data.
  *
- *   kind            "meal" | "snack" | "drink" — display category. The sheet
- *                                 only surfaces the alcohol block when kind
- *                                 is "drink"; a meal can't be alcoholic by
+ *   kind            "meal" | "drink" — display category. The sheet only
+ *                                 surfaces the alcohol block when kind is
+ *                                 "drink"; a meal can't be alcoholic by
  *                                 design (carry it as a separate drink item).
  *   description     HTML (base) — visual layer only; shown on the sheet.
  *   taste           string      — flavor line posted to chat on consume,
@@ -41,7 +41,6 @@ const fields = foundry.data.fields;
 
 export const FOOD_KINDS = Object.freeze({
     meal:  "WITCHER.Food.KindMeal",
-    snack: "WITCHER.Food.KindSnack",
     drink: "WITCHER.Food.KindDrink"
 });
 
@@ -71,13 +70,30 @@ export class FoodData extends foundry.abstract.TypeDataModel {
             // the endurance roll path cleanly. Sheet hides the editor unless
             // kind === "drink", but the schema accepts the values regardless
             // so an authoring mistake doesn't lose data on the next save.
+            //
+            // NOTE: the legacy `bypassWitcherResist` field was removed — the
+            // witcher-resistance roll-twice perk is now data-driven via the AE
+            // editor's `alcoholRollAdvantage` action attached to the Witcher
+            // race / a perk / etc. Stale `bypassWitcherResist` values on
+            // pre-migration items are silently dropped on the next save.
             drunk: new fields.SchemaField({
-                isAlcohol:           new fields.BooleanField({ initial: false }),
-                dc:                  new fields.NumberField({ initial: 10, integer: true, min: 0 }),
-                levelJump:           new fields.NumberField({ initial: 1, integer: true, min: 0 }),
-                bypassWitcherResist: new fields.BooleanField({ initial: false }),
-                flavorVerb:          new fields.StringField({ initial: "drinks" }),
-                effectIcon:          new fields.StringField({ initial: "" })
+                isAlcohol:  new fields.BooleanField({ initial: false }),
+                dc:         new fields.NumberField({ initial: 10, integer: true, min: 0 }),
+                levelJump:  new fields.NumberField({ initial: 1, integer: true, min: 0 }),
+                flavorVerb: new fields.StringField({ initial: "drinks" }),
+                effectIcon: new fields.StringField({ initial: "" })
+            }),
+            // Spoilage. shelfLifeDays === 0 disables tracking entirely (the
+            // food is treated as "fresh forever"); a positive number is the
+            // in-game day budget after the freshness clock starts. anchorTime
+            // is stamped automatically when the item is FIRST acquired by an
+            // actor (see stampFreshnessAnchor in mechanics/foodAndDrink.mjs);
+            // sidebar items stay un-anchored (null = no aging in the world
+            // template). The anchor SURVIVES transfers between actors so a
+            // half-spoiled loaf doesn't reset when traded.
+            freshness: new fields.SchemaField({
+                shelfLifeDays: new fields.NumberField({ initial: 0, min: 0 }),
+                anchorTime:    new fields.NumberField({ initial: null, nullable: true, required: false })
             }),
             availability: new fields.StringField({ initial: "common" })
         };
@@ -85,17 +101,32 @@ export class FoodData extends foundry.abstract.TypeDataModel {
 
     /* Back-fill `kind` for foods authored before the field existed.
      *
-     * IMPORTANT: only act when `kind` is genuinely UNDEFINED on the source.
-     * Foundry calls migrateData with PARTIAL DIFF data during updates
-     * (`item.update({ "system.charges.current": N })` → the diff has no
-     * `kind` key). A previous version of this fix treated any non-canonical
-     * value (including undefined-in-the-diff) as "needs clamp" and reset
-     * drinks/snacks back to "meal" every time a charge was consumed. The
-     * narrower undefined-only check mirrors DiagramsData.migrateData and is
-     * safe for both initial load (no kind on legacy items) and partial
-     * updates (no spurious overwrite). */
+     * IMPORTANT: migrateData fires in two scenarios in Foundry v14:
+     *   1. Document construction from the full persisted source (legit
+     *      migration target — kind may genuinely be missing on legacy data).
+     *   2. Update validation when item.update() is called with a partial
+     *      diff (the diff is merged with existing source first, but in
+     *      practice some Foundry code paths hand the raw diff to validators
+     *      instead of the merged shape). A partial diff for
+     *      `system.charges.current` has neither `kind` NOR any other field —
+     *      so the original "kind undefined → default to meal" check fires
+     *      and resets drinks to meals on every charge tick.
+     *
+     * Guard: require BOTH `kind === undefined` AND at least one always-
+     * present base field (quantity) in the data. If the data carries no
+     * quantity, it's a partial diff, not a full source — skip migration. */
     static migrateData(data) {
-        if (data?.kind === undefined) {
+        // Heuristic: a FULL source has every base schema field initialized
+        // by `defineSchema()`. A partial update diff (e.g. `{ quantity: 5 }`
+        // from an inventory stack merge) has only the touched keys, so the
+        // SchemaField for `drunk` reads undefined. Require BOTH a `drunk`
+        // object AND an `availability` string to be present before treating
+        // `data.kind === undefined` as legacy-data-needing-backfill. This
+        // is the conservative check; missing it caused stacked foods to
+        // reset to meal on every quantity bump.
+        const looksLikeFullSource = data?.drunk !== undefined
+                                 && data?.availability !== undefined;
+        if (looksLikeFullSource && data?.kind === undefined) {
             data.kind = data?.drunk?.isAlcohol ? "drink" : "meal";
         }
         return super.migrateData(data);

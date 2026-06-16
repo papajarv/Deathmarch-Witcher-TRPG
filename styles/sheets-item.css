@@ -2826,6 +2826,37 @@ body.witcher-ttrpg-death-march .wdm-remains-charges {
   color: var(--wdm-amber-hi);
 }
 
+/* ── Food freshness chip — surfaced on the food sheet display layer AND
+ *    the inventory inspection card. Same shape both places. ────────────── */
+body.witcher-ttrpg-death-march .wdm-food-freshness {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 6px;
+  padding: 3px 10px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--wdm-rule-amber);
+  border-radius: 2px;
+  color: var(--wdm-ink-dim);
+  white-space: nowrap;
+}
+body.witcher-ttrpg-death-march .wdm-food-freshness.is-fresh {
+  color: #6e9856;
+  border-color: #6e9856;
+}
+body.witcher-ttrpg-death-march .wdm-food-freshness.is-stale {
+  color: #d4a04a;
+  border-color: #d4a04a;
+}
+body.witcher-ttrpg-death-march .wdm-food-freshness.is-spoiled {
+  color: #a83232;
+  border-color: #a83232;
+}
+body.witcher-ttrpg-death-march .wdm-food-freshness-time {
+  opacity: 0.85;
+}
+
 /* ── Die item: face grid (display) + per-face config pickers ─────────── */
 body.witcher-ttrpg-death-march .wdm-die-faces {
   list-style: none;

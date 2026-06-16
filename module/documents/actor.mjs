@@ -16,6 +16,26 @@ import { defenseMixin } from "./mixins/defenseMixin.mjs";
 import { toxicityMixin } from "./mixins/toxicityMixin.mjs";
 
 export class WitcherActor extends toxicityMixin(combatRoundMixin(defenseMixin(castSpellMixin(brawlMixin(weaponAttackMixin(saveMixin(skillMixin(Actor)))))))) {
+
+    /**
+     * Final-pass REC floor. Runs after the whole prepare pipeline — that
+     * means after `prepareDerivedData` (which seeds REC from BODY+WILL plus
+     * any `mods.derived.recBonus` from active statuses) AND after Foundry
+     * applies "final" phase ActiveEffect changes (hangover's flat −N, any
+     * other heavy REC debuff). Clamps REC at 1 so a brutal stack of
+     * penalties can't drive it to 0 or negative — recovery slows but never
+     * inverts. Consumers (heal dialog, dock REC pill, sheet readout) all
+     * read `actor.system.derivedStats.rec` so the floor applies everywhere
+     * at once.
+     */
+    prepareData() {
+        super.prepareData();
+        const ds = this.system?.derivedStats;
+        if (ds && typeof ds.rec === "number") {
+            ds.rec = Math.max(1, ds.rec);
+        }
+    }
+
     /**
      * Add an item (Item document or raw item data) to this actor, merging
      * into an existing stackable item when one matches instead of creating a

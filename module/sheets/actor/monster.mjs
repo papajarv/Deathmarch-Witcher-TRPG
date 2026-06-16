@@ -38,7 +38,7 @@ const MONSTER_ARRAY_PATHS = [
  * item. A humanoid monster's *weapons* still embed normally (handled by the
  * super drop) — these are harvest/drop materials. Mutagens are NOT here: a
  * monster has a single signature mutagen, linked in its own slot. */
-const LOOT_DROP_TYPES = new Set(["component", "alchemical", "valuable"]);
+const LOOT_DROP_TYPES = new Set(["component", "alchemical", "valuable", "map", "remains"]);
 
 /* Resolve a list of weapon-quality keys into display rows. Parameterized
  * qualities fold their stored value into the label (`Silver(2d6)`) and

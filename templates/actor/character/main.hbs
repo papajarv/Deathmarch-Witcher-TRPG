@@ -112,44 +112,6 @@
         </div>
       </div>
 
-        {{!-- Adrenaline / Luck trackers under the vital bars. --}}
-        <div class="wcs-trackers">
-          {{#if adrenalineEnabled}}
-          <span class="wcs-track">
-            <i class="fa-solid fa-burst"></i>Adrenaline
-            <a data-action="adjustValue" data-target="system.adrenaline.value" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
-            <input type="number" name="system.adrenaline.value" value="{{source.adrenaline.value}}" min="0" title="Max BODY per RAW p.153" />
-            <a data-action="adjustValue" data-target="system.adrenaline.value" data-delta="1" data-min="0" data-max="{{bodyValue}}" title="+1"><i class="fa-solid fa-plus"></i></a>
-          </span>
-          {{/if}}
-          <span class="wcs-track">
-            <i class="fa-solid fa-clover"></i>Luck
-            <input type="number" name="system.stats.luck.value" value="{{source.stats.luck.value}}" min="0" title="Spendable LUCK pool" />
-            <span class="wcs-track-cap">/ {{system.stats.luck.max}}</span>
-            <a data-action="refillLuck" title="Refill pool to LUCK (session start)"><i class="fa-solid fa-rotate-left"></i></a>
-          </span>
-          {{#if satiety}}
-            {{!-- Compact form: icon + value + tier — the "Satiety" label is
-                 dropped because the utensils icon is the only one of its kind
-                 in this strip, and the text was tipping the row over the
-                 flex-wrap threshold (forcing the tracker onto a new line).
-                 The textual label still surfaces in the title tooltip. --}}
-            <span class="wcs-track" style="white-space:nowrap;"
-                  title="Satiety {{satiety.value}} — {{satiety.tierLabel}} (GM-edited only).">
-              <i class="fa-solid fa-utensils"></i>
-              <input type="number"
-                     {{#if satiety.isGM}}name="system.satiety"{{else}}readonly{{/if}}
-                     value="{{satiety.value}}" min="-100" max="125" />
-              <span class="wcs-track-cap">· {{satiety.tierLabel}}</span>
-            </span>
-          {{/if}}
-          {{#if (homebrew "stress")}}
-            <span class="wcs-track">
-              <i class="fa-solid fa-brain"></i>Stress
-              <input type="number" name="system.stress" value="{{system.stress}}" min="0" />
-            </span>
-          {{/if}}
-        </div>
       </div>
 
         {{!-- Right column: derived pills + Vigor / Shield trackers. --}}
@@ -163,28 +125,64 @@
               {{/if}}
             {{/each}}
           </section>
-          <div class="wcs-trackers">
-            <span class="wcs-track">
-              <i class="fa-solid fa-circle-notch"></i>Vigor
-              <a data-action="adjustValue" data-target="system.derivedStats.vigor" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
-              <input type="number" name="system.derivedStats.vigor" value="{{system.derivedStats.vigor}}" min="0" title="Static ceiling — profession / skill tree (Core p.38)" />
-              <a data-action="adjustValue" data-target="system.derivedStats.vigor" data-delta="1" data-min="0" title="+1"><i class="fa-solid fa-plus"></i></a>
-            </span>
-            <span class="wcs-track">
-              <i class="fa-solid fa-shield"></i>Shield
-              <a data-action="adjustValue" data-target="system.derivedStats.shield" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
-              <input type="number" name="system.derivedStats.shield" value="{{system.derivedStats.shield}}" min="0" title="Static counter — Quen, armor, etc." />
-              <a data-action="adjustValue" data-target="system.derivedStats.shield" data-delta="1" data-min="0" title="+1"><i class="fa-solid fa-plus"></i></a>
-            </span>
-            <span class="wcs-track">
-              <i class="fa-solid fa-magnifying-glass"></i>Focus
-              <a data-action="adjustValue" data-target="system.derivedStats.focus.value" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
-              <input type="number" name="system.derivedStats.focus.value" value="{{source.derivedStats.focus.value}}" min="0" max="{{system.derivedStats.focus.max}}" title="Investigation pool — A Witcher's Journal p.145" />
-              <span class="wcs-track-cap">/ {{system.derivedStats.focus.max}}</span>
-              <a data-action="adjustValue" data-target="system.derivedStats.focus.value" data-delta="1" data-min="0" data-max="{{system.derivedStats.focus.max}}" title="+1"><i class="fa-solid fa-plus"></i></a>
-            </span>
-          </div>
         </div>
+      </div>
+
+      {{!-- All trackers consolidated into ONE full-width row below the
+           vitals + derived block: Adrenaline, Luck, Vigor, Shield, Focus,
+           then the homebrew pair (Satiety, Stress). Single strip so they
+           wrap together if the sheet is narrow rather than splitting across
+           two columns. --}}
+      <div class="wcs-trackers wcs-trackers-unified">
+        {{#if adrenalineEnabled}}
+        <span class="wcs-track" style="white-space:nowrap;">
+          <i class="fa-solid fa-burst"></i>Adrenaline
+          <a data-action="adjustValue" data-target="system.adrenaline.value" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
+          <input type="number" name="system.adrenaline.value" value="{{source.adrenaline.value}}" min="0" title="Max BODY per RAW p.153" />
+          <a data-action="adjustValue" data-target="system.adrenaline.value" data-delta="1" data-min="0" data-max="{{bodyValue}}" title="+1"><i class="fa-solid fa-plus"></i></a>
+        </span>
+        {{/if}}
+        <span class="wcs-track" style="white-space:nowrap;">
+          <i class="fa-solid fa-clover"></i>Luck
+          <input type="number" name="system.stats.luck.value" value="{{source.stats.luck.value}}" min="0" title="Spendable LUCK pool" />
+          <span class="wcs-track-cap">/ {{system.stats.luck.max}}</span>
+          <a data-action="refillLuck" title="Refill pool to LUCK (session start)"><i class="fa-solid fa-rotate-left"></i></a>
+        </span>
+        <span class="wcs-track" style="white-space:nowrap;">
+          <i class="fa-solid fa-circle-notch"></i>Vigor
+          <a data-action="adjustValue" data-target="system.derivedStats.vigor" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
+          <input type="number" name="system.derivedStats.vigor" value="{{system.derivedStats.vigor}}" min="0" title="Static ceiling — profession / skill tree (Core p.38)" />
+          <a data-action="adjustValue" data-target="system.derivedStats.vigor" data-delta="1" data-min="0" title="+1"><i class="fa-solid fa-plus"></i></a>
+        </span>
+        <span class="wcs-track" style="white-space:nowrap;">
+          <i class="fa-solid fa-shield"></i>Shield
+          <a data-action="adjustValue" data-target="system.derivedStats.shield" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
+          <input type="number" name="system.derivedStats.shield" value="{{system.derivedStats.shield}}" min="0" title="Static counter — Quen, armor, etc." />
+          <a data-action="adjustValue" data-target="system.derivedStats.shield" data-delta="1" data-min="0" title="+1"><i class="fa-solid fa-plus"></i></a>
+        </span>
+        <span class="wcs-track" style="white-space:nowrap;">
+          <i class="fa-solid fa-magnifying-glass"></i>Focus
+          <a data-action="adjustValue" data-target="system.derivedStats.focus.value" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
+          <input type="number" name="system.derivedStats.focus.value" value="{{source.derivedStats.focus.value}}" min="0" max="{{system.derivedStats.focus.max}}" title="Investigation pool — A Witcher's Journal p.145" />
+          <span class="wcs-track-cap">/ {{system.derivedStats.focus.max}}</span>
+          <a data-action="adjustValue" data-target="system.derivedStats.focus.value" data-delta="1" data-min="0" data-max="{{system.derivedStats.focus.max}}" title="+1"><i class="fa-solid fa-plus"></i></a>
+        </span>
+        {{#if satiety}}
+          <span class="wcs-track wcs-track-homebrew" style="white-space:nowrap;"
+                title="Satiety {{satiety.value}} — {{satiety.tierLabel}} (GM-edited only).">
+            <i class="fa-solid fa-utensils"></i>
+            <input type="number"
+                   {{#if satiety.isGM}}name="system.satiety"{{else}}readonly{{/if}}
+                   value="{{satiety.value}}" min="-100" max="125" />
+            <span class="wcs-track-cap">· {{satiety.tierLabel}}</span>
+          </span>
+        {{/if}}
+        {{#if (homebrew "stress")}}
+          <span class="wcs-track" style="white-space:nowrap;">
+            <i class="fa-solid fa-brain"></i>Stress
+            <input type="number" name="system.stress" value="{{system.stress}}" min="0" />
+          </span>
+        {{/if}}
       </div>
     </div>
   </section>

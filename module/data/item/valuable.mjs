@@ -1,8 +1,13 @@
 /**
- * ValuableData — miscellaneous items (books, maps, remains).
+ * ValuableData — miscellaneous items (books, trophies, generic valuables).
  *
  * Schema additions over base:
- *   type : "map" | "remains" | "book" | ""  (subtype)
+ *   type : "book" | "trophy" | ""  (subtype)
+ *
+ * Map and Remains are no longer valuable subtypes; they live as their own
+ * first-class item types (`map`, `remains`). The "Map" / "Remains" options
+ * in the subtype <select> were removed at the same time — existing items
+ * that still carry one of those legacy strings render as generic valuables.
  *
  * Homebrew (ADR 0003): the book system stores its configuration on
  * valuables of subtype "book". The book mechanic is opt-in via
@@ -47,17 +52,6 @@ export class ValuableData extends foundry.abstract.TypeDataModel {
             // Only the source-monster category is metadata.
             trophyConfig: new fields.SchemaField({
                 monsterCategory: new fields.StringField({ initial: "" })
-            }),
-
-            // When type === "remains", monsterUuid points to the source
-            // monster actor (overhaul-ui monster-remains.js:156).
-            monsterUuid: new fields.StringField({ initial: "" }),
-
-            // Map image path for type === "map"
-            // (overhaul-ui valuable-map.js MAP_IMAGE_FLAG → field).
-            mapImage: new fields.FilePathField({
-                categories: ["IMAGE"],
-                required: false
             })
         };
     }

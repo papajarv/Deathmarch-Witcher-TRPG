@@ -1,0 +1,213 @@
+/* =============================================================================
+   FOOD & DRINK CONFIGURATION (system-settings menu — `.wdm-food-drink-config`)
+   =============================================================================
+   GM-only form for tuning the food & drink numeric knobs. Mirrors the look of
+   the Homebrew Content and Status Effects editors — display-font headings,
+   amber accents, ink-dim hints, lifted-bg section cards. */
+
+/* Window-content is a flex column so the scrollable body + the form-footer
+   share the height without the Save & Reload button getting clipped. */
+body.witcher-ttrpg-death-march .wdm-food-drink-config .window-content {
+  padding: 12px 16px 14px !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+body.witcher-ttrpg-death-march .wdm-fdc {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  font-family: var(--wdm-font-body);
+  color: var(--wdm-ink-hi);
+}
+
+body.witcher-ttrpg-death-march .wdm-food-drink-config .form-footer {
+  flex: 0 0 auto;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────── */
+
+body.witcher-ttrpg-death-march .wdm-fdc-head { flex: 0 0 auto; }
+body.witcher-ttrpg-death-march .wdm-fdc-head h2 {
+  margin: 0 0 4px;
+  font-family: var(--wdm-font-display);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-bright);
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+body.witcher-ttrpg-death-march .wdm-fdc-head h2 > i {
+  font-size: 12px;
+  color: var(--wdm-amber-dim);
+  letter-spacing: 0;
+}
+body.witcher-ttrpg-death-march .wdm-fdc-blurb {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--wdm-ink-dim);
+}
+
+/* ── Scroll region ────────────────────────────────────────────────────── */
+
+body.witcher-ttrpg-death-march .wdm-fdc-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 6px 4px 2px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ── Section card ─────────────────────────────────────────────────────── */
+
+body.witcher-ttrpg-death-march .wdm-fdc-section {
+  background: var(--wdm-bg-lifted);
+  border: 1px solid var(--wdm-amber-dim);
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+body.witcher-ttrpg-death-march .wdm-fdc-section-head { display: flex; flex-direction: column; gap: 3px; }
+body.witcher-ttrpg-death-march .wdm-fdc-section-head h3 {
+  margin: 0;
+  font-family: var(--wdm-font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi);
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+body.witcher-ttrpg-death-march .wdm-fdc-section-head h3 > i {
+  color: var(--wdm-amber-dim);
+  font-size: 10px;
+  letter-spacing: 0;
+}
+body.witcher-ttrpg-death-march .wdm-fdc-section-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--wdm-ink-dim);
+}
+body.witcher-ttrpg-death-march .wdm-fdc-section-hint code {
+  font-family: var(--wdm-font-mono, monospace);
+  font-size: 10.5px;
+  padding: 0 4px;
+  background: rgba(0,0,0,0.25);
+  color: var(--wdm-amber-hi);
+}
+
+/* ── Grid (decay) ─────────────────────────────────────────────────────── */
+
+body.witcher-ttrpg-death-march .wdm-fdc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 14px;
+  margin-top: 2px;
+}
+body.witcher-ttrpg-death-march .wdm-fdc-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+body.witcher-ttrpg-death-march .wdm-fdc-label {
+  font-family: var(--wdm-font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-dim);
+}
+body.witcher-ttrpg-death-march .wdm-fdc-cell input {
+  padding: 4px 8px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--wdm-amber-dim);
+  color: var(--wdm-ink-hi);
+  font-family: var(--wdm-font-body);
+  font-size: 12px;
+}
+body.witcher-ttrpg-death-march .wdm-fdc-cell input:focus {
+  outline: none;
+  border-color: var(--wdm-amber-bright);
+  background: rgba(0,0,0,0.4);
+}
+
+/* ── Tables (hunger / drunk) ──────────────────────────────────────────── */
+
+body.witcher-ttrpg-death-march .wdm-fdc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 2px;
+}
+body.witcher-ttrpg-death-march .wdm-fdc-table th,
+body.witcher-ttrpg-death-march .wdm-fdc-table td {
+  padding: 5px 8px;
+  text-align: left;
+}
+body.witcher-ttrpg-death-march .wdm-fdc-table th {
+  font-family: var(--wdm-font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-dim);
+  border-bottom: 1px solid var(--wdm-amber-dim);
+}
+body.witcher-ttrpg-death-march .wdm-fdc-table td {
+  border-bottom: 1px dotted rgba(184,148,100,0.18);
+}
+body.witcher-ttrpg-death-march .wdm-fdc-table tr:last-child td { border-bottom: none; }
+body.witcher-ttrpg-death-march .wdm-fdc-table tbody tr:hover td {
+  background: rgba(184,148,100,0.06);
+}
+
+body.witcher-ttrpg-death-march .wdm-fdc-num { text-align: right; }
+body.witcher-ttrpg-death-march .wdm-fdc-num input {
+  width: 70px;
+  padding: 3px 6px;
+  text-align: right;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--wdm-amber-dim);
+  color: var(--wdm-ink-hi);
+  font-family: var(--wdm-font-body);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+body.witcher-ttrpg-death-march .wdm-fdc-num input:focus {
+  outline: none;
+  border-color: var(--wdm-amber-bright);
+  background: rgba(0,0,0,0.4);
+}
+body.witcher-ttrpg-death-march .wdm-fdc-na {
+  color: var(--wdm-ink-dim);
+  opacity: 0.6;
+  font-style: italic;
+}
+body.witcher-ttrpg-death-march .wdm-fdc-readonly td {
+  color: var(--wdm-ink-dim);
+  font-style: italic;
+}
+body.witcher-ttrpg-death-march .wdm-fdc-table-drunk td:first-child {
+  white-space: nowrap;
+  font-family: var(--wdm-font-display);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--wdm-amber-hi);
+}

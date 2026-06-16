@@ -92,7 +92,12 @@ export function registerSheets() {
     DSC.registerSheet(Item, SYSTEM_ID, WitcherComponentSheet,   { types: ["component"],   makeDefault: true, label: "WITCHER.SheetClassItem" });
     DSC.registerSheet(Item, SYSTEM_ID, WitcherEnhancementSheet, { types: ["enhancement"], makeDefault: true, label: "WITCHER.SheetClassItem" });
     DSC.registerSheet(Item, SYSTEM_ID, WitcherContainerSheet,     { types: ["container"],     makeDefault: true, label: "WITCHER.SheetClassItem" });
-    DSC.registerSheet(Item, SYSTEM_ID, WitcherValuableSheet,      { types: ["valuable"],      makeDefault: true, label: "WITCHER.SheetClassItem" });
+    // Map + Remains share the valuable sheet — the sheet branches on
+    // document.type to pick the right config / display block. One sheet
+    // covers all three because the rendered shape is almost identical: a
+    // header + a type-specific config section (image picker for map,
+    // source-monster link for remains, subtype select for plain valuables).
+    DSC.registerSheet(Item, SYSTEM_ID, WitcherValuableSheet,      { types: ["valuable", "map", "remains"], makeDefault: true, label: "WITCHER.SheetClassItem" });
     DSC.registerSheet(Item, SYSTEM_ID, WitcherDieSheet,           { types: ["die"],           makeDefault: true, label: "WITCHER.SheetClassItem" });
     DSC.registerSheet(Item, SYSTEM_ID, WitcherFoodSheet,          { types: ["food"],          makeDefault: true, label: "WITCHER.SheetClassItem" });
     DSC.registerSheet(Item, SYSTEM_ID, WitcherNoteSheet,          { types: ["note"],          makeDefault: true, label: "WITCHER.SheetClassItem" });

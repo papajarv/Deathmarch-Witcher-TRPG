@@ -112,13 +112,22 @@ const TOOL_PENALTY = 4;
 function diagramKind(diagram) {
   const k = diagram?.system?.kind;
   if (k === "diagram" || k === "formula" || k === "recipe") return k;
-  return diagram?.system?.isFormulae ? "formula" : "diagram";
+  // Legacy/unset fallbacks. Order matters: an explicit isFormulae flag still
+  // wins over inference, then we look at the subtype as a strong hint —
+  // recipe subtypes (`meal`, `drink`) on an item with a missing/unset `kind`
+  // are still recipes; otherwise default to crafting diagram.
+  if (diagram?.system?.isFormulae) return "formula";
+  const t = String(diagram?.system?.type ?? "").toLowerCase();
+  if (t === "meal" || t === "drink") return "recipe";
+  return "diagram";
 }
-/* Human label for the required tool. */
+/* Human label for the required tool. Cooking unified to "Cooking Tools" so
+ * the naming matches the convention used by every other craft (Crafting
+ * Tools, Alchemy Set, Tinker's Forge). */
 function craftToolLabel(diagram) {
   const k = diagramKind(diagram);
   if (k === "formula") return "Alchemy set";
-  if (k === "recipe")  return "Cooking pot";
+  if (k === "recipe")  return "Cooking tools";
   if (diagram?.system?.requiresForge) return "Forge";
   return "Crafting tools";
 }
@@ -126,7 +135,7 @@ function craftToolLabel(diagram) {
 function craftToolItemName(diagram) {
   const k = diagramKind(diagram);
   if (k === "formula") return "Alchemy Set";
-  if (k === "recipe")  return "Cooking Pot";
+  if (k === "recipe")  return "Cooking Tools";
   if (diagram?.system?.requiresForge) return "Tinker's Forge";
   return "Crafting Tools";
 }
@@ -1136,7 +1145,7 @@ function renderCraftingDetail(diagram) {
      - DC field        recipes piggyback on `alchemyDC` for the Cooking DC
                        (sheet relabels — see DiagramsData)
      - skill           always `cooking`
-     - tool item       "Cooking Pot" (craftToolItemName resolves it)
+     - tool item       "Cooking Tools" (craftToolItemName resolves it)
    Memorization, salvage, modifier prompt all reuse the existing helpers; the
    only bespoke piece is the cook-action handler at the bottom of this block.
    ========================================================================= */
@@ -1169,14 +1178,13 @@ function renderCookingView(active) {
 }
 
 /* Recipe groupings — uses the same RECIPE_SUBTYPES map exported by config
- * (meal / drink / snack). Recipes with no sub-type fall into "Misc" so they
- * stay reachable. The match callback matches case-insensitively so authors
- * don't have to remember exact casing. */
+ * (meal / drink). Recipes with no sub-type fall into "Misc" so they stay
+ * reachable. The match callback matches case-insensitively so authors don't
+ * have to remember exact casing. */
 const RECIPE_GROUPS = [
   { key: "meal",  label: "Meals",   icon: "fa-bowl-food",    match: (t) => t === "meal"  },
   { key: "drink", label: "Drinks",  icon: "fa-wine-glass",   match: (t) => t === "drink" },
-  { key: "snack", label: "Snacks",  icon: "fa-cookie-bite",  match: (t) => t === "snack" },
-  { key: "misc",  label: "Misc",    icon: "fa-utensils",     match: (t) => !t || !["meal","drink","snack"].includes(t) }
+  { key: "misc",  label: "Misc",    icon: "fa-utensils",     match: (t) => !t || !["meal","drink"].includes(t) }
 ];
 
 function renderCookingList(recipes) {
@@ -1205,7 +1213,7 @@ function renderCookingCenter(recipe) {
   }
   // Recipes piggyback on `alchemyDC` for storage — sheet relabels to "Cooking
   // DC" — so the chrome panel reads the same field. Tool penalty applies the
-  // same +4 hit as other crafts when the Cooking Pot is missing.
+  // same +4 hit as other crafts when the Cooking Tools are missing.
   const baseDC = Number(recipe.system?.alchemyDC) || 0;
   const dc     = baseDC + craftToolPenalty(recipe);
   const ready  = craftReadinessCrafting(recipe);

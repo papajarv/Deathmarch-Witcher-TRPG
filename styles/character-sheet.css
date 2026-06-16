@@ -310,11 +310,14 @@ body.witcher-ttrpg-death-march .wcs-vital-bonus {
   min-width: 2ch; text-align: right;
 }
 
-/* Total Stats — right-anchored tally directly above the statblock. */
+/* Total Stats — right-anchored tally directly above the statblock. Margin
+   trimmed so the statblock's grey separator border sits flush against the
+   trackers row above (no airy gap between the consolidated trackers and
+   the statblock's top rule). */
 body.witcher-ttrpg-death-march .wcs-total-row {
   display: flex;
   justify-content: flex-end;
-  margin: 8px 0 4px;
+  margin: 0 0 4px;
 }
 
 /* ============================  STATBLOCK  =============================== */
@@ -414,6 +417,19 @@ body.witcher-ttrpg-death-march .wcs-trackers {
   gap: 5px 14px;
   padding: 6px 0 0;
   border-top: 1px dotted rgba(184,148,100,0.18);
+  /* min-width: 0 lets the strip compress inside narrow flex parents instead
+   * of bursting through the column edge. The inner `.wcs-track` items carry
+   * their own `white-space: nowrap` so each tracker (e.g. "1 / 2") stays
+   * intact while the strip itself wraps to a new line. */
+  min-width: 0;
+}
+/* When two tracker strips are stacked (the right column now carries both
+   Vigor/Shield/Focus and Adrenaline/Luck/Satiety/Stress), suppress the
+   second strip's separator and tighten the gap so they read as one
+   contiguous block instead of two ruled rows. */
+body.witcher-ttrpg-death-march .wcs-trackers + .wcs-trackers {
+  border-top: 0;
+  padding-top: 2px;
 }
 body.witcher-ttrpg-death-march .wcs-track {
   display: inline-flex;
@@ -424,7 +440,16 @@ body.witcher-ttrpg-death-march .wcs-track {
   text-transform: uppercase; letter-spacing: 0.16em;
   color: var(--wdm-amber-hi);
 }
+/* Tight pull-in only for the −/+ buttons that flank a value input — the
+   general gap stays at 5px (its original value) so the icon / label / cap
+   spacing isn't crowded; only the bracketed `- N +` cluster gets compressed. */
+body.witcher-ttrpg-death-march .wcs-track > a + input,
+body.witcher-ttrpg-death-march .wcs-track > input + a {
+  margin-left: -4px;
+}
 body.witcher-ttrpg-death-march .wcs-track > i { color: var(--wdm-amber-dim); font-size: 11px; width: 12px; text-align: center; }
+/* `.wcs-track-homebrew` is currently a marker class only — Satiety sits at
+   the default row gap from its neighbours like every other tracker. */
 body.witcher-ttrpg-death-march .wcs-track a {
   color: var(--wdm-amber-dim);
   cursor: pointer;

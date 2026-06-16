@@ -15,6 +15,7 @@ import { StatusEffectsEditor } from "../applications/statusEffectsEditor.mjs";
 import { HomebrewContentEditor } from "../applications/homebrewContentEditor.mjs";
 import { WeatherConfigApp } from "../applications/weatherConfig.mjs";
 import { SceneDefaultsLauncher } from "../applications/sceneDefaultsConfig.mjs";
+import { FoodAndDrinkConfigApp, FOOD_AND_DRINK_CONFIG_DEFAULTS } from "../applications/foodAndDrinkConfig.mjs";
 import { STATUS_OVERRIDE_SETTING, invalidateStatusClauseCache } from "../mechanics/statusOverrides.mjs";
 
 const SYSTEM_ID = "witcher-ttrpg-death-march";
@@ -411,6 +412,31 @@ export function registerSettings() {
      * (extendedCombat, splitMovement) stay inline in the main list; the
      * added-content toggles (book system, stress, food & drink, the two
      * gambling tables, merchant) are config:false and live here. GM-only. */
+    /* Food & Drink config — the numeric knobs (decay rate, hunger tier
+     * thresholds, drunk-tier metadata). Stored as one Object setting and
+     * edited through FoodAndDrinkConfigApp. The setting itself is always
+     * registered so values survive a toggle flip; the MENU is only added to
+     * the Configure Settings panel when foodAndDrink is currently on, which
+     * means a pure-RAW world doesn't see the entry. requiresReload because
+     * the satiety tick / drunk roll code reads the config at load time. */
+    game.settings.register(SYSTEM_ID, "foodAndDrinkConfig", {
+        scope: "world",
+        config: false,
+        type: Object,
+        default: FOOD_AND_DRINK_CONFIG_DEFAULTS,
+        requiresReload: true
+    });
+    if (game.settings.get(SYSTEM_ID, "homebrew.foodAndDrink")) {
+        game.settings.registerMenu(SYSTEM_ID, "foodAndDrinkConfig", {
+            name: "Food & Drink Configuration",
+            label: "Configure Food & Drink",
+            hint: "Edit how fast satiety decays per hour, at what satiety values each hunger tier kicks in, and the per-tier metadata (Endurance DC, level jump, unconscious / death thresholds) the drunk roll uses.",
+            icon: "fa-solid fa-utensils",
+            type: FoodAndDrinkConfigApp,
+            restricted: true
+        });
+    }
+
     game.settings.registerMenu(SYSTEM_ID, "homebrewContent", {
         name: "Homebrew Content",
         label: "Manage Homebrew Content",

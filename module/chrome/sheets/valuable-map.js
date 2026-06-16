@@ -1,23 +1,23 @@
 /**
- * Map valuable helpers.
+ * Map item helpers.
  *
- * A Map is a valuable with `system.type === "map"`. Its image lives on the
- * first-class field `system.mapImage` (configured from the item sheet's Map
- * panel). The map overlay in chrome/chrome/map.js reads it via getMapImage().
+ * A Map is now a first-class Foundry Item type (`item.type === "map"`). Its
+ * image lives on the schema field `system.mapImage` (configured from the
+ * item sheet's Map panel — the shared valuable sheet branches by document
+ * type). The map overlay in chrome/chrome/map.js reads it via getMapImage().
  *
- * The subtype select and the image picker are owned by the bespoke valuable
- * sheet (templates/item/valuable.hbs) — this file no longer injects anything
- * into the sheet. It only exposes the two read helpers the display layer uses.
+ * Previously a valuable subtype; promoted to its own type so the categorizer
+ * and the sheet routing no longer need the `valuable + system.type === "map"`
+ * two-step. This file just exposes the two read helpers the display layer
+ * uses.
  */
 
 const MODULE_ID = "witcher-ttrpg-death-march";
 const LEGACY_ID = "witcher-overhaul-ui";
-const MAP_TYPE_SLUG = "map";
 
-/** True if the item is a Map valuable. */
+/** True if the item is a Map. */
 export function isMapItem(item) {
-  return item?.type === "valuable"
-      && String(item?.system?.type ?? "").toLowerCase() === MAP_TYPE_SLUG;
+  return item?.type === "map";
 }
 
 /** Read the configured map image URL for a Map item (or empty string).

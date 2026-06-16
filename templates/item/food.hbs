@@ -60,6 +60,18 @@
             </li>
           {{/if}}
         </ul>
+
+        {{!-- Freshness badge. Hidden when the GM didn't author a shelf life
+              or the item hasn't been acquired yet (freshness.tracked === false). --}}
+        {{#if freshness.tracked}}
+          <div class="wdm-food-freshness is-{{freshness.state}}">
+            <i class="fa-solid {{freshness.icon}}"></i>
+            <span class="wdm-food-freshness-label">{{freshness.stateLabel}}</span>
+            {{#if freshness.remaining}}
+              <span class="wdm-food-freshness-time">· {{freshness.remaining}} day{{#unless (eq freshness.remaining "1.0")}}s{{/unless}} left</span>
+            {{/if}}
+          </div>
+        {{/if}}
       {{/if}}
 
       {{#if source.description}}
@@ -140,6 +152,19 @@
           </label>
         </div>
 
+        <div class="wdm-cfg-section">Freshness</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row" title="In-game days before the food spoils after it's first acquired by a character. 0 = never spoils (cured, dried, distilled).">
+            <span>Shelf Life (days)</span>
+            <input type="number" min="0" step="0.5" name="system.freshness.shelfLifeDays" value="{{source.freshness.shelfLifeDays}}" />
+          </label>
+          {{#if freshness.tracked}}
+            <div class="wdm-cfg-readout" title="Days remaining before this item becomes spoiled.">
+              State: <b>{{freshness.stateLabel}}</b>{{#if freshness.remaining}} · {{freshness.remaining}} day{{#unless (eq freshness.remaining "1.0")}}s{{/unless}} left{{/if}}
+            </div>
+          {{/if}}
+        </div>
+
         <div class="wdm-cfg-section">Taste</div>
         <textarea class="wdm-cfg-textarea" name="system.taste"
                   placeholder="Short flavor line — printed in chat each time a portion is consumed (never on the display tooltip).">{{source.taste}}</textarea>
@@ -162,10 +187,6 @@
           <label class="wdm-cfg-row" title="How many drunk tiers to advance on a failed save (usually 1).">
             <span>Level Jump</span>
             <input type="number" min="0" name="system.drunk.levelJump" value="{{source.drunk.levelJump}}" />
-          </label>
-          <label class="wdm-cfg-row is-checkbox" title="When ON, witcher actors don't get the roll-twice-take-best they'd normally enjoy against alcohol.">
-            <span>Bypass Witcher Resist</span>
-            <input type="checkbox" name="system.drunk.bypassWitcherResist" {{#if source.drunk.bypassWitcherResist}}checked{{/if}} />
           </label>
           <label class="wdm-cfg-row" title="Verb used in chat: 'drinks', 'sips', 'guzzles', 'downs'…">
             <span>Flavor Verb</span>

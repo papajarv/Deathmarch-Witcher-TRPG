@@ -2,7 +2,8 @@
  * Monster defeat → Remains item creation.
  *
  * When a monster actor has the "dead" status effect applied, a world-level
- * "remains" valuable is created in the Items sidebar and flagged with:
+ * `remains` item (first-class type) is created in the Items sidebar and
+ * flagged with:
  *   - remainsCharges / remainsBaseWeight  (charge system, full on creation)
  *   - monsterUuid                          (UUID back-reference for future loot harvest)
  *
@@ -60,20 +61,17 @@ async function createRemainsForMonster(actor) {
 
     const itemData = {
         name:  `${actor.name} Carcass`,
-        type:  "valuable",
+        type:  "remains",
         img:   remainsImg,
         system: {
-            type:        "remains",
             // Canonical source-monster link. Consumers (harvest / dissect /
             // context menu) and the item sheet read this system field first;
             // the flag below is kept only as a legacy read fallback.
             monsterUuid: sourceUuid,
             cost:        0,
             weight,
-            quantity:    "1",
-            isHidden:    false,
+            quantity:    1,
             isStored:    false,
-            isCarried:   true,
             description: "",
         },
         // Default everyone to OWNER so any player can harvest / extract /
@@ -108,7 +106,7 @@ async function createRemainsForMonster(actor) {
 
 function registerSidebarRefresh() {
     Hooks.on("updateItem", (item, diff) => {
-        if (item.type !== "valuable" || item.system?.type !== "remains") return;
+        if (item.type !== "remains") return;
         const flagDiff = diff?.flags?.[MODULE_ID];
         if (!flagDiff) return;
         if (!(CHARGES_FLAG in flagDiff) && !(BASE_WEIGHT_FLAG in flagDiff)) return;
@@ -116,7 +114,7 @@ function registerSidebarRefresh() {
     });
     // Re-render on delete so destroyed carcasses vanish from the directory.
     Hooks.on("deleteItem", (item) => {
-        if (item.type !== "valuable" || item.system?.type !== "remains") return;
+        if (item.type !== "remains") return;
         ui.items?.render();
     });
 }
@@ -143,8 +141,7 @@ export function registerMonsterRemainsHooks() {
     Hooks.once("ready", async () => {
         if (game.users.activeGM?.id !== game.user.id) return;
         const stuck = (game.items?.contents ?? []).filter(it =>
-            it.type === "valuable"
-            && it.system?.type === "remains"
+            it.type === "remains"
             && (it.ownership?.default ?? 0) < CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER
         );
         if (!stuck.length) return;
@@ -174,8 +171,7 @@ export function registerMonsterRemainsHooks() {
         if (!sourceUuid) return;   // no compendium origin, nothing we can do
 
         const remains = (game.items?.contents ?? []).filter(it =>
-            it.type === "valuable"
-            && it.system?.type === "remains"
+            it.type === "remains"
             && it.flags?.[MODULE_ID]?.[MONSTER_UUID_FLAG] === actor.uuid
         );
         for (const r of remains) {

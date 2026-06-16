@@ -1817,12 +1817,26 @@ export class WitcherValuableSheet extends WitcherItemSheet {
     /* Subtype-driven display context: resolve the subtype label, a short
      * book summary, the map image (system-first, legacy-flag fallback), and
      * the source-monster name for remains. The book/map detail editors are
-     * owned elsewhere (dialog / file picker); this only feeds the readout. */
+     * owned elsewhere (dialog / file picker); this only feeds the readout.
+     *
+     * Subtype resolution: map and remains are first-class item types
+     * (item.type === "map" / "remains"); for those, the subtype is implicit
+     * from the document type, and the in-sheet subtype <select> is hidden.
+     * For plain valuables (item.type === "valuable") the subtype comes from
+     * system.type ("" | "book" | "trophy") as before.
+     */
     async _prepareContext(options) {
         const ctx = await super._prepareContext(options);
         const src = ctx.source ?? this.item.toObject().system;
-        const subtype = String(src?.type ?? "");
+        const docType = this.item.type;
+        const subtype = docType === "map" || docType === "remains"
+            ? docType
+            : String(src?.type ?? "");
         ctx.subtype = subtype;
+        // Only valuables surface the subtype <select> — the new types are
+        // implicit from their document type, so the dropdown would just
+        // confuse the author.
+        ctx.showSubtypeSelect = docType === "valuable";
 
         const SUBTYPE_LABELS = { "": "Valuable", book: "Book", map: "Map", remains: "Remains", trophy: "Trophy" };
         ctx.subtypeLabel = SUBTYPE_LABELS[subtype] ?? "Valuable";
@@ -1939,6 +1953,24 @@ export class WitcherFoodSheet extends WitcherItemSheet {
      * carrying a buff-laden pie permanently buffs the holder. */
     get effectsTransfer() { return false; }
 
+    /* Override the base "name new effects after the item" behavior: on a
+     * food item that's misleading because the consume flow copies the
+     * effect to the actor, where it'd appear as e.g. "Mead" — looking
+     * like the food itself rather than what it does. Default to "New
+     * Effect" so the GM has to name it intentionally; carry the icon and
+     * description as helpful starting points. */
+    static async _onCreateEffect(event, target) {
+        if (!this.isEditable) return;
+        const [effect] = await this.item.createEmbeddedDocuments("ActiveEffect", [{
+            name: "New Effect",
+            img:  this.item.img,
+            description: this.item.system?.description ?? "",
+            disabled: false,
+            transfer: this.effectsTransfer
+        }]);
+        effect?.sheet?.render(true);
+    }
+
     /* Add the homebrew-gate flag the food.hbs template uses to hide the
      * taste / charges / satiety / drunk blocks when foodAndDrink is off,
      * plus the localized kind dropdown options and a `kind`-on-source
@@ -1953,11 +1985,32 @@ export class WitcherFoodSheet extends WitcherItemSheet {
         ctx.kind = src?.kind || "meal";
         ctx.kindOptions = {
             meal:  game.i18n.localize("WITCHER.Food.KindMeal"),
-            snack: game.i18n.localize("WITCHER.Food.KindSnack"),
             drink: game.i18n.localize("WITCHER.Food.KindDrink")
         };
         ctx.kindLabel = ctx.kindOptions[ctx.kind] ?? ctx.kind;
         ctx.isDrink = ctx.kind === "drink";
+
+        // Freshness readout. Pulled live so the sheet shows the up-to-date
+        // state without an explicit re-render. Untracked items (sidebar copy
+        // or shelfLifeDays === 0) collapse to `tracked: false` so the
+        // template hides the readout instead of saying "0.0 days left".
+        try {
+            const { getFreshnessState, getFreshnessDaysRemaining } =
+                await import("../../mechanics/foodAndDrink.mjs");
+            const state = getFreshnessState(this.item);
+            const remaining = getFreshnessDaysRemaining(this.item);
+            const LABELS = { fresh: "Fresh", stale: "Stale", spoiled: "Spoiled" };
+            const ICONS  = { fresh: "fa-leaf", stale: "fa-leaf", spoiled: "fa-skull" };
+            ctx.freshness = {
+                tracked: state !== "untracked",
+                state,
+                stateLabel: LABELS[state] ?? "Fresh",
+                icon: ICONS[state] ?? "fa-leaf",
+                remaining: remaining != null ? remaining.toFixed(1) : ""
+            };
+        } catch (_) {
+            ctx.freshness = { tracked: false };
+        }
         return ctx;
     }
 }

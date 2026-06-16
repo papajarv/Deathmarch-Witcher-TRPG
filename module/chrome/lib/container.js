@@ -142,6 +142,8 @@ export const SLOT_TYPES = [
   "component",
   "mutagen",
   "valuable",
+  "map",
+  "remains",
   "enhancement",
   "diagrams",
   "note",
@@ -157,6 +159,8 @@ const SLOT_TYPE_LABELS = {
   component:   "Component",
   mutagen:     "Mutagen",
   valuable:    "Valuable",
+  map:         "Map",
+  remains:     "Remains",
   enhancement: "Enhancement",
   diagrams:    "Diagram",
   note:        "Note",
@@ -478,6 +482,8 @@ export function tilePlaceholderIcon(row) {
     case "component":   return "fa-leaf";
     case "mutagen":     return "fa-vial";
     case "valuable":    return "fa-coins";
+    case "map":         return "fa-map";
+    case "remains":     return "fa-skull";
     case "enhancement": return "fa-gem";
     case "diagrams":    return "fa-scroll";
     case "note":        return "fa-feather";

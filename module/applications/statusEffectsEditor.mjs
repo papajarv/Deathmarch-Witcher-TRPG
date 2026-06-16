@@ -20,6 +20,62 @@ import { STATUS_CLAUSES } from "../setup/statusClauses.mjs";
 import { STATUS_EFFECTS } from "../setup/statusEffects.mjs";
 import { SYSTEM_ID, STATUS_OVERRIDE_SETTING, readStatusOverride } from "../mechanics/statusOverrides.mjs";
 
+/* Build the "everything we know how to edit" map at editor-open time.
+ * STATUS_EFFECTS is the PURE-RAW seed — it deliberately omits the homebrew-
+ * gated entries (drunk-1..8, hunger ladder, hangover) so they don't appear in
+ * a pure-RAW world's token HUD. The EDITOR needs them all the time though, so
+ * the GM can tune them whether the toggle is currently on or off. We union the
+ * seed with every id present in STATUS_CLAUSES (the editable source of truth)
+ * and fall back to a default presentation for ids the seed doesn't carry. */
+function buildEditableRegistry() {
+    const out = Object.fromEntries(
+        STATUS_EFFECTS.map(s => [s.id, { name: s.name, img: s.img }])
+    );
+    // Conservative icon defaults for clause-only ids. Mirrors what
+    // setup/statusEffects.mjs assigns to drunk/hunger/hangover when registered.
+    const ICON_FALLBACKS = {
+        "drunk-1": "icons/svg/tankard.svg", "drunk-2": "icons/svg/tankard.svg",
+        "drunk-3": "icons/svg/tankard.svg", "drunk-4": "icons/svg/tankard.svg",
+        "drunk-5": "icons/svg/tankard.svg", "drunk-6": "icons/svg/tankard.svg",
+        "drunk-7": "icons/svg/skull.svg",   "drunk-8": "icons/svg/skull.svg",
+        gorged:   "icons/svg/regen.svg",
+        full:     "icons/svg/up.svg",
+        fed:      "icons/svg/aura.svg",
+        peckish:  "icons/svg/down.svg",
+        hungry:   "icons/svg/degen.svg",
+        famished: "icons/svg/skull.svg",
+        hangover: "icons/svg/sleep.svg"
+    };
+    const NAME_FALLBACKS = {
+        "drunk-1": "Drunk I",   "drunk-2": "Drunk II",  "drunk-3": "Drunk III",
+        "drunk-4": "Drunk IV",  "drunk-5": "Drunk V",   "drunk-6": "Drunk VI",
+        "drunk-7": "Drunk VII", "drunk-8": "Drunk VIII",
+        gorged: "Gorged", full: "Full", fed: "Fed",
+        peckish: "Peckish", hungry: "Hungry", famished: "Famished",
+        hangover: "Hangover"
+    };
+    // Clause-only ids the editor must NOT surface as editable rows:
+    //   - "aim" : doc-only clause; real registrations are aim-1..3 (the bare
+    //             "aim" clause exists only so the status panel can read the
+    //             help text for the aim mechanic).
+    //   - "full" / "fed" : sated-baseline hunger tiers that are DELIBERATELY
+    //             not registered (no AE ever lands). Their clauses exist for
+    //             documentation only. Peckish IS registered (per spec — it's
+    //             a heads-up warning even though it has no stat changes).
+    // fastDraw IS a real registered status (procedural marker), so don't
+    // skip it — the editor should let the GM retune its description.
+    const SKIP_IDS = new Set(["aim", "full", "fed"]);
+    for (const id of Object.keys(STATUS_CLAUSES)) {
+        if (out[id]) continue;
+        if (SKIP_IDS.has(id)) continue;
+        out[id] = {
+            name: NAME_FALLBACKS[id] ?? id,
+            img:  ICON_FALLBACKS[id] ?? DEFAULT_ICON
+        };
+    }
+    return out;
+}
+
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 const DEFAULT_ICON = "icons/svg/aura.svg";
@@ -37,10 +93,10 @@ const END_KINDS = [
     { value: "skill",    label: "Skill check (DC)" }
 ];
 
-/* Default presentation (id → name/img) read off the seed registry. */
-const DEFAULT_PRESENTATION = Object.fromEntries(
-    STATUS_EFFECTS.map(s => [s.id, { name: s.name, img: s.img }])
-);
+/* Default presentation (id → name/img). Pulled through buildEditableRegistry()
+ * which unions the RAW seed with every homebrew-gated status (drunk, hunger,
+ * hangover) so the GM can edit them regardless of toggle state. */
+const DEFAULT_PRESENTATION = buildEditableRegistry();
 const DEFAULT_IDS = new Set(Object.keys(DEFAULT_PRESENTATION));
 
 /* Localize an i18n-key name for display; pass literals through unchanged. */
@@ -400,5 +456,14 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
 
         await game.settings.set(SYSTEM_ID, STATUS_OVERRIDE_SETTING, override);
         ui.notifications.info("Status effects saved.");
+        // The setting is requiresReload:true, but Foundry's auto-reload prompt
+        // only fires from the native Configure Settings panel. Our custom
+        // editor has to invoke it itself — otherwise the GM saves, the panel
+        // closes, and no reload happens (so CONFIG.statusEffects keeps the
+        // stale values until they manually refresh).
+        const SettingsConfig = foundry.applications?.settings?.SettingsConfig
+                            ?? globalThis.SettingsConfig;
+        try { await SettingsConfig?.reloadConfirm?.({ world: true }); }
+        catch (err) { console.warn("witcher-ttrpg-death-march | status editor reload prompt failed", err); }
     }
 }

@@ -23,11 +23,40 @@ import { getStress, getWill, getStressPenalty } from "../../../mechanics/stress.
 
 const SYSTEM_ID = "witcher-ttrpg-death-march";
 
+/**
+ * Walk active ActiveEffects for healing-only REC bonuses. Hangover applies a
+ * FLAT REC penalty directly to the displayed stat (via an AE change on
+ * `system.derivedStats.rec`), so it shows up in `actor.system.derivedStats.rec`
+ * already — no flag lookup needed. Gorged on the other hand contributes a
+ * heal-only bonus the displayed stat doesn't reflect; that flag is
+ * `flags.<systemId>.healingRecBonus` and gets summed here.
+ *
+ * `healingRecPenalty` is intentionally NOT subtracted anymore — hangover used
+ * to set it back when the penalty was healing-only, but the rule was reverted
+ * to a flat REC penalty, so subtracting it again would double-count.
+ */
+function getHealingRecMod(actor) {
+    if (!actor?.appliedEffects) return 0;
+    let mod = 0;
+    for (const e of actor.appliedEffects) {
+        if (e.disabled || e.system?.isSuppressed) continue;
+        mod += Number(e.flags?.[SYSTEM_ID]?.healingRecBonus) || 0;
+    }
+    return mod;
+}
+
 function computeTotalRec(actor, opts) {
-    const rec = Number(actor?.system?.derivedStats?.rec) || 0;
+    const baseRec = Number(actor?.system?.derivedStats?.rec) || 0;
     const penalty = getStressPenalty(actor);
-    let total = opts.resting ? rec : Math.floor(rec / 2);
+    let total = opts.resting ? baseRec : Math.floor(baseRec / 2);
     total = Math.max(0, total - penalty);
+    // Healing-only modifiers from active effects (Gorged +2, Hangover −N).
+    // Applied AFTER the half/full split so they're flat — same pattern as
+    // Sterilized / Healing Hand / Healing Tent below. Previously these
+    // landed on the REC base and got halved during active rest, which made
+    // Gorged's +2 read as a +1 to healing — not what the spec wanted.
+    const healMod = getHealingRecMod(actor);
+    total = Math.max(0, total + healMod);
     if (opts.sterilized)   total += 2;
     if (opts.healingHand)  total += 3;
     if (opts.healingTent)  total += 2;

@@ -180,6 +180,24 @@
     </div>
   {{/if}}
 
+  {{#if isAlcoholRollAdvantage}}
+    {{!-- Flat marker action — bearer rolls Endurance twice and takes the
+         best when drinking alcohol. Hook it to the Witcher race (or any
+         perk/item) to grant alcohol resistance via the AE system. --}}
+    <div class="wdm-change-field wdm-change-note">
+      <p class="hint">{{localize "WITCHER.Effect.ActionAlcoholRollAdvantageHint"}}</p>
+    </div>
+  {{/if}}
+
+  {{#if isClearHangover}}
+    {{!-- One-shot: applying this effect deletes every hangover AE on the
+         bearer. The source effect itself is left alone — let its own
+         duration / removal handle cleanup. --}}
+    <div class="wdm-change-field wdm-change-note">
+      <p class="hint">{{localize "WITCHER.Effect.ActionClearHangoverHint"}}</p>
+    </div>
+  {{/if}}
+
   <button type="button" class="wdm-change-del" data-action="deleteAction"
           title="{{localize 'WITCHER.Effect.RemoveAction'}}">
     <i class="fa-solid fa-trash"></i>

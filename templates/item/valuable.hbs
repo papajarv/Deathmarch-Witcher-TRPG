@@ -124,18 +124,18 @@
         <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Valuable name" />
       </div>
 
-      <div class="wdm-cfg-section">Subtype</div>
-      <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span title="What kind of valuable this is">Type</span>
-          <select name="system.type">
-            <option value=""        {{#if (eq subtype "")       }}selected{{/if}}>Generic</option>
-            <option value="book"    {{#if (eq subtype "book")   }}selected{{/if}}>Book</option>
-            <option value="map"     {{#if (eq subtype "map")    }}selected{{/if}}>Map</option>
-            <option value="remains" {{#if (eq subtype "remains")}}selected{{/if}}>Remains</option>
-            <option value="trophy"  {{#if (eq subtype "trophy") }}selected{{/if}}>Trophy</option>
-          </select>
-        </label>
-      </div>
+      {{#if showSubtypeSelect}}
+        <div class="wdm-cfg-section">Subtype</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span title="What kind of valuable this is">Type</span>
+            <select name="system.type">
+              <option value=""        {{#if (eq subtype "")       }}selected{{/if}}>Generic</option>
+              <option value="book"    {{#if (eq subtype "book")   }}selected{{/if}}>Book</option>
+              <option value="trophy"  {{#if (eq subtype "trophy") }}selected{{/if}}>Trophy</option>
+            </select>
+          </label>
+        </div>
+      {{/if}}
 
       {{!-- BOOK CONFIG — rich detail lives in the dialog --}}
       {{#if (eq subtype "book")}}

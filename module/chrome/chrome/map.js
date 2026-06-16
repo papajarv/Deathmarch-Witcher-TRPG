@@ -1,9 +1,9 @@
 /**
- * Map overlay — displays an image from a "Map"-typed valuable item.
+ * Map overlay — displays an image from a first-class Map item.
  *
- * Map items are valuables with system.type === "map". The image lives on
- * the first-class field system.mapImage, configured from the item sheet's
- * Map panel (cog → config → Choose image). getMapImage() in
+ * Map items are now their own Foundry Item type (`item.type === "map"`).
+ * The image lives on the schema field system.mapImage, configured from the
+ * item sheet's Map panel (cog → config → Choose image). getMapImage() in
  * sheets/valuable-map.js reads it, with legacy flag namespaces as fallback.
  *
  * Layout:

@@ -19,7 +19,7 @@ import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 function actionLabelFor(item) {
     const kind = item?.system?.kind;
     if (kind === "drink") return "Drink";
-    if (kind === "meal" || kind === "snack") return "Eat";
+    if (kind === "meal") return "Eat";
     return "Consume";
 }
 

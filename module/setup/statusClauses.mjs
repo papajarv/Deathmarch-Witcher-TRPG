@@ -311,7 +311,7 @@ export const STATUS_CLAUSES = {
      * carry different penalties. The clause just marks it for the day-tick
      * handler and carries the player-facing description. */
     hangover: {
-        description: "Hangover — recovery from a binge. Reduces REC by half your peak drunk level (floor), for a third of your peak drunk level in days (ceil).",
+        description: "Hangover — paying for last night. Your head's pounding, your stomach's a knot, and every REC roll feels like climbing out of a well. Sleep it off over the next few days.",
         hangover: { tickPerDay: true }
     },
 
@@ -325,9 +325,9 @@ export const STATUS_CLAUSES = {
      * Tier-cross stress is one-shot via `onApply.stress`.
      */
     gorged: {
-        description: "Gorged — overfull. −1 REF, −1 DEX (sluggish), +2 REC.",
+        description: "Gorged — overfull. −1 REF, −1 DEX (sluggish). The full belly powers daily recovery — counts as +2 REC for healing purposes (your displayed REC stat is unchanged).",
         stressNote: " The heavy meal clears 2 STRESS on apply.",
-        mods: { stats: { ref: -1, dex: -1 }, derived: { recBonus: 2 } },
+        mods: { stats: { ref: -1, dex: -1 } },
         onApply: { stress: -2 }
     },
     full: {
@@ -350,6 +350,15 @@ export const STATUS_CLAUSES = {
         stressNote: " +1 STRESS on entry.",
         mods: { derived: { staMaxFraction: -0.4 }, roll: { all: -1 } },
         onApply: { stress: 1 }
+    },
+
+    /* Food sickness — failed Endurance vs DC 14 after eating spoiled food.
+     * Lighter than Famished: a one-day, no-stress queasy hit. The native AE
+     * duration (24h, set at create-time by applySpoiledHazard) handles
+     * auto-clear — no clause-side ticking required. */
+    "food-sickness": {
+        description: "Food Sickness — queasy from spoiled food. Max STA reduced by one-fifth, −1 to every roll. Clears after a day's rest.",
+        mods: { derived: { staMaxFraction: -0.2 }, roll: { all: -1 } }
     }
 };
 
