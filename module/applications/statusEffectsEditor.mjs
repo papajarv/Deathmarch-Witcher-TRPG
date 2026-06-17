@@ -44,7 +44,17 @@ function buildEditableRegistry() {
         peckish:  "icons/svg/down.svg",
         hungry:   "icons/svg/degen.svg",
         famished: "icons/svg/skull.svg",
-        hangover: "icons/svg/sleep.svg"
+        hangover: "icons/svg/sleep.svg",
+        "food-sickness":          "icons/svg/poison.svg",
+        // Stress homebrew — mental break / boon presentation. Must mirror the
+        // STRESS_BREAKS / STRESS_BOONS entries in setup/statusEffects.mjs so the
+        // editor row shows the same icon the runtime registration uses.
+        "break-scared":           "icons/svg/eye.svg",
+        "break-depressive":       "icons/svg/degen.svg",
+        "break-violent":          "icons/svg/blood.svg",
+        "boon-focused":           "icons/svg/upgrade.svg",
+        "boon-determined-grit":   "icons/svg/regen.svg",
+        "boon-smile-at-death":    "icons/svg/lightning.svg"
     };
     const NAME_FALLBACKS = {
         "drunk-1": "Drunk I",   "drunk-2": "Drunk II",  "drunk-3": "Drunk III",
@@ -52,7 +62,14 @@ function buildEditableRegistry() {
         "drunk-7": "Drunk VII", "drunk-8": "Drunk VIII",
         gorged: "Gorged", full: "Full", fed: "Fed",
         peckish: "Peckish", hungry: "Hungry", famished: "Famished",
-        hangover: "Hangover"
+        hangover: "Hangover",
+        "food-sickness":         "Food Sickness",
+        "break-scared":          "Scared",
+        "break-depressive":      "Depressive",
+        "break-violent":         "Violent",
+        "boon-focused":          "Focused",
+        "boon-determined-grit":  "Determined Grit",
+        "boon-smile-at-death":   "Smile at Death"
     };
     // Clause-only ids the editor must NOT surface as editable rows:
     //   - "aim" : doc-only clause; real registrations are aim-1..3 (the bare

@@ -111,6 +111,24 @@ const FOOD_DRINK_SICKNESS = [
 ];
 const FOOD_DRINK = [...FOOD_DRINK_DRUNK, ...FOOD_DRINK_HUNGER, ...FOOD_DRINK_HANGOVER, ...FOOD_DRINK_SICKNESS];
 
+/* Stress mental breaks + selected boons. Registered as statuses so the
+ * modifier pipeline (rollMods, attackMod, statusChanges) picks them up when
+ * applied to an actor. Only the breaks with mechanical effects (Scared,
+ * Depressive, Violent) and the persistent boons (Focused, Determined Grit,
+ * Smile at Death) need entries here — flavor-only breaks (Indulgent,
+ * Paranoid, Impulsive, Selfish) and instant boons (stress clears) don't. */
+const STRESS_BREAKS = [
+    { id: "break-scared",            name: "Scared",            img: "icons/svg/eye.svg",           family: "stress-break" },
+    { id: "break-depressive",        name: "Depressive",        img: "icons/svg/degen.svg",         family: "stress-break" },
+    { id: "break-violent",           name: "Violent",           img: "icons/svg/blood.svg",         family: "stress-break" }
+];
+const STRESS_BOONS = [
+    { id: "boon-focused",            name: "Focused",           img: "icons/svg/upgrade.svg",       family: "stress-boon" },
+    { id: "boon-determined-grit",    name: "Determined Grit",   img: "icons/svg/regen.svg",         family: "stress-boon" },
+    { id: "boon-smile-at-death",     name: "Smile at Death",    img: "icons/svg/lightning.svg",     family: "stress-boon" }
+];
+const STRESS = [...STRESS_BREAKS, ...STRESS_BOONS];
+
 /* The default presentation layer (id / name / icon) before any GM override.
  * Food & Drink statuses are appended only when the homebrew toggle is on —
  * checked at buildStatusEffects() time, since registerSettings has already
@@ -119,12 +137,13 @@ const PURE_RAW_PRESENTATION = [...BASELINE, ...AIM];
 function defaultPresentation() {
     const list = [...PURE_RAW_PRESENTATION];
     if (isHomebrewEnabled?.("foodAndDrink")) list.push(...FOOD_DRINK);
+    if (isHomebrewEnabled?.("stress"))       list.push(...STRESS);
     return list;
 }
 /* Used by override-merge as "is this a default id" — we want the union of
  * RAW + every homebrew family, because turning off a toggle shouldn't make a
  * GM's custom override re-appear as a brand-new status. */
-const ALL_DEFAULT_IDS = new Set([...PURE_RAW_PRESENTATION, ...FOOD_DRINK].map(s => s.id));
+const ALL_DEFAULT_IDS = new Set([...PURE_RAW_PRESENTATION, ...FOOD_DRINK, ...STRESS].map(s => s.id));
 
 /* Attach a status entry's mechanics: stat-debuff `changes` (from the active
  * clause) and the RAW/overridden `description`, both read THROUGH the engine

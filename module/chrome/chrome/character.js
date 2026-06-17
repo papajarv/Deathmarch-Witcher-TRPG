@@ -2550,7 +2550,7 @@ function wireListeners(actor) {
    *   - Blur:    commits whatever the user typed. */
   wireOnce('input[data-tracker]', el => {
     el.addEventListener("wheel", (ev) => onTrackerWheel(ev, actor), { passive: false });
-    el.addEventListener("input", onTrackerTyping);
+    el.addEventListener("input", (ev) => onTrackerTyping(ev, actor));
     el.addEventListener("blur",  (ev) => onTrackerBlur(ev, actor));
     el.addEventListener("keydown", (ev) => {
       if (ev.key === "Enter") { ev.preventDefault(); ev.target.blur(); }
@@ -2649,20 +2649,28 @@ function onTrackerWheel(ev, actor) {
   bumpTracker(actor, ev.currentTarget.dataset.tracker, delta);
 }
 
-function onTrackerTyping(ev) {
+function onTrackerTyping(ev, actor) {
   /* Track the in-flight typed value so a re-render mid-type doesn't blow it
-   * away.  Crucially does NOT schedule a write — we wait for blur. */
+   * away.  Crucially does NOT schedule a write — we wait for blur. Uses the
+   * tracker's own clamp so negative-valued trackers (satiety lives at
+   * [−100, 125]) accept what the GM is typing instead of snapping to 0. */
   const kind = ev.currentTarget.dataset.tracker;
   const v = Number(ev.currentTarget.value);
   if (!Number.isFinite(v)) return;
-  setPendingValueOnly(`tracker.${kind}`, Math.max(0, Math.floor(v)));
+  const cfg = trackerConfig(actor, kind);
+  const clamp = cfg?.clamp ?? ((x) => Math.max(0, x));
+  setPendingValueOnly(`tracker.${kind}`, clamp(Math.floor(v)));
 }
 
 function onTrackerBlur(ev, actor) {
+  /* Same clamp story as onTrackerTyping — defer to the tracker's own clamp
+   * so the typed value commits as authored when the field allows negatives. */
   const kind = ev.currentTarget.dataset.tracker;
   const v = Number(ev.currentTarget.value);
   if (!Number.isFinite(v)) return;
-  setTrackerAbsolute(actor, kind, Math.max(0, Math.floor(v)));
+  const cfg = trackerConfig(actor, kind);
+  const clamp = cfg?.clamp ?? ((x) => Math.max(0, x));
+  setTrackerAbsolute(actor, kind, clamp(Math.floor(v)));
 }
 
 function setPendingValueOnly(key, value) {

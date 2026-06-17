@@ -40,8 +40,13 @@ import { baseItemSchema } from "./templates/base.mjs";
 const fields = foundry.data.fields;
 
 export const FOOD_KINDS = Object.freeze({
-    meal:  "WITCHER.Food.KindMeal",
-    drink: "WITCHER.Food.KindDrink"
+    meal:       "WITCHER.Food.KindMeal",
+    drink:      "WITCHER.Food.KindDrink",
+    // Raw ingredient — for cooking recipe inputs. Functionally identical to
+    // a meal at the schema level (charges, satiety, effects all valid) so
+    // a GM can still author a "raw apple" that grants a little satiety on
+    // consume; the kind tag is what flags it as a recipe-eligible input.
+    ingredient: "WITCHER.Food.KindIngredient"
 });
 
 export class FoodData extends foundry.abstract.TypeDataModel {
@@ -82,6 +87,19 @@ export class FoodData extends foundry.abstract.TypeDataModel {
                 levelJump:  new fields.NumberField({ initial: 1, integer: true, min: 0 }),
                 flavorVerb: new fields.StringField({ initial: "drinks" }),
                 effectIcon: new fields.StringField({ initial: "" })
+            }),
+            // Ingredient metadata — only meaningful when `kind === "ingredient"`.
+            // Edible: when off, consuming the raw ingredient is refused; when
+            //         on, the satiety/effects path runs as it does for meals.
+            // MakesSick: when on, consuming routes through the spoiled-food
+            //            hazard (Endurance vs DC 14; fail = Food Sickness AE).
+            //            Stacks with edible — an edible-but-sickening item
+            //            grants satiety AND triggers the save.
+            // Schema is always present (ADR 0003); the sheet hides the block
+            // for non-ingredient kinds.
+            ingredient: new fields.SchemaField({
+                edible:    new fields.BooleanField({ initial: false }),
+                makesSick: new fields.BooleanField({ initial: false })
             }),
             // Spoilage. shelfLifeDays === 0 disables tracking entirely (the
             // food is treated as "fresh forever"); a positive number is the

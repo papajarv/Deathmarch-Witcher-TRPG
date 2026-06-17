@@ -874,6 +874,147 @@ export async function adjustSatiety(actor, delta) {
     }
 }
 
+/* Famished-depth stress — reversible debt model. Each band INSIDE Famished
+ * (band 1: [−25,−1], band 2: [−50,−26], band 3: [−75,−51], band 4: [−100,−76])
+ * carries one point of "starvation debt". The actor's CURRENT depth IS the
+ * debt:
+ *   sat ≥ 0   → depth 0
+ *   sat ≥ −25 → depth 1
+ *   sat ≥ −50 → depth 2
+ *   sat ≥ −75 → depth 3
+ *   else      → depth 4
+ *
+ * Descending one band → +1 stress; ascending one band → −1 stress (relief).
+ * Going from sat 0 to sat −100 grants +4 stress; eating back to 0 refunds
+ * all 4. We persist the stored debt as a flag so we never double-grant or
+ * over-refund across sessions / multiple updates. Stress floors at 0 in
+ * setStress, so refunding more than the actor currently carries can't go
+ * negative — that's the natural behavior of an actor whose stress already
+ * came down from other sources. */
+const FAMISHED_DEBT_FLAG = "famishedDepthDebt";
+
+function famishedDepthFor(satiety) {
+    if (!Number.isFinite(satiety)) return 0;
+    if (satiety >=   0) return 0;
+    if (satiety >= -25) return 1;
+    if (satiety >= -50) return 2;
+    if (satiety >= -75) return 3;
+    return 4;
+}
+
+async function applyFamishedDepthStress(actor, prev, next) {
+    if (!actor || actor.type !== "character") return;
+    if (!game.user?.isActiveGM) return;
+    if (!isHomebrewEnabled("stress")) return;
+    if (!Number.isFinite(prev) || !Number.isFinite(next)) return;
+
+    const prevDepth = famishedDepthFor(prev);
+    const nextDepth = famishedDepthFor(next);
+    if (prevDepth === nextDepth) return;          // no band change → no stress
+
+    // Stored debt — what the system has put on the actor. Lazy init to the
+    // pre-change depth: an actor who enters tracking already deep in Famished
+    // is treated as "already owed" — we don't retroactively dump 4 stress on
+    // them, but ascending out will still refund the implicit debt.
+    const rawFlag = actor.getFlag(SYSTEM_ID, FAMISHED_DEBT_FLAG);
+    const storedDebt = Number.isFinite(Number(rawFlag)) ? Number(rawFlag) : prevDepth;
+    const delta = nextDepth - storedDebt;
+
+    try {
+        if (delta !== 0) {
+            const { grantStress } = await import("./stress.mjs");
+            await grantStress(actor, delta);
+        }
+        await actor.setFlag(SYSTEM_ID, FAMISHED_DEBT_FLAG, nextDepth);
+    } catch (err) {
+        console.warn(`${SYSTEM_ID} | famished-depth stress failed`, err);
+        return;
+    }
+    if (delta === 0) return;                       // synced silently — no chat
+
+    // Chat feedback. Color + verb flip on direction; the breakdown save card
+    // (stress.mjs) follows separately if the new total crosses WILL.
+    try {
+        const ascending = delta < 0;
+        const verb  = ascending ? "starvation eases off"        : "starvation gnaws deeper";
+        const color = ascending ? "#4a7c59"                     : "#6b3f3f";
+        const sign  = ascending ? ""                            : "+";
+        await ChatMessage.create({
+            speaker: ChatMessage.getSpeaker({ actor }),
+            content: `<div style="border-left:3px solid ${color};padding:4px 8px">
+                <b>${actor.name}</b> — ${verb} (satiety now <b>${Math.round(next)}</b>).
+                <b>${sign}${delta} stress</b>.
+            </div>`
+        });
+    } catch (err) {
+        console.warn(`${SYSTEM_ID} | famished-depth chat failed`, err);
+    }
+}
+
+/* Intermediate-tier stress walk. When a single satiety update crosses
+ * multiple hunger tier boundaries (e.g., Full → Famished in one jump), the
+ * reconciler creates only the FINAL tier's AE and so only fires that tier's
+ * onApply.stress hook — Hungry's +1 entry cost gets silently skipped. Walk
+ * the tiers strictly BETWEEN prev and next, fire `onApply.stress` for each
+ * that has `approachFrom` matching the direction of travel. Target tier
+ * (the one whose AE is created) is excluded; sated tiers (no approachFrom)
+ * are naturally skipped. */
+async function applyIntermediateTierStress(actor, prev, next) {
+    if (!actor || actor.type !== "character") return;
+    if (!game.user?.isActiveGM) return;
+    if (!isHomebrewEnabled("stress")) return;
+    if (!Number.isFinite(prev) || !Number.isFinite(next)) return;
+    const prevTier = tierForSatiety(prev);
+    const nextTier = tierForSatiety(next);
+    if (prevTier === nextTier) return;
+    const prevIdx = HUNGER_TIERS.findIndex(t => t.id === prevTier);
+    const nextIdx = HUNGER_TIERS.findIndex(t => t.id === nextTier);
+    if (prevIdx < 0 || nextIdx < 0) return;
+    // HUNGER_TIERS is ordered top-down (gorged=0 … famished=5). Descending
+    // satiety means moving to a higher index. The direction the *intermediate*
+    // tiers are approached from is "above" for descent (we're entering each
+    // from a satiety value above it) and "below" for ascent.
+    const direction = nextIdx > prevIdx ? "above" : "below";
+    const start = Math.min(prevIdx, nextIdx);
+    const end   = Math.max(prevIdx, nextIdx);
+    let stressDelta = 0;
+    const fired = [];
+    for (let i = start + 1; i < end; i++) {          // strictly between
+        const tier = HUNGER_TIERS[i];
+        if (tier.approachFrom !== direction) continue;
+        const s = Number(clauseFor(tier.id)?.onApply?.stress);
+        if (!Number.isFinite(s) || s === 0) continue;
+        stressDelta += s;
+        fired.push({ id: tier.id, s });
+    }
+    if (stressDelta === 0) return;
+    try {
+        const { grantStress } = await import("./stress.mjs");
+        await grantStress(actor, stressDelta);
+    } catch (err) {
+        console.warn(`${SYSTEM_ID} | intermediate tier stress failed`, err);
+        return;
+    }
+    try {
+        const sign  = stressDelta > 0 ? "+" : "";
+        const color = stressDelta > 0 ? "#6b3f3f" : "#4a7c59";
+        const list = fired.map(f => {
+            const cap = f.id.charAt(0).toUpperCase() + f.id.slice(1);
+            const fs  = f.s > 0 ? `+${f.s}` : String(f.s);
+            return `<b>${cap}</b> (${fs})`;
+        }).join(", ");
+        await ChatMessage.create({
+            speaker: ChatMessage.getSpeaker({ actor }),
+            content: `<div style="border-left:3px solid ${color};padding:4px 8px">
+                <b>${actor.name}</b> — passed through ${list}.
+                <b>${sign}${stressDelta} stress</b>.
+            </div>`
+        });
+    } catch (err) {
+        console.warn(`${SYSTEM_ID} | intermediate tier chat failed`, err);
+    }
+}
+
 /**
  * Swap the actor's hunger status to match satiety. Ascending into a new tier
  * (e.g. Peckish → Hungry as satiety drops) fires `onApply.stress` from the
@@ -885,6 +1026,20 @@ export async function reconcileHungerStatus(actor, { prev, next } = {}) {
     if (!actor) return;
     if (!isHomebrewEnabled("foodAndDrink")) return;
     if (!actor.isOwner && !game.user.isGM) return;
+
+    // Famished-depth stress: while satiety is below 0, every additional −25
+    // crossed on the way down grants +1 stress. Fired BEFORE the tier
+    // reconcile so it lands even when the actor stays inside Famished
+    // (e.g. −30 → −60 doesn't change tier but still crosses −50). Gated on
+    // descent so eating back up out of starvation doesn't refund the cost.
+    await applyFamishedDepthStress(actor, prev, next);
+
+    // Intermediate-tier stress: a satiety jump that crosses MULTIPLE hunger
+    // tier boundaries in one update only instantiates the final tier's AE,
+    // so the per-tier onApply.stress on intermediate tiers (Hungry's +1 on
+    // descent, etc.) would otherwise silently disappear. Walk the strictly-
+    // between tiers and fire their stress directly here.
+    await applyIntermediateTierStress(actor, prev, next);
 
     const v = Number.isFinite(next) ? next : (Number(actor.system?.satiety) || 0);
     const targetId = tierForSatiety(v);
@@ -1190,6 +1345,35 @@ export async function onConsume(item) {
     let handled = false;
 
     if (item?.type === "food") {
+        // Ingredient gate. Raw ingredients (kind === "ingredient") follow
+        // their own consume rules:
+        //   - not edible & not sickening → refuse the consume outright (you
+        //     can't just chew a raw onion at the GM's discretion).
+        //   - makesSick → route through the spoiled-food hazard regardless
+        //     of edibility; the quantity still ticks down.
+        //   - edible → proceed to the standard satiety / effects / taste
+        //     path below, exactly like a meal would.
+        // Falls through to the regular food path when kind isn't "ingredient",
+        // so meals and drinks are unaffected.
+        const isIngredient = item.system?.kind === "ingredient";
+        if (isIngredient) {
+            const edible    = !!item.system?.ingredient?.edible;
+            const makesSick = !!item.system?.ingredient?.makesSick;
+            if (!edible && !makesSick) {
+                ui?.notifications?.info?.(
+                    `${item.name} is a raw ingredient — not for eating as-is.`
+                );
+                return true;   // handled — block the default quantity decrement
+            }
+            if (makesSick && item.actor) {
+                await applySpoiledHazard(item.actor, item.name);
+                // If ALSO edible, fall through to satiety/effects/taste
+                // below. If not edible, the only side effect is the hazard
+                // plus the base quantity tick — return without handled so
+                // the base mixin still decrements the unit.
+                if (!edible) return false;
+            }
+        }
         // Spoilage gate. Fresh & stale items proceed as normal (stale just
         // appends a heads-up chip in the chat line further down). Spoiled
         // items zero out satiety, skip the taste line + alcohol roll, and
@@ -1207,15 +1391,16 @@ export async function onConsume(item) {
         // Hoisted so the already-full guard and the actual adjustment lower
         // down both see the same value without a second declaration.
         const restore = Number(item.system?.satietyRestore) || 0;
-        // Already-full guard. If the food/drink would PUSH satiety past the
-        // ceiling, refuse the consume outright — no taste line, no charge
-        // tick, no effects copied, no alcohol roll. Drinks are NOT exempt:
-        // chugging a mead with a full stomach hits the same wall. Drinks
-        // with `satietyRestore: 0` (a shot of vodka, plain water) still go
-        // through at any satiety because they don't push anything.
+        // Already-full guard. Only refuse the consume when the actor is
+        // ALREADY at the ceiling (125). If they're below 125, the consume
+        // goes through and adjustSatiety clamps to 125 — so a 20-satiety
+        // bite at 120 fills them to 125 instead of being refused for the
+        // overflow. Drinks aren't exempt (chugging a mead at max satiety
+        // still hits the wall); drinks with `satietyRestore: 0` still go
+        // through at any value because they're not pushing anything.
         if (restore > 0 && item.actor?.type === "character") {
             const cur = Number(item.actor.system?.satiety) || 0;
-            if (cur + restore > SATIETY_CEIL) {
+            if (cur >= SATIETY_CEIL) {
                 const verb = item.system?.kind === "drink" ? "drink" : "eat";
                 const more = item.system?.kind === "drink" ? "another sip" : "another bite";
                 ui?.notifications?.info?.(
@@ -1594,19 +1779,30 @@ export function registerFoodAndDrink() {
         if (changes?.system?.satiety === undefined) return;
         if (options?.wdmSatietyInternal) return;
         const user = game.users?.get(userId);
-        if (user?.isGM) return;
-        // Silently drop the satiety change rather than failing the whole
-        // update — a player edit may legitimately bundle other fields.
-        delete changes.system.satiety;
-        ui?.notifications?.warn?.("Satiety is GM-edited only.");
+        if (!user?.isGM) {
+            // Silently drop the satiety change rather than failing the whole
+            // update — a player edit may legitimately bundle other fields.
+            delete changes.system.satiety;
+            ui?.notifications?.warn?.("Satiety is GM-edited only.");
+            return;
+        }
+        // GM edit. Stash the CURRENT (pre-update) satiety value on `options`
+        // so the post-update reconcile can read it as `prev` and apply the
+        // tier-cross stress in the right direction. Foundry shares the
+        // options object across pre/update/onUpdate phases, so this is a
+        // side-channel-free handoff (no per-actor Map to leak across edits).
+        // Without this, every GM edit lands with prev=undefined → fireOnApply
+        // is false (line 917) → wdmSkipOnApply: true → the onApply.stress
+        // hook NEVER fires for GM manual edits, either gain or relief.
+        const cur = Number(actor.system?.satiety);
+        if (Number.isFinite(cur)) options.wdmSatietyPrev = cur;
     });
 
     // GM-side reconcile when the GM edits satiety directly on the sheet
     // (otherwise the hunger status doesn't refresh until the next hourly
-    // tick). The pre-update gate above ensures only GM writes reach here.
-    // We're not in the hourly-loss path so no `prev` is tracked — we just
-    // re-apply the matching tier and suppress the onApply stress hook so a
-    // manual nudge doesn't fire breakdown saves.
+    // tick). The pre-update gate above ensures only GM writes reach here
+    // AND stashes the old satiety as `options.wdmSatietyPrev` so this
+    // reconcile fires the proper direction-gated onApply stress.
     //
     // Internal writes from adjustSatiety carry options.wdmSatietyInternal so
     // we skip them here — adjustSatiety runs its own reconcile with the full
@@ -1618,7 +1814,12 @@ export function registerFoodAndDrink() {
         if (!game.user?.isActiveGM) return;
         if (actor.type !== "character") return;
         if (changes?.system?.satiety === undefined) return;
-        await reconcileHungerStatus(actor, { /* no prev → ascending=false → no stress */ });
+        const prev = Number(options?.wdmSatietyPrev);
+        const next = Number(actor.system?.satiety) || 0;
+        await reconcileHungerStatus(
+            actor,
+            Number.isFinite(prev) ? { prev, next } : { next }
+        );
     });
 }
 

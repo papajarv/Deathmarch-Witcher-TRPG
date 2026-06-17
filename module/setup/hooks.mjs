@@ -6,7 +6,7 @@
  * adding a new policy is just two lines (import + Hooks.on).
  */
 
-import { onPreUpdateActor, onUpdateActor as onStressUpdateActor } from "../mechanics/stress.mjs";
+import { onPreUpdateActor, onUpdateActor as onStressUpdateActor, registerStressCombatHooks } from "../mechanics/stress.mjs";
 import { onUpdateActorStun } from "../mechanics/stun.mjs";
 import { onUpdateContainerEquip } from "../mechanics/container-rail-sync.mjs";
 import { onCreateActiveEffectStatus } from "../mechanics/statusEngine.mjs";
@@ -34,6 +34,10 @@ export function registerHooks() {
     // WILL save when stress is raised over WILL on a character.
     Hooks.on("preUpdateActor", onPreUpdateActor);
     Hooks.on("updateActor",    onStressUpdateActor);
+    // Combat lifecycle for break sub-effects: fire banked combat-scoped
+    // breaks on combatStart, tear them down on deleteCombat. The persistent
+    // "experienced" markers are untouched by combat lifecycle.
+    registerStressCombatHooks();
 
     // Stun / Exhausted at 0 STA — auto-apply the STA-driven condition
     // (stunned, or exhausted under the house rule) whenever stamina hits 0,

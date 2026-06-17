@@ -1210,7 +1210,7 @@ async function refreshInspectionPanel() {
       if (item.type === "food" && isHomebrewEnabled("foodAndDrink")) {
         const sys = rawItem.system ?? {};
         const kind = sys.kind || "meal";
-        const KIND_LABELS = { meal: "Meal", drink: "Drink" };
+        const KIND_LABELS = { meal: "Meal", drink: "Drink", ingredient: "Ingredient" };
         const max = Number(sys.charges?.max) || 0;
         const cur = Math.max(0, Math.min(max, Number(sys.charges?.current) || 0));
         const qty = Math.max(0, Number(sys.quantity) || 0);

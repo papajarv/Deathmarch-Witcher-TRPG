@@ -297,6 +297,7 @@
     "WITCHER.Crafting.KindRecipe":       "Recipe",
     "WITCHER.Food.KindMeal":             "Meal",
     "WITCHER.Food.KindDrink":            "Drink",
+    "WITCHER.Food.KindIngredient":       "Ingredient",
     "WITCHER.Effect.TargetSatiety":            "Satiety",
     "WITCHER.Effect.TargetSatietyDrainScale":  "Satiety drain × multiplier",
     "WITCHER.Effect.TargetSatietyDrainFlat":   "Satiety drain + flat / hour",

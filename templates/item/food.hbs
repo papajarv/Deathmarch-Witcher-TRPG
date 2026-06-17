@@ -136,21 +136,45 @@
            doesn't see fields it can't actually use. Flipping it back on keeps
            previously-authored data intact. --}}
       {{#if foodAndDrinkOn}}
-        <div class="wdm-cfg-section">Portions &amp; Satiety</div>
-        <div class="wdm-cfg-grid">
-          <label class="wdm-cfg-row" title="Portions left in THIS unit. When 0, consuming drops quantity by 1 and resets to max (or deletes the item).">
-            <span>Current Portion</span>
-            <input type="number" min="0" name="system.charges.current" value="{{source.charges.current}}" />
-          </label>
-          <label class="wdm-cfg-row" title="Total portions per unit (0 = no portion ticker, consume just decrements quantity).">
-            <span>Max Portions</span>
-            <input type="number" min="0" name="system.charges.max" value="{{source.charges.max}}" />
-          </label>
-          <label class="wdm-cfg-row" title="Satiety restored per portion eaten (0–125).">
-            <span>Satiety Restore</span>
-            <input type="number" min="0" name="system.satietyRestore" value="{{source.satietyRestore}}" />
-          </label>
-        </div>
+        {{!-- Ingredients are raw inputs to cooking recipes — no portions,
+             and satiety only when the GM marks the ingredient edible. The
+             schema fields stay in place either way; the UI just hides them
+             so flipping kind back to meal/drink keeps prior data. --}}
+        {{#if isIngredient}}
+          <div class="wdm-cfg-section">Ingredient</div>
+          <div class="wdm-cfg-grid">
+            <label class="wdm-cfg-row is-checkbox" title="When ON, this ingredient can be eaten raw and restores satiety per the field below. When OFF, consuming it is refused (raw cabbage etc.).">
+              <span>Edible</span>
+              <input type="checkbox" name="system.ingredient.edible" {{#if ingredientEdible}}checked{{/if}} />
+            </label>
+            {{#if ingredientEdible}}
+              <label class="wdm-cfg-row" title="Satiety restored on consume (0–125). Only used when Edible is on.">
+                <span>Satiety Restore</span>
+                <input type="number" min="0" name="system.satietyRestore" value="{{source.satietyRestore}}" />
+              </label>
+            {{/if}}
+            <label class="wdm-cfg-row is-checkbox" title="When ON, consuming this ingredient runs the spoiled-food hazard (DC 14 Endurance; fail = Food Sickness AE for 24 h). Stacks with Edible — an edible-but-sickening ingredient grants satiety AND triggers the save.">
+              <span>Makes you sick</span>
+              <input type="checkbox" name="system.ingredient.makesSick" {{#if ingredientMakesSick}}checked{{/if}} />
+            </label>
+          </div>
+        {{else}}
+          <div class="wdm-cfg-section">Portions &amp; Satiety</div>
+          <div class="wdm-cfg-grid">
+            <label class="wdm-cfg-row" title="Portions left in THIS unit. When 0, consuming drops quantity by 1 and resets to max (or deletes the item).">
+              <span>Current Portion</span>
+              <input type="number" min="0" name="system.charges.current" value="{{source.charges.current}}" />
+            </label>
+            <label class="wdm-cfg-row" title="Total portions per unit (0 = no portion ticker, consume just decrements quantity).">
+              <span>Max Portions</span>
+              <input type="number" min="0" name="system.charges.max" value="{{source.charges.max}}" />
+            </label>
+            <label class="wdm-cfg-row" title="Satiety restored per portion eaten (0–125).">
+              <span>Satiety Restore</span>
+              <input type="number" min="0" name="system.satietyRestore" value="{{source.satietyRestore}}" />
+            </label>
+          </div>
+        {{/if}}
 
         <div class="wdm-cfg-section">Freshness</div>
         <div class="wdm-cfg-grid">

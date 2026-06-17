@@ -1984,11 +1984,17 @@ export class WitcherFoodSheet extends WitcherItemSheet {
         const src = ctx.source ?? this.item.toObject().system;
         ctx.kind = src?.kind || "meal";
         ctx.kindOptions = {
-            meal:  game.i18n.localize("WITCHER.Food.KindMeal"),
-            drink: game.i18n.localize("WITCHER.Food.KindDrink")
+            meal:       game.i18n.localize("WITCHER.Food.KindMeal"),
+            drink:      game.i18n.localize("WITCHER.Food.KindDrink"),
+            ingredient: game.i18n.localize("WITCHER.Food.KindIngredient")
         };
         ctx.kindLabel = ctx.kindOptions[ctx.kind] ?? ctx.kind;
         ctx.isDrink = ctx.kind === "drink";
+        ctx.isIngredient = ctx.kind === "ingredient";
+        // Surface the two ingredient toggles so the template can branch the
+        // Satiety field on `edible` and show the sickness toggle directly.
+        ctx.ingredientEdible    = !!src?.ingredient?.edible;
+        ctx.ingredientMakesSick = !!src?.ingredient?.makesSick;
 
         // Freshness readout. Pulled live so the sheet shows the up-to-date
         // state without an explicit re-render. Untracked items (sidebar copy

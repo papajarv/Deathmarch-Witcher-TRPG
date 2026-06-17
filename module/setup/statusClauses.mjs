@@ -359,6 +359,48 @@ export const STATUS_CLAUSES = {
     "food-sickness": {
         description: "Food Sickness — queasy from spoiled food. Max STA reduced by one-fifth, −1 to every roll. Clears after a day's rest.",
         mods: { derived: { staMaxFraction: -0.2 }, roll: { all: -1 } }
+    },
+
+    /* ── Homebrew: stress mental breaks (gated registration in
+     *      statusEffects.mjs). Mental breaks stack and persist until either
+     *      stress drops to 0 (clearBreakdownEffects strips them) or all 8
+     *      breaks are owned (character control passes to the GM). The flag
+     *      `flags.<systemId>.stressBreakdown` marks them so the stress system
+     *      can find / clear them. Breaks WITHOUT mechanical effects (Indulgent,
+     *      Paranoid, Impulsive, Selfish) live as marker AEs — no clause needed.
+     *      Breaks WITH effects (Scared, Depressive, Violent) get clauses here
+     *      so the modifier pipeline picks them up. Self-Harming applies its
+     *      1d6 damage on-create (in mechanics/stress.mjs#applyBreakdownEffect)
+     *      and persists as a marker. ─────────────────────────────────────── */
+    "break-scared": {
+        description: "Scared — gripped by uncertainty. −1 to every roll.",
+        mods: { roll: { all: -1 } }
+    },
+    "break-depressive": {
+        description: "Depressive — what's the point. −2 WILL.",
+        mods: { stats: { will: -2 } }
+    },
+    "break-violent": {
+        description: "Violent — only one answer. +1 REF for the immediate combat.",
+        mods: { stats: { ref: 1 } }
+    },
+
+    /* ── Homebrew: stress boons (nat-1 on the WILL save). Boons that grant
+     *      lasting bonuses (Focused, Smile at Death) attach a status whose
+     *      clause defines the mod; instant boons (Optimistic / Stalwart /
+     *      Determined / Unbreakable stress clears) don't need a clause and are
+     *      handled imperatively in mechanics/stress.mjs#applyBoonEffect. ── */
+    "boon-focused": {
+        description: "Focused — +1 to attack rolls for the rest of the day.",
+        mods: { roll: { attack: 1 } }
+    },
+    "boon-determined-grit": {
+        description: "Determined Grit — ignore wound penalties for 3 turns.",
+        mods: { }
+    },
+    "boon-smile-at-death": {
+        description: "Smile at Death — accepting the end made you sharper: +2 REF, ignore wound penalties, +2d6 temp HP/STA. When combat ends you're thrown back into the Death state.",
+        mods: { stats: { ref: 2 } }
     }
 };
 
