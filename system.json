@@ -2,7 +2,7 @@
     "id": "witcher-ttrpg-death-march",
     "title": "Death March: Unofficial Witcher TRPG",
     "description": "Death March is a unified, stand-alone Foundry VTT game system for tabletop play in the world of The Witcher. Death March is unofficial content provided under the Homebrew Content Policy of R. Talsorian Games and is not approved or endorsed by RTG. This content references materials that are the property of R. Talsorian Games and its licensees.",
-    "version": "1.0.0",
+    "version": "1.0",
     "authors": [
         {
             "name": "papajarv"
@@ -211,5 +211,5 @@
     "secondaryTokenAttribute": "derivedStats.sta",
     "url": "https://github.com/papajarv/Deathmarch-Witcher-TRPG",
     "manifest": "https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/download/1.0/system.json",
-    "download": "https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/latest/download/1.0/witcher-ttrpg-death-march-1.0.zip"
+    "download": "https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/download/1.0/witcher-ttrpg-death-march-1.0.zip"
 }
