@@ -1,6 +1,6 @@
 # Death March — an unofficial Witcher TRPG system for Foundry VTT
 
-Death March is a from-scratch Foundry VTT v14 system for The Witcher TRPG.
+Death March is an UNOFFICIAL from-scratch Foundry VTT v14 system for The Witcher TRPG.
 
 Playing Witcher on Foundry used to mean a clunky and barren base system plus a pile of community modules held together with hope. This is all of it in one place: the rules, the interface, the GM tools, and a good amount of homebrew.
 
