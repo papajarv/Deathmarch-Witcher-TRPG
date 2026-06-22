@@ -45,6 +45,7 @@ const BASELINE = [
     { id: "hallucinating",name: "WITCHER.Status.Hallucinating",img: "icons/svg/stoned.svg"      },
     { id: "paralyzed",    name: "WITCHER.Status.Paralyzed",    img: "icons/svg/paralysis.svg"   },
     { id: "restrained",   name: "WITCHER.Status.Restrained",   img: "icons/svg/net.svg"         },
+    { id: "entangled",    name: "WITCHER.Status.Entangled",    img: "icons/svg/net.svg"         },
     { id: "unconscious",  name: "WITCHER.Status.Unconscious",  img: "icons/svg/unconscious.svg" },
     { id: "dead",         name: "WITCHER.Status.Dead",         img: "icons/svg/skull.svg"       },
     { id: "poisoned",     name: "WITCHER.Status.Poisoned",     img: "icons/svg/poison.svg"      },
@@ -60,6 +61,13 @@ const BASELINE = [
     { id: "nausea",       name: "WITCHER.Status.Nausea",       img: "icons/svg/degen.svg"       },
     // Fast Draw (Core p.165): a pure marker read by the attack/cast flow.
     { id: "fastDraw",     name: "WITCHER.Status.FastDraw",     img: "icons/svg/upgrade.svg"     }
+    /* No `bloodied` status — the wounded indicator is a PIXI visual
+     * treatment (red inner-glow + blood streaks on the token mesh) that
+     * does NOT obscure the portrait. See policy/health-state-visuals.mjs.
+     * Dying uses the same PIXI path — grayscale mesh + ~20%-alpha skull
+     * glyph centered, also non-obscuring. The canonical `dead` status
+     * stays in the baseline above for MANUAL application (NPC killed by
+     * narrative fiat, instant-kill abilities, etc.). */
 ];
 
 // Aim (Core p.152): the full-round Aim action grants +1 to your next ranged
@@ -82,10 +90,14 @@ const AIM = [1, 2, 3].map(n => ({
  * carrying a status can be applied if the status isn't registered). The
  * setting is requiresReload, so toggling rebuilds CONFIG.statusEffects from
  * a clean init — no live editing of the registry needed. */
+/* Status icon directory — local SVGs shipped in /assets/icons/statuses/.
+ * Filenames mirror the status id so the registry stays single-source: edit
+ * the id, rename the SVG, both stay in sync. */
+const ICON_DIR = "systems/witcher-ttrpg-death-march/assets/icons/statuses";
 const FOOD_DRINK_DRUNK = [1,2,3,4,5,6,7,8].map(n => ({
     id:    `drunk-${n}`,
     name:  `Drunk ${["", "I","II","III","IV","V","VI","VII","VIII"][n]}`,
-    img:   n >= 7 ? "icons/svg/skull.svg" : "icons/svg/tankard.svg",
+    img:   `${ICON_DIR}/drunk-${n}.svg`,
     family: "drunk",
     tier:   n
 }));
@@ -95,19 +107,19 @@ const FOOD_DRINK_DRUNK = [1,2,3,4,5,6,7,8].map(n => ({
  * registered — those names still show as TIER LABELS on the satiety widget
  * via tierForSatiety, just without an active effect. */
 const FOOD_DRINK_HUNGER = [
-    { id: "gorged",   name: "Gorged",   img: "icons/svg/regen.svg", family: "hunger", tier: 5 },
-    { id: "peckish",  name: "Peckish",  img: "icons/svg/down.svg",  family: "hunger", tier: 2 },
-    { id: "hungry",   name: "Hungry",   img: "icons/svg/degen.svg", family: "hunger", tier: 1 },
-    { id: "famished", name: "Famished", img: "icons/svg/skull.svg", family: "hunger", tier: 0 }
+    { id: "gorged",   name: "Gorged",   img: `${ICON_DIR}/gorged.svg`,   family: "hunger", tier: 5 },
+    { id: "peckish",  name: "Peckish",  img: `${ICON_DIR}/peckish.svg`,  family: "hunger", tier: 2 },
+    { id: "hungry",   name: "Hungry",   img: `${ICON_DIR}/hungry.svg`,   family: "hunger", tier: 1 },
+    { id: "famished", name: "Famished", img: `${ICON_DIR}/famished.svg`, family: "hunger", tier: 0 }
 ];
 const FOOD_DRINK_HANGOVER = [
-    { id: "hangover", name: "Hangover", img: "icons/svg/sleep.svg", family: "hangover" }
+    { id: "hangover", name: "Hangover", img: `${ICON_DIR}/hangover.svg`, family: "hangover" }
 ];
 /* Food sickness — applied when an actor eats SPOILED food and fails the
  * Endurance save (mechanics/foodAndDrink.mjs#applySpoiledHazard). 1-day
  * native duration; cleared automatically on expiry. */
 const FOOD_DRINK_SICKNESS = [
-    { id: "food-sickness", name: "Food Sickness", img: "icons/svg/poison.svg", family: "sickness" }
+    { id: "food-sickness", name: "Food Sickness", img: `${ICON_DIR}/food-sickness.svg`, family: "sickness" }
 ];
 const FOOD_DRINK = [...FOOD_DRINK_DRUNK, ...FOOD_DRINK_HUNGER, ...FOOD_DRINK_HANGOVER, ...FOOD_DRINK_SICKNESS];
 
@@ -118,14 +130,25 @@ const FOOD_DRINK = [...FOOD_DRINK_DRUNK, ...FOOD_DRINK_HUNGER, ...FOOD_DRINK_HAN
  * Smile at Death) need entries here — flavor-only breaks (Indulgent,
  * Paranoid, Impulsive, Selfish) and instant boons (stress clears) don't. */
 const STRESS_BREAKS = [
-    { id: "break-scared",            name: "Scared",            img: "icons/svg/eye.svg",           family: "stress-break" },
-    { id: "break-depressive",        name: "Depressive",        img: "icons/svg/degen.svg",         family: "stress-break" },
-    { id: "break-violent",           name: "Violent",           img: "icons/svg/blood.svg",         family: "stress-break" }
+    { id: "break-indulgent",         name: "Indulgent",         img: `${ICON_DIR}/break-indulgent.svg`,    family: "stress-break" },
+    { id: "break-paranoid",          name: "Paranoid",          img: `${ICON_DIR}/break-paranoid.svg`,     family: "stress-break" },
+    { id: "break-scared",            name: "Scared",            img: `${ICON_DIR}/break-scared.svg`,       family: "stress-break" },
+    { id: "break-depressive",        name: "Depressive",        img: `${ICON_DIR}/break-depressive.svg`,   family: "stress-break" },
+    { id: "break-impulsive",         name: "Impulsive",         img: `${ICON_DIR}/break-impulsive.svg`,    family: "stress-break" },
+    { id: "break-self-harming",      name: "Self-Harming",      img: `${ICON_DIR}/break-self-harming.svg`, family: "stress-break" },
+    { id: "break-selfish",           name: "Selfish",           img: `${ICON_DIR}/break-selfish.svg`,      family: "stress-break" },
+    { id: "break-violent",           name: "Violent",           img: `${ICON_DIR}/break-violent.svg`,      family: "stress-break" }
 ];
 const STRESS_BOONS = [
-    { id: "boon-focused",            name: "Focused",           img: "icons/svg/upgrade.svg",       family: "stress-boon" },
-    { id: "boon-determined-grit",    name: "Determined Grit",   img: "icons/svg/regen.svg",         family: "stress-boon" },
-    { id: "boon-smile-at-death",     name: "Smile at Death",    img: "icons/svg/lightning.svg",     family: "stress-boon" }
+    { id: "boon-stoic",              name: "Stoic",             img: `${ICON_DIR}/boon-stoic.svg`,           family: "stress-boon" },
+    { id: "boon-optimistic",         name: "Optimistic",        img: `${ICON_DIR}/boon-optimistic.svg`,      family: "stress-boon" },
+    { id: "boon-hopeful",            name: "Hopeful",           img: `${ICON_DIR}/boon-hopeful.svg`,         family: "stress-boon" },
+    { id: "boon-defiant",            name: "Defiant",           img: `${ICON_DIR}/boon-defiant.svg`,         family: "stress-boon" },
+    { id: "boon-focused",            name: "Focused",           img: `${ICON_DIR}/boon-focused.svg`,         family: "stress-boon" },
+    { id: "boon-stalwart",           name: "Stalwart",          img: `${ICON_DIR}/boon-stalwart.svg`,        family: "stress-boon" },
+    { id: "boon-determined-grit",    name: "Determined Grit",   img: `${ICON_DIR}/boon-determined-grit.svg`, family: "stress-boon" },
+    { id: "boon-unbreakable",        name: "Unbreakable",       img: `${ICON_DIR}/boon-unbreakable.svg`,     family: "stress-boon" },
+    { id: "boon-smile-at-death",     name: "Smile at Death",    img: `${ICON_DIR}/boon-smile-at-death.svg`,  family: "stress-boon" }
 ];
 const STRESS = [...STRESS_BREAKS, ...STRESS_BOONS];
 
@@ -172,12 +195,23 @@ export function buildStatusEffects() {
     for (const s of defaultPresentation()) {
         const o = override[s.id];
         if (o?.removed) continue;
-        list.push(finishStatusEntry({ ...s, name: o?.name ?? s.name, img: o?.img ?? s.img }));
+        list.push(finishStatusEntry({
+            ...s,
+            name: o?.name ?? s.name,
+            img:  o?.img  ?? s.img,
+            // GM-set per-status rim color — overrides the family default in the
+            // chrome dock badge. Undefined → no override (inherit family / RAW).
+            ...(o?.rimColor ? { rimColor: o.rimColor } : {})
+        }));
     }
     for (const [id, o] of Object.entries(override)) {
         if (ALL_DEFAULT_IDS.has(id) || !o || o.removed) continue;
         const name = o.name || id;
-        list.push(finishStatusEntry({ id, name, label: name, img: o.img || DEFAULT_STATUS_ICON }));
+        list.push(finishStatusEntry({
+            id, name, label: name,
+            img: o.img || DEFAULT_STATUS_ICON,
+            ...(o.rimColor ? { rimColor: o.rimColor } : {})
+        }));
     }
     return list;
 }

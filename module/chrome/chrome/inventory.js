@@ -139,7 +139,10 @@ const CURRENCY_LABEL = { bizant: "B", ducat: "D", lintar: "L", floren: "F", crow
 function isParchmentLike(item) {
   if (!item) return false;
   if (item.type === "note" || item.type === "diagrams") return true;
-  if (item.type === "map") return true;
+  if (item.type === "map")  return true;
+  if (item.type === "book") return true;   // first-class book item type
+  // Legacy valuable-with-book-subtype — still matches until migration v5
+  // rewrites the document to type:"book".
   if (item.type === "valuable") {
     const sub = String(item.system?.type ?? "").trim().toLowerCase().replace(/[\s_]+/g, "-");
     if (sub === "book") return true;
@@ -1180,8 +1183,12 @@ async function refreshInspectionPanel() {
         };
       }
 
-      // Book valuables: per-reader progress, shown above the description.
-      if (item.type === "valuable" && item.system?.type === "book" && actor) {
+      // Books: per-reader progress, shown above the description. Covers
+      // both the first-class `book` item type AND the legacy valuable
+      // subtype that pre-dates the type promotion.
+      const isBookLike = item.type === "book"
+        || (item.type === "valuable" && item.system?.type === "book");
+      if (isBookLike && actor) {
         try {
           const studyMod = await import("/systems/witcher-ttrpg-death-march/module/chrome/sheets/valuable-study.js");
           bookMeta = studyMod.getBookProgress?.(item, actor) ?? null;
@@ -1281,7 +1288,10 @@ async function refreshInspectionPanel() {
         socketedQualityList
       }
     );
-    panel.innerHTML = `<div class="wou-inspection-body">${html}</div>`;
+    /* Tag the inspection body with the item id so the broken-weapon
+     * decorator (policy/broken-weapon-indicator.mjs) greys the icon
+     * + appends (BROKEN) to the name when this item is broken. */
+    panel.innerHTML = `<div class="wou-inspection-body" data-item-id="${escapeAttr(item.id)}">${html}</div>`;
 
     // Legacy post-process hooks — they look for selectors in the
     // old-system template that don't exist in our new partial. Wrap
@@ -1977,7 +1987,11 @@ function renderContainerWeaponOverlay(weapons) {
       : `<i class="wou-cw-art fa-solid ${fallbackIconFor(wpn.type)}"></i>`;
     const rarity  = String(wpn.system?.availability ?? "").toLowerCase();
     const rarAttr = rarity ? ` data-rarity="${escapeAttr(rarity)}"` : "";
-    return `<span class="wou-cw-clip"${rarAttr} title="${escapeAttr(wpn.name)}">${art}</span>`;
+    /* data-item-id lets the broken-weapon decorator find these clips
+     * (it scans [data-item-id] universally). Without this, a broken
+     * weapon inside a container would NEVER show as broken on the
+     * container's weapon-clip overlay. */
+    return `<span class="wou-cw-clip" data-item-id="${escapeAttr(wpn.id)}"${rarAttr} title="${escapeAttr(wpn.name)}">${art}</span>`;
   }).join("");
   return `<div class="wou-container-weapons">${clips}</div>`;
 }
@@ -2353,7 +2367,9 @@ function valuableSubtypeCornerHTML(item) {
   if (item.type === "map") {
     return `<span class="wou-slot-subtype" data-subtype="map" title="Map"><i class="fa-solid fa-map"></i></span>`;
   }
-  if (item.type === "valuable" && item.system?.type === "book") {
+  // Books — first-class type OR legacy valuable subtype (pre-migration).
+  if (item.type === "book"
+      || (item.type === "valuable" && item.system?.type === "book")) {
     return `<span class="wou-slot-subtype" data-subtype="book" title="Book"><i class="fa-solid fa-book"></i></span>`;
   }
   return "";
@@ -2557,6 +2573,7 @@ function fallbackIconFor(type) {
     case "enhancement": return "fa-gem";
     case "die":         return "fa-dice";
     case "valuable":    return "fa-coins";
+    case "book":        return "fa-book";
     case "map":         return "fa-map";
     case "remains":     return "fa-skull";
     case "food":        return "fa-utensils";
@@ -4929,21 +4946,26 @@ export async function sheathWeapon(actor, item) {
     return;
   }
 
-  // Just clear the equipped flag — leave `hands` alone so the weapon
-  // remembers its preferred hand for the next Draw.
-  if (item.system?.equipped) {
-    await item.update({ "system.equipped": false });
-  }
-
+  /* Single item update for both equipped/isStored — splitting them caused
+   * two update broadcasts (and two re-render passes on inventory listeners)
+   * with brief inconsistent state between them, which made it look like the
+   * weapon "disappeared" mid-flight. Keep `hands` alone so the weapon
+   * remembers its preferred hand for the next Draw. */
   if (target) {
     const content = target.system?.content ?? [];
     if (!content.includes(item.uuid) && !content.includes(item.id)) {
       await target.update({ "system.content": [...content, item.uuid] });
     }
-    await item.update({ "system.isStored": true });
-    ui?.notifications?.info?.(`Sheathed ${item.name} in ${target.name}.`);
+    await item.update({ "system.equipped": false, "system.isStored": true });
+    /* Surface the destination visibly — the previous toast was easy to miss
+     * and the weapon disappearing from the inventory grid (because stored
+     * items are nested inside their container) reads as "lost". */
+    ui?.notifications?.info?.(`Sheathed ${item.name} in ${target.name}. Open ${target.name} to find it.`);
   } else {
-    ui?.notifications?.info?.(`Sheathed ${item.name}.`);
+    if (item.system?.equipped) {
+      await item.update({ "system.equipped": false });
+    }
+    ui?.notifications?.info?.(`Sheathed ${item.name}. (No railed container — it's loose in your inventory.)`);
   }
 
   // Sheathing a weapon is a single action (Core p.151), same as drawing. Note

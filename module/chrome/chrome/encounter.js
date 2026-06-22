@@ -37,6 +37,16 @@ function assignedActorInCombat() {
 function assignedActorHasEquippedWeapon() {
   const actor = getAssignedActor();
   if (!actor) return false;
+  /* Monsters: their inline attacks (system.combat.attacks) are the
+   * equivalent of "always equipped" — a Drowner doesn't unsheathe its
+   * claws. Treat ANY inline attack as a permanently-armed monster so
+   * the dock enters war mode and the attack row is visible without
+   * needing an active combat. */
+  if (actor.type === "monster"
+      && Array.isArray(actor.system?.combat?.attacks)
+      && actor.system.combat.attacks.length > 0) {
+    return true;
+  }
   return actor.items?.some?.(i => i.type === "weapon" && i.system?.equipped) ?? false;
 }
 

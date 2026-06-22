@@ -1,0 +1,45 @@
+{{!-- Stripped-down debug build. Apply uses data-action so V2 action
+      handler is guaranteed to fire (not relying on form-submit
+      machinery). --}}
+
+<div class="wdm-rpc-body">
+
+  <p class="wdm-rpc-hint">
+    Drag the image to pan, wheel or slider to zoom. The shaded area outside
+    the dashed circle becomes transparent on Apply, so Foundry's ring shows
+    around it.
+  </p>
+
+  <div class="wdm-rpc-stage" data-stage style="width:{{stagePx}}px;height:{{stagePx}}px;">
+    {{#if sourceImage}}
+      <img class="wdm-rpc-image" data-img src="{{sourceImage}}" alt="" draggable="false" />
+    {{else}}
+      <div class="wdm-rpc-empty">No portrait set on this actor.</div>
+    {{/if}}
+    <svg class="wdm-rpc-mask" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <mask id="wdm-rpc-mask-cut">
+          <rect width="100" height="100" fill="white"/>
+          <circle cx="50" cy="50" r="32.5" fill="black"/>
+        </mask>
+      </defs>
+      <rect width="100" height="100" fill="rgba(0,0,0,0.55)" mask="url(#wdm-rpc-mask-cut)"/>
+      <circle cx="50" cy="50" r="32.5" fill="none" stroke="rgba(200,168,120,0.85)"
+              stroke-width="0.4" stroke-dasharray="1.2 1.2"/>
+    </svg>
+  </div>
+
+  <div class="wdm-rpc-controls">
+    <label class="wdm-rpc-zoom">
+      <span>Zoom</span>
+      <input type="range" min="0.2" max="4" step="0.01" value="1" data-zoom />
+    </label>
+    <button type="button" data-action="reset">
+      <i class="fa-solid fa-arrow-rotate-left"></i> Reset
+    </button>
+    <button type="button" data-action="apply">
+      <i class="fa-solid fa-check"></i> Apply Crop
+    </button>
+  </div>
+
+</div>

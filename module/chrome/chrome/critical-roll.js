@@ -32,6 +32,7 @@
  */
 
 import { isAdrenalineEnabled } from "../../api/adrenaline.mjs";
+import { appendAttackResult } from "../../documents/mixins/weaponAttackMixin.mjs";
 
 /**
  * Scoring a critical banks 1 adrenaline for the attacker (RAW Core p.175-176:
@@ -310,16 +311,43 @@ async function applyCritFromButton(button) {
         actor = await promptPick(controlled.map(t => t.actor), controlled[0].actor.id);
         if (!actor) return;
     } else {
-        const owned = game.actors.contents
-            .filter(a => a.isOwner && ['character', 'monster'].includes(a.type))
+        /* Fallback: prefer canvas TOKENS over base actors so unlinked /
+         * synthetic-token actors resolve to the right document (writing the
+         * wound to the base actor would land on every other token of the same
+         * base instead of the specific token instance). De-dupe by actor.uuid
+         * (one token per actor uuid is enough for the picker). */
+        const seen = new Set();
+        const tokenActors = (canvas.tokens?.placeables ?? [])
+            .map(t => t.actor)
+            .filter(a => {
+                if (!a?.isOwner) return false;
+                if (!['character', 'monster'].includes(a.type)) return false;
+                if (seen.has(a.uuid)) return false;
+                seen.add(a.uuid);
+                return true;
+            })
             .sort((a, b) => a.name.localeCompare(b.name));
-        if (owned.length === 1) {
-            actor = owned[0];
-        } else if (owned.length >= 2) {
-            actor = await promptPick(owned, game.user.character?.id);
+
+        if (tokenActors.length === 1) {
+            actor = tokenActors[0];
+        } else if (tokenActors.length >= 2) {
+            actor = await promptPick(tokenActors, game.user.character?.id);
             if (!actor) return;
         } else {
+            /* Last resort — no tokens on the canvas the user owns. Fall back
+             * to the user's assigned character (a base actor), and only if
+             * that's missing too, to the owned-actor list. */
             actor = game.user.character;
+            if (!actor) {
+                const owned = game.actors.contents
+                    .filter(a => a.isOwner && ['character', 'monster'].includes(a.type))
+                    .sort((a, b) => a.name.localeCompare(b.name));
+                if (owned.length === 1) actor = owned[0];
+                else if (owned.length >= 2) {
+                    actor = await promptPick(owned, game.user.character?.id);
+                    if (!actor) return;
+                }
+            }
         }
     }
     if (!actor) {
@@ -360,6 +388,100 @@ async function applyCritFromButton(button) {
     } catch (err) {
         console.warn('witcher-ttrpg-death-march | crit-wound stun save failed', err);
     }
+}
+
+/**
+ * Programmatic crit-wound application — used by the auto-damage pipeline
+ * when crit severity is detected.  Picks lesser/greater (1d6 for head/torso,
+ * default lesser for limbs), resolves the wound from the assigned compendium,
+ * embeds it on the target, then routes the resulting Stun save through the
+ * same prompt the dock uses.
+ *
+ * `locationKey` is the ATTACK_LOCATIONS key (head|torso|leftArm|rightArm|
+ * leftLeg|rightLeg|tailWing). Unknown / tailWing locations skip silently —
+ * the wound table is human-anatomy only per RAW. */
+function escWoundAttr(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+export async function autoApplyCriticalWound({ actor, severity, locationKey, attackMessageUuid = null }) {
+    if (!actor || !severity) return null;
+    // Map ATTACK_LOCATIONS keys to wound-table region keys. Sided limbs
+    // pass through; the wound's stored `location` keeps the side stamp.
+    const loc = locationKey;
+    const region = locRegion(loc);
+    if (!region || region === "tailWing") return null;     // no human wound entry for tail/wing
+
+    // Lesser vs greater: head/torso roll 1d6 (RAW Aimed Criticals sidebar),
+    // limbs only have one variant — pick lesser by convention.
+    let lesser = true;
+    if (region === "head" || region === "torso") {
+        const roll = await new Roll("1d6").evaluate();
+        lesser = roll.total <= 4;
+    }
+
+    const { pack, entry } = await resolveWoundEntry(loc, severity, lesser);
+    if (!pack || !entry) {
+        ui.notifications?.warn(`No ${severity} ${region} wound found — set the Critical Wounds compendium in system settings.`);
+        return null;
+    }
+    const doc = await pack.getDocument(entry._id);
+    const data = doc.toObject();
+    delete data._id;
+    if (Array.isArray(data.effects)) for (const e of data.effects) delete e._id;
+    if (loc) data.system.location = loc;
+    data.system.criticalLevel = severity;
+    data.system.lesserEffect = lesser;
+
+    /* Stamp the attack message UUID on the wound item so the stress
+     * chain (onCreateCriticalWoundStress in mechanics/stress.mjs) can
+     * forward it through runStressCheck → chat-poster → appendAttackResult,
+     * folding the stress save / break result into the SAME collapsible
+     * damage block on the attack card instead of posting separately. */
+    if (attackMessageUuid) {
+        foundry.utils.setProperty(data, "flags.witcher-ttrpg-death-march.attackMessageUuid", attackMessageUuid);
+    }
+    const [created] = await actor.createEmbeddedDocuments("Item", [data]);
+    const woundLine = `<div class="wdm-attack-crit-wound"><i class="fa-solid fa-skull-crossbones"></i> <strong>${escWoundAttr(actor.name)}</strong> suffers <strong>${escWoundAttr(entry.name)}</strong> <span class="wdm-attack-crit-wound-sev">(${severity}${lesser ? "" : " — greater"})</span></div>`;
+    const attackMsg = attackMessageUuid ? await fromUuid(attackMessageUuid) : null;
+    if (attackMsg) {
+        /* Fold into the attack card's collapsible damage-result block
+         * AND tag the crit wound's name onto the one-liner summary
+         * chip. Uses the static import above (the previous dynamic
+         * `await import(...)` from inside this function was the source
+         * of "summary chip never appears" — dynamic relative imports
+         * silently fail in some Foundry contexts; the catch block fell
+         * back to a plain content append, which left the summary
+         * un-updated). */
+        try {
+            /* Prefix with the target's name so the summary chip reads
+             * "Vlad: Stabbed Lung" — without the prefix it looks like
+             * the attacker took the wound (everything else in the
+             * summary line up to this point is the attacker's POV). */
+            await appendAttackResult(attackMsg, {
+                fragment: woundLine,
+                summaryAdd: { label: `${actor.name}: ${entry.name}`, kind: "crit", icon: "fa-skull-crossbones" }
+            });
+        } catch (err) {
+            console.warn("witcher-ttrpg-death-march | crit-wound appendAttackResult failed", err);
+            await attackMsg.update({ content: String(attackMsg.content ?? "") + woundLine });
+        }
+    } else {
+        await ChatMessage.create({
+            speaker: ChatMessage.getSpeaker({ actor }),
+            content: woundLine,
+            flags: { "witcher-ttrpg-death-march": { category: "combat" } }
+        });
+    }
+
+    // RAW Core p.159: every critical wound forces a Stun save. Call
+    // rollStunSave directly (no interactive prompt) so the auto-flow
+    // doesn't block — the save auto-applies Stunned on fail and clears
+    // it on a pass. GM can re-roll with situational mod manually if needed.
+    try { await actor.rollStunSave?.({ modifier: 0 }); }
+    catch (err) { console.warn("witcher-ttrpg-death-march | crit-wound stun save failed", err); }
+
+    return created;
 }
 
 /* ============================================================================

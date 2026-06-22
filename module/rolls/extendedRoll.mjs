@@ -29,8 +29,17 @@ async function rollOneD10() {
 /**
  * Roll a Witcher-style d10 chain.
  * Returns { total, dice: [{ value, kind }], fumble } where kind ∈
- * "initial" | "explode" | "fumble". A natural 1 sets `fumble` true but does
- * NOT implode the die (no downward explosion) — it stays at 1.
+ * "initial" | "explode" | "fumble" | "implode".
+ *
+ *   nat 10 → explode UP: roll another d10, ADD, repeat on 10
+ *   nat  1 → fumble + implode DOWN: roll another d10, SUBTRACT, repeat
+ *            on 10. The implode chain mirrors the explode chain so a
+ *            string of 10s on the implode side keeps draining the total
+ *            (matches the Witcher TRPG RAW: a fumble's downward die
+ *            also explodes — Core p.21).
+ *
+ * Example: nat 1 with +15 modifier → die = 1 (running total 1), implode
+ * rolls a 5 → total becomes 1 - 5 = -4 → final = -4 + 15 = 11.
  */
 export async function rollWitcherD10() {
     const dice = [];
@@ -47,9 +56,15 @@ export async function rollWitcherD10() {
             total += next;
         } while (next === 10);
     } else if (first === 1) {
-        // Fumble: flag it, but leave the die at 1 (no roll-and-subtract).
+        // Fumble + implode chain (downward explode).
         dice.push({ value: first, kind: "fumble" });
         fumble = true;
+        let next;
+        do {
+            next = await rollOneD10();
+            dice.push({ value: next, kind: "implode" });
+            total -= next;
+        } while (next === 10);
     } else {
         dice.push({ value: first, kind: "initial" });
     }
@@ -93,9 +108,13 @@ async function evalModifier(modifierExpr, rollData) {
 function buildChatContent({ dieTotal, modifierTotal, finalTotal, dice, config, fumble }) {
     const chain = dice.map(d => {
         const cls = d.kind === "explode" ? "wdm-die-explode"
+                  : d.kind === "implode" ? "wdm-die-implode"
                   : d.kind === "fumble"  ? "wdm-die-fumble"
                   :                        "wdm-die";
-        return `<span class="${cls}">${d.value}</span>`;
+        /* Prefix implode dice with "−" so the math in the chain reads
+         * as "1 − 5" instead of an ambiguous "1 5". */
+        const value = d.kind === "implode" ? `−${d.value}` : String(d.value);
+        return `<span class="${cls}">${value}</span>`;
     }).join(" ");
 
     let result = `
@@ -150,10 +169,24 @@ export async function extendedRoll(formula, messageData = {}, config = {}) {
     let dice = [];
     let fumble = false;
     if (hasDie) {
-        const rolled = await rollWitcherD10();
-        dieTotal = rolled.total;
-        dice = rolled.dice;
-        fumble = rolled.fumble;
+        /* config.flat → roll a flat d10 with NO explode and NO fumble
+         * flag. Used for Stun/Death saves (Core p.47, p.162): they're
+         * roll-under saves where a natural 10 exploding past the
+         * threshold is just a guaranteed failure (already implicit in
+         * the comparison), and a natural 1 isn't a "fumble" — it's
+         * just a low roll that almost certainly passes. The dice
+         * chain rendering treats this single die as an "initial". */
+        if (config.flat) {
+            const v = await rollOneD10();
+            dieTotal = v;
+            dice = [{ value: v, kind: "initial" }];
+            fumble = false;
+        } else {
+            const rolled = await rollWitcherD10();
+            dieTotal = rolled.total;
+            dice = rolled.dice;
+            fumble = rolled.fumble;
+        }
     }
 
     const modifierTotal = await evalModifier(modifier, config.rollData);
@@ -165,13 +198,38 @@ export async function extendedRoll(formula, messageData = {}, config = {}) {
     /* messageMode (v14 visibility key: public|gm|blind|self|ic|emote) routes
      * the card to whispers/blind. Omit it for the default public card. */
     const createOpts = messageData.messageMode ? { messageMode: messageData.messageMode } : {};
-    await ChatMessage.create({
+    /* Caller-supplied flags persist on the chat message — used by the
+     * attack→defense engagement linkage so the damage card can find the
+     * matching defense roll by an engagementId flag.  `flags` may be a
+     * plain object OR a function `(result) => flagObj` that runs AFTER
+     * the roll evaluates so callers can stamp the rolled total. */
+    const msgPayload = {
         speaker: messageData.speaker ?? ChatMessage.getSpeaker(),
         content: `${flavor}${body}`,
         rolls:   []
-    }, createOpts);
+    };
+    if (messageData.flags) {
+        const f = (typeof messageData.flags === "function")
+            ? messageData.flags({ total: finalTotal, dieTotal, modifierTotal, dice, fumble })
+            : messageData.flags;
+        if (f) msgPayload.flags = f;
+    }
 
-    if (fumble) ui.notifications?.warn(game.i18n.localize("WITCHER.Roll.FumbleWarning"));
+    /* `suppressMessage` lets defense flows compute + return the roll
+     * without posting a standalone chat card — the attacker's flow then
+     * folds defense info into the unified attack chat card. The body
+     * HTML is still returned so the caller can render it inline. */
+    const created = messageData.suppressMessage
+        ? null
+        : await ChatMessage.create(msgPayload, createOpts);
 
-    return { total: finalTotal, dieTotal, modifierTotal, dice, fumble };
+    /* No standalone ui.notifications warning on fumble — the fumble is
+     * already prominently rendered in the attack card (red FUMBLE
+     * banner above the verdict) and mirrored into the chat preview.
+     * The separate top-of-strip warning was overlapping the chat
+     * preview pinned in the same screen area. */
+
+    // Expose the created message so callers can patch follow-up info
+    // (e.g. the attack-card verdict appended once defense resolves).
+    return { total: finalTotal, dieTotal, modifierTotal, dice, fumble, message: created, body, flavor };
 }

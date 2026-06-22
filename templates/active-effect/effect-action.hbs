@@ -198,6 +198,29 @@
     </div>
   {{/if}}
 
+  {{#if isStressShield}}
+    {{!-- One-shot: on apply, statusEngine parses Value as a Roll formula
+         (dice or flat number) and writes the total into the AE's
+         stressAbsorbPoints / stressAbsorbSources flag. The stress preUpdate
+         gate consumes the flag on every raise. The AE persists with no
+         native timer until the buffer is depleted, then deletes itself. --}}
+    <div class="wdm-change-field">
+      <label>{{localize "WITCHER.Effect.ActionStressShieldKind"}}</label>
+      <select name="{{kindPath}}">
+        <option value="points"  {{#if (eq kind "points")}}selected{{/if}}>{{localize "WITCHER.Effect.ActionStressShieldKindPoints"}}</option>
+        <option value="sources" {{#if (eq kind "sources")}}selected{{/if}}>{{localize "WITCHER.Effect.ActionStressShieldKindSources"}}</option>
+      </select>
+    </div>
+    <div class="wdm-change-field">
+      <label>{{localize "WITCHER.Effect.ActionStressShieldValue"}}</label>
+      <input type="text" name="{{dicePath}}" value="{{dice}}" placeholder="1d6 / 2d6 / 3" spellcheck="false"
+             title="{{localize 'WITCHER.Effect.ActionStressShieldValueHint'}}" />
+    </div>
+    <div class="wdm-change-field wdm-change-note">
+      <p class="hint">{{localize "WITCHER.Effect.ActionStressShieldHint"}}</p>
+    </div>
+  {{/if}}
+
   <button type="button" class="wdm-change-del" data-action="deleteAction"
           title="{{localize 'WITCHER.Effect.RemoveAction'}}">
     <i class="fa-solid fa-trash"></i>

@@ -16,7 +16,7 @@
  */
 
 const SYSTEM_ID = "witcher-ttrpg-death-march";
-const CURRENT_VERSION = 4;
+const CURRENT_VERSION = 5;
 
 const OUI = "witcher-overhaul-ui";
 const STRESS = "witcher-stress-mechanic";
@@ -86,6 +86,16 @@ export async function runLegacyMigration() {
     // that only ever had the SYSTEM_ID bag.)
     if (current < 4) {
         tally(await safe(() => migrateValuableFlagBagAcrossWorld(), "valuable flag-bag → system"));
+    }
+
+    // v5: book promotion. `book` used to be a valuable subtype
+    // (`valuable + system.type === "book"`). It's now a first-class item
+    // type with its own data model + sheet + template. Rewrite every legacy
+    // valuable-book on the world to type:"book" while preserving the
+    // bookConfig payload and the rest of the system data. Items in
+    // compendia and on actors are both walked.
+    if (current < 5) {
+        tally(await safe(() => promoteValuableBooksAcrossWorld(), "valuable + book subtype → book"));
     }
 
     // Stamp the version even if some docs failed — partial-migration is
@@ -345,5 +355,109 @@ async function copyChromeFlagsAcrossWorld() {
     for (const m of game.macros)        count += await merge(m);
     for (const m of game.messages)      count += await merge(m);
 
+    return count;
+}
+
+/**
+ * Book promotion (v5). Books used to live as a valuable subtype
+ * (`type: "valuable", system.type: "book"`). They're now a first-class
+ * item type — own data model (data/item/book.mjs), own sheet, own
+ * template. This rewrites every legacy valuable-book on the world to
+ * `type: "book"` while preserving `system.bookConfig`, weight, cost,
+ * availability, description, etc.
+ *
+ * Foundry doesn't allow `item.update({type: ...})` — the document type is
+ * immutable on update. So for each legacy valuable-book we CREATE a new
+ * book document with the same data and DELETE the original. Embedded
+ * items on actors and items in compendia are both covered.
+ *
+ * Per-doc isolation: a failing create/delete is logged and the original
+ * is left in place rather than orphaned with partial state. Idempotent:
+ * once the document is a `book`, the next pass finds nothing to do.
+ */
+async function promoteValuableBooksAcrossWorld() {
+    let count = 0;
+
+    const isLegacyValuableBook = (item) =>
+        item?.type === "valuable"
+        && String(item?.system?.type ?? "").toLowerCase() === "book";
+
+    const buildBookData = (item) => {
+        const sys = item.toObject().system ?? {};
+        // Carry every field that BookData's schema understands. Anything
+        // valuable-specific (system.type, trophyConfig) is intentionally
+        // dropped because BookData doesn't define those fields.
+        return {
+            name: item.name,
+            img:  item.img,
+            type: "book",
+            system: {
+                description:  sys.description ?? "",
+                source:       sys.source ?? "",
+                quantity:     Number(sys.quantity) || 1,
+                weight:       Number(sys.weight)   || 0,
+                cost:         Number(sys.cost)     || 0,
+                availability: sys.availability ?? "common",
+                bookConfig:   sys.bookConfig ?? { bookType: "monster", monster: {}, skill: {}, stress: {} }
+            },
+            effects: item.effects?.contents?.map(e => e.toObject()) ?? [],
+            flags:   item.flags ?? {}
+        };
+    };
+
+    /* Per-reader progress lives in `actor.system.bookUsage`, keyed by
+     * `encKey(item.uuid)` (a slash-and-dot-escaped UUID). Promoting the
+     * book creates a fresh document with a fresh UUID, so without this
+     * step the actor's existing progress key would point at a dead doc
+     * and the new book would read as "never opened". Move the entry
+     * from old-key → new-key on the SAME actor before deleting the old
+     * item. Books promoted at the world level don't carry per-reader
+     * state so no work is needed there. */
+    const encKey = (uuid) => String(uuid).replace(/[./]/g, "_");
+
+    const carryBookUsage = async (actor, oldItem, newItem) => {
+        if (!actor || !oldItem || !newItem) return;
+        const bag = actor.system?.bookUsage ?? {};
+        const oldKey = encKey(oldItem.uuid);
+        const newKey = encKey(newItem.uuid);
+        if (oldKey === newKey) return;
+        const entry = bag[oldKey];
+        if (!entry) return;
+        try {
+            await actor.update({
+                [`system.bookUsage.${newKey}`]: entry,
+                [`system.bookUsage.-=${oldKey}`]: null
+            });
+        } catch (err) {
+            console.warn(`${SYSTEM_ID} | book usage carry failed on actor ${actor.id} (${oldKey} → ${newKey}):`, err);
+        }
+    };
+
+    const promoteOne = async (item, parent /* Actor | null */) => {
+        if (!isLegacyValuableBook(item)) return 0;
+        const newData = buildBookData(item);
+        try {
+            if (parent) {
+                const created = await parent.createEmbeddedDocuments("Item", [newData], { keepId: false });
+                const newItem = Array.isArray(created) ? created[0] : created;
+                await carryBookUsage(parent, item, newItem);
+                await item.delete();
+            } else {
+                await Item.implementation.create(newData, { keepId: false, displaySheet: false });
+                await item.delete();
+            }
+            return 1;
+        } catch (err) {
+            console.warn(`${SYSTEM_ID} | book promotion failed on ${parent ? `actor ${parent.id}` : "world"} item ${item.id}:`, err);
+            return 0;
+        }
+    };
+
+    // World items.
+    for (const i of [...game.items]) count += await promoteOne(i, null);
+    // Embedded on actors.
+    for (const a of game.actors) {
+        for (const i of [...a.items]) count += await promoteOne(i, a);
+    }
     return count;
 }

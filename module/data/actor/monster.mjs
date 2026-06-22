@@ -17,7 +17,8 @@ import { statsSchema }        from "./templates/stats.mjs";
 import { skillsSchema }       from "./templates/skills.mjs";
 import { derivedStatsSchema } from "./templates/derivedStats.mjs";
 import { currencySchema, calcCurrencyWeight } from "./templates/currency.mjs";
-import { applyConditionActions, applyEventLedger, DAMAGE_TYPES } from "../../setup/config.mjs";
+import { combatRoundSchema }  from "./templates/combatRound.mjs";
+import { applyConditionActions, applyEventLedger, DAMAGE_TYPES, defaultWeaponWeaknessFor } from "../../setup/config.mjs";
 
 const fields = foundry.data.fields;
 
@@ -36,6 +37,7 @@ export class MonsterData extends foundry.abstract.TypeDataModel {
             ...skillsSchema({ rankMax: null }),
             ...derivedStatsSchema(),
             ...currencySchema(),
+            ...combatRoundSchema(),
 
             // Icons used for the remains (carcass) and trophy items generated
             // from this monster — configured via the monster sheet's icon
@@ -76,6 +78,31 @@ export class MonsterData extends foundry.abstract.TypeDataModel {
             // monster can additionally hold dragged-in weapon Items.
             combat: new fields.SchemaField({
                 armor: new fields.NumberField({ initial: 0, integer: true, min: 0 }),
+                /* Organ-crit immunity override (RAW Core p.159 — elemental
+                 * / spectral creatures don't take organ-based critical
+                 * wounds; they take a higher flat damage bonus instead,
+                 * +5/+10/+15/+20 vs +3/+5/+8/+10).
+                 *   "auto"  = derive from `category` (elementa/specter
+                 *             default to immune, everything else doesn't)
+                 *   "true"  = force-immune regardless of category
+                 *   "false" = force-vulnerable regardless of category
+                 *
+                 * Stored as a string (not a boolean) so the sheet's
+                 * <select> can serialize all three states without
+                 * Foundry's BooleanField rejecting the "" auto value. */
+                immuneToOrganCrits: new fields.StringField({
+                    initial: "auto",
+                    choices: ["auto", "true", "false"]
+                }),
+                /* Optional novel-rule weapon weakness (Core p.175 sidebar):
+                 * a monster either takes half damage from non-silver weapons
+                 * ("silver" — the video-game default for non-beasts) OR half
+                 * from non-meteorite weapons ("meteorite" — the novel-rule
+                 * alternative for beasts / hybrids / draconids / insectoids /
+                 * ogroids). "none" disables both (humanoids and houseruled
+                 * monsters). The MonsterSheet seeds a sensible default per
+                 * category but the GM picks the final value. */
+                weaponWeakness: new fields.StringField({ initial: "none" }),
                 attacks: new fields.ArrayField(new fields.SchemaField({
                     name:   new fields.StringField({ initial: "" }),
                     damage: new fields.StringField({ initial: "" }),  // dice e.g. "3d6+2"
@@ -95,6 +122,13 @@ export class MonsterData extends foundry.abstract.TypeDataModel {
                     // both the same way.
                     qualities:     new fields.ArrayField(new fields.StringField()),
                     qualityValues: new fields.ObjectField(),
+                    /* Damage types the attack inflicts (DAMAGE_TYPES keys —
+                     * slashing, piercing, bludgeoning, fire, ...). Surfaces in
+                     * the damage calculator's per-type reaction lookup on the
+                     * target (resistant/vulnerable/immune). Without this the
+                     * monster's attack rolled as typeless and bypassed every
+                     * vulnerability the target had set. */
+                    damageTypes:   new fields.ArrayField(new fields.StringField()),
                     shown:  shown()
                 })),
                 // Per-damage-type reaction (none/resistant/vulnerable/immune).
@@ -184,6 +218,20 @@ export class MonsterData extends foundry.abstract.TypeDataModel {
                 controlBonus: new fields.NumberField({ initial: 0, integer: true })
             })
         };
+    }
+
+    /* Seed `combat.weaponWeakness` for legacy monsters that pre-date the
+     * field, using the RAW p.175 default for their category (silver for
+     * cursed / elementa / necrophage / relict / specter / vampire;
+     * meteorite for beast / hybrid / draconid / insectoid / ogroid). The
+     * GM can override per monster in the sheet. */
+    static migrateData(data) {
+        const w = data?.combat?.weaponWeakness;
+        if (w === undefined || w === null || w === "") {
+            data.combat = data.combat ?? {};
+            data.combat.weaponWeakness = defaultWeaponWeaknessFor(data?.category);
+        }
+        return super.migrateData(data);
     }
 
     calcCurrencyWeight() {

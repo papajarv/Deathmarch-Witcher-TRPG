@@ -213,6 +213,313 @@ body.witcher-ttrpg-death-march .wdm-attack-damage-note {
   color: var(--wdm-ink-dim);
 }
 
+/* ---------------------------------------------- attack defense + verdict -- */
+body.witcher-ttrpg-death-march .wdm-attack-defense {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  margin: 6px 0 0;
+  padding: 4px 8px;
+  background: rgba(255,255,255,0.02);
+  border-left: 2px solid var(--wdm-ink-dim);
+}
+body.witcher-ttrpg-death-march .wdm-attack-defense .wdm-attack-defense-k {
+  font-family: var(--wdm-font-display);
+  text-transform: uppercase;
+  letter-spacing: var(--wdm-track-tight);
+  font-size: 0.7em;
+  color: var(--wdm-ink-dim);
+}
+body.witcher-ttrpg-death-march .wdm-attack-defense .wdm-attack-defense-v {
+  font-family: var(--wdm-font-mono);
+  font-size: 0.95em;
+  color: var(--wdm-ink-bright);
+}
+body.witcher-ttrpg-death-march .wdm-attack-defense .wdm-attack-defense-v b {
+  font-weight: 700;
+  color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march .wdm-attack-defense .wdm-attack-defense-body {
+  flex: 1 1 100%;
+  margin-top: 2px;
+  opacity: 0.85;
+}
+
+/* Big, loud HIT / MISS / CRIT banner — the GM should be able to read it
+ * from across the room. Color cues: green for plain hit, gold-gradient for
+ * any crit (severity tier shifts hue), red for miss. */
+body.witcher-ttrpg-death-march .wdm-attack-verdict {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "head sub"
+    "rolls rolls";
+  gap: 2px 12px;
+  align-items: baseline;
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: var(--wdm-radius-sm);
+  border: 1px solid transparent;
+  background: rgba(0,0,0,0.25);
+}
+body.witcher-ttrpg-death-march .wdm-attack-verdict-head {
+  grid-area: head;
+  font-family: var(--wdm-font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 1.35em;
+  font-weight: 800;
+  line-height: 1;
+}
+body.witcher-ttrpg-death-march .wdm-attack-verdict-sub {
+  grid-area: sub;
+  font-family: var(--wdm-font-mono);
+  font-size: 0.85em;
+  color: var(--wdm-ink-dim);
+}
+body.witcher-ttrpg-death-march .wdm-attack-verdict-rolls {
+  grid-area: rolls;
+  font-family: var(--wdm-font-mono);
+  font-size: 0.9em;
+  /* Bright ash on the dark backdrop (was --wdm-ink-ash which is muted-dark
+   * and went illegible against the rgba(0,0,0,0.25) base + the colored
+   * tint overlays on HIT/MISS/CRIT). */
+  color: var(--wdm-ink-bright);
+  font-weight: 600;
+}
+body.witcher-ttrpg-death-march .wdm-attack-verdict-rolls b {
+  color: var(--wdm-amber-hi);
+  font-weight: 800;
+}
+body.witcher-ttrpg-death-march .wdm-attack-verdict-sub {
+  /* Match the same brightening so "attacker/defender beat by X" stays readable. */
+  color: var(--wdm-ink-bright);
+  opacity: 0.85;
+}
+
+/* HIT — green border + green head, restrained background */
+body.witcher-ttrpg-death-march .wdm-attack-verdict.is-hit {
+  border-color: #5ea566;
+  background: linear-gradient(90deg, rgba(94,165,102,0.18), rgba(94,165,102,0.04));
+}
+body.witcher-ttrpg-death-march .wdm-attack-verdict.is-hit .wdm-attack-verdict-head {
+  color: #b8e2bd;
+  text-shadow: 0 0 6px rgba(94,165,102,0.4);
+}
+
+/* MISS — muted red, less visual weight than crits */
+body.witcher-ttrpg-death-march .wdm-attack-verdict.is-miss {
+  border-color: rgba(180,80,80,0.55);
+  background: linear-gradient(90deg, rgba(180,80,80,0.18), rgba(180,80,80,0.04));
+}
+body.witcher-ttrpg-death-march .wdm-attack-verdict.is-miss .wdm-attack-verdict-head {
+  color: #f0b5b5;
+}
+
+/* CRIT — gold-shimmer with a tier-tinted underline so simple → deadly is
+ * obvious at a glance. Stacks on top of .is-hit so the head stays readable. */
+body.witcher-ttrpg-death-march .wdm-attack-verdict.is-crit {
+  border-color: var(--wdm-amber-hi);
+  background:
+    linear-gradient(90deg, rgba(212,162,57,0.28), rgba(212,162,57,0.06));
+  box-shadow: 0 0 0 1px rgba(212,162,57,0.25) inset;
+}
+body.witcher-ttrpg-death-march .wdm-attack-verdict.is-crit .wdm-attack-verdict-head {
+  color: #ffe6a1;
+  text-shadow: 0 0 8px rgba(255,200,80,0.55);
+}
+/* Severity tier accent under the head (color ramps with severity) */
+body.witcher-ttrpg-death-march .wdm-attack-verdict.is-crit-simple    { box-shadow: 0 0 0 1px rgba(212,162,57,0.30) inset, inset 0 -3px 0 0 #b8893a; }
+body.witcher-ttrpg-death-march .wdm-attack-verdict.is-crit-complex   { box-shadow: 0 0 0 1px rgba(212,162,57,0.35) inset, inset 0 -3px 0 0 #c2782a; }
+body.witcher-ttrpg-death-march .wdm-attack-verdict.is-crit-difficult { box-shadow: 0 0 0 1px rgba(212,162,57,0.45) inset, inset 0 -3px 0 0 #c25a2a; }
+body.witcher-ttrpg-death-march .wdm-attack-verdict.is-crit-deadly    { box-shadow: 0 0 0 1px rgba(212,162,57,0.55) inset, inset 0 -3px 0 0 #c22a2a; }
+
+/* FUMBLE banner — a separate horizontal strip ABOVE the HIT/MISS
+ * verdict. Red palette, single-line layout (no narrow grid column to
+ * force "FU MB LE!" wrapping). The verdict block below still shows
+ * the real HIT / MISS based on the actual roll vs defense — a fumble
+ * doesn't auto-miss, the math still applies. */
+body.witcher-ttrpg-death-march .wdm-attack-fumble {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 4px;
+  padding: 6px 12px;
+  border-radius: var(--wdm-radius-sm);
+  border: 1px solid #c0392b;
+  background:
+    linear-gradient(90deg, rgba(192,57,43,0.35), rgba(140,30,30,0.18));
+  box-shadow: 0 0 0 1px rgba(192,57,43,0.50) inset, inset 0 -2px 0 0 #c0392b;
+  white-space: nowrap;
+}
+body.witcher-ttrpg-death-march .wdm-attack-fumble i {
+  color: #ff7a6b;
+  font-size: 1.05em;
+  flex: 0 0 auto;
+}
+body.witcher-ttrpg-death-march .wdm-attack-fumble .wdm-attack-fumble-k {
+  font-family: var(--wdm-font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  font-weight: 800;
+  font-size: 1.0em;
+  color: #ffb8b0;
+  text-shadow: 0 0 6px rgba(255,80,60,0.55);
+  flex: 0 0 auto;
+}
+body.witcher-ttrpg-death-march .wdm-attack-fumble .wdm-attack-fumble-v {
+  font-family: var(--wdm-font-mono);
+  font-size: 0.85em;
+  color: #ffd5ce;
+  font-style: italic;
+  flex: 1 1 auto;
+  /* Long subtext can still wrap if the card is really narrow, but the
+   * label stays on one line because of nowrap on the container + nowrap
+   * on the k span. */
+  white-space: normal;
+}
+
+/* Damage roll block — replaces the [ROLL DAMAGE] button after it fires.
+ * Sits inside the attack card; the Foundry dice renderer's own .dice-roll
+ * fills the body. */
+body.witcher-ttrpg-death-march .wdm-attack-damage-roll-block {
+  margin: 6px 0;
+  padding: 6px 10px;
+  border-left: 2px solid var(--wdm-amber-hi);
+  background: rgba(212,162,57,0.06);
+}
+body.witcher-ttrpg-death-march .wdm-attack-damage-roll-head {
+  font-family: var(--wdm-font-display);
+  text-transform: uppercase;
+  letter-spacing: var(--wdm-track-tight);
+  font-size: 0.75em;
+  color: var(--wdm-ink-bright);
+  margin-bottom: 3px;
+}
+body.witcher-ttrpg-death-march .wdm-attack-damage-roll-types {
+  color: var(--wdm-ink-dim);
+  font-weight: normal;
+}
+
+/* "Applied to <Target>" appended block + breakdown */
+body.witcher-ttrpg-death-march .wdm-attack-applied {
+  margin: 6px 0;
+  padding: 6px 10px;
+  border-left: 2px solid var(--wdm-red-bright);
+  background: rgba(180,80,80,0.08);
+}
+body.witcher-ttrpg-death-march .wdm-attack-applied-head {
+  font-family: var(--wdm-font-display);
+  text-transform: uppercase;
+  letter-spacing: var(--wdm-track-tight);
+  font-size: 0.75em;
+  color: var(--wdm-ink-bright);
+  margin-bottom: 4px;
+}
+body.witcher-ttrpg-death-march .wdm-attack-applied-hp {
+  font-family: var(--wdm-font-mono);
+  color: var(--wdm-red-bright);
+  font-weight: 700;
+}
+
+/* Crit wound line appended after the breakdown */
+body.witcher-ttrpg-death-march .wdm-attack-crit-wound {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-left: 2px solid #c22a2a;
+  background: linear-gradient(90deg, rgba(194,42,42,0.18), rgba(194,42,42,0.02));
+  font-size: 0.95em;
+}
+body.witcher-ttrpg-death-march .wdm-attack-crit-wound i {
+  color: #ffcf66;
+  margin-right: 4px;
+}
+body.witcher-ttrpg-death-march .wdm-attack-crit-wound-sev {
+  color: var(--wdm-ink-dim);
+  font-size: 0.85em;
+  margin-left: 4px;
+}
+
+/* Reposition movement allowance — appended to a Reposition defense card with
+ * a click-to-choose button that puts the canvas in destination-pick mode. */
+body.witcher-ttrpg-death-march .wdm-defense-reposition {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-left: 2px solid var(--wdm-amber-hi);
+  background: rgba(212,162,57,0.08);
+  font-size: 0.92em;
+}
+body.witcher-ttrpg-death-march .wdm-defense-reposition-k {
+  font-family: var(--wdm-font-display);
+  text-transform: uppercase;
+  letter-spacing: var(--wdm-track-tight);
+  font-size: 0.75em;
+  color: var(--wdm-ink-dim);
+  margin-right: 4px;
+}
+body.witcher-ttrpg-death-march .wdm-defense-reposition-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-left: 6px; padding: 3px 9px;
+  font-family: var(--wdm-font-display);
+  text-transform: uppercase;
+  letter-spacing: var(--wdm-track-tight);
+  font-size: 0.7em; line-height: 1.4;
+  color: var(--wdm-ink-bright);
+  background: var(--wdm-bg-deep);
+  border: 1px solid var(--wdm-amber-hi);
+  border-radius: var(--wdm-radius-sm);
+  cursor: pointer;
+}
+body.witcher-ttrpg-death-march .wdm-defense-reposition-btn:hover {
+  color: var(--wdm-amber-hi);
+  border-color: var(--wdm-amber-bright);
+}
+body.witcher-ttrpg-death-march .wdm-defense-reposition-btn.is-armed {
+  background: var(--wdm-amber-hi);
+  color: var(--wdm-bg-deep);
+  border-color: var(--wdm-amber-bright);
+  animation: wdm-reposition-pulse 1.2s ease-in-out infinite;
+}
+@keyframes wdm-reposition-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,200,80,0.4); }
+  50%      { box-shadow: 0 0 0 5px rgba(255,200,80,0.0); }
+}
+
+/* Hit location — promoted to a dedicated, readable block (was a small chip
+ * in the row; now its own callout with bullseye icon, the location name,
+ * and the damage multiplier when ≠ 1×). */
+body.witcher-ttrpg-death-march .wdm-attack-hit-loc {
+  display: flex; align-items: center; gap: 8px;
+  margin: 6px 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--wdm-amber-hi);
+  background: rgba(212,162,57,0.10);
+}
+body.witcher-ttrpg-death-march .wdm-attack-hit-loc > i {
+  color: var(--wdm-amber-hi);
+  font-size: 1.1em;
+}
+body.witcher-ttrpg-death-march .wdm-attack-hit-loc-k {
+  font-family: var(--wdm-font-display);
+  text-transform: uppercase;
+  letter-spacing: var(--wdm-track-tight);
+  font-size: 0.75em;
+  color: var(--wdm-ink-dim);
+}
+body.witcher-ttrpg-death-march .wdm-attack-hit-loc-v {
+  font-family: var(--wdm-font-mono);
+  font-weight: 800;
+  font-size: 1.05em;
+  color: var(--wdm-ink-bright);
+}
+body.witcher-ttrpg-death-march .wdm-attack-hit-loc-mult {
+  margin-left: auto;
+  font-family: var(--wdm-font-mono);
+  font-size: 0.85em;
+  color: var(--wdm-red-bright);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--wdm-track-tight);
+}
+
 body.witcher-ttrpg-death-march .wdm-attack-qualities {
   margin-top: 3px;
   font-size: 0.74em;
@@ -295,7 +602,8 @@ body.witcher-ttrpg-death-march .wdm-roll .wdm-roll-dice {
 
 body.witcher-ttrpg-death-march .wdm-roll .wdm-die,
 body.witcher-ttrpg-death-march .wdm-roll .wdm-die-explode,
-body.witcher-ttrpg-death-march .wdm-roll .wdm-die-fumble {
+body.witcher-ttrpg-death-march .wdm-roll .wdm-die-fumble,
+body.witcher-ttrpg-death-march .wdm-roll .wdm-die-implode {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -320,6 +628,15 @@ body.witcher-ttrpg-death-march .wdm-roll .wdm-die-explode {
 body.witcher-ttrpg-death-march .wdm-roll .wdm-die-fumble {
   border-color: var(--wdm-red);
   color: var(--wdm-red-bright);
+}
+
+/* Implode dice — the downward-exploding subtract chain that fires after
+ * a fumble. Same warning palette as fumble but slightly desaturated and
+ * with a "−" prefix in the value so the math reads "1 −5" not "1 5". */
+body.witcher-ttrpg-death-march .wdm-roll .wdm-die-implode {
+  border-color: var(--wdm-red);
+  color: var(--wdm-red-bright);
+  opacity: 0.85;
 }
 
 body.witcher-ttrpg-death-march .wdm-roll .wdm-roll-fumble {
@@ -633,3 +950,439 @@ body.witcher-ttrpg-death-march .wdm-cast-warn {
 }
 body.witcher-ttrpg-death-march .wdm-cast-warn[hidden] { display: none; }
 body.witcher-ttrpg-death-march .wdm-cast-warn i { margin-top: 1px; color: #d6a050; }
+
+/* ─────────── broken weapon / shield indicator ───────────
+ * Decorator (policy/broken-weapon-indicator.mjs) sets inline
+ * `filter: grayscale(1)` on icon nodes and appends a (BROKEN) span
+ * to the item name. That's all the CSS we need — just style the
+ * appended label. No row-level filter, no pseudo-element slash or
+ * badge (earlier attempts piled those on; they read as overlay
+ * blocks the user explicitly didn't want). */
+body.witcher-ttrpg-death-march .wdm-broken-label {
+  margin-left: 4px;
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #ff8a7a;
+  text-shadow: 0 1px 0 #000;
+}
+
+/* Top-right corner repair-wrench icon — marks broken weapons across
+ * every surface (sheets, dock, inventory, merchant, inspect window).
+ * Sized small so it doesn't dominate the slot; bright red for a fast
+ * read against any background. */
+body.witcher-ttrpg-death-march .wdm-broken-icon {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 99;
+  font-size: 11px;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffd4c8;
+  background: rgba(140, 30, 30, 0.92);
+  border: 1px solid rgba(255, 180, 160, 0.55);
+  border-radius: 50%;
+  text-shadow: 0 1px 0 #000;
+  pointer-events: none;
+  /* Override the parent's grayscale filter so the wrench stays red. */
+  filter: none !important;
+}
+
+/* ─────────── attack result card (collapsible damage block) ───────────
+ * Sits under the HIT/MISS verdict on the attack chat card. Hosts the
+ * damage roll dice, applied breakdown, crit wound, status rider lines
+ * — all folded together so the card stays one card. Collapsed by
+ * default: just the one-liner shows ("torso · 6 dmg · Bleed · Stabbed Lung").
+ * Click the chevron / summary to expand for the full breakdown. */
+body.witcher-ttrpg-death-march details.wdm-attack-result {
+  margin: 6px 0 0;
+  padding: 0;
+  border: 1px solid var(--wdm-amber-dim);
+  border-radius: var(--wdm-radius-sm);
+  background: linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.08));
+}
+body.witcher-ttrpg-death-march details.wdm-attack-result > .wdm-attack-result-summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-family: var(--wdm-font-mono);
+  font-size: 0.92em;
+  font-weight: 600;
+  color: var(--wdm-ink-bright);
+  list-style: none;
+  user-select: none;
+}
+body.witcher-ttrpg-death-march details.wdm-attack-result > .wdm-attack-result-summary::-webkit-details-marker { display: none; }
+body.witcher-ttrpg-death-march details.wdm-attack-result > .wdm-attack-result-summary::before {
+  content: "▸";
+  margin-right: 4px;
+  color: var(--wdm-amber-hi);
+  font-size: 0.85em;
+  transition: transform 120ms ease-out;
+}
+body.witcher-ttrpg-death-march details.wdm-attack-result[open] > .wdm-attack-result-summary::before {
+  content: "▾";
+}
+body.witcher-ttrpg-death-march details.wdm-attack-result > .wdm-attack-result-summary:hover {
+  background: rgba(212,162,57,0.08);
+}
+body.witcher-ttrpg-death-march details.wdm-attack-result .wdm-attack-result-body {
+  padding: 4px 10px 8px;
+  border-top: 1px solid rgba(212,162,57,0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Rider line styling — keeps each status apply / percent roll readable
+ * inside the folded body. Hit = amber, miss = muted. */
+body.witcher-ttrpg-death-march .wdm-attack-rider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 3px 6px;
+  border-left: 2px solid var(--wdm-amber-dim);
+  background: rgba(0,0,0,0.18);
+  border-radius: 2px;
+  font-size: 0.88em;
+}
+body.witcher-ttrpg-death-march .wdm-attack-rider.is-miss {
+  border-left-color: var(--wdm-ink-faint);
+  opacity: 0.7;
+}
+body.witcher-ttrpg-death-march .wdm-attack-rider i { color: var(--wdm-amber-hi); }
+body.witcher-ttrpg-death-march .wdm-attack-rider.is-miss i { color: var(--wdm-ink-dim); }
+body.witcher-ttrpg-death-march .wdm-attack-rider-src {
+  font-size: 0.85em;
+  opacity: 0.65;
+}
+body.witcher-ttrpg-death-march .wdm-attack-rider-detail {
+  width: 100%;
+  margin-top: 3px;
+  font-size: 0.85em;
+}
+body.witcher-ttrpg-death-march .wdm-attack-rider-detail > summary {
+  cursor: pointer;
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
+/* ─────────── outer attack card (collapsible whole-card wrap) ─────────── */
+body.witcher-ttrpg-death-march details.wdm-attack-card {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--wdm-amber-dim);
+  border-radius: var(--wdm-radius);
+  background: linear-gradient(180deg, rgba(0,0,0,0.10), rgba(0,0,0,0.04));
+}
+body.witcher-ttrpg-death-march details.wdm-attack-card > summary.wdm-attack-card-summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 7px 12px;
+  font-family: var(--wdm-font-mono);
+  font-size: 0.92em;
+  font-weight: 600;
+  color: var(--wdm-ink-bright);
+  list-style: none;
+  user-select: none;
+  border-radius: var(--wdm-radius);
+}
+body.witcher-ttrpg-death-march details.wdm-attack-card > summary::-webkit-details-marker { display: none; }
+body.witcher-ttrpg-death-march details.wdm-attack-card > summary::before {
+  content: "▸";
+  margin-right: 6px;
+  color: var(--wdm-amber-hi);
+  font-size: 0.85em;
+  transition: transform 120ms ease-out;
+  flex: 0 0 auto;
+}
+body.witcher-ttrpg-death-march details.wdm-attack-card[open] > summary::before {
+  content: "▾";
+}
+body.witcher-ttrpg-death-march details.wdm-attack-card > summary:hover {
+  background: rgba(212,162,57,0.06);
+}
+body.witcher-ttrpg-death-march details.wdm-attack-card > .wdm-attack-card-body {
+  padding: 8px 10px 10px;
+  border-top: 1px solid rgba(212,162,57,0.18);
+}
+
+/* Crosshair icon at the start of the summary */
+body.witcher-ttrpg-death-march .wdm-card-sum-ico {
+  color: var(--wdm-amber-hi);
+  font-size: 0.95em;
+  margin-right: 2px;
+}
+
+/* Chevron separator between summary chips */
+body.witcher-ttrpg-death-march .wdm-card-sum-sep {
+  color: var(--wdm-ink-dim);
+  opacity: 0.55;
+  font-weight: 400;
+  padding: 0 2px;
+}
+
+/* Generic summary chip */
+body.witcher-ttrpg-death-march .wdm-card-sum-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: var(--wdm-radius-pill);
+  font-family: var(--wdm-font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.82em;
+  font-weight: 700;
+  border: 1px solid var(--wdm-ink-faint);
+  background: rgba(0,0,0,0.30);
+  color: var(--wdm-ink-bright);
+}
+body.witcher-ttrpg-death-march .wdm-card-sum-part i {
+  font-size: 0.85em;
+  opacity: 0.85;
+}
+
+/* Verdict-typed chips */
+body.witcher-ttrpg-death-march .wdm-card-sum-part.is-hit {
+  background: rgba(94,165,102,0.22);
+  border-color: #5ea566;
+  color: #d6f0d8;
+}
+body.witcher-ttrpg-death-march .wdm-card-sum-part.is-miss {
+  background: rgba(180,80,80,0.22);
+  border-color: rgba(180,80,80,0.55);
+  color: #f0b5b5;
+}
+body.witcher-ttrpg-death-march .wdm-card-sum-part.is-crit {
+  background: linear-gradient(90deg, rgba(212,162,57,0.30), rgba(212,162,57,0.10));
+  border-color: var(--wdm-amber-hi);
+  color: #ffe6a1;
+  text-shadow: 0 0 4px rgba(255,200,80,0.35);
+}
+body.witcher-ttrpg-death-march .wdm-card-sum-part.is-fumble {
+  background: rgba(192,57,43,0.32);
+  border-color: #c0392b;
+  color: #ffb8b0;
+}
+body.witcher-ttrpg-death-march .wdm-card-sum-part.is-damage {
+  background: rgba(220,80,60,0.18);
+  border-color: #d05030;
+  color: #ffd2c8;
+}
+body.witcher-ttrpg-death-march .wdm-card-sum-part.is-status {
+  background: rgba(212,162,57,0.18);
+  border-color: var(--wdm-amber-dim);
+  color: #ffe2a8;
+}
+body.witcher-ttrpg-death-march .wdm-card-sum-part.is-stress {
+  background: rgba(80,40,140,0.28);
+  border-color: #6a4dac;
+  color: #d6c6f0;
+}
+
+/* Trailing action slot in the attack-card summary (lives on the right
+ * side of the one-liner). Holds the [Roll Damage] button so the user
+ * can resolve a hit without expanding the collapsed card. */
+body.witcher-ttrpg-death-march details.wdm-attack-card > summary .wdm-card-sum-action {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+body.witcher-ttrpg-death-march details.wdm-attack-card > summary .wdm-card-sum-action button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  font-family: var(--wdm-font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.72em;
+  font-weight: 700;
+  color: var(--wdm-ink-bright);
+  background: var(--wdm-bg-deep);
+  border: 1px solid var(--wdm-gilt);
+  border-radius: var(--wdm-radius-sm);
+  cursor: pointer;
+}
+body.witcher-ttrpg-death-march details.wdm-attack-card > summary .wdm-card-sum-action button:hover {
+  color: var(--wdm-gilt-hi);
+  border-color: var(--wdm-gilt-hi);
+}
+body.witcher-ttrpg-death-march details.wdm-attack-card > summary .wdm-card-sum-action button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Chat preview that mirrors the attack-card summary — same chip styling
+ * as in the chat card so the middle-screen text is a 1:1 echo. The
+ * preview already lives in the notifications strip; we just need the
+ * chip classes to resolve here too. */
+body.witcher-ttrpg-death-march .wou-chat-preview .wou-chat-preview-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-family: var(--wdm-font-mono);
+  font-size: 0.92em;
+  font-weight: 600;
+  color: var(--wdm-ink-bright);
+}
+
+/* Combat tracker GM "take control on turn" toggle — sits between the
+ * encounter-tabs nav and the round-counter encounter-controls block.
+ * Full-width row so it doesn't disrupt the header's flex children. */
+body.witcher-ttrpg-death-march #combat .wdm-tc-on-turn,
+body.witcher-ttrpg-death-march #combat-popout .wdm-tc-on-turn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 8px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--wdm-ink-dim);
+  background: rgba(0, 0, 0, 0.18);
+  border-top: 1px solid rgba(212, 162, 57, 0.18);
+  border-bottom: 1px solid rgba(212, 162, 57, 0.18);
+  cursor: pointer;
+  user-select: none;
+}
+body.witcher-ttrpg-death-march #combat .wdm-tc-on-turn input[type="checkbox"],
+body.witcher-ttrpg-death-march #combat-popout .wdm-tc-on-turn input[type="checkbox"] {
+  margin: 0;
+  vertical-align: middle;
+  accent-color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march #combat .wdm-tc-on-turn:hover,
+body.witcher-ttrpg-death-march #combat-popout .wdm-tc-on-turn:hover {
+  color: var(--wdm-ink-bright);
+  background: rgba(212, 162, 57, 0.08);
+}
+
+/* GM party-panel status block — per-actor collapsible. The parent
+ * .wou-gm-row is a 2-column grid (portrait | content); the original
+ * .wou-gm-statuses used `grid-column: 2` to sit in the right column.
+ * Wrapping in <details> moved the grid placement off the inner div,
+ * which caused the icons to fall under the portrait column and wrap
+ * vertically. Re-pin the wrapper to column 2 here. */
+body.witcher-ttrpg-death-march .wou-gm-statuses-collapse {
+  grid-column: 2;
+  width: 100%;
+  margin-top: 4px;
+}
+body.witcher-ttrpg-death-march .wou-gm-statuses-collapse > .wou-gm-statuses-summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  font-family: var(--wdm-font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 9px;
+  color: var(--wdm-ink-dim);
+  list-style: none;
+  user-select: none;
+}
+body.witcher-ttrpg-death-march .wou-gm-statuses-collapse > .wou-gm-statuses-summary::-webkit-details-marker {
+  display: none;
+}
+body.witcher-ttrpg-death-march .wou-gm-statuses-collapse > .wou-gm-statuses-summary::before {
+  content: "▸";
+  color: var(--wdm-amber-hi);
+  font-size: 11px;
+  width: 10px;
+  text-align: center;
+}
+body.witcher-ttrpg-death-march .wou-gm-statuses-collapse[open] > .wou-gm-statuses-summary::before {
+  content: "▾";
+}
+body.witcher-ttrpg-death-march .wou-gm-statuses-collapse > .wou-gm-statuses-summary .cnt {
+  margin-left: auto;
+  padding: 0 5px;
+  background: rgba(212,162,57,0.18);
+  color: var(--wdm-amber-hi);
+  border-radius: 8px;
+  font-weight: 700;
+}
+body.witcher-ttrpg-death-march .wou-gm-statuses-collapse > .wou-gm-statuses-summary .cnt:empty {
+  display: none;
+}
+/* Family chip level badge — the small number in the corner. */
+body.witcher-ttrpg-death-march .wou-gm-status-family {
+  position: relative;
+}
+body.witcher-ttrpg-death-march .wou-gm-status-lvl {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: var(--wdm-amber-hi);
+  color: #1a120a;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 14px;
+  text-align: center;
+  box-shadow: 0 1px 0 #000;
+}
+
+/* Stack-count badge on GM panel single status chips (×N when the
+ * actor carries >1 AE with the same status id). Mirrors token-HUD
+ * stack indicator. */
+body.witcher-ttrpg-death-march .wou-gm-status {
+  position: relative;
+}
+body.witcher-ttrpg-death-march .wou-gm-status-stacks {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: var(--wdm-red, #8c3c3c);
+  color: #ffe2d8;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 14px;
+  text-align: center;
+  box-shadow: 0 1px 0 #000;
+  pointer-events: none;
+}
+
+/* Monster sheet — damage type checkboxes on each inline attack row. */
+body.witcher-ttrpg-death-march .wdm-attack-dmgtypes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 3px 0;
+  font-size: 11px;
+  color: var(--wdm-ink-dim);
+}
+body.witcher-ttrpg-death-march .wdm-attack-dmgtypes .wdm-dmgtype {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+body.witcher-ttrpg-death-march .wdm-attack-dmgtypes .wdm-dmgtype input {
+  margin: 0;
+  accent-color: var(--wdm-amber-hi);
+}

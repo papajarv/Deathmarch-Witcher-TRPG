@@ -169,6 +169,10 @@ function extractSkillCard(message) {
 function buildPreviewElement(message) {
   const li = document.createElement("li");
   li.classList.add("notification", "wou-chat-preview");
+  /* Tag with the source message id so the updateMessage hook can find
+   * + re-sync this preview when the underlying chat card mutates
+   * (damage button consumed, crit wound appended, etc.). */
+  li.dataset.wouMsgId = message.id;
 
   /* Whisper detection — paints the stripe frost-blue to match the chat
    * tab's .whisper-to color, so a private message reads as private even
@@ -239,21 +243,39 @@ function buildPreviewElement(message) {
        </div>`
     : "";
 
-  li.innerHTML = `
-    <span class="wou-chat-preview-sender">${esc(senderLabel(message))}</span>
-    <div class="wou-chat-preview-text">
-      ${subtitle ? `<div class="wou-chat-preview-subtitle">${esc(subtitle)}</div>` : ""}
-      ${primary ? `<p>${esc(primary)}</p>` : ""}
-      ${rollsHtml}
-      ${verdictHtml}
-      <!-- Action buttons get appended here after construction. -->
-    </div>
-  `;
+  /* Attack-card messages have a self-describing one-liner summary
+   * (the `<summary class="wdm-attack-card-summary">` chips: verdict,
+   * location, damage, status, crit, stress). When present, just
+   * MIRROR that into the preview — the user explicitly wants the
+   * middle-screen bar to echo the chat card's summary verbatim
+   * instead of having its own subtitle/primary/verdict rendering.
+   * Falls back to the legacy preview body for non-attack messages. */
+  const attackSummaryHtml = extractAttackCardSummaryHtml(message);
+  if (attackSummaryHtml) {
+    li.innerHTML = `
+      <span class="wou-chat-preview-sender">${esc(senderLabel(message))}</span>
+      <div class="wou-chat-preview-text wou-chat-preview-mirror">
+        <div class="wou-chat-preview-summary">${attackSummaryHtml}</div>
+      </div>
+    `;
+  } else {
+    li.innerHTML = `
+      <span class="wou-chat-preview-sender">${esc(senderLabel(message))}</span>
+      <div class="wou-chat-preview-text">
+        ${subtitle ? `<div class="wou-chat-preview-subtitle">${esc(subtitle)}</div>` : ""}
+        ${primary ? `<p>${esc(primary)}</p>` : ""}
+        ${rollsHtml}
+        ${verdictHtml}
+        <!-- Action buttons get appended here after construction. -->
+      </div>
+    `;
+  }
 
   /* Mirror action buttons from the real chat-message — clicking a preview
    * button forwards to the live button in #chat-log so the system's
-   * existing renderChatMessageHTML-bound handlers fire as-is.  No need
-   * to re-implement attack/damage/defense flows. */
+   * existing renderChatMessageHTML-bound handlers fire as-is.  For
+   * attack cards we extract the summary's in-line action slot button
+   * (Roll Damage) which is also already in the message content. */
   appendActionButtons(li, message);
 
   /* Clicking the card itself (anywhere outside an action button) just
@@ -270,11 +292,19 @@ function buildPreviewElement(message) {
  *  in #chat-log so the system's bound handler fires. */
 function appendActionButtons(li, message) {
   const sources = [];
+  /* Dedupe by data-action — the attack card sometimes has the SAME
+   * action button in two places (the body's .wdm-attack-damage and
+   * the summary action slot). One preview proxy per logical action
+   * is enough. */
+  const seenActions = new Set();
   for (const html of [message.flavor, message.content]) {
     if (!html) continue;
     const tmp = document.createElement("div");
     tmp.innerHTML = String(html);
     tmp.querySelectorAll("button").forEach((b, i) => {
+      const action = b.dataset.action || "";
+      if (action && seenActions.has(action)) return;
+      if (action) seenActions.add(action);
       sources.push({ btn: b, index: i, label: (b.textContent || "").trim() });
     });
   }
@@ -300,11 +330,27 @@ function appendActionButtons(li, message) {
       const live = findLiveButton(message.id, n, src.btn.className);
       if (live) {
         live.click();
+        /* One-shot sync: a damage button is consumed after a single
+         * click (data-consumed = "1" set by rollDamageFromButton).
+         * Once consumed, the proxy should vanish from the preview so
+         * the user can't try to re-fire it from here. Same logic for
+         * any other "consumed" button pattern (defense buttons that
+         * get re-rendered out of the card). */
+        setTimeout(() => {
+          const stillLive = findLiveButton(message.id, n, src.btn.className);
+          if (!stillLive || stillLive.dataset.consumed === "1" || stillLive.disabled) {
+            proxy.remove();
+            /* If no proxies left, drop the whole row. */
+            if (!row.querySelector("button")) row.remove();
+          }
+        }, 50);
       } else {
-        ui.notifications?.warn?.("Could not find the original chat button to forward this action.");
+        /* Live button is gone — most likely consumed already from the
+         * chat tab. Remove the stale proxy so the preview stays in
+         * sync with the actual card state. */
+        proxy.remove();
+        if (!row.querySelector("button")) row.remove();
       }
-      /* Leave the preview up after invoking an action — the player may want
-       * to fire another button (e.g. damage after a hit) on the same card. */
     });
 
     row.appendChild(proxy);
@@ -370,6 +416,77 @@ function previewContainer() {
   return el;
 }
 
+/** Pull the inner HTML of `<summary class="wdm-attack-card-summary">`
+ *  from a message's content, if it carries one. Returns the chip HTML
+ *  ready to drop into the preview as-is — same chevron/chips/styling
+ *  the chat card uses, so the preview reads as a 1:1 echo of the
+ *  collapsed chat one-liner. Excludes the trailing action slot
+ *  (`.wdm-card-sum-action`) which is handled by appendActionButtons. */
+function extractAttackCardSummaryHtml(message) {
+    const content = String(message?.content ?? "");
+    if (!content.includes("wdm-attack-card-summary")) return null;
+    const tmp = document.createElement("div");
+    tmp.innerHTML = content;
+    const summary = tmp.querySelector("summary.wdm-attack-card-summary");
+    if (!summary) return null;
+    /* Strip the action slot — buttons go in their own row via
+     * appendActionButtons. Keep crosshair icon + chips + separators. */
+    const clone = summary.cloneNode(true);
+    clone.querySelectorAll(".wdm-card-sum-action").forEach(n => n.remove());
+    return clone.innerHTML;
+}
+
+/** Find any open preview <li>s for a given message id. */
+function previewsFor(messageId) {
+  const list = document.getElementById("wdm-chat-previews");
+  if (!list) return [];
+  return Array.from(list.querySelectorAll(`li[data-wou-msg-id="${CSS.escape(messageId)}"]`));
+}
+
+/** Sync an existing preview's body to the latest message state.
+ *
+ * Called from updateMessage so the floating preview reflects:
+ *   - Damage button consumed (chip removed once rollDamageFromButton
+ *     strips it from the chat content)
+ *   - Newly appended consequences (crit wound, status riders, stress)
+ *     that other contributors fold into the attack card via
+ *     appendAttackResult
+ *
+ * Strategy: re-derive the action buttons row + the verdict/rolls
+ * text from the live message, then swap them into the preview. The
+ * sender + subtitle stay (they don't change post-creation). */
+function syncPreviewToMessage(message) {
+  const previews = previewsFor(message.id);
+  if (!previews.length) return;
+  /* If the message NOW has an attack-card summary, that's what we
+   * want to show — even if the preview was originally built (on
+   * createChatMessage) before appendAttackResult wrapped the content.
+   * Re-extract once per call and reuse across all matching previews. */
+  const newSummaryHtml = extractAttackCardSummaryHtml(message);
+  for (const li of previews) {
+    const textBox = li.querySelector(".wou-chat-preview-text");
+    if (newSummaryHtml !== null && textBox) {
+      /* Wipe the legacy body (subtitle/primary/rolls/verdict) and
+       * replace with the mirror block. Idempotent: if a mirror is
+       * already there, it just gets re-rendered with fresh chips. */
+      textBox.classList.add("wou-chat-preview-mirror");
+      textBox.innerHTML = `<div class="wou-chat-preview-summary">${newSummaryHtml}</div>`;
+    }
+    /* Strip the old action row + rebuild from current content. */
+    li.querySelector(".wou-chat-preview-actions")?.remove();
+    try { appendActionButtons(li, message); }
+    catch (_) { /* preview structure changed under us — ignore */ }
+  }
+}
+
 export function installChatPreviews() {
   Hooks.on("createChatMessage", showPreviewFor);
+  /* Keep the floating preview in sync with the underlying message:
+   * if the attack card grows or its damage button is consumed, the
+   * preview should reflect that without waiting for its 11-second
+   * auto-dismiss. */
+  /* Foundry's hook name for ChatMessage updates is `updateChatMessage`
+   * (follows the `update<DocumentName>` convention) — `updateMessage`
+   * never fires for chat messages and the preview stayed stale. */
+  Hooks.on("updateChatMessage", (message) => syncPreviewToMessage(message));
 }

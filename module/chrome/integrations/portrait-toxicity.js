@@ -22,6 +22,8 @@
  * (`flags.witcher-ttrpg-death-march.portrait_t{n}_{ne|ye}`) into the new shape.
  */
 
+import { rasterizePortraitCrop, PORTRAIT_CROP_FLAG } from "../../applications/ringPortraitCropper.mjs";
+
 const MODULE_ID = "witcher-ttrpg-death-march";
 
 /* Upper bound (inclusive) of each tier, as a fraction of toxicity.max. Tier i
@@ -129,16 +131,68 @@ function isResponsible(actor) {
   return owners[0]?.isSelf ?? false;
 }
 
+/* Tiny cache so repeated syncs of the same tier portrait don't re-rasterize
+ * each time. Keyed by `${img}|${tx}|${ty}|${scale}` since the data URL is a
+ * pure function of those inputs. Cleared on a slow LRU-ish bound. */
+const _cropCache = new Map();
+function cropCacheKey(img, c) { return `${img}|${c.tx ?? 0}|${c.ty ?? 0}|${c.scale ?? 1}`; }
+
 async function syncPortrait(actor) {
   if (!isVariablePortraitEnabled(actor)) return;
   if (!hasAnyImage(actor)) return;       // nothing configured → never clobber img
   if (!isResponsible(actor)) return;
   const target = selectImage(actor);
-  if (!target || actor.img === target) return;
-  try {
-    await actor.update({ img: target });
-  } catch (err) {
-    console.error(`${MODULE_ID} | variable portrait sync failed for ${actor.name}`, err);
+  if (!target) return;
+
+  /* Actor portrait — always the raw (uncropped) source image. */
+  if (actor.img !== target) {
+    try { await actor.update({ img: target }); }
+    catch (err) { console.error(`${MODULE_ID} | variable portrait sync failed for ${actor.name}`, err); }
+  }
+
+  /* For TOKEN textures (prototype + every active token doc) apply the
+   * saved crop transform — same {tx, ty, scale} the user picked once in
+   * the cropper — so every variable-portrait swap inherits the circular
+   * framing. Without this, the syncs below would clobber the cropper's
+   * output every time toxicity ticks. If no crop is saved, fall back to
+   * pushing the raw image. */
+  const cropState = actor.getFlag?.(MODULE_ID, PORTRAIT_CROP_FLAG);
+  let tokenTextureSrc = target;
+  if (cropState) {
+    const key = cropCacheKey(target, cropState);
+    let cached = _cropCache.get(key);
+    if (!cached) {
+      try {
+        cached = await rasterizePortraitCrop(target, cropState);
+        if (cached) {
+          if (_cropCache.size > 32) _cropCache.clear(); // simple bound
+          _cropCache.set(key, cached);
+        }
+      } catch (err) {
+        console.warn(`${MODULE_ID} | portrait crop rasterize failed, using raw image`, err);
+      }
+    }
+    if (cached) tokenTextureSrc = cached;
+  }
+
+  /* Prototype token texture — keep newly-spawned tokens of this actor in
+   * sync with the current tier/condition portrait. */
+  if (actor.prototypeToken?.texture?.src !== tokenTextureSrc) {
+    try { await actor.update({ "prototypeToken.texture.src": tokenTextureSrc }); }
+    catch (err) { console.warn(`${MODULE_ID} | prototype token texture sync failed for ${actor.name}`, err); }
+  }
+
+  /* All active token DOCUMENTS for this actor across the loaded scenes.
+   * Linked tokens don't pull from the prototype on every change — they
+   * carry their own texture.src once placed — so we have to push the new
+   * image to each token doc explicitly to swap what's on the canvas. */
+  const tokenDocs = (typeof actor.getActiveTokens === "function")
+    ? (actor.getActiveTokens(false, true) ?? [])  // (linked=false → all, document=true → TokenDocuments)
+    : [];
+  for (const td of tokenDocs) {
+    if (td?.texture?.src === tokenTextureSrc) continue;
+    try { await td.update({ "texture.src": tokenTextureSrc }); }
+    catch (err) { console.warn(`${MODULE_ID} | token texture sync failed for ${td?.name ?? "token"}`, err); }
   }
 }
 
@@ -449,3 +503,48 @@ Hooks.once("ready", async () => {
     try { syncPortrait(actor); } catch (_) { /* per-actor isolation */ }
   }
 });
+
+/* Inject a flask-vial button into the ApplicationV2 actor sheet's window
+ * header — placed immediately before the 3-dot controls toggle (so it sits
+ * to its LEFT) when the actor has variable portrait enabled. Click opens
+ * the same Variable Portrait config the chrome character panel uses, so
+ * GMs / owners can edit the tier+condition table from the sheet without
+ * going through the chrome dock first. */
+function injectVariablePortraitHeaderButton(app, element) {
+  try {
+    if (!element) return;
+    const actor = app?.actor;
+    if (!actor) return;
+    if (!isVariablePortraitEnabled(actor)) return;
+    if (!(game.user?.isGM || actor.isOwner)) return;
+
+    const header = element.querySelector?.(".window-header");
+    if (!header) return;
+    // Idempotent: re-renders happen on every form change, don't pile up.
+    if (header.querySelector('[data-wdm-vp-btn]')) return;
+
+    const controlsBtn = header.querySelector('button[data-action="toggleControls"]');
+    if (!controlsBtn) return;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "header-control icon fa-solid fa-flask-vial";
+    btn.dataset.wdmVpBtn = "1";
+    btn.dataset.tooltip = "Variable portrait";
+    btn.setAttribute("aria-label", "Variable portrait");
+    btn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      try { await openVariablePortraitConfig(actor); }
+      catch (err) { console.error(`${MODULE_ID} | open variable portrait config failed`, err); }
+    });
+    header.insertBefore(btn, controlsBtn);
+  } catch (err) {
+    console.warn(`${MODULE_ID} | variable portrait sheet button inject failed`, err);
+  }
+}
+
+/* renderActorSheetV2 catches every V2 actor sheet via Foundry's parent-class
+ * hook chain (renderWitcherCharacterSheet → renderWitcherActorSheet →
+ * renderActorSheetV2 → …). One handler covers all subclasses. */
+Hooks.on("renderActorSheetV2", injectVariablePortraitHeaderButton);

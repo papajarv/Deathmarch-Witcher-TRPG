@@ -904,6 +904,16 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
         if (!formConfig.submitOnChange || !this.rendered || DERIVED_FIELD_RE.test(name)) {
             return super._onChangeForm(formConfig, event);
         }
+        // The actor name field must NOT take the `{render:false}` shortcut:
+        // that option propagates through Document.update() and suppresses
+        // the global update broadcast that the actor sidebar / token name-
+        // plate / combat tracker all rely on to re-render with the new
+        // label. The user is done editing by the time `change` fires
+        // (blur), so caret preservation isn't a concern here — let the
+        // normal full-render submit path run for this field only.
+        if (name === "name") {
+            return super._onChangeForm(formConfig, event);
+        }
         event.preventDefault();
         // Mirror _onSubmitForm's error surfacing — submit() runs validate()
         // with fallback:false, which throws on an invalid value.
@@ -988,16 +998,55 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
 
     /**
      * Roll initiative (Core p.151). `1d10 + REF` (post-AE so debuffs
-     * count). Posts to the chat log; doesn't push to a combat tracker
-     * automatically — that's a follow-up if the GM wants integration.
+     * count). The actor is automatically added to the active combat
+     * (or a new one if none exists) and placed at the rolled value —
+     * if they're already a combatant this just rolls their slot.
+     * Mirrors the monster sheet's _addToCombatAndRoll behavior so the
+     * "Initiative" button on EITHER sheet always lands the actor in
+     * the tracker without the GM having to also drop the token onto
+     * a combat encounter.
      */
     static async _onRollInitiative(event, target) {
-        const ref = Number(this.actor.system?.stats?.ref?.value) || 0;
-        const roll = await new Roll(`1d10 + ${ref}`).evaluate();
-        await roll.toMessage({
-            speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-            flavor: `<h3>${this.actor.name} — Initiative</h3>`
-        });
+        const actor = this.actor;
+        try {
+            let combat = game.combat;
+            if (!combat) {
+                combat = await CONFIG.Combat.documentClass.create(
+                    { scene: canvas?.scene?.id ?? null, active: true });
+            }
+            if (!combat) {
+                ui.notifications.error("Could not create or find a combat encounter.");
+                return;
+            }
+
+            const sceneId = combat.scene?.id ?? canvas?.scene?.id ?? null;
+            const tokens = actor.getActiveTokens(false, true)
+                .filter(t => !sceneId || t.scene?.id === sceneId);
+            const placed = new Set(combat.combatants.map(c => c.tokenId).filter(Boolean));
+            if (tokens.length) {
+                const toAdd = tokens
+                    .filter(t => !placed.has(t.id))
+                    .map(t => ({ tokenId: t.id, sceneId: t.scene.id, actorId: actor.id, hidden: t.hidden }));
+                if (toAdd.length) await combat.createEmbeddedDocuments("Combatant", toAdd);
+            } else if (!combat.combatants.some(c => c.actorId === actor.id)) {
+                /* No token on the scene — fall back to a tokenless combatant
+                 * so the actor still shows up in the tracker (matches the
+                 * behavior of the monster sheet). */
+                await combat.createEmbeddedDocuments("Combatant", [{ actorId: actor.id }]);
+            }
+
+            const mine = combat.combatants.filter(c => c.actorId === actor.id);
+            const ids  = mine.filter(c => c.initiative == null).map(c => c.id);
+            const rollIds = ids.length ? ids : mine.map(c => c.id);
+            if (rollIds.length) {
+                const ref = Number(actor.system?.stats?.ref?.value) || 0;
+                await combat.rollInitiative(rollIds, { formula: `1d10 + ${ref}` });
+            }
+            if (!combat.active && typeof combat.activate === "function") await combat.activate();
+        } catch (err) {
+            ui.notifications.error("Failed to roll initiative into combat — see console.");
+            console.error(err);
+        }
     }
 
     /**

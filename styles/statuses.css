@@ -70,12 +70,33 @@ body.witcher-ttrpg-death-march #wou-dock .wou-status-ring .ring-track {
   stroke: rgba(140,133,121,0.55);
   stroke-width: 3 !important;
 }
+/* The ring color goes through a single `--ring-color` CSS variable so the
+   cascade is uniform across all sources:
+     · per-status override (inline style from dock-statuses.js) — top priority
+     · family default       (data-family attribute, set below)
+     · RAW fallback         (var() default — `--wdm-amber-bright`)
+   Whichever level sets the variable last wins; inline always beats the
+   stylesheet, so a GM-set per-status colour stays on top of family + RAW. */
 body.witcher-ttrpg-death-march #wou-dock .wou-status-ring .ring-fill {
-  stroke: var(--wdm-amber-bright);
+  stroke: var(--ring-color, var(--wdm-amber-bright));
   stroke-width: 3 !important;
   stroke-linecap: butt;
-  filter: drop-shadow(0 0 1px rgba(184,148,100,0.6));
+  filter: drop-shadow(0 0 1px rgba(0,0,0,0.7));
   transition: stroke-dasharray .25s ease-out;
+}
+
+/* Family-tinted rings — keyed off the `data-family` attribute that
+   dock-statuses.js stamps on the badge based on the AE's status ids and
+   system flags. RAW statuses (no attribute, no inline override) fall through
+   to the default amber via the var() above. */
+body.witcher-ttrpg-death-march #wou-dock .wou-status-badge[data-family="stress-break"] {
+  --ring-color: #d13838;        /* vivid blood-rust — clearly red vs. amber */
+}
+body.witcher-ttrpg-death-march #wou-dock .wou-status-badge[data-family="stress-boon"] {
+  --ring-color: #89cff0;        /* baby blue — distinct from amber and break-red */
+}
+body.witcher-ttrpg-death-march #wou-dock .wou-status-badge[data-family="food-drink"] {
+  --ring-color: #cc6b1c;        /* burnt-orange, separate from amber */
 }
 
 body.witcher-ttrpg-death-march #wou-dock .wou-status-icon {
@@ -489,4 +510,37 @@ body.witcher-ttrpg-death-march .wdm-se-check {
 body.witcher-ttrpg-death-march .wdm-se-check input[type="checkbox"] {
   flex: 0 0 auto;
   margin: 0;
+}
+
+/* Rim-color picker — small horizontal row: native color swatch, hex text
+   input, and a clear button to drop the override. The text is the canonical
+   form value; the picker syncs from JS for visual UX. */
+body.witcher-ttrpg-death-march .wdm-se-rim {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+body.witcher-ttrpg-death-march .wdm-se-rim-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+body.witcher-ttrpg-death-march .wdm-se-rim-row input[type="color"] {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--wdm-bg-deep);
+  border: 1px solid var(--wdm-amber-dim);
+  cursor: pointer;
+}
+body.witcher-ttrpg-death-march .wdm-se-rim-row input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+body.witcher-ttrpg-death-march .wdm-se-rim-clear {
+  flex: 0 0 auto;
+  padding: 4px 10px !important;
+  font-family: var(--wdm-font-display) !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
 }

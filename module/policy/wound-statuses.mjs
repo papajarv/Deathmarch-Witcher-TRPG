@@ -112,11 +112,31 @@ export function registerWoundStatuses() {
             && foundry.utils.hasProperty(ch, "system.state")) reconcileWoundStatuses(it.parent);
     });
 
-    // Any effect change can shift the immunity set (a potion granting/losing
-    // bleed immunity, an immunity AE enabled/disabled/expired) or strip a wound
-    // status (an end-check pass on an independent bleed) — so re-evaluate to
-    // suppress, resume, or re-assert. The _busy lock guards against recursion.
-    const onEffect = (e) => reconcileWoundStatuses(actorOf(e));
+    /* Any effect change can shift the immunity set (a potion granting/losing
+     * bleed immunity, an immunity AE enabled/disabled/expired) or strip a
+     * wound status (an end-check pass on an independent bleed) — so we have
+     * to re-evaluate. But these hooks fire often: applying a single multi-
+     * status effect, ticking durations, end-of-turn auto-clears, etc. Each
+     * one triggers a full per-actor wound scan; on a wounded NPC with many
+     * AEs, that's measurable. Debounce per-actor (microtask + RAF) so a
+     * burst of effect changes collapses into ONE reconcile pass. The
+     * existing _busy lock still guards against re-entrancy inside the
+     * reconciler itself. */
+    const _pending = new Set();
+    const flushReconcile = () => {
+        for (const actorId of _pending) {
+            _pending.delete(actorId);
+            const actor = game.actors?.get?.(actorId);
+            if (actor) reconcileWoundStatuses(actor);
+        }
+    };
+    const scheduleReconcile = (actor) => {
+        if (!actor?.id) return;
+        const wasEmpty = _pending.size === 0;
+        _pending.add(actor.id);
+        if (wasEmpty) requestAnimationFrame(flushReconcile);
+    };
+    const onEffect = (e) => scheduleReconcile(actorOf(e));
     Hooks.on("createActiveEffect", onEffect);
     Hooks.on("deleteActiveEffect", onEffect);
     Hooks.on("updateActiveEffect", onEffect);

@@ -536,17 +536,26 @@ export const STRIKE_TYPES = Object.freeze({
  *   status      status id applied to the target on a hit
  *   needsGrapple true → presumes the target is already grappled
  *   note        i18n key describing the rider effect (card + dialog info box) */
+/* Action metadata for the brawl + grapple chain (Core p.159-160).
+ *
+ *   pushBackFormula : a dice / stat expression evaluated against the attacker
+ *                     in metres of forced knockback (push kick: "body/3").
+ *   triggerStunSave : { mod } — after the action's status lands, the target
+ *                     rolls a Stun save at the listed modifier (throw: −1).
+ *   needsGrapple    : the action requires the target to be Grappled first
+ *                     (pin/choke/throw); a warning posts when it isn't.
+ */
 export const BRAWL_ACTIONS = Object.freeze({
     block:    { labelKey: "WITCHER.Brawl.Block",    kind: "defense", note: "WITCHER.Brawl.NoteBlock" },
     punch:    { labelKey: "WITCHER.Brawl.Punch",    kind: "attack",  damage: "punch", strikes: true, location: true, note: "WITCHER.Brawl.NotePunch" },
     kick:     { labelKey: "WITCHER.Brawl.Kick",     kind: "attack",  damage: "kick",  strikes: true, location: true, note: "WITCHER.Brawl.NoteKick" },
-    pushKick: { labelKey: "WITCHER.Brawl.PushKick", kind: "attack",  damage: "punch", half: true, fixedLoc: "torso", note: "WITCHER.Brawl.NotePushKick" },
+    pushKick: { labelKey: "WITCHER.Brawl.PushKick", kind: "attack",  damage: "punch", half: true, fixedLoc: "torso", pushBackFormula: "body/3", note: "WITCHER.Brawl.NotePushKick" },
     charge:   { labelKey: "WITCHER.Brawl.Charge",   kind: "attack",  damage: "punch", forceStrike: "strong", fullRound: true, note: "WITCHER.Brawl.NoteCharge" },
     disarm:   { labelKey: "WITCHER.Brawl.Disarm",   kind: "grapple", note: "WITCHER.Brawl.NoteDisarm" },
     grapple:  { labelKey: "WITCHER.Brawl.Grapple",  kind: "grapple", status: "grappled", note: "WITCHER.Brawl.NoteGrapple" },
     pin:      { labelKey: "WITCHER.Brawl.Pin",      kind: "grapple", status: "pinned", needsGrapple: true, note: "WITCHER.Brawl.NotePin" },
     choke:    { labelKey: "WITCHER.Brawl.Choke",    kind: "grapple", status: "suffocation", needsGrapple: true, note: "WITCHER.Brawl.NoteChoke" },
-    throw:    { labelKey: "WITCHER.Brawl.Throw",    kind: "grapple", damage: "punch", status: "prone", needsGrapple: true, note: "WITCHER.Brawl.NoteThrow" },
+    throw:    { labelKey: "WITCHER.Brawl.Throw",    kind: "grapple", damage: "punch", status: "prone", needsGrapple: true, triggerStunSave: { mod: -1 }, note: "WITCHER.Brawl.NoteThrow" },
     trip:     { labelKey: "WITCHER.Brawl.Trip",     kind: "grapple", status: "prone", note: "WITCHER.Brawl.NoteTrip" }
 });
 
@@ -616,6 +625,31 @@ export const AIM_BONUS_CAP = 3;
  * Monster category. Humanoids + Beasts are "not technically monsters" per
  * RAW (no silver vulnerability / steel resistance) but live in the same
  * stat-block. */
+/* Optional Novel-rules weapon-weakness defaults per category (Core p.175).
+ * Silver: Cursed Ones, Elementals, Necrophages, Relicts, Specters, Vampires.
+ * Meteorite: Beasts, Hybrids, Draconids, Insectoids, Ogroids.
+ * Humanoids carry neither weakness. Used as the sheet's default seed when
+ * the GM picks a category — they can always override per monster. */
+export function defaultWeaponWeaknessFor(category) {
+    switch (category) {
+        case "cursedOne":
+        case "elementa":
+        case "necrophage":
+        case "relict":
+        case "specter":
+        case "vampire":
+            return "silver";
+        case "beast":
+        case "hybrid":
+        case "draconid":
+        case "insectoid":
+        case "ogroid":
+            return "meteorite";
+        default:
+            return "none";
+    }
+}
+
 export const MONSTER_TYPES = Object.freeze({
     humanoid:   "WITCHER.MonsterType.Humanoid",
     beast:      "WITCHER.MonsterType.Beast",
@@ -667,51 +701,102 @@ export const DAMAGE_REACTIONS = Object.freeze({
  * Silver, the integer for Focus / Stun). Storage lives in a sibling
  * map on the document: `system.qualityValues = { silver: "2d6", … }`.
  * The display tooltip renders parameterized qualities as `Label(value)`. */
-const wq = (label, description, param = null) => Object.freeze({
-    label, description, param: param ? Object.freeze(param) : null
+/* Quality entry constructor.  `extra` lets a quality carry behavioral
+ * config the calculator + post-hit pipeline read at runtime — keeps every
+ * piece of weapon-quality behavior in ONE editable place (the qualities
+ * editor) instead of scattered hardcoded maps:
+ *
+ *   damageFlags : flags the damage calculator ORs onto the damageSource
+ *                 when the weapon has this quality.  Recognized keys:
+ *                   armorPiercing | improvedArmorPiercing | ablating |
+ *                   bypassesWornArmor | bypassesNaturalArmor |
+ *                   bypassesShield | isSilver
+ *   rider       : post-hit status application.  Shape:
+ *                   { kind, statusId, locations? }
+ *                 kind ∈ percent | auto | stunSave
+ *                   percent  — roll d100, apply on <= param value
+ *                   auto     — apply on every damaging hit
+ *                   stunSave — post a Stun-save prompt (modifier = param)
+ *                 statusId  — id from CONFIG.statusEffects (e.g. "bleed")
+ *                 locations — array of ATTACK_LOCATIONS keys; the rider
+ *                             only fires when the hit landed on one of
+ *                             them.  Defaults to [head, torso] for
+ *                             stunSave and to "any" for percent / auto. */
+const wq = (label, description, param = null, extra = null) => Object.freeze({
+    label,
+    description,
+    param:       param ? Object.freeze(param) : null,
+    damageFlags: Object.freeze(extra?.damageFlags ?? {}),
+    rider:       extra?.rider ? Object.freeze({
+        kind:      extra.rider.kind ?? "none",
+        statusId:  extra.rider.statusId ?? "",
+        locations: extra.rider.locations ? Object.freeze([...extra.rider.locations]) : null
+    }) : null,
+    /* Hardwired tactical flags — read by combat-flow code at attack time.
+     *   ignoresRepositionDistance — the weapon's reach is long enough that
+     *     a defender Repositioning out of the original square does NOT
+     *     escape the engagement; follow-up Fast-attack swings still resolve.
+     *     See Long Reach (Core p.118). */
+    ignoresRepositionDistance: Boolean(extra?.ignoresRepositionDistance ?? false)
 });
 export const WEAPON_QUALITIES = Object.freeze({
-    ablating:              wq("Ablating",                "Penetrating hits chip stopping power off armor (1d6/2 SP damage)."),
-    armorPiercing:         wq("Armor Piercing",          "Ignores the target armor's damage resistance."),
-    improvedArmorPiercing: wq("Improved Armor Piercing", "Ignores damage resistance AND halves the armor's SP on hit."),
+    ablating:              wq("Ablating",                "Penetrating hits chip stopping power off armor (1d6/2 SP damage).",
+                              null, { damageFlags: { ablating: true } }),
+    armorPiercing:         wq("Armor Piercing",          "Ignores the target armor's damage resistance.",
+                              null, { damageFlags: { armorPiercing: true } }),
+    improvedArmorPiercing: wq("Improved Armor Piercing", "Ignores damage resistance AND halves the armor's SP on hit.",
+                              null, { damageFlags: { improvedArmorPiercing: true } }),
     balanced:              wq("Balanced",                "Better criticals: roll 2d6+2 (or 1d6+1 if aimed) for severity."),
     bleeding:              wq("Bleeding",                "On damage, chance to inflict Bleeding (see Status Effects).",
-                              { type: "percent", placeholder: "25", suffix: "%" }),
+                              { type: "percent", placeholder: "25", suffix: "%" },
+                              { rider: { kind: "percent", statusId: "bleed" } }),
     brawling:              wq("Brawling",                "Uses Brawling skill; adds weapon damage to unarmed strikes."),
     charging:              wq("Charging",                "Used from a mount in motion: add 1d6 bonus damage per meter charged, rather than the usual half."),
     concealment:           wq("Concealment",             "+2 to checks made to conceal this weapon on your person."),
     knockdown:             wq("Knock-Down",              "On a damaging hit, chance to knock the target prone.",
-                              { type: "percent", placeholder: "50", suffix: "%" }),
+                              { type: "percent", placeholder: "50", suffix: "%" },
+                              { rider: { kind: "percent", statusId: "prone" } }),
     disease:               wq("Disease",                 "On a damaging hit, chance to inflict the Disease condition (see Status Effects).",
-                              { type: "percent", placeholder: "25", suffix: "%" }),
-    crushingForce:         wq("Crushing Force",          "Cannot be parried; inflicts double ablation on weapons, shields, and armor."),
+                              { type: "percent", placeholder: "25", suffix: "%" },
+                              { rider: { kind: "percent", statusId: "diseased" } }),
+    crushingForce:         wq("Crushing Force",          "Cannot be parried; inflicts double ablation on weapons, shields, and armor.",
+                              null, { damageFlags: { ablating: true } }),
     fire:                  wq("Fire",                    "On a damaging hit, chance to set the target alight (see Burning status).",
-                              { type: "percent", placeholder: "25", suffix: "%" }),
+                              { type: "percent", placeholder: "25", suffix: "%" },
+                              { rider: { kind: "percent", statusId: "burning" } }),
     focus:                 wq("Focus",                   "Casting through this weapon reduces STA cost by its Focus value.",
                               { type: "number", placeholder: "1" }),
     freeze:                wq("Freeze",                   "On a damaging hit, chance to chill the target solid (see Frozen status).",
-                              { type: "percent", placeholder: "25", suffix: "%" }),
+                              { type: "percent", placeholder: "25", suffix: "%" },
+                              { rider: { kind: "percent", statusId: "freeze" } }),
     grappling:             wq("Grappling",               "Can be used to grapple and trip opponents in reach."),
-    entangling:            wq("Entangling",              "On a hit the target is entangled: -5 SPD and -2 to all physical actions; each turn a DC 18 Dodge/Escape or Contortionist check breaks free, or an ally may spend an action to remove it."),
+    entangling:            wq("Entangling",              "On a hit the target is entangled: -5 SPD and -2 to all physical actions; each turn a DC 18 Dodge/Escape or Contortionist check breaks free, or an ally may spend an action to remove it.",
+                              null, { rider: { kind: "auto", statusId: "entangled" } }),
     magicalAnchoring:      wq("Magically Anchoring",     "While a creature touches the weapon it cannot turn invisible or intangible or teleport away; any already invisible or intangible creature is forced visible and solid."),
     bladeCatcher:          wq("Blade Catcher",           "When you block a melee attack with it, both weapons lock together and are useless until the attacker beats your Small Blades check with a Physique or Sleight of Hand check, or you let go."),
     crewReload:            wq("Crew Reload",             "Reloading takes 2 actions, which two people may split between them."),
     mounted:               wq("Mounted",                 "Fixed in place; it must be set up before use and packed away (an action each) before it can be moved."),
     injector:              wq("Injector",                "Can be charged (an action) with a dose of poison or elixir; a damaging hit drives the dose deep, making a poison 3 harder to resist or an elixir last 3 rounds longer."),
     greaterFocus:          wq("Greater Focus",           "Spells cast through this weapon treat DC as +2."),
-    longReach:             wq("Long Reach",              "Strikes targets up to 2m away."),
-    meteorite:             wq("Meteorite",               "Full damage vs meteorite-vulnerable monsters; +5 Reliability."),
+    longReach:             wq("Long Reach",              "Strikes targets up to 2m away. A defender Repositioning out of the original square does NOT escape this weapon — the follow-up Fast-attack swing still resolves.",
+                              null, { ignoresRepositionDistance: true }),
+    meteorite:             wq("Meteorite",               "Full damage vs meteorite-vulnerable monsters; +5 Reliability.",
+                              null, { damageFlags: { isMeteorite: true } }),
     nonLethal:             wq("Non-Lethal",              "Deals non-lethal damage with no normal penalty."),
     parrying:              wq("Parrying",                "Parrying with this weapon lowers the parry penalty by 2."),
     poison:                wq("Poison",                   "On a damaging hit, chance to envenom the target (see Poisoned status).",
-                              { type: "percent", placeholder: "25", suffix: "%" }),
+                              { type: "percent", placeholder: "25", suffix: "%" },
+                              { rider: { kind: "percent", statusId: "poisoned" } }),
     silver:                wq("Silver",                  "Counts as silver vs monster resistances; deals the listed damage formula when used as a silver attack.",
-                              { type: "text", placeholder: "2d6" }),
+                              { type: "text", placeholder: "2d6" },
+                              { damageFlags: { isSilver: true } }),
     slowReload:            wq("Slow Reload",             "Takes a 1-action reload between shots."),
     stagger:               wq("Stagger",                 "On a damaging hit, chance to knock the target off-balance (see Staggered status).",
-                              { type: "percent", placeholder: "25", suffix: "%" }),
+                              { type: "percent", placeholder: "25", suffix: "%" },
+                              { rider: { kind: "percent", statusId: "staggered" } }),
     stun:                  wq("Stun",                    "Head/torso hits force a Stun save at the listed penalty.",
-                              { type: "text", placeholder: "-2" })
+                              { type: "text", placeholder: "-2" },
+                              { rider: { kind: "stunSave", statusId: "stunned", locations: ["head", "torso"] } })
 });
 
 /* Armor qualities — the Core Rulebook armor section doesn't have a
@@ -1085,18 +1170,33 @@ export const EFFECT_ACTION_TYPES = Object.freeze([
     // can wire it to the Witcher race / a perk / a magical token instead of
     // being hard-coded to a profession-name regex). Read by
     // mechanics/foodAndDrink.handleEnduranceRoll.
-    { type: "alcoholRollAdvantage", labelKey: "WITCHER.Effect.ActionAlcoholRollAdvantage", kind: "marker" },
+    { type: "alcoholRollAdvantage", labelKey: "WITCHER.Effect.ActionAlcoholRollAdvantage", kind: "marker", homebrew: "foodAndDrink" },
     // Clear hangover — one-shot. When an effect carrying this action lands
     // on an actor, every hangover AE the bearer has gets deleted. Used by
     // "hair of the dog" potions, restorative meals, the cleric's Cure
     // Hangover invocation, etc. Source effect is left in place; rely on
     // its own duration / removal for cleanup.
-    { type: "clearHangover", labelKey: "WITCHER.Effect.ActionClearHangover", kind: "oneshot" }
+    { type: "clearHangover", labelKey: "WITCHER.Effect.ActionClearHangover", kind: "oneshot", homebrew: "foodAndDrink" },
+    // Stress shield — declarative absorb buffer. On apply, statusEngine
+    // rolls the configured value (dice formula or flat number) and writes
+    // the result onto the AE as `stressAbsorbPoints` (kind=points: per-
+    // point) or `stressAbsorbSources` (kind=sources: per-event). The stress
+    // preUpdate gate consumes the buffer on every raise — manual dock entry,
+    // WILL-save raises, GM panel — and the AE persists until depleted. Pin
+    // this to potions, perks, or any custom buff that should soak stress.
+    { type: "stressShield", labelKey: "WITCHER.Effect.ActionStressShield", kind: "oneshot", homebrew: "stress" }
 ]);
 
 export function effectActionTypeOptions() {
     const L = (k) => game.i18n.localize(k);
-    return EFFECT_ACTION_TYPES.map(o => ({ value: o.type, label: L(o.labelKey) }));
+    // Hide homebrew-gated action types when their toggle is off — keeps the
+    // AE editor's dropdown free of mechanics the world won't act on. The
+    // engine handlers already bail on the same toggle, so a stored action
+    // from before the flip remains inert until it's flipped back on.
+    const safe = (k) => { try { return !!game.settings?.get?.("witcher-ttrpg-death-march", `homebrew.${k}`); } catch { return false; } };
+    return EFFECT_ACTION_TYPES
+        .filter(o => !o.homebrew || safe(o.homebrew))
+        .map(o => ({ value: o.type, label: L(o.labelKey) }));
 }
 
 /* What a suppress action can switch off. Labels reuse the Suppress* keys. */
@@ -1510,7 +1610,16 @@ function mergeQualityCatalog(defaults, override) {
             ? {
                 label:       ovrEntry.label       ?? defEntry.label,
                 description: ovrEntry.description ?? defEntry.description,
-                param:       ovrEntry.param       ?? defEntry.param ?? null
+                param:       ovrEntry.param       ?? defEntry.param ?? null,
+                /* Preserve tactical/damage behavior from defaults when the
+                 * override only edited descriptive fields. Earlier versions
+                 * of this merge dropped damageFlags / rider entirely, which
+                 * broke (e.g.) Bleeding's rider whenever the GM tweaked
+                 * Bleeding's description in the qualities editor. */
+                damageFlags: ovrEntry.damageFlags ?? defEntry.damageFlags ?? {},
+                rider:       ovrEntry.rider       ?? defEntry.rider       ?? null,
+                ignoresRepositionDistance:
+                    ovrEntry.ignoresRepositionDistance ?? defEntry.ignoresRepositionDistance ?? false
             }
             : defEntry;
     }

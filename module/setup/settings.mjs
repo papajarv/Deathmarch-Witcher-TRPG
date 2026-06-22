@@ -16,6 +16,8 @@ import { HomebrewContentEditor } from "../applications/homebrewContentEditor.mjs
 import { WeatherConfigApp } from "../applications/weatherConfig.mjs";
 import { SceneDefaultsLauncher } from "../applications/sceneDefaultsConfig.mjs";
 import { FoodAndDrinkConfigApp, FOOD_AND_DRINK_CONFIG_DEFAULTS } from "../applications/foodAndDrinkConfig.mjs";
+import { StressConfigApp } from "../applications/stressConfig.mjs";
+import { STRESS_CONFIG_DEFAULTS } from "../mechanics/stress.mjs";
 import { STATUS_OVERRIDE_SETTING, invalidateStatusClauseCache } from "../mechanics/statusOverrides.mjs";
 
 const SYSTEM_ID = "witcher-ttrpg-death-march";
@@ -47,6 +49,45 @@ export function registerSettings() {
         type: Boolean,
         default: true,
         requiresReload: true
+    });
+
+    /* Token facing offset for the "auto-face target" feature (see
+     * policy/canvas-auto-face.mjs). Different VTT token art faces
+     * different compass directions at rotation 0:
+     *   asset faces NORTH (head-up portrait)         →  +90
+     *   asset faces EAST  (sideways, facing right)   →    0  (default)
+     *   asset faces SOUTH (looking at the viewer)    →  -90
+     *   asset faces WEST  (sideways, facing left)    → +180
+     * The setting is added to the rotation atan2 to compute facing.
+     * If your tokens face the wrong way when auto-facing, try a
+     * different offset. */
+    game.settings.register(SYSTEM_ID, "tokenFacingOffsetDeg", {
+        name: "Token facing offset (auto-face)",
+        hint: "Offset added to computed facing rotations. Pick whichever direction your token art naturally faces at rotation 0. The Witcher portrait packs (and most VTT-marketplace tokens) draw the character looking AT the viewer — that's SOUTH at rotation 0, default -90. If facing comes out backward, try one of the other values.",
+        scope: "world",
+        config: true,
+        type: Number,
+        choices: {
+            "-90": "-90° — asset faces SOUTH at rotation 0 (looking at viewer, DEFAULT)",
+              "0": "0° — asset faces EAST at rotation 0 (sideways → right)",
+             "90": "90° — asset faces NORTH at rotation 0 (head-up portrait)",
+            "180": "180° — asset faces WEST at rotation 0 (sideways → left)"
+        },
+        default: -90
+    });
+
+    /* One-shot migration flag — early releases of this setting shipped
+     * with defaults 0 and +90 before the user's table identified that
+     * their token art is south-facing (looking-at-viewer). Worlds that
+     * upgraded already have a cached value that doesn't match the new
+     * default. We bump those once on ready (see registerFacingOffsetMigration
+     * in setup/hooks.mjs) and then set this flag so the migration never
+     * re-runs — if the GM later picks a different value, we respect it. */
+    game.settings.register(SYSTEM_ID, "tokenFacingOffsetMigratedV1", {
+        scope: "world",
+        config: false,
+        type: Boolean,
+        default: false
     });
 
     /* Stamina spent per adrenaline die (RAW default 10, Core p.176). Only
@@ -204,6 +245,27 @@ export function registerSettings() {
         hint: "WITCHER.Settings.TimeFlowRate.Hint",
         scope: "world",
         config: false,   // surfaced in WeatherConfigApp's General tab
+        type: Number,
+        default: 1
+    });
+
+    /* Scene units per SPD point — how many canvas/scene-grid distance units
+     * equal one point of SPD when charging the movement budget from a token
+     * drag. Default 1 (Witcher RAW: 1 SPD = 1m, scene grid in meters).
+     *
+     * Examples:
+     *   - Scene uses meters, 1 SPD = 1 m   → set 1  (RAW)
+     *   - Scene uses feet,   1 SPD ≈ 3 ft  → set 3
+     *   - Scene uses feet,   1 SPD = 5 ft  → set 5  (hex-board convention)
+     *
+     * canvas-movement.mjs reads this when converting a token drag's measured
+     * grid distance into SPD-equivalent meters: `meters = sceneDist / unitsPerSpd`.
+     */
+    game.settings.register(SYSTEM_ID, "spdUnitsPerPoint", {
+        name: "Scene units per SPD point",
+        hint: "How many of the scene's grid-distance units equal one point of SPD when canvas drags charge the movement budget. Default 1 (Witcher RAW: 1 SPD = 1 metre, scene grid in metres). Use 3 for scene-grid-in-feet with 1 SPD ≈ 1 metre, or 5 for hex-board convention (1 SPD = 5 ft).",
+        scope: "world",
+        config: true,
         type: Number,
         default: 1
     });
@@ -433,6 +495,29 @@ export function registerSettings() {
             hint: "Edit how fast satiety decays per hour, at what satiety values each hunger tier kicks in, and the per-tier metadata (Endurance DC, level jump, unconscious / death thresholds) the drunk roll uses.",
             icon: "fa-solid fa-utensils",
             type: FoodAndDrinkConfigApp,
+            restricted: true
+        });
+    }
+
+    /* Stress config — numeric tunables + system-wide toggles for the stress
+     * homebrew. Same pattern as Food & Drink: setting is always registered
+     * so values survive a toggle flip; the menu only appears when stress
+     * is currently on. requiresReload because consumers read the config
+     * during init paths (runStressCheck, healSheetMixin, wound-stress hook). */
+    game.settings.register(SYSTEM_ID, "stressConfig", {
+        scope: "world",
+        config: false,
+        type: Object,
+        default: STRESS_CONFIG_DEFAULTS,
+        requiresReload: true
+    });
+    if (game.settings.get(SYSTEM_ID, "homebrew.stress")) {
+        game.settings.registerMenu(SYSTEM_ID, "stressConfig", {
+            name: "Stress Configuration",
+            label: "Configure Stress",
+            hint: "Toggle the recovery penalty on/off, tune the WILL-save threshold multiplier and post-save clear target, set the breakdown-cap-before-handover, and adjust the stress granted by each critical wound severity. Boon / break tables and stress-shield dice live in the Status Effects editor.",
+            icon: "fa-solid fa-brain",
+            type: StressConfigApp,
             restricted: true
         });
     }

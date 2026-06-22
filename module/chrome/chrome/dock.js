@@ -23,7 +23,7 @@ import { openFumbleDialog, installFumbleChatHandler } from "./fumble-dialog.js";
 import { openCriticalDialog, installCritChatHandler } from "./critical-roll.js";
 import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 import { reloadWithPrompt } from "../lib/reload.js";
-import { getActiveWeaponQualities, WEAPON_QUALITIES, AIM_BONUS_CAP, AIM_BONUS_PER_TURN } from "../../setup/config.mjs";
+import { getActiveWeaponQualities, WEAPON_QUALITIES, AIM_BONUS_CAP, AIM_BONUS_PER_TURN, DAMAGE_TYPES } from "../../setup/config.mjs";
 import { selfClearOptions, actionEndCheckOptions, performActionEndCheck } from "../../mechanics/statusEngine.mjs";
 import { isAdrenalineEnabled, adrenalineStaPerDie } from "../../api/adrenaline.mjs";
 import { getActiveWeatherModifiers } from "../../mechanics/weather-modifiers.mjs";
@@ -153,6 +153,10 @@ const DOCK_HTML = `
             <button type="button" class="action-btn" data-action="movement" title="Movement">
               <i class="fa-solid fa-shoe-prints"></i>
               <span class="nm">Movement</span>
+              <!-- Live in-combat readout: spent/cap, painted by
+                   paintActionBudget. Hidden out of combat (or when SPD is
+                   unknown) by CSS reading the empty value. -->
+              <span class="mov-counter" data-bind="mov-counter"></span>
             </button>
             <button type="button" class="action-btn" data-action="action" title="Action">
               <i class="fa-solid fa-bullseye"></i>
@@ -223,7 +227,7 @@ const DOCK_HTML = `
             <button type="button" class="defense-btn" data-action="dodge" title="Dodge">
               <i class="fa-solid fa-person-running"></i><span class="nm">Dodge</span>
             </button>
-            <button type="button" class="defense-btn" data-action="relocate" title="Relocate">
+            <button type="button" class="defense-btn" data-action="reposition" title="Reposition">
               <i class="fa-solid fa-arrows-up-down-left-right"></i><span class="nm">Rel</span>
             </button>
             <button type="button" class="defense-btn" data-action="brawl" title="Brawl">
@@ -966,9 +970,20 @@ function escapeHTML(s) {
  * discrete jumps (never real-time), so this re-renders exactly when the
  * coating's countdown actually changes, with no per-second thrash. */
 function weaponListSig(actor) {
+  /* Monsters: also include inline attacks (system.combat.attacks) so a
+   * picker edit re-renders the dock attack row. Item weapons can still
+   * coexist (humanoid monster carrying a dragged steel sword). Per-attack
+   * ROF tally also rides in the sig so a swing that decrements ROF (or
+   * a turn-start reset) actually re-renders the row state. */
+  let inlineSig = "";
+  if (actor?.type === "monster") {
+    const attacks = actor.system?.combat?.attacks ?? [];
+    const rof     = actor.getFlag?.("witcher-ttrpg-death-march", "monsterAttackUsed") ?? {};
+    inlineSig = JSON.stringify(attacks) + "|rof:" + JSON.stringify(rof);
+  }
   const equipped = (actor?.items?.contents ?? actor?.items ?? [])
     .filter(i => (i.type === "weapon" || i.type === "shield") && i.system?.equipped);
-  return equipped.map(w => {
+  return inlineSig + "||" + equipped.map(w => {
     const oil = getAppliedOilForWeapon(w);
     const od  = oil ? describeDuration(oil.dur ?? {}) : null;
     const oilKey = od ? `${od.label}:${Math.round(od.remaining)}` : "";
@@ -977,7 +992,13 @@ function weaponListSig(actor) {
           ? `c${Number(w.system?.loaded?.count) || 0}/${Math.max(1, Number(w.system?.loaded?.capacity) || 1)}:${w.system?.loaded?.uuid ?? ""}:p${Number(w.system?.loaded?.reloadProgress) || 0}`
           : `b${Number(w.getSelectedAmmo?.()?.system?.quantity) || 0}:${w.getSelectedAmmo?.()?.id ?? ""}`)
       : "";
-    return `${w.id}:${w.name}:${occupancyOf(w)}:${oil?.name ?? ""}:${oilKey}:${ammoKey}`;
+    /* Reliability: include both max + value so an SP change (block
+     * absorbed → −1) AND a repair (raise back above 0) both invalidate
+     * the sig and force a dock rebuild. Without this, repairing a
+     * broken weapon required an equip/unequip round-trip to convince
+     * the sig-skip to let the rebind through. */
+    const relKey = `r${Number(w.system?.reliability?.value) || 0}/${Number(w.system?.reliability?.max) || 0}`;
+    return `${w.id}:${w.name}:${occupancyOf(w)}:${oil?.name ?? ""}:${oilKey}:${ammoKey}:${relKey}`;
   }).join("|");
 }
 
@@ -1012,7 +1033,124 @@ function renderWeaponList(host, actor) {
   const equipped = (actor.items?.contents ?? actor.items ?? [])
     .filter(i => (i.type === "weapon" || i.type === "shield") && i.system?.equipped);
 
-  if (!equipped.length) {
+  /* Monster inline attacks: render simpler buttons before the item weapons.
+   * Each clicks through the unified weaponAttack flow via a virtual weapon.
+   * RAW Core p.153: monsters can't use Strong / Fast / Joint / Feint, so the
+   * strike-type dialog is skipped — default declaration is a normal swing. */
+  if (actor.type === "monster") {
+    const inline = Array.isArray(actor.system?.combat?.attacks) ? actor.system.combat.attacks : [];
+    /* Per-attack: how many shots already fired this round. ROF caps the
+     * remaining swings — at 0 the attack button greys out until next turn.
+     * Stored on actor.flags so it survives reload. Key is the attack index. */
+    const firedThisRound = actor.getFlag?.("witcher-ttrpg-death-march", "monsterAttackUsed") ?? {};
+    inline.forEach((attack, i) => {
+      const name      = String(attack?.name || "Attack");
+      const dmg       = String(attack?.damage || "");
+      const rofMax    = Math.max(1, Number(attack?.rof) || 1);
+      const rofUsed   = Math.max(0, Number(firedThisRound?.[i]) || 0);
+      const rofLeft   = Math.max(0, rofMax - rofUsed);
+      /* Quality labels via the same catalog the PC dock uses, so a
+       * Bleeding(50%) chip reads identically to the same chip on a
+       * character weapon row. */
+      const qLabels = (() => {
+        const keys   = Array.isArray(attack?.qualities) ? attack.qualities : [];
+        if (!keys.length) return [];
+        const values = (attack?.qualityValues && typeof attack.qualityValues === "object") ? attack.qualityValues : {};
+        const catalog = getActiveWeaponQualities() ?? {};
+        return keys.map((key) => {
+          const entry = catalog[key] ?? WEAPON_QUALITIES[key];
+          if (!entry) return null;
+          const param = entry.param ?? null;
+          let label = entry.label ?? key;
+          if (param) {
+            const raw = values[key];
+            const v   = raw == null ? "" : String(raw).trim();
+            if (v.length) label = `${entry.label}(${v}${param.suffix ?? ""})`;
+          }
+          return label;
+        }).filter(Boolean);
+      })();
+      /* Damage type labels — show alongside qualities so a Slashing
+       * Bite reads as "Slashing · Bleeding(50%)". */
+      const typeLabels = (() => {
+        /* Filter to non-empty strings: the monster sheet's damage-type
+         * checkbox row serializes unchecked slots as nulls (one per
+         * damage-type option), leaving `damageTypes` as a sparse
+         * [null,null,...] array. Without this guard `k.charAt(0)` on
+         * a null entry throws and aborts the inline-attack render
+         * mid-forEach, leaving the dock weapon list blank. */
+        const keys = (Array.isArray(attack?.damageTypes) ? attack.damageTypes : [])
+          .filter(k => typeof k === "string" && k.length > 0);
+        if (!keys.length) return [];
+        return keys.map(k => {
+          const i18nKey = DAMAGE_TYPES[k];
+          return i18nKey ? game.i18n.localize(i18nKey) : (k.charAt(0).toUpperCase() + k.slice(1));
+        });
+      })();
+      const subline = [...typeLabels, ...qLabels].join(" · ");
+      const skillName = attack?.skill ? attack.skill : "melee";
+      const exhausted = isActorInActiveCombat(actor) && rofLeft <= 0;
+
+      const el = document.createElement("div");
+      el.className = "weapon-item is-monster-inline"
+        + (exhausted ? " is-no-action" : "");
+      el.dataset.monsterAttackIndex = String(i);
+      el.innerHTML = `
+        <button type="button" class="weapon-main${exhausted ? " is-disabled" : ""}" ${exhausted ? "disabled" : ""}
+                title="${exhausted ? "ROF exhausted this round." : `Attack with ${escapeHTML(name)} (ROF ${rofLeft}/${rofMax})`}">
+          <span class="weapon-icon-wrap">
+            <i class="fa-solid fa-paw"></i>
+          </span>
+          <span class="weapon-text">
+            <span class="weapon-name">${escapeHTML(name)}<span class="weapon-rof" title="Rate of Fire — shots remaining this round"> ROF ${rofLeft}/${rofMax}</span></span>
+            ${dmg || subline ? `<span class="weapon-qualities">${[
+              dmg ? `<span class="weapon-dmg">${escapeHTML(dmg)}</span>` : "",
+              subline ? escapeHTML(subline) : ""
+            ].filter(Boolean).join(" · ")}</span>` : ""}
+            <span class="weapon-monster-skill" title="Attack skill — monsters roll 1d10 + this">${escapeHTML(skillName.charAt(0).toUpperCase() + skillName.slice(1))}</span>
+          </span>
+        </button>
+      `;
+      el.querySelector(".weapon-main").addEventListener("click", async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (exhausted) {
+          ui.notifications?.warn("No swings left this round (ROF spent).");
+          return;
+        }
+        try {
+          const { buildMonsterVirtualWeapon } = await import("../../combat/monsterVirtualWeapon.mjs");
+          const vw = buildMonsterVirtualWeapon(actor, attack, i);
+          /* Monsters can't use Strong / Fast / Joint / Feint (Core p.153),
+           * so skip the strike-type dialog. The action-economy gate still
+           * fires below (movement-eats-action, action-already-spent). */
+          await actor.weaponAttack(vw, { skipDialog: true });
+          /* Increment per-attack ROF tally; spend an action slot like a
+           * regular weapon. Out of combat both no-op. */
+          if (isActorInActiveCombat(actor)) {
+            const cur = actor.getFlag("witcher-ttrpg-death-march", "monsterAttackUsed") ?? {};
+            await actor.setFlag("witcher-ttrpg-death-march", "monsterAttackUsed", { ...cur, [i]: (Number(cur?.[i]) || 0) + 1 });
+            /* Only burn an action slot on the FIRST swing of the round
+             * — subsequent ROF shots ride the same action. (Per RAW the
+             * monster's listed ROF is the per-action shot count.) */
+            if ((Number(cur?.[i]) || 0) === 0) {
+              await maybeSpendActionSlot(actor, `Attack: ${name}`);
+            }
+          }
+        } catch (err) {
+          console.warn("witcher-ttrpg-death-march | monster inline attack failed", err);
+        }
+      });
+      host.appendChild(el);
+    });
+
+    if (!inline.length && !equipped.length) {
+      host.innerHTML = `<div class="weapon-empty">— no attacks defined —</div>`;
+      return;
+    }
+    /* Fall through into the item-weapons loop below so a humanoid
+     * monster with a dragged-in sword still gets the full Parry/Drop
+     * UX on top of its inline attacks. */
+  } else if (!equipped.length) {
     host.innerHTML = `<div class="weapon-empty">— no equipped weapons —</div>`;
     return;
   }
@@ -1103,29 +1241,48 @@ function renderWeaponList(host, actor) {
     const showReloadBar  = reloadNeeded > 1 && reloadProgress > 0;
     const reloadPct      = showReloadBar ? Math.max(0, Math.min(100, (reloadProgress / reloadNeeded) * 100)) : 0;
 
+    /* Broken-weapon state: reliability.max > 0 && reliability.value === 0.
+     * Broken items stay in the dock slot (so the player has to consciously
+     * swap or repair) but the slot reads as broken (CSS hook + disabled
+     * action buttons via .is-broken). */
+    const relMax = Number(w.system?.reliability?.max) || 0;
+    const relVal = Number(w.system?.reliability?.value) || 0;
+    const isBroken = relMax > 0 && relVal <= 0;
     const el = document.createElement("div");
     el.className = "weapon-item"
       + (blockedByQuick ? " is-blocked-by-quick" : "")
-      + (noActions ? " is-no-action" : "");
+      + (noActions ? " is-no-action" : "")
+      + (isBroken ? " wdm-item-broken" : "");
     el.dataset.weaponId = w.id;
-    const mainTitle = blockedByQuick
-      ? `Two-handed weapons can't attack while a Quick item is equipped.`
-      : noActions
-        ? `No actions left this turn.`
-        : `Attack with ${escapeHTML(w.name)}`;
-    const parryTitle = blockedByQuick
-      ? `Two-handed weapons can't defend while a Quick item is equipped.`
-      : `Defend with ${escapeHTML(w.name)} — Parry or Block`;
+    /* Also expose as data-item-id so the cross-cutting broken-indicator
+     * decorator (policy/broken-weapon-indicator.mjs) picks it up. */
+    el.dataset.itemId = w.id;
+    if (isBroken) el.dataset.wdmBroken = "1";
+    const mainTitle = isBroken
+      ? `${escapeHTML(w.name)} is broken — repair it before attacking.`
+      : blockedByQuick
+        ? `Two-handed weapons can't attack while a Quick item is equipped.`
+        : noActions
+          ? `No actions left this turn.`
+          : `Attack with ${escapeHTML(w.name)}`;
+    const parryTitle = isBroken
+      ? `${escapeHTML(w.name)} is broken — can't parry or block.`
+      : blockedByQuick
+        ? `Two-handed weapons can't defend while a Quick item is equipped.`
+        : `Defend with ${escapeHTML(w.name)} — Parry or Block`;
+    /* Combined gate used by both buttons. */
+    const attackGate = blockedByQuick || isBroken;
+    const defendGate = blockedByQuick || isBroken;
     el.innerHTML = `
       ${showReloadBar
         ? `<span class="weapon-reload-bar" title="Reloading ${escapeHTML(w.name)} — ${reloadProgress}/${reloadNeeded} actions">
              <span class="weapon-reload-bar-fill" style="width:${reloadPct.toFixed(1)}%"></span>
            </span>`
         : ""}
-      <button type="button" class="weapon-parry${blockedByQuick ? " is-disabled" : ""}" ${blockedByQuick ? "disabled" : ""} title="${parryTitle}">
+      <button type="button" class="weapon-parry${defendGate ? " is-disabled" : ""}" ${defendGate ? "disabled" : ""} title="${parryTitle}">
         <i class="fa-solid fa-shield-halved"></i>
       </button>
-      <button type="button" class="weapon-main${blockedByQuick ? " is-disabled" : ""}" ${blockedByQuick ? "disabled" : ""} title="${mainTitle}">
+      <button type="button" class="weapon-main${attackGate ? " is-disabled" : ""}" ${attackGate ? "disabled" : ""} title="${mainTitle}">
         <span class="weapon-icon-wrap">
           <i class="fa-solid ${iconCls}"></i>
           ${oil ? `<i class="fa-solid fa-droplet weapon-oil-icon" title="Coated: ${escapeHTML(oil.name)}"></i>` : ""}
@@ -1669,6 +1826,7 @@ async function openActionMenu(actor, slot) {
             } else if (btn.dataset.group === "full") {
               if (btn.dataset.key === "recovery") await actor.takeRecoveryAction();
               else if (btn.dataset.key === "aim") await actor.takeAimAction();
+              else if (btn.dataset.key === "run") await actor.recordRun();
               else await actor.recordFullRound(label);
             } else if (slot === "extra") {
               await actor.recordExtraAction(label);
@@ -1718,13 +1876,21 @@ function isStunnedSta(sta) {
   return Number(sta?.max) > 0 && Number(sta?.cur) === 0;
 }
 
-function paintActionBudget(dock, cr, inCombat = false, sta = null) {
+function paintActionBudget(dock, cr, inCombat = false, sta = null, opts = {}) {
   const budget = dock.querySelector(".action-budget");
   if (!budget) return;
   // Out of combat: blank the round so every slot reads fresh/available.
   const c = inCombat ? (cr ?? {}) : {};
   budget.classList.toggle("out-of-combat", !inCombat);
   budget.classList.toggle("is-locked", !!c.fullRound);
+
+  /* Off-turn marker (only meaningful in combat). The "off-turn" class is
+   * picked up by CSS to dim the entire budget panel; we also block every
+   * slot individually below so click handling refuses cleanly without
+   * having to teach each button about the off-turn state. */
+  const offTurn = !!opts.offTurn && inCombat;
+  budget.classList.toggle("is-off-turn", offTurn);
+  const OFF_TURN_TITLE = "Not your turn — wait for the active combatant.";
 
   // Stunned at 0 STA (regardless of whether a combat is started): every slot
   // but the Recovery full-round action is locked out until STA climbs to ≥1.
@@ -1738,10 +1904,11 @@ function paintActionBudget(dock, cr, inCombat = false, sta = null) {
   if (full) {
     full.classList.toggle("is-used", !!c.fullRound);
     // Greyed + non-clickable once a full round is committed, or once any other
-    // slot is spent (which makes a full round impossible this turn).
-    full.classList.toggle("is-blocked", !!dirty || !!c.fullRound);
-    full.title = c.fullRound
-      ? (c.fullRoundLabel || "Full Round")
+    // slot is spent (which makes a full round impossible this turn). Off-turn
+    // adds to the block reasons.
+    full.classList.toggle("is-blocked", !!dirty || !!c.fullRound || offTurn);
+    full.title = offTurn ? OFF_TURN_TITLE
+      : c.fullRound ? (c.fullRoundLabel || "Full Round")
       : dirty
         ? "Full Round unavailable — you've already moved or acted this turn"
         : "Full Round (uses your whole turn — locks all three)";
@@ -1751,17 +1918,26 @@ function paintActionBudget(dock, cr, inCombat = false, sta = null) {
     // With Split Movement on, the total accumulates and only locks at SPD —
     // show the running tally even before it's exhausted. Otherwise it's
     // single-use: declaring any distance locks Move and crosses it out.
-    const moved = Number(c.movementMeters) || 0;
+    const moved   = Number(c.movementMeters) || 0;
+    const spd     = Number(c.spd) || 0;
+    const runMul  = c.runUsed ? 3 : 1;
+    const cap     = spd * runMul;
     move.classList.toggle("is-used", !!c.movementUsed);
     // RAW (Split Movement off): acting forfeits any remaining movement, so
     // once an action/extra is spent the Move button is no longer available.
     const splitOff = !isHomebrewEnabled("splitMovement");
     const moveLockedByAction = splitOff && !c.movementUsed && (c.actionUsed || c.extraUsed);
-    move.classList.toggle("is-blocked", !!moveLockedByAction || stunned);
+    move.classList.toggle("is-blocked", !!moveLockedByAction || stunned || offTurn);
     const nm = move.querySelector(".nm");
-    if (nm) nm.textContent = moved > 0 ? `${moved}m` : "Movement";
-    move.title = stunned
-      ? STUN_TITLE
+    if (nm) nm.textContent = "Movement";
+    /* Big "spent / cap" counter to the right of the icon, painted only
+     * while in combat (and only when SPD is set). Out of combat the
+     * counter span is emptied so CSS hides it and the .nm "Movement"
+     * label shows by itself, matching the other budget buttons. */
+    const counter = move.querySelector('[data-bind="mov-counter"]');
+    if (counter) counter.textContent = (cap > 0 && inCombat) ? `${moved}/${cap}` : "";
+    move.title = offTurn ? OFF_TURN_TITLE
+      : stunned ? STUN_TITLE
       : c.movementUsed
         ? `Moved ${moved}m — movement spent`
         : moveLockedByAction
@@ -1773,8 +1949,10 @@ function paintActionBudget(dock, cr, inCombat = false, sta = null) {
   const act = budget.querySelector('.action-btn[data-action="action"]');
   if (act) {
     act.classList.toggle("is-used", !!c.actionUsed);
-    act.classList.toggle("is-blocked", stunned);
-    act.title = stunned ? STUN_TITLE : c.actionUsed ? (c.actionLabel || "Action used") : "Action";
+    act.classList.toggle("is-blocked", stunned || offTurn);
+    act.title = offTurn ? OFF_TURN_TITLE
+      : stunned ? STUN_TITLE
+      : c.actionUsed ? (c.actionLabel || "Action used") : "Action";
   }
   const extra = budget.querySelector('.action-btn[data-action="extra-action"]');
   if (extra) {
@@ -1785,9 +1963,9 @@ function paintActionBudget(dock, cr, inCombat = false, sta = null) {
     // tracked as used and the extra stays unavailable, which is intended:
     // the extra action is a combat-only second action.
     const extraLocked = !c.fullRound && !c.extraUsed && !c.actionUsed;
-    extra.classList.toggle("is-blocked", !!extraLocked || stunned);
-    extra.title = stunned
-      ? STUN_TITLE
+    extra.classList.toggle("is-blocked", !!extraLocked || stunned || offTurn);
+    extra.title = offTurn ? OFF_TURN_TITLE
+      : stunned ? STUN_TITLE
       : c.extraUsed
         ? (c.extraLabel || "Extra action used")
         : extraLocked
@@ -1859,6 +2037,12 @@ export function rebindDock() {
   if (!dock) return;
 
   const actor = getAssignedActor();
+  /* Tag the dock with the assigned actor type so CSS can hide PC-only
+   * widgets (vigor arc, stress arc, adrenaline/stress/shield counters,
+   * sign tray peace, spells row) when a monster is up. Monsters reuse
+   * the same .bs-grid; only what doesn't apply is hidden. */
+  dock.dataset.actorType = actor?.type ?? "none";
+
   const data = getDockData(actor);
 
   /* Sig-skip: getDockData is cheap-ish to recompute, but the ~30 DOM
@@ -1881,7 +2065,21 @@ export function rebindDock() {
   // shift the sig and the sober-up roman numeral stayed stale until a
   // separate dock-touching event hit. Sorted for determinism.
   const statusSig = JSON.stringify([...(actor?.statuses ?? [])].sort());
-  const sig = JSON.stringify(data) + "|" + weaponListSig(actor) + "|" + armorSig + "|" + pinSig + "|" + statusSig;
+  /* Combat state — started/round/active-combatant. Without this in the
+   * sig, the combatStart→update sequence (rebind scheduled at
+   * combatStart, runs before update applies, then combatTurnChange
+   * scheduled — but sig didn't change so the second rebind no-ops)
+   * would leave the dock showing pre-combat state until the NEXT
+   * round/turn advance forced a new sig. Folds in `started` (the gate
+   * paintActionBudget uses to flip to the X/cap readout) and the
+   * current combatant id (drives _isMyTurn / off-turn dimming). */
+  const c = game?.combat;
+  const combatSig = JSON.stringify({
+    started:   !!c?.started,
+    round:     c?.round ?? 0,
+    combatant: c?.combatant?.id ?? null
+  });
+  const sig = JSON.stringify(data) + "|" + weaponListSig(actor) + "|" + armorSig + "|" + pinSig + "|" + statusSig + "|" + combatSig;
   if (sig === _lastRebindSig) return;
   _lastRebindSig = sig;
 
@@ -1982,11 +2180,14 @@ export function rebindDock() {
 
   // Action-economy budget — wire the four slot buttons, then paint state.
   // Out of combat the budget is unlimited, so ignore any persisted slot
-  // state and paint everything fresh.
+  // state and paint everything fresh. In combat, off-turn = no budget
+  // (blackout visualization handled in paintActionBudget).
   wireActionButtons(dock, actor);
-  paintActionBudget(dock, data.combatRound, isActorInActiveCombat(actor), data.sta);
+  const inCombat = isActorInActiveCombat(actor);
+  const offTurn  = inCombat && !actor?._isMyTurn;
+  paintActionBudget(dock, data.combatRound, inCombat, data.sta, { offTurn });
 
-  // Defense buttons — dodge rolls the dodge skill, relocate rolls athletics.
+  // Defense buttons — dodge rolls the dodge skill, reposition rolls athletics.
   // Each also records a defensive action (1st free, each extra costs 1 STA
   // unless Actively Dodging — Core p.152), but only inside an active combat.
   // Stunned at 0 STA: defenses are locked out too — grey them and ignore clicks.
@@ -2021,20 +2222,20 @@ export function rebindDock() {
 
       // Brawl opens the unarmed-action dialog (punch/kick/grapple chain + block).
       // It routes its own economy: a block records a defense, an attack/grapple
-      // spends an action slot — so this branch returns before the dodge/relocate
+      // spends an action slot — so this branch returns before the dodge/reposition
       // defense bookkeeping below.
       if (action === "brawl") {
         await runBrawlAction(actor);
         return;
       }
 
-      // Dodge and Relocation are first-class defensive actions (not generic
-      // skill rolls): defendBySkill posts a "Dodge"/"Relocation — defense" card
+      // Dodge and Reposition are first-class defensive actions (not generic
+      // skill rolls): defendBySkill posts a "Dodge"/"Reposition — defense" card
       // and records the reaction itself (first free, each extra 1 STA), so no
-      // separate rollSkill / recordDefense here. Relocation uses the Athletics
+      // separate rollSkill / recordDefense here. Reposition uses the Athletics
       // skill but is distinct from throwing something with Athletics.
       const def = action === "dodge" ? { skill: "dodge", label: "Dodge" }
-                : action === "relocate" ? { skill: "athletics", label: "Relocation" }
+                : action === "reposition" ? { skill: "athletics", label: "Reposition" }
                 : null;
       if (def && actor && typeof actor.defendBySkill === "function") {
         try { await actor.defendBySkill(def.skill, { label: def.label }); }

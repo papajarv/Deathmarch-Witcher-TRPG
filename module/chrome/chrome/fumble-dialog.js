@@ -210,9 +210,35 @@ export async function openFumbleDialog(actor = null) {
         <i class="fas fa-fire-flame-curved"></i> Resolve elemental fumble
       </button>`
     : "";
+
+  /* Apply-damage buttons: parse [[XdY]] inline-roll formulas from the
+   * fumble text and render one button per formula. Click rolls it and
+   * applies the result to the FUMBLER's HP via the damage socket (raw
+   * bypass — fumble damage doesn't go through SP/DR). Skipped when the
+   * fumble narrates damage to a third party (ally / weapon reliability),
+   * since those aren't HP hits on the fumbler. */
+  const isSelfDamage = /yourself|you take|wound your|hit your head|fall prone|set on fire/i.test(result)
+                    && !/ally|reliability|points of (reliability|durability)/i.test(result);
+  const dmgFormulas = isSelfDamage
+    ? [...result.matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1].trim()).filter(Boolean)
+    : [];
+  const actorUuid = actor?.uuid ?? "";
+  const isNonLethal = /non-lethal/i.test(result);
+  const dmgButtons = (dmgFormulas.length && actorUuid)
+    ? dmgFormulas.map(f =>
+        `<button type="button" data-action="wdm-fumble-self-damage"
+                 data-formula="${esc(f)}" data-uuid="${esc(actorUuid)}"
+                 data-nonlethal="${isNonLethal ? "1" : "0"}"
+                 style="margin-top:4px;width:100%;cursor:pointer;">
+            <i class="fa-solid fa-burst"></i> Apply ${esc(f)} ${isNonLethal ? "non-lethal " : ""}damage to yourself
+        </button>`
+      ).join("")
+    : "";
+
   const content = `
     <div style="border-left: 3px solid #b65a5a; padding: 6px 12px; margin: 4px 0;">
       <div style="font-style: italic;">${result}</div>
+      ${dmgButtons}
       ${elementalBtn}
     </div>
   `;
@@ -224,7 +250,14 @@ export async function openFumbleDialog(actor = null) {
     content,
     rolls: [roll],
     rollMode: game.settings.get("core", "rollMode"),
+    flags: { "witcher-ttrpg-death-march": { category: "combat" } }
   });
+}
+
+function esc(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("'", "&#39;")
+    .replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
 /** Prompt for the channelled element, then post its effect to chat. */
@@ -274,13 +307,51 @@ async function resolveElementalFumble(speaker) {
   });
 }
 
-/** Wire the "Resolve elemental fumble" button on magic fumble chat cards. */
+/** Roll a fumble's self-damage formula and apply it to the fumbler via
+ *  the GM-proxied damage socket. Bypasses armor (fumble damage is a
+ *  flat HP hit per RAW). */
+async function applyFumbleSelfDamage(btn) {
+  const formula = btn?.dataset?.formula;
+  const uuid    = btn?.dataset?.uuid;
+  if (!formula || !uuid) return;
+  btn.disabled = true;
+  try {
+    const roll = await new Roll(formula).evaluate();
+    await roll.toMessage({
+      flavor: `<em>Fumble self-damage roll</em>`,
+      flags: { "witcher-ttrpg-death-march": { category: "combat" } }
+    });
+    const { emitApplyDamage } = await import("../../setup/socketHook.mjs");
+    await emitApplyDamage({
+      targetUuid:    uuid,
+      weaponDamage:  roll.total,
+      damageTypes:   [],
+      locationKey:   "head",         // fumble narrates "head" or "self" — use head as default
+      locationLabel: "Head",
+      qualities:     [],
+      qualityValues: {},
+      throughArmor:  true            // RAW fumble damage isn't soaked
+    });
+  } catch (err) {
+    console.error("witcher-ttrpg-death-march | fumble self-damage failed", err);
+    ui.notifications?.error("Fumble damage apply failed — see console.");
+    btn.disabled = false;
+  }
+}
+
+/** Wire the "Resolve elemental fumble" + "Apply X damage to yourself"
+ *  buttons on fumble chat cards. */
 export function installFumbleChatHandler() {
   Hooks.on("renderChatMessageHTML", (msg, el) => {
-    const btn = el.querySelector?.('button[data-action="wdm-elemental-fumble"]');
-    if (btn && !btn.dataset.wired) {
-      btn.dataset.wired = "1";
-      btn.addEventListener("click", () => resolveElementalFumble(msg.speaker));
+    const elem = el.querySelector?.('button[data-action="wdm-elemental-fumble"]');
+    if (elem && !elem.dataset.wired) {
+      elem.dataset.wired = "1";
+      elem.addEventListener("click", () => resolveElementalFumble(msg.speaker));
+    }
+    for (const dmg of el.querySelectorAll?.('button[data-action="wdm-fumble-self-damage"]') ?? []) {
+      if (dmg.dataset.wired) continue;
+      dmg.dataset.wired = "1";
+      dmg.addEventListener("click", () => applyFumbleSelfDamage(dmg));
     }
   });
 }

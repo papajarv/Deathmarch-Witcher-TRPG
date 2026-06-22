@@ -285,6 +285,15 @@ let _lastShellHtml = null;
  *  committing a field doesn't flash the whole tab.  Any other (external)
  *  update still re-renders normally. */
 let _suppressNextRender = false;
+/* When `patchInputValue` writes directly to a DOM input (optimistic +/- or
+ * typing display) the panel's cached shell HTML no longer matches what's
+ * actually on screen. If the next render produces identical HTML to the
+ * cached version (e.g. the write got fully absorbed by a stress shield, so
+ * actor data is unchanged), `render()` short-circuits via `html === _lastShellHtml`
+ * and the out-of-band patched input is never reconciled. This flag forces
+ * the next render to bypass the equality short-circuit so the morph step
+ * can sync the input's `.value` property back to the new HTML attribute. */
+let _forceNextRender = false;
 function rerenderIfOpen() {
   if (_suppressNextRender) { _suppressNextRender = false; return; }
   if (_charRenderPending) return;
@@ -354,8 +363,13 @@ async function render() {
     ? renderShell(actor, getDockData(actor))
     : renderEmptyState("No character assigned.");
 
-  /* Skip the rewrite when the output is unchanged — see _lastShellHtml. */
-  if (html === _lastShellHtml) return;
+  /* Skip the rewrite when the output is unchanged — see _lastShellHtml.
+   * `_forceNextRender` bypasses the equality short-circuit when the DOM
+   * has been patched out-of-band (optimistic tracker +/-) — without this,
+   * a fully-absorbed stress raise leaves the input visually stuck on the
+   * patched value because the morph step never runs to reconcile it. */
+  if (!_forceNextRender && html === _lastShellHtml) return;
+  _forceNextRender = false;
   const firstPaint = _lastShellHtml === null;
   _lastShellHtml = html;
 
@@ -670,7 +684,7 @@ function renderTrackersColumn(actor, data) {
             min:      -100,
             readonly: !game.user?.isGM
           }) : ""}
-        ${renderTracker("deathSaves", "Death Saves", "fa-skull",          { cur: deathCount, max: 10 }, deathState)}
+        ${renderTracker("deathSaves", "Death Save", "fa-skull",          { cur: deathCount, max: 10 }, deathState)}
       </div>
       ${renderDerivedStatsRow(actor)}
     </div>
@@ -3377,25 +3391,39 @@ const pendingBumps = new Map();   // key → { value, timer }
 
 function pendingValue(key) {
   const p = pendingBumps.get(key);
-  return p ? p.value : undefined;
+  if (!p) return undefined;
+  // Display value wins over commit value so a stress bump that the shield
+  // will eat shows the post-absorb number (e.g. stay at 0) during the
+  // debounce window, not the raw +1 that's about to commit-and-vanish.
+  return p.displayValue ?? p.value;
 }
 
-function scheduleBump({ key, delta, currentValue, write, clamp }) {
+function scheduleBump({ key, delta, currentValue, write, clamp, displayMap }) {
   const existing = pendingBumps.get(key);
   const cur  = existing ? existing.value : currentValue;
   const next = (clamp ?? ((v) => Math.max(0, v)))(cur + delta);
+  // displayMap (optional) transforms the commit value into what the user
+  // should see optimistically — used for stress to subtract the shield's
+  // predicted absorb. Defaults to the identity map for everything else.
+  const displayNext = (typeof displayMap === "function") ? displayMap(next) : next;
   if (existing?.timer) clearTimeout(existing.timer);
   const timer = setTimeout(() => {
     const final = pendingBumps.get(key)?.value;
     pendingBumps.delete(key);
+    // Force the next render to bypass the html-equality short-circuit so
+    // the morph step reconciles `patchInputValue`'s out-of-band write. If
+    // the write was absorbed (stress shield) the actor data is unchanged
+    // and the new HTML matches the cached version — without the force, the
+    // optimistic display stays stuck on the patched value.
+    _forceNextRender = true;
     if (typeof final === "number") {
       Promise.resolve(write(final)).catch((err) =>
         console.warn(`${MODULE_ID} | bump commit failed for ${key}`, err)
       );
     }
   }, BUMP_DEBOUNCE_MS);
-  pendingBumps.set(key, { value: next, timer });
-  return next;
+  pendingBumps.set(key, { value: next, displayValue: displayNext, timer });
+  return displayNext;
 }
 
 function trackerConfig(actor, kind) {
@@ -3450,8 +3478,37 @@ function bumpTracker(actor, kind, delta) {
   if (!actor || !kind || !delta) return;
   const cfg = trackerConfig(actor, kind);
   if (!cfg) return;
-  const next = scheduleBump({ key: `tracker.${kind}`, delta, ...cfg });
-  patchInputValue(`.wou-chr-tracker[data-kind="${kind}"] .wou-chr-tracker-val`, next);
+  // For stress + positive cumulative delta, peek at the same `planAbsorb`
+  // the preUpdateActor gate will run on commit, so the optimistic display
+  // already reflects what's actually going to land. Without this, clicking
+  // "+" on a Stoic-buffered actor would flash stress = 1 (then snap back to
+  // 0 once the write fires and gets absorbed) — which reads as a buggy
+  // dance even though it's just optimistic UI lying about the outcome.
+  //
+  // The commit value (`next`) stays as-is so the write still triggers the
+  // absorb gate and the shield buffer decrements; only the rendered value
+  // is mapped down. Cumulative delta accounts for rapid multi-click bursts
+  // — clicking + four times on a 4-point buffer keeps the display at 0
+  // throughout because preview(actor, 4) reports the buffer covers it.
+  let displayMap;
+  if (kind === "stress" && delta > 0) {
+    const existing = pendingBumps.get(`tracker.${kind}`);
+    const cur  = existing ? existing.value : cfg.currentValue;
+    const next = cfg.clamp(cur + delta);
+    const cumulativeDelta = next - cfg.currentValue;
+    if (cumulativeDelta > 0) {
+      let plan = null;
+      try { plan = game.system?.api?.mechanics?.stress?.previewAbsorb?.(actor, cumulativeDelta) ?? null; }
+      catch (_) { plan = null; }
+      if (plan?.absorbed > 0) {
+        const absorbed = Number(plan.absorbed) || 0;
+        const curValue = cfg.currentValue;
+        displayMap = (committed) => Math.max(curValue, committed - absorbed);
+      }
+    }
+  }
+  const shown = scheduleBump({ key: `tracker.${kind}`, delta, ...cfg, displayMap });
+  patchInputValue(`.wou-chr-tracker[data-kind="${kind}"] .wou-chr-tracker-val`, shown);
 }
 
 function setTrackerAbsolute(actor, kind, value) {
@@ -3474,6 +3531,8 @@ function scheduleAbsolute({ key, value, write }) {
   const timer = setTimeout(() => {
     const final = pendingBumps.get(key)?.value;
     pendingBumps.delete(key);
+    // Same force-render contract as scheduleBump — see comment there.
+    _forceNextRender = true;
     if (typeof final === "number") {
       Promise.resolve(write(final)).catch((err) =>
         console.warn(`${MODULE_ID} | tracker commit failed for ${key}`, err)

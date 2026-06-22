@@ -187,8 +187,27 @@
       <label class="wdm-field">{{localize "WITCHER.Monster.Armor"}} (SP)
         <input type="number" name="system.combat.armor" value="{{system.combat.armor}}" min="0" />
       </label>
+      <label class="wdm-field" title="Optional weapon weakness (Core p.175). Stacks independently of the per-type Damage Profile below.">
+        Weapon Weakness
+        <select name="system.combat.weaponWeakness">
+          {{#each weaponWeaknessOptions}}
+          <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+          {{/each}}
+        </select>
+      </label>
       <label class="wdm-field">{{localize "WITCHER.Monster.MeleeBonus"}}
         <input type="number" value="{{system.derivedStats.meleeBonus}}" readonly title="ceil((BODY-6)/2)×2 (Core p.48)" />
+      </label>
+      {{!-- Organ-crit immunity override (Core p.159). Tri-state:
+            "auto" defers to category (elementa/specter → immune by
+            default), "true" force-immune, "false" force-vulnerable. --}}
+      <label class="wdm-field" title="RAW Core p.159 — creatures without organs (elementa, specters, constructs) don't take organ-based critical wounds; they take a higher flat bonus instead (+5/+10/+15/+20 vs +3/+5/+8/+10). 'Auto' defers to category.">
+        Organ Crits
+        <select name="system.combat.immuneToOrganCrits">
+          <option value="auto"  {{#if (eq system.combat.immuneToOrganCrits "auto")}}selected{{/if}}>Auto (by category)</option>
+          <option value="false" {{#if (eq system.combat.immuneToOrganCrits "false")}}selected{{/if}}>Takes organ crits</option>
+          <option value="true"  {{#if (eq system.combat.immuneToOrganCrits "true")}}selected{{/if}}>Immune (no organs)</option>
+        </select>
       </label>
     </div>
 
@@ -226,6 +245,18 @@
                 <i class="fa-solid fa-trash"></i>
               </button>
             </span>
+          </div>
+          {{!-- Damage types for this attack — controls per-type target
+                reactions (resistant / vulnerable / immune). Checkboxes
+                use the array-field name convention so all checked values
+                are collected into system.combat.attacks[i].damageTypes. --}}
+          <div class="wdm-attack-dmgtypes" title="Damage types — target's reactions to these types apply">
+            {{#each damageTypeOptions}}
+            <label class="wdm-dmgtype">
+              <input type="checkbox" name="system.combat.attacks.{{../index}}.damageTypes" value="{{key}}" {{#if checked}}checked{{/if}} />
+              <span>{{label}}</span>
+            </label>
+            {{/each}}
           </div>
           <div class="wdm-quality-line">
             <label class="wdm-attack-skill" title="{{localize 'WITCHER.Monster.AttackSkillHint'}}">

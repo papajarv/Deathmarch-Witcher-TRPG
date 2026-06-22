@@ -111,6 +111,10 @@ export const saveMixin = (Base) => class extends Base {
             flavor
         }, {
             threshold, rollUnder: true,
+            /* Flat d10 — no explode, no fumble. Roll-under save where
+             * a nat 10 exploding is trivially a fail and a nat 1 is a
+             * trivial pass; the fumble flag would be misleading. */
+            flat: true,
             messageOnSuccess: "Stays standing",
             messageOnFailure: "Stunned"
         });
@@ -141,6 +145,31 @@ export const saveMixin = (Base) => class extends Base {
      * accumulated success penalty is the only thing that erodes it.
      */
     async rollDeathSave({ modifier = 0 } = {}) {
+        // Unbreakable death-save bank: an AE with `flags.<sys>.deathSaveAutoPasses`
+        // (the Unbreakable boon stamps 3 of these on apply during combat)
+        // auto-passes the save without rolling. The bank decrements on each
+        // consume; AE deletes when the buffer hits 0. The success still
+        // counts toward the cumulative −1 penalty so the actor isn't IMMORTAL
+        // — once the bank's gone, the deepening penalty stays.
+        const SYS = "witcher-ttrpg-death-march";
+        const bankAE = this.effects?.find?.(e =>
+            !e.disabled && Number(e.getFlag?.(SYS, "deathSaveAutoPasses")) > 0
+        );
+        if (bankAE) {
+            const remaining = Number(bankAE.getFlag(SYS, "deathSaveAutoPasses")) || 0;
+            const next = remaining - 1;
+            if (next <= 0) await bankAE.delete();
+            else await bankAE.setFlag(SYS, "deathSaveAutoPasses", next);
+            const successes = Number(this.system.deathSaves) || 0;
+            const advanced  = successes + 1;
+            await this.update({ "system.deathSaves": advanced });
+            await ChatMessage.create({
+                speaker: ChatMessage.getSpeaker({ actor: this }),
+                content: `<em>${esc(this.name)} — death save auto-passed (Unbreakable, ${next} left).</em>`
+            });
+            return { pass: true, deathSaves: advanced, dead: false, autoPassed: true };
+        }
+
         const stun      = Number(this.system.derivedStats?.stunUnmodified
                               ?? this.system.derivedStats?.stun) || 0;
         const successes = Number(this.system.deathSaves) || 0;
@@ -162,6 +191,8 @@ export const saveMixin = (Base) => class extends Base {
             flavor
         }, {
             threshold, rollUnder: true,
+            /* Flat d10 — no explode, no fumble (see Stun save above). */
+            flat: true,
             messageOnSuccess: "Holds on",
             messageOnFailure: "Death save failed — death"
         });

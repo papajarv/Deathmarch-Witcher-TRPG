@@ -130,7 +130,12 @@
           <label class="wdm-cfg-row"><span title="What kind of valuable this is">Type</span>
             <select name="system.type">
               <option value=""        {{#if (eq subtype "")       }}selected{{/if}}>Generic</option>
-              <option value="book"    {{#if (eq subtype "book")   }}selected{{/if}}>Book</option>
+              {{!-- "Book" is no longer a valuable subtype — it's a first-class
+                    item type. Legacy items still rendered here while waiting
+                    for migration keep their "book" string until then. --}}
+              {{#if (eq subtype "book")}}
+                <option value="book" selected>Book (legacy — will migrate)</option>
+              {{/if}}
               <option value="trophy"  {{#if (eq subtype "trophy") }}selected{{/if}}>Trophy</option>
             </select>
           </label>

@@ -905,6 +905,10 @@ function patchPrepareValuables(app) {
     const original = proto._prepareValuables;
     proto._prepareValuables = function (context) {
         original.call(this, context);
+        // Legacy valuable-book items still surface in `context.valuables`
+        // (they're valuables with system.type === "book") — relocate them to
+        // `general` like before. First-class `book` items don't appear in
+        // `context.valuables` so they're handled by their own sheet category.
         const extras = (context.valuables ?? []).filter(
             i => i.system?.type === "book"
         );

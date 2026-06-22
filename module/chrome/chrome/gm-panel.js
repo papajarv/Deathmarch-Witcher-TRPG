@@ -245,16 +245,116 @@ function renderPartyTab(body) {
   body.innerHTML = `<div class="wou-gm-chips">${chips}</div><div class="wou-gm-roster">${rows}</div>`;
 }
 
+/* Per-actor open/closed memory for the Status Effects collapsible.
+ * Survives the re-render that follows a status click (without this,
+ * every click reset the <details> to its default closed state — the
+ * user's manual expand disappeared the moment they made any change). */
+const _openStatusActors = new Set();
+
+/* Per-actor status block on the GM party panel.
+ *
+ *   Wrapped in a <details class="wou-gm-statuses-collapse" open> so
+ *   the (long) grid of toggle buttons can be folded per actor. Starts
+ *   expanded; the GM clicks the chevron to hide.
+ *
+ *   "Stack logic": status effects with a `-N` suffix in their id are
+ *   treated as LEVELS of the same family (e.g. drunk-1 .. drunk-8 →
+ *   "Drunk"). The summary shows the active level instead of N separate
+ *   on buttons. The full family is still togglable from a small popout
+ *   under the chip — click the chip to step through, alt-click to clear.
+ *
+ *   Non-leveled statuses render as their existing per-id buttons. */
+function familyOf(id) {
+    const m = String(id ?? "").match(/^(.+)-(\d+)$/);
+    return m ? { family: m[1], level: Number(m[2]) } : null;
+}
+
 function statusStrip(actor) {
-  const active = actor.statuses ?? new Set();
-  const items = (CONFIG.statusEffects ?? []).map(se => {
-    const id = se.id;
-    const img = se.img ?? se.icon;
-    const on = active.has(id);
-    const name = game.i18n?.localize?.(se.name ?? se.label) ?? id;
-    return `<button type="button" class="wou-gm-status${on ? " is-on" : ""}" data-actor-uuid="${escapeHTML(actor.uuid)}" data-status="${escapeHTML(id)}" title="${escapeHTML(name)}"><img src="${escapeHTML(img)}" alt="" /></button>`;
-  }).join("");
-  return `<div class="wou-gm-statuses">${items}</div>`;
+    const active = actor.statuses ?? new Set();
+    const all = CONFIG.statusEffects ?? [];
+
+    /* Stack counts: how many ActiveEffects on the actor carry each
+     * status id. This mirrors the token-HUD's native stack indicator
+     * (e.g. Bleed × 3 when three separate Bleed AEs are applied).
+     * Singletons get count 1; absent statuses get 0. */
+    const stackById = new Map();
+    for (const eff of (actor.effects ?? [])) {
+        if (eff.disabled) continue;
+        const ids = eff.statuses;
+        if (!ids?.size) continue;
+        for (const id of ids) stackById.set(id, (stackById.get(id) ?? 0) + 1);
+    }
+
+    /* Group leveled statuses (id ends with -N) by family; keep singles
+     * as their own bucket. */
+    const families = new Map();   // family → { entries: [{id,img,name,level,on,stacks}], maxLevel, activeLevel }
+    const singles = [];
+    for (const se of all) {
+        const id = se.id;
+        const img = se.img ?? se.icon;
+        const name = game.i18n?.localize?.(se.name ?? se.label) ?? id;
+        const fam = familyOf(id);
+        const on = active.has(id);
+        const stacks = stackById.get(id) ?? 0;
+        if (fam) {
+            const bucket = families.get(fam.family) ?? { entries: [], maxLevel: 0, activeLevel: 0, family: fam.family };
+            bucket.entries.push({ id, img, name, level: fam.level, on, stacks });
+            if (fam.level > bucket.maxLevel) bucket.maxLevel = fam.level;
+            if (on && fam.level > bucket.activeLevel) bucket.activeLevel = fam.level;
+            families.set(fam.family, bucket);
+        } else {
+            singles.push({ id, img, name, on, stacks });
+        }
+    }
+
+    /* Render family chips — one chip per family, shows current level
+     * via a small badge if active. Click steps to next level (or sets
+     * level 1 if clear); alt-click clears the family. */
+    const familyHtml = [...families.values()].map(b => {
+        const top = b.entries.find(e => e.level === b.activeLevel) ?? b.entries[0];
+        const famLabel = top.name.replace(/\s*\d+\s*$/, "");      // strip trailing "1" from "Drunk 1"
+        const isOn = b.activeLevel > 0;
+        const lvlBadge = isOn ? `<span class="wou-gm-status-lvl">${b.activeLevel}</span>` : "";
+        return `<button type="button" class="wou-gm-status wou-gm-status-family${isOn ? " is-on" : ""}" ` +
+            `data-actor-uuid="${escapeHTML(actor.uuid)}" ` +
+            `data-status-family="${escapeHTML(b.family)}" ` +
+            `data-status-max-level="${b.maxLevel}" ` +
+            `data-status-level="${b.activeLevel}" ` +
+            `title="${escapeHTML(famLabel)}${isOn ? ` (${b.activeLevel}/${b.maxLevel})` : ""} — click to step level, alt-click to clear">` +
+                `<img src="${escapeHTML(top.img)}" alt="" />${lvlBadge}` +
+            `</button>`;
+    }).join("");
+
+    const singleHtml = singles.map(s => {
+        /* ×N stack badge — shows for ANY active count (even 1) so the
+         * user can see immediately that their click registered. The
+         * badge color stays the same; the "is-on" class on the button
+         * provides the active-vs-inactive visual. */
+        const stackBadge = s.stacks > 0
+            ? `<span class="wou-gm-status-stacks">×${s.stacks}</span>`
+            : "";
+        const title = s.stacks > 0 ? `${s.name} (×${s.stacks})` : s.name;
+        return `<button type="button" class="wou-gm-status${s.on ? " is-on" : ""}" ` +
+            `data-actor-uuid="${escapeHTML(actor.uuid)}" ` +
+            `data-status="${escapeHTML(s.id)}" ` +
+            `title="${escapeHTML(title)} — left-click +1 stack, right-click −1, alt-click clear">` +
+                `<img src="${escapeHTML(s.img)}" alt="" />${stackBadge}` +
+            `</button>`;
+    }).join("");
+
+    const activeCount = [...active].length;
+    /* Collapsed by default; but if the user previously opened this
+     * actor's section, KEEP it open across re-renders so a status
+     * click doesn't snap it shut. */
+    const wasOpen = _openStatusActors.has(actor.uuid);
+    return `
+        <details class="wou-gm-statuses-collapse"${wasOpen ? " open" : ""} data-actor-uuid="${escapeHTML(actor.uuid)}">
+          <summary class="wou-gm-statuses-summary">
+            <span class="lbl">Status Effects</span>
+            <span class="cnt">${activeCount > 0 ? activeCount : ""}</span>
+          </summary>
+          <div class="wou-gm-statuses">${familyHtml}${singleHtml}</div>
+        </details>`;
 }
 
 /* ─────────── reference tab ─────────── */
@@ -324,7 +424,7 @@ function buildReferenceSeed() {
     cat("Defense reactions (STA)", [
       ["1st reaction / round", "Free"],
       ["Each extra reaction", "+1 STA"],
-      ["Options", "Relocation, Dodge, Parry, Block"],
+      ["Options", "Reposition, Dodge, Parry, Block"],
     ]),
     cat("Damage resolution order", [
       ["1. Strong-strike ×", "Multiplier applied to the rolled dice, before SP"],
@@ -670,17 +770,98 @@ export function setupGMPanel() {
     commitVital(input.dataset.actorUuid, input.dataset.stat, input.value);
   });
 
-  /* ─── party tab: status toggles (optimistic class; debounced refresh reconciles) ─── */
-  document.addEventListener("click", (ev) => {
+  /* ─── party tab: status chip interactions ─────────────────────
+   * Per user spec:
+   *   - Left-click  → ADD a stack / step UP a level (family)
+   *   - Right-click → REMOVE a stack / step DOWN a level (family)
+   *   - Alt-click   → CLEAR all stacks / clear the family
+   * Both left-click and contextmenu handlers route through one
+   * helper so the behavior stays in sync. */
+  const handleStatusChipInteract = async (ev, direction) => {
+    /* direction: "up" (+1 / step up) | "down" (−1 / step down) | "clear" */
     const btn = ev.target.closest?.(`#${PANEL_ID} .wou-gm-status`);
     if (!btn) return;
     ev.preventDefault(); ev.stopPropagation();
     const actor = fromUuidSync(btn.dataset.actorUuid);
     if (!actor) return;
-    const wantOn = !btn.classList.contains("is-on");
-    actor.toggleStatusEffect(btn.dataset.status, { active: wantOn });
-    btn.classList.toggle("is-on", wantOn);
+
+    const family = btn.dataset.statusFamily;
+    if (family) {
+      const max = Number(btn.dataset.statusMaxLevel) || 0;
+      const cur = Number(btn.dataset.statusLevel)    || 0;
+      let next;
+      if (direction === "clear") next = 0;
+      else if (direction === "down") next = Math.max(0, cur - 1);
+      else /* up */ next = cur >= max ? 0 : (cur + 1);
+      try {
+        if (cur > 0) await actor.toggleStatusEffect(`${family}-${cur}`, { active: false });
+        if (next > 0) await actor.toggleStatusEffect(`${family}-${next}`, { active: true });
+      } catch (err) { console.warn("wou gm-panel | family step failed", err); }
+      refreshPartyIfOpen();
+      return;
+    }
+
+    const statusId = btn.dataset.status;
+    try {
+      if (direction === "clear") {
+        /* Remove ALL AEs carrying this id. */
+        const toRemove = (actor.effects ?? []).filter(e => !e.disabled && e.statuses?.has?.(statusId));
+        if (toRemove.length) {
+          await actor.deleteEmbeddedDocuments("ActiveEffect", toRemove.map(e => e.id));
+        }
+      } else if (direction === "down") {
+        /* Remove one AE carrying this id. */
+        const target = (actor.effects ?? []).find(e => !e.disabled && e.statuses?.has?.(statusId));
+        if (target) await target.delete();
+      } else {
+        /* up: create a new AE for the id (stacks). */
+        const def = (CONFIG.statusEffects ?? []).find(s => s.id === statusId);
+        if (def) {
+          await actor.createEmbeddedDocuments("ActiveEffect", [{
+            name:     game.i18n?.localize?.(def.name ?? def.label) ?? statusId,
+            img:      def.img ?? def.icon,
+            statuses: [statusId],
+            origin:   actor.uuid
+          }]);
+        }
+      }
+    } catch (err) {
+      console.warn("wou gm-panel | status interact failed", err);
+    }
+    /* Blur the clicked chip before refreshing — refreshPartyIfOpen
+     * skips when focus is still inside the panel (it's there to
+     * protect mid-edit number fields). Without the blur, every status
+     * click left the button focused → refresh skipped → UI stayed
+     * stale until something else (a hook a few ms later) triggered
+     * a second refresh attempt. */
+    try { btn.blur(); } catch (_) { /* button may be re-rendered */ }
+    refreshPartyIfOpen();
+  };
+
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target.closest?.(`#${PANEL_ID} .wou-gm-status`);
+    if (!btn) return;
+    handleStatusChipInteract(ev, ev.altKey ? "clear" : "up");
   });
+  document.addEventListener("contextmenu", (ev) => {
+    const btn = ev.target.closest?.(`#${PANEL_ID} .wou-gm-status`);
+    if (!btn) return;
+    /* Suppress the browser's native right-click menu only over our chips. */
+    handleStatusChipInteract(ev, ev.altKey ? "clear" : "down");
+  });
+  /* Track open/closed state of the Status Effects <details> per actor
+   * so re-renders triggered by a status click don't collapse the panel
+   * the user just opened. Listens on the `toggle` event (fires when
+   * the user clicks <summary>) — captured at the panel level. */
+  document.addEventListener("toggle", (ev) => {
+    const det = ev.target;
+    if (!(det instanceof HTMLDetailsElement)) return;
+    if (!det.classList.contains("wou-gm-statuses-collapse")) return;
+    const uuid = det.dataset.actorUuid;
+    if (!uuid) return;
+    if (det.open) _openStatusActors.add(uuid);
+    else          _openStatusActors.delete(uuid);
+  }, true);   // capture phase — `toggle` doesn't bubble
 
   /* ─── party tab: live refresh hooks (registered once, here inside _wired) ─── */
   Hooks.on("updateActor", () => refreshPartyIfOpen());

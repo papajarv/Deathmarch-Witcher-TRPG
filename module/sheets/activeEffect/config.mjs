@@ -124,6 +124,7 @@ export class WitcherActiveEffectConfig extends ActiveEffectConfig {
             isPurge:    type === "purge",
             isAlcoholRollAdvantage: type === "alcoholRollAdvantage",
             isClearHangover:        type === "clearHangover",
+            isStressShield:         type === "stressShield",
             // modify: <op> <value> TO <target> WHEN <when>
             targetPath: `${base}.target`, target: a?.target ?? a?.key ?? "",
             opPath:     `${base}.op`,     op:     a?.op ?? a?.mode ?? "add",
@@ -146,7 +147,10 @@ export class WitcherActiveEffectConfig extends ActiveEffectConfig {
             // suppress
             whatPath: `${base}.what`, what: a?.what ?? "death",
             // immunity
-            statusPath: `${base}.status`, status: a?.status ?? ""
+            statusPath: `${base}.status`, status: a?.status ?? "",
+            // stress shield — kind (points/sources) + buffer dice
+            kindPath: `${base}.kind`, kind: a?.kind ?? "points",
+            dicePath: `${base}.dice`, dice: a?.dice ?? "1d6"
         };
         if (type === "damage") {
             const raw = a?.locations;

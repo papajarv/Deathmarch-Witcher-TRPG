@@ -188,8 +188,12 @@ body.witcher-ttrpg-death-march .wou-apply-status-dialog .wou-apply-status-cell {
   background: rgba(10,9,8,0.55) !important;
   border: 1px solid rgba(140,133,121,0.20) !important;
   border-radius: 0 !important;
+  /* Reserve enough vertical space for the icon + label even after the
+   * dialog drag triggers a reflow. Without an explicit min-height, the
+   * cell collapses to icon-height-only and the label span loses room
+   * to render. */
   height: auto !important;
-  min-height: 0 !important;
+  min-height: 72px !important;
   cursor: pointer;
   transition: border-color .12s, background-color .12s;
 }
@@ -216,9 +220,15 @@ body.witcher-ttrpg-death-march .wou-apply-status-dialog .wou-apply-status-cell s
   color: var(--wdm-ink-hi);
   text-align: center;
   line-height: 1.2;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  /* Reserve at least one line's worth of vertical space — flex-shrink:0
+   * locks that against the parent's reflow on window drag, which was
+   * otherwise compressing the span to 0 height and visually erasing the
+   * label. min-height matches one line so single-word labels still draw;
+   * long labels wrap up to ~2 lines via overflow clip. */
+  display: block;
+  flex: 0 0 auto;
+  min-height: 1.2em;
+  max-height: calc(1.2em * 2);
   overflow: hidden;
   word-break: break-word;
   max-width: 100%;

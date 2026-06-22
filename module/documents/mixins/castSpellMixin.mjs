@@ -123,10 +123,16 @@ export const castSpellMixin = (Base) => class extends Base {
     }
 
     /** The round id used to bucket cumulative Chaos (STA spent on magic). Null
-     *  out of combat, where there's no round to accumulate across. */
+     *  out of combat, where there's no round to accumulate across.
+     *
+     *  Composite key `${combatId}:${round}` so the flag from a PRIOR combat
+     *  doesn't collide with the same round number in a NEW combat — that
+     *  was making vigor read as depleted on a fresh combat once its round
+     *  number happened to match a leftover flag. */
     _castRoundKey() {
         const c = game.combat;
-        return c?.started ? c.round : null;
+        if (!c?.started) return null;
+        return `${c.id}:${c.round}`;
     }
 
     /** Chaos (magic STA) already spent earlier this combat round, 0 if this is

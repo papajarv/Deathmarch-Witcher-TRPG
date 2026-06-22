@@ -20,6 +20,15 @@
 const SYSTEM_ID = "witcher-ttrpg-death-march";
 const TEMPLATE_FLAG = "isDefaultTemplate";
 
+/* System-wide grid defaults for any fresh scene that doesn't get a more
+ * specific value from the GM's template scene. Witcher TRPG distances are
+ * in METRES (Core rulebook); 2 m / square matches the houseruled grid
+ * scale this table uses — a 1.5 m default (Foundry's stock) doesn't
+ * round well to the SPD-based movement budgets. The GM can still
+ * override per-scene by editing the template or the scene itself. */
+const DEFAULT_GRID_DISTANCE = 2;
+const DEFAULT_GRID_UNITS    = "m";
+
 /* Scene fields that are identity, geometry, or content — never copied from
    the template onto a new scene (those come from the new scene / its map). */
 const COPY_EXCLUDE = new Set([
@@ -65,16 +74,41 @@ function buildTemplatePatch(templateScene) {
     return patch;
 }
 
-/** preCreateScene handler — seed a blank new scene from the template. */
+/** preCreateScene handler — seed a blank new scene from the template, AND
+ *  apply system-wide grid defaults (2 m / square) so a brand-new scene
+ *  always lands at the houseruled grid scale even before the GM sets up
+ *  a template scene. The template (if present) wins on grid fields —
+ *  the system default only fills in what the template doesn't specify. */
 export function applyDefaultSceneSettings(scene, data) {
     const src = scene._source ?? data ?? {};
     if (src.flags?.[SYSTEM_ID]?.[TEMPLATE_FLAG]) return;   // never seed the template itself
-    if (sceneHasContent(scene)) return;                    // a duplicate / import — leave it
 
-    const template = findTemplateScene();
-    if (!template || template.id === scene.id) return;
+    /* Carry a copy of any user-supplied grid fields so the template /
+     * system-default merging below can defer to them. Foundry's
+     * "Create Scene" dialog doesn't set grid distance/units, so for the
+     * common path these are undefined and our default lands. */
+    const userGrid = src.grid ?? {};
 
-    const patch = buildTemplatePatch(template);
+    let patch = {};
+    if (!sceneHasContent(scene)) {
+        const template = findTemplateScene();
+        if (template && template.id !== scene.id) {
+            patch = buildTemplatePatch(template);
+        }
+    }
+
+    /* Grid distance / units default applies to every fresh scene (even
+     * duplicates / imports get it ONLY if they don't already specify),
+     * because mismatched grid scales are the #1 source of "Reposition
+     * showed the wrong cell count" bug reports. */
+    const tmplGrid = patch.grid ?? {};
+    const mergedGrid = foundry.utils.mergeObject(
+        { distance: DEFAULT_GRID_DISTANCE, units: DEFAULT_GRID_UNITS },
+        foundry.utils.mergeObject(tmplGrid, userGrid, { inplace: false }),
+        { inplace: false }
+    );
+    patch.grid = mergedGrid;
+
     if (!foundry.utils.isEmpty(patch)) scene.updateSource(patch);
 }
 

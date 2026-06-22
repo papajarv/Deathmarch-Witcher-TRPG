@@ -1,0 +1,132 @@
+/* =========================================================================
+   RING PORTRAIT CROPPER — modal launched from Token Configuration's
+   Dynamic Ring section. Drag the actor's portrait under a circular cutout
+   matching the inscribed ring; Save rasterizes and writes the resulting
+   path back into the parent TokenConfig form.
+   ========================================================================= */
+
+/* Button injected into the TokenConfig dialog beside Subject Texture. */
+body.witcher-ttrpg-death-march .wdm-ring-portrait-btn,
+.wdm-ring-portrait-btn {
+  margin-top: 6px;
+  padding: 4px 12px;
+  background: rgba(184, 148, 100, 0.10);
+  border: 1px solid var(--wdm-amber-dim, #6b5a3a);
+  color: var(--wdm-amber-bright, #c8a878);
+  font-family: var(--wdm-font-display, "Bebas Neue", "Trajan Pro", serif);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.wdm-ring-portrait-btn:hover {
+  background: rgba(184, 148, 100, 0.20);
+  color: var(--wdm-amber-bright, #c8a878);
+  border-color: var(--wdm-amber, #b89464);
+}
+
+/* Modal body. The window itself uses Foundry's ApplicationV2 chrome; this
+   styles only the content. */
+body.witcher-ttrpg-death-march .wdm-rpc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 14px 12px;
+  color: var(--wdm-ink-hi, #e8e1cb);
+  font-family: var(--wdm-font-body, sans-serif);
+  font-size: 12px;
+  line-height: 1.5;
+}
+body.witcher-ttrpg-death-march .wdm-rpc-hint {
+  margin: 0;
+  color: var(--wdm-ink, #b8ad96);
+  font-style: italic;
+}
+
+/* Crop stage — square container that holds the draggable image AND the
+   circular cutout overlay. Both are positioned absolute and stack so the
+   overlay is purely visual (pointer-events none). */
+body.witcher-ttrpg-death-march .wdm-rpc-stage {
+  position: relative;
+  margin: 0 auto;
+  background: var(--wdm-bg-deep, #0a0908);
+  border: 1px solid var(--wdm-amber-dim, #6b5a3a);
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+}
+body.witcher-ttrpg-death-march .wdm-rpc-stage:active { cursor: grabbing; }
+
+/* Source image — positioned at the stage center; CSS object-fit fits the
+   natural image into the stage at startup, and the transform pans + zooms
+   it from there. The transform itself is written by the cropper class on
+   every drag/zoom event. */
+body.witcher-ttrpg-death-march .wdm-rpc-image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  /* No transition — drag motion needs to feel direct. */
+}
+
+body.witcher-ttrpg-death-march .wdm-rpc-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--wdm-ink-faint, #6e6452);
+  font-style: italic;
+}
+
+/* Circular cutout overlay — sits on top of the image but never grabs
+   pointer events so dragging still works through it. */
+body.witcher-ttrpg-death-march .wdm-rpc-mask {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Controls row — zoom slider + reset + save. */
+body.witcher-ttrpg-death-march .wdm-rpc-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+body.witcher-ttrpg-death-march .wdm-rpc-zoom {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--wdm-font-display, sans-serif);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-dim, #8e8470);
+}
+body.witcher-ttrpg-death-march .wdm-rpc-zoom input[type="range"] {
+  flex: 1 1 auto;
+  accent-color: var(--wdm-amber-bright, #c8a878);
+}
+body.witcher-ttrpg-death-march .wdm-rpc-controls button {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  background: rgba(184, 148, 100, 0.10);
+  border: 1px solid var(--wdm-amber-dim, #6b5a3a);
+  color: var(--wdm-amber-bright, #c8a878);
+  font-family: var(--wdm-font-display, sans-serif);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+body.witcher-ttrpg-death-march .wdm-rpc-controls button:hover {
+  background: rgba(184, 148, 100, 0.22);
+  border-color: var(--wdm-amber, #b89464);
+}

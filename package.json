@@ -13,6 +13,7 @@
     "test:compliance": "node --test tools/check-compliance.test.mjs"
   },
   "devDependencies": {
-    "classic-level": "^1.4.1"
+    "classic-level": "^1.4.1",
+    "playwright": "^1.61.0"
   }
 }

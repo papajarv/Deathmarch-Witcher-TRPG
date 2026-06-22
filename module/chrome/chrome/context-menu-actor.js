@@ -43,6 +43,77 @@ export function registerActorContextMenu() {
   };
   Hooks.on("getCombatTrackerContextOptions", (app, entries) => addApplyStatus(entries, combatResolver));
   Hooks.on("getCombatantContextOptions",     (app, entries) => addApplyStatus(entries, combatResolver));
+  Hooks.on("getCombatTrackerContextOptions", (app, entries) => addTargetActor(entries, combatResolver));
+  Hooks.on("getCombatantContextOptions",     (app, entries) => addTargetActor(entries, combatResolver));
+}
+
+/* Target / Untarget toggle — works for both placed tokens AND tokenless
+ * play. Routes:
+ *   1. Active token on canvas → use Foundry's standard `token.setTarget`
+ *      so the canvas reticle + downstream `game.user.targets` work as
+ *      they would for any normal targeting (and the rest of the system
+ *      sees a real token target).
+ *   2. No active token → fall back to a per-user actor-target flag that
+ *      the attack flow reads via `getActorTarget` when game.user.targets
+ *      is empty. This is the theater-of-mind path.
+ */
+const ACTOR_TARGET_FLAG = "actorTargetUuid";
+function addTargetActor(entries, opts = {}) {
+  if (entries.some(e => e?.name === "Target / Untarget")) return;
+  const resolveActor = opts.resolveActor ?? defaultResolveActor;
+  entries.push({
+    name: "Target / Untarget",
+    icon: '<i class="fa-solid fa-crosshairs"></i>',
+    condition: (li) => !!resolveActor(li),
+    callback: async (li) => {
+      const actor = resolveActor(li);
+      if (!actor) return;
+
+      /* Prefer a real token target when one is on the active scene —
+       * this gives the canvas reticle + standard target semantics. */
+      const liveTokens = (typeof actor.getActiveTokens === "function")
+        ? actor.getActiveTokens()
+        : [];
+      const token = liveTokens[0] ?? null;
+      if (token) {
+        const wasTargeted = !!game.user?.targets?.has?.(token);
+        try {
+          token.setTarget(!wasTargeted, { user: game.user, releaseOthers: !wasTargeted, groupSelection: false });
+          // Also clear any tokenless actor-target flag so the two systems
+          // don't get out of sync.
+          if (game.user?.getFlag?.(MODULE_ID, ACTOR_TARGET_FLAG)) {
+            await game.user.unsetFlag(MODULE_ID, ACTOR_TARGET_FLAG);
+          }
+          ui.notifications?.info(`${wasTargeted ? "Released" : "Targeting"} ${actor.name}.`);
+        } catch (err) {
+          console.warn("witcher-ttrpg-death-march | target via combat-tracker failed", err);
+        }
+        return;
+      }
+
+      /* No token on canvas — toggle the per-user actor-target flag.
+       * The attack flow's getActorTarget() will resolve to this actor
+       * when game.user.targets is empty. */
+      const cur = game.user?.getFlag?.(MODULE_ID, ACTOR_TARGET_FLAG);
+      if (cur === actor.uuid) {
+        await game.user.unsetFlag(MODULE_ID, ACTOR_TARGET_FLAG);
+        ui.notifications?.info(`No longer targeting ${actor.name}.`);
+      } else {
+        await game.user.setFlag(MODULE_ID, ACTOR_TARGET_FLAG, actor.uuid);
+        ui.notifications?.info(`Targeting ${actor.name} (tokenless — no canvas token found).`);
+      }
+    }
+  });
+}
+
+/** Public resolver: the attack flow uses this to find the user's "actor
+ *  target" when no token target is active. Returns the targeted Actor or
+ *  null. Cheap — no document load required when no flag is set. */
+export async function getActorTarget() {
+  const uuid = game.user?.getFlag?.(MODULE_ID, ACTOR_TARGET_FLAG);
+  if (!uuid) return null;
+  try { return await fromUuid(uuid); }
+  catch (_) { return null; }
 }
 
 function addApplyStatus(entries, opts = {}) {

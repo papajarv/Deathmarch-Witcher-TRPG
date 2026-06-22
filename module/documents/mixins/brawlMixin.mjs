@@ -138,6 +138,15 @@ export const brawlMixin = (Base) => class extends Base {
         const locLabel = loc.mode === "random" ? `${loc.label} (d10: ${loc.face})`
                        : loc.mode === "specific" ? loc.label : "";
 
+        // Grapple-chain prerequisite check — pin/choke/throw require the
+        // target to already be Grappled (RAW Core p.160).  When the target
+        // isn't grappled, we still apply the status (GM call) but flag it
+        // in the note so the table catches the violation.
+        const grappleTargets = [...(game.user?.targets ?? [])].map(t => t.actor).filter(Boolean);
+        const grappleViolations = (meta.needsGrapple
+            ? grappleTargets.filter(a => !a.statuses?.has?.("grappled"))
+            : []).map(a => a.name);
+
         // Apply the rider status to the user's target(s), then build the note:
         // the action's RAW text plus what actually happened to the target.
         const status = await applyStatusToTargets(meta.status);
@@ -148,6 +157,18 @@ export const brawlMixin = (Base) => class extends Base {
             const statusLabel = statusDef?.name ? L(statusDef.name) : meta.status;
             if (status.applied.length) noteParts.push(esc(L("WITCHER.Brawl.StatusApplied").replace("{status}", statusLabel).replace("{targets}", status.applied.join(", "))));
             else noteParts.push(esc(L("WITCHER.Brawl.StatusManual").replace("{status}", statusLabel)));
+        }
+        // Push Kick distance (RAW p.159): body/3 meters of knockback, surfaced
+        // as a note line so the GM moves the token. Floor to whole metres.
+        if (meta.pushBackFormula === "body/3") {
+            const body = Number(this.system?.stats?.body?.value) || 0;
+            const push = Math.floor(body / 3);
+            if (push > 0) noteParts.push(esc(`Push back ${push}m on a successful kick.`));
+        }
+        // Grapple-chain prerequisite violation note (Pin/Choke/Throw vs an
+        // un-grappled target — RAW says these require an existing grapple).
+        if (grappleViolations.length) {
+            noteParts.push(`<strong style="color:#b97;">⚠ Target not Grappled — RAW requires a prior grapple (${esc(grappleViolations.join(", "))}).</strong>`);
         }
         const note = noteParts.join("<br>");
 
@@ -172,7 +193,19 @@ export const brawlMixin = (Base) => class extends Base {
                 note: i === 0 ? note : ""
             });
             result = await extendedRoll(decl.grandMod ? `1d10 + ${decl.grandMod}` : `1d10`,
-                { speaker, flavor }, {});
+                { speaker, flavor, flags: { "witcher-ttrpg-death-march": { category: "combat" } } }, {});
+        }
+
+        // RAW Throw (Core p.160): on a successful throw, target makes a
+        // Stun save at −1. We trigger the prompt on each currently-targeted
+        // actor — the same rollStunSave used everywhere else (auto-applies
+        // Stunned on fail, clears on pass).
+        if (meta.triggerStunSave?.mod != null && grappleTargets.length) {
+            for (const a of grappleTargets) {
+                if (typeof a.rollStunSave !== "function") continue;
+                try { await a.rollStunSave({ modifier: meta.triggerStunSave.mod }); }
+                catch (err) { console.warn("witcher-ttrpg-death-march | throw stun save failed", err); }
+            }
         }
 
         return { declaration: decl, kind: meta.kind };

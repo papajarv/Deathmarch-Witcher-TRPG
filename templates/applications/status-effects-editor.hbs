@@ -42,7 +42,6 @@
                 title="Choose an icon">
           <img data-preview="{{s.index}}" src="{{s.img}}" alt="" />
         </button>
-        <input type="hidden" name="s.{{s.index}}.img" value="{{s.img}}" />
 
         <div class="wdm-se-id-name">
           <label class="wdm-se-field">
@@ -65,10 +64,47 @@
         </button>
       </div>
 
+      {{!-- Icon path / FontAwesome class. Editable text field so the GM can
+            type any FA class ("fa-solid fa-brain", "fa-regular fa-star",
+            etc.). The icon picker button up top also writes here when used
+            for file-path selection. The preview re-renders to an <i> tag
+            automatically on save & reload. --}}
+      <label class="wdm-se-field">
+        <span class="wdm-se-label">Icon</span>
+        <input type="text" name="s.{{s.index}}.img" value="{{s.img}}"
+               data-img-input="{{s.index}}"
+               placeholder="fa-solid fa-brain  or  icons/svg/foo.svg" />
+      </label>
+
       <label class="wdm-se-field">
         <span class="wdm-se-label">Description</span>
         <textarea name="s.{{s.index}}.description" rows="2" spellcheck="false">{{s.description}}</textarea>
       </label>
+
+      {{!-- Optional per-status rim color override for the chrome dock status
+            badge. Empty = inherit the family default (red for stress breaks,
+            green for boons, orange for food/drink, amber for everything else).
+            The text field is the canonical value; the color picker is a visual
+            aid that syncs into the text on input. --}}
+      <div class="wdm-se-row">
+        <label class="wdm-se-mini wdm-se-rim" title="Color of the countdown ring on the chrome dock status badge. Leave blank to use the family default (red = stress break, green = stress boon, orange = food/drink, amber = everything else).">
+          <span>Rim color (chrome dock ring)</span>
+          <div class="wdm-se-rim-row">
+            <input type="color"
+                   value="{{#if s.rimColor}}{{s.rimColor}}{{else}}#c8a878{{/if}}"
+                   data-rim-picker="{{s.index}}"
+                   aria-label="Rim color picker" />
+            <input type="text"
+                   name="s.{{s.index}}.rimColor"
+                   value="{{s.rimColor}}"
+                   placeholder="#rrggbb — blank to inherit family default"
+                   data-rim-text="{{s.index}}" />
+            <button type="button" class="wdm-se-btn wdm-se-rim-clear"
+                    data-action="clearRim" data-index="{{s.index}}"
+                    title="Clear override and fall back to family default">×</button>
+          </div>
+        </label>
+      </div>
 
       <details class="wdm-se-group">
         <summary>Stat modifiers</summary>
@@ -171,6 +207,34 @@
           </label>
         </div>
       </details>
+
+      {{!-- Stress shield (Stoic / Hopeful pattern). When kind is "points" or
+            "sources", statusEngine.onApply parses the Value as a Roll formula
+            (dice OR a flat number) and stamps an absorb buffer onto the AE
+            when this status lands. The preUpdate gate consumes the buffer on
+            every stress raise. Setting "none" removes the shield entirely.
+            The whole section is gated behind the stress homebrew toggle —
+            no toggle, no controls. --}}
+      {{#if @root.showStressShield}}
+      <details class="wdm-se-group">
+        <summary>Stress shield</summary>
+        <div class="wdm-se-row">
+          <label class="wdm-se-mini" title="What the buffer counts. Points: subtracts from each raise until the buffer is gone. Sources: ignores entire raise events, one per buffer point.">
+            <span>Kind</span>
+            <select name="s.{{s.index}}.stressShieldKind">
+              {{#each s.stressShieldOptions as |o|}}
+              <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
+              {{/each}}
+            </select>
+          </label>
+          <label class="wdm-se-mini" title="Buffer size rolled on apply. Accepts any Roll formula — dice (1d6, 2d6, 3d6+1) or a flat number (3). Ignored when Kind is None.">
+            <span>Value</span>
+            <input type="text" name="s.{{s.index}}.stressShieldDice" value="{{s.stressShieldDice}}"
+                   placeholder="1d6 / 2d6 / 3" spellcheck="false" />
+          </label>
+        </div>
+      </details>
+      {{/if}}
 
       <details class="wdm-se-group">
         <summary>Auto-clear &amp; periodic</summary>

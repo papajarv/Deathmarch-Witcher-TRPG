@@ -41,6 +41,10 @@ export function combatRoundSchema() {
             extraLabel:      new fields.StringField({ initial: "" }),
             fullRound:       new fields.BooleanField({ initial: false }),
             fullRoundLabel:  new fields.StringField({ initial: "" }),
+            // Set when the full-round action used was Run — multiplies the
+            // movement cap by 3 for the remainder of the turn (SPD×3) and
+            // locks the normal/extra action slots via the `fullRound` gate.
+            runUsed:         new fields.BooleanField({ initial: false }),
             defenseCount:    new fields.NumberField({ initial: 0, integer: true, min: 0 }),
             activelyDodging: new fields.BooleanField({ initial: false }),
             // Set when at least one reload action was taken this turn. If a

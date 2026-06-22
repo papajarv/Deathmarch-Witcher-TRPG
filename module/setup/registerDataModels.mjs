@@ -4,7 +4,9 @@
  *
  * Add each type's data model here as it gets implemented. The presence of
  * a registration here is what tells Foundry to use our schema instead of
- * the empty shell declared in template.json.
+ * the empty shell declared in system.json's `documentTypes` block
+ * (template.json was deprecated in v14; document types now live in
+ * system.json per the System Data Models guide).
  */
 
 // Actor data models
@@ -23,6 +25,7 @@ import { ComponentData }     from "../data/item/component.mjs";
 import { MutagenData }       from "../data/item/mutagen.mjs";
 import { DiagramsData }      from "../data/item/diagrams.mjs";
 import { ValuableData }      from "../data/item/valuable.mjs";
+import { BookData }          from "../data/item/book.mjs";
 import { MapData }           from "../data/item/map.mjs";
 import { RemainsData }       from "../data/item/remains.mjs";
 import { DieData }           from "../data/item/die.mjs";
@@ -64,6 +67,7 @@ export function registerDataModels() {
     CONFIG.Item.dataModels.mutagen       = MutagenData;
     CONFIG.Item.dataModels.diagrams      = DiagramsData;
     CONFIG.Item.dataModels.valuable      = ValuableData;
+    CONFIG.Item.dataModels.book          = BookData;
     CONFIG.Item.dataModels.map           = MapData;
     CONFIG.Item.dataModels.remains       = RemainsData;
     CONFIG.Item.dataModels.die           = DieData;

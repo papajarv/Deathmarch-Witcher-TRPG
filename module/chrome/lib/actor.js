@@ -36,7 +36,12 @@ export function getAssignedActor() {
   const u = game?.user;
   if (u?.isGM && _actorOverrideId) {
     const override = game.actors?.get?.(_actorOverrideId);
-    if (override?.type === "character") return override;
+    /* Accept BOTH character and monster overrides — take-control on
+     * turn binds the dock to whichever combatant is up. The dock's
+     * weapon-list render (dock.js renderWeaponList) branches on
+     * actor.type === "monster" to draw inline attacks from
+     * system.combat.attacks alongside any equipped weapon items. */
+    if (override?.type === "character" || override?.type === "monster") return override;
   }
   // A single controlled, owned token drives the dock — so the action-economy
   // and combat flow run on the TOKEN's actor (the same document the combat
@@ -123,17 +128,26 @@ export function getDockData(actor) {
   }
 
   const s = actor.system ?? {};
+  const isMonster = actor.type === "monster";
 
   // Identity — Profession and Race are EMBEDDED ITEMS on the actor
   // (system.items of type "profession" / "race"), not raw string fields.
+  // Monsters: no profession; "race" line shows the monster's category
+  // (necrophage, beast, elementa, ...) and the medallion uses the actor
+  // portrait so the dock has an identifying face.
   const name       = actor.name ?? "—";
-  const profItem   = safe(() => actor.items?.find(i => i.type === "profession"), null);
-  const raceItem   = safe(() => actor.items?.find(i => i.type === "race"), null);
+  const profItem   = isMonster ? null : safe(() => actor.items?.find(i => i.type === "profession"), null);
+  const raceItem   = isMonster ? null : safe(() => actor.items?.find(i => i.type === "race"), null);
   const profession = safe(() => String(profItem?.name ?? ""), "");
-  const race       = safe(() => String(raceItem?.name ?? ""), "");
+  const race       = isMonster
+      ? safe(() => String(s.category ?? ""), "")
+      : safe(() => String(raceItem?.name ?? ""), "");
   // Medallion icon is linked to the PROFESSION item (system.medallionIcon).
   // No profession, or none set → empty, and the dock hides the medallion.
-  const medallion  = safe(() => String(profItem?.system?.medallionIcon ?? ""), "");
+  // Monsters: fall back to actor.img so the dock's central portrait isn't blank.
+  const medallion  = isMonster
+      ? safe(() => String(actor.img ?? ""), "")
+      : safe(() => String(profItem?.system?.medallionIcon ?? ""), "");
 
   // Pools — Witcher TRPG schema:
   //   derivedStats.{hp,sta}.{value,max}    primary pools
@@ -183,13 +197,15 @@ export function getDockData(actor) {
   // Round Chaos — magic STA poured into spells so far this combat round
   // (castSpellMixin's `chaosRound` flag). Drives the segmented vigor bar's
   // depletion. Zero out of combat or when the flag is from an older round, so
-  // the bar reads full. Part of the return object → joins the rebind signature.
+  // the bar reads full. Composite `${combatId}:${round}` key so a flag from a
+  // PRIOR combat with a matching round number doesn't bleed into this one
+  // (was making vigor read as depleted on the matching round of a new combat).
   const vigorSpent = safe(() => {
     const combat = game.combat;
-    const roundNo = combat?.started ? combat.round : null;
-    if (roundNo == null) return 0;
+    if (!combat?.started) return 0;
+    const roundKey = `${combat.id}:${combat.round}`;
     const f = actor.getFlag?.("witcher-ttrpg-death-march", "chaosRound") ?? {};
-    return f.round === roundNo ? (Number(f.spent) || 0) : 0;
+    return f.round === roundKey ? (Number(f.spent) || 0) : 0;
   }, 0);
 
   // Combat round budget (Core p.151-152). Folded into the dock data so a
@@ -206,6 +222,10 @@ export function getDockData(actor) {
     extraLabel:      String(cr.extraLabel ?? ""),
     fullRound:       !!cr.fullRound,
     fullRoundLabel:  String(cr.fullRoundLabel ?? ""),
+    /* Run (full-round action) triples the movement cap to SPD×3 and locks
+     * normal/extra actions. The dock surfaces this as a "spent/cap" string
+     * on the Movement slot — `runUsed` flips the cap multiplier from 1 to 3. */
+    runUsed:         !!cr.runUsed,
     defenseCount:    Number(cr.defenseCount) || 0,
     activelyDodging: !!cr.activelyDodging,
     spd

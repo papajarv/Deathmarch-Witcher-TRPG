@@ -1,0 +1,73 @@
+{{!-- Stress Configuration — GM-only world settings menu. Edits one Object
+      setting (`stressConfig`); save reloads the world. --}}
+<div class="wdm-stress-config-body">
+
+  <header class="wdm-se-head">
+    <h2><i class="fa-solid fa-brain"></i> Stress Configuration</h2>
+    <p class="wdm-se-blurb">
+      Knobs for the stress homebrew. Defaults match the original spec.
+      Break / boon table text and stress-shield dice are edited from the
+      Status Effects editor.
+    </p>
+  </header>
+
+  <details class="wdm-se-group" open>
+    <summary>WILL Save &amp; Recovery</summary>
+
+    <label class="wdm-se-check">
+      <input type="checkbox" name="recoveryPenaltyEnabled" {{#if values.recoveryPenaltyEnabled}}checked{{/if}} />
+      <span><b>Stress over WILL slows natural healing</b> — when the character heals HP from rest, they lose <em>(stress − WILL)</em> from the amount restored. Off = stress only affects mental breaks, never physical recovery.</span>
+    </label>
+
+    <div class="wdm-se-row">
+      <label class="wdm-se-mini" title="Each point of stress over WILL hits the WILL save by this much. 1 = default (stress 9 vs WILL 6 → save target 3). 0.5 = saves stay easier at high stress; 2 = each point over WILL doubles the pain.">
+        <span>How hard each point over WILL hurts the save</span>
+        <input type="number" step="0.1" min="0" name="thresholdPenaltyMultiplier"
+               value="{{values.thresholdPenaltyMultiplier}}" />
+      </label>
+      <label class="wdm-se-mini" title="After every WILL save, stress settles to (WILL + this number). Default =−1, so WILL 6 lands at 5. Use 0 to stop at WILL exactly; use −3 for a stronger reset.">
+        <span>Stress remaining after a WILL save (relative to WILL)</span>
+        <input type="number" step="1" name="postSaveClearOffset"
+               value="{{values.postSaveClearOffset}}" />
+      </label>
+      <label class="wdm-se-mini" title="How many distinct mental breaks a character can accumulate before control passes to the GM. Default =8 (every entry on the break table). Lower numbers make the character break sooner.">
+        <span>Mental breaks before character is lost</span>
+        <input type="number" step="1" min="1" max="8" name="breakdownCap"
+               value="{{values.breakdownCap}}" />
+      </label>
+    </div>
+  </details>
+
+  <details class="wdm-se-group" open>
+    <summary>Critical Wounds</summary>
+
+    <label class="wdm-se-check">
+      <input type="checkbox" name="woundStressEnabled" {{#if values.woundStressEnabled}}checked{{/if}} />
+      <span><b>Taking a critical wound adds stress</b> — the listed amount lands once when the wound first appears on the character. Pulling the wound back out (item move, healing, GM cleanup) does not refund it.</span>
+    </label>
+
+    <div class="wdm-se-row">
+      <label class="wdm-se-mini">
+        <span>Simple wound</span>
+        <input type="number" step="1" min="0" name="woundStressSimple"
+               value="{{values.woundStressSimple}}" />
+      </label>
+      <label class="wdm-se-mini">
+        <span>Complex wound</span>
+        <input type="number" step="1" min="0" name="woundStressComplex"
+               value="{{values.woundStressComplex}}" />
+      </label>
+      <label class="wdm-se-mini">
+        <span>Difficult wound</span>
+        <input type="number" step="1" min="0" name="woundStressDifficult"
+               value="{{values.woundStressDifficult}}" />
+      </label>
+      <label class="wdm-se-mini">
+        <span>Deadly wound</span>
+        <input type="number" step="1" min="0" name="woundStressDeadly"
+               value="{{values.woundStressDeadly}}" />
+      </label>
+    </div>
+  </details>
+
+</div>

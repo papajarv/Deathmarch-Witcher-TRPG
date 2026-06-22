@@ -41,7 +41,6 @@ import { weatherMapApi }        from "./mechanics/weather-map.mjs";
 import { wireSceneFx, sceneFxApi } from "./mechanics/scene-fx.mjs";
 import { wireTimeFlow } from "./mechanics/time-flow.mjs";
 import { registerTerrainPaintLayer } from "./canvas/terrainPaintLayer.mjs";
-import { registerWitcherToken } from "./canvas/token.mjs";
 import { registerSceneWeatherMode } from "./mechanics/scene-weather-mode.mjs";
 import { registerSceneWeatherAudio } from "./mechanics/scene-weather-audio.mjs";
 import {
@@ -71,8 +70,6 @@ Hooks.once("init", () => {
     CONFIG.Item.documentClass = WitcherItem;
     CONFIG.ActiveEffect.documentClass = WitcherActiveEffect;
 
-    // Tint the token resource bars in our palette (HP red / STA amber).
-    registerWitcherToken();
 
     CONFIG.Combat.initiative = { formula: "1d10", decimals: 0 };
 

@@ -129,7 +129,8 @@ export const skillMixin = (Base) => class extends Base {
         const result = await extendedRoll(formula, {
             speaker: ChatMessage.getSpeaker({ actor: this }),
             flavor,
-            messageMode
+            messageMode,
+            flags: { "witcher-ttrpg-death-march": { category: "skill" } }
         }, dc != null ? { threshold: dc } : {});
         return { ...result, formula };
     }
@@ -161,7 +162,8 @@ export const skillMixin = (Base) => class extends Base {
         });
         const result = await extendedRoll(formula, {
             speaker: ChatMessage.getSpeaker({ actor: this }),
-            flavor
+            flavor,
+            flags: { "witcher-ttrpg-death-march": { category: "skill" } }
         }, dc != null ? { threshold: dc } : {});
         return { ...result, formula };
     }

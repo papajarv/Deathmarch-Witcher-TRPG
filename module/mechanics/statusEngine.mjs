@@ -468,8 +468,14 @@ export async function onCreateActiveEffectStatus(effect, options /*, userId */) 
         try { stressOn = !!game.settings?.get?.(SYSTEM_ID, "homebrew.stress"); }
         catch { /* settings not yet registered */ }
         if (!stressOn) return;
-        const statuses = effect.statuses;
-        if (!statuses?.size) return;
+        // The two onApply flows (stressDelta + stressShield) have different
+        // data sources: stressDelta reads CLAUSES off the AE's statuses,
+        // shield reads BOTH the AE's flags.<sys>.actions[] AND its statuses'
+        // clauses. So we can't bail on statuses-being-empty up front — a
+        // status-less AE that carries a stressShield action row (a potion,
+        // a perk) wouldn't reach the shield handler. Fall through with an
+        // empty Set instead; the stressDelta loop becomes a no-op naturally.
+        const statuses = effect.statuses ?? new Set();
 
         let stressDelta = 0;
         for (const id of statuses) {
@@ -480,6 +486,59 @@ export async function onCreateActiveEffectStatus(effect, options /*, userId */) 
         if (stressDelta !== 0) {
             const { grantStress } = await import("./stress.mjs");
             await grantStress(actor, stressDelta);
+        }
+
+        /* Stress shield — declarative absorb buffer. Two sources, same handler:
+         *   • clause `stressShield` on any of the AE's statuses (Stoic /
+         *     Hopeful out of the box, plus any GM-tagged custom status via
+         *     the Status Effects editor).
+         *   • action row `{ type: "stressShield", kind, dice }` on the AE
+         *     itself (set in the AE editor). Lets a potion / perk / custom
+         *     buff carry a shield without needing a registered status.
+         * First match wins — one shield per AE, action overrides clause.
+         *
+         * Idempotent across re-renders: bails if the corresponding flag is
+         * already set, so the GM can pre-roll a buffer (or fix a runaway) via
+         * the AE editor without it being overwritten next createAE pass. */
+        const collectShieldSpecs = () => {
+            const specs = [];
+            const actions = effect.flags?.[SYSTEM_ID]?.actions;
+            if (Array.isArray(actions)) {
+                for (const a of actions) {
+                    if (a?.type === "stressShield") specs.push({ kind: a.kind, dice: a.dice });
+                }
+            }
+            for (const id of statuses) {
+                const s = clauseFor(id)?.stressShield;
+                if (s) specs.push({ kind: s.kind, dice: s.dice });
+            }
+            return specs;
+        };
+
+        for (const spec of collectShieldSpecs()) {
+            const flag = spec.kind === "sources" ? "stressAbsorbSources" : "stressAbsorbPoints";
+            if (effect.getFlag(SYSTEM_ID, flag)) break;  // already provisioned
+            const dice = String(spec.dice || "1d6").trim();
+            let total = 0;
+            try {
+                const r = await new Roll(dice).evaluate();
+                total = Math.max(0, Math.floor(r.total));
+            } catch (_) { break; }
+            if (total <= 0) break;
+            try { await effect.setFlag(SYSTEM_ID, flag, total); }
+            catch (_) { break; }
+            if (!/\(\d+\)\s*$/.test(effect.name)) {
+                try { await effect.update({ name: `${effect.name} (${total})` }); }
+                catch (_) { /* presentation only */ }
+            }
+            const unit = spec.kind === "sources" ? "sources" : "points";
+            try {
+                await ChatMessage.create({
+                    speaker: ChatMessage.getSpeaker({ actor }),
+                    content: `<i>${actor.name}'s ${effect.name.replace(/\s*\(\d+\)\s*$/, "")} will absorb the next <b>${total}</b> ${unit} of STRESS.</i>`
+                });
+            } catch (_) { /* chat is informational */ }
+            break;  // one shield per AE
         }
     } catch (err) {
         console.warn("witcher-ttrpg-death-march | onCreateActiveEffect onApply failed", err);

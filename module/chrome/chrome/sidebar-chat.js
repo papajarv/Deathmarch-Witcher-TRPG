@@ -344,10 +344,12 @@ export function setupChatEnhancements() {
     }
   }
 
-  // Per-message avatars — V13 fires renderChatMessageHTML, V12 fires
-  // renderChatMessage. Listen on both.
+  // Per-message avatars — V13 fires renderChatMessageHTML (HTMLElement).
+  // The legacy V12 renderChatMessage (jQuery) hook is deprecated in V13
+  // and emits a noisy compatibility warning every time chat renders, so
+  // we only listen on the V13 hook now. If/when this system needs to
+  // support V12 again, re-add the legacy listener.
   Hooks.on("renderChatMessageHTML", (msg, html /*, data */) => decorateMessage(html, msg));
-  Hooks.on("renderChatMessage",     (msg, html /*, data */) => decorateMessage(html, msg));
 
   // Backfill existing messages (e.g., when the world has chat history already
   // and our hook only catches the next message). Walk every rendered .chat-message.

@@ -1,0 +1,121 @@
+{{!-- Book item sheet — first-class book document. Display layer mirrors the
+      Witcher 3 in-game tooltip readout; config layer carries book-type choice
+      and a launcher for the dedicated "Configure Book" dialog (DC / monster
+      filter / skill range / stress steps). The dialog lives in
+      module/chrome/sheets/valuable-study.js. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-book" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}Back to display view{{else}}Configure item{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- DISPLAY VIEW --}}
+  <div class="wdm-display-view">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">{{bookTypeLabel}}</div>
+        </div>
+      </header>
+
+      {{#unless bookEnabled}}
+        <div class="wdm-w3-effects wdm-empty">Book System is disabled in world settings.</div>
+      {{/unless}}
+
+      {{!-- READING PROGRESS (owned by an actor) — above the description --}}
+      {{#if bookProgress}}
+        <div class="wdm-w3-section-label">Reading Progress</div>
+        <div class="wdm-book-progress{{#if bookProgress.completed}} is-complete{{/if}}">
+          <div class="wdm-book-progress-bar"><span style="width:{{bookProgress.percent}}%"></span></div>
+          <div class="wdm-book-progress-pct">{{bookProgress.percent}}%{{#if bookProgress.completed}} · Complete{{/if}}</div>
+        </div>
+      {{/if}}
+
+      {{#if source.description}}
+        <div class="wdm-w3-section-label">Description</div>
+        <div class="wdm-w3-effects">{{{source.description}}}</div>
+      {{/if}}
+
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        {{#unless (eq source.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+        {{/unless}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- CONFIG VIEW --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Book title" />
+      </div>
+
+      <div class="wdm-cfg-section">Book Setup</div>
+      {{#if bookEnabled}}
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span title="Which book mechanic this drives">Book Type</span>
+            <select name="system.bookConfig.bookType">
+              <option value="monster" {{#if (eq bookType "monster")}}selected{{/if}}>Monster Lore</option>
+              <option value="skill"   {{#if (eq bookType "skill")  }}selected{{/if}}>Skill</option>
+              {{!-- Stress books only when the stress homebrew is on; still
+                    shown if this book is ALREADY stress-typed so the GM can
+                    see/change it rather than silently losing the type. --}}
+              {{#if (or (homebrew "stress") (eq bookType "stress"))}}
+              <option value="stress"  {{#if (eq bookType "stress") }}selected{{/if}}>Novel / Lore (Stress)</option>
+              {{/if}}
+            </select>
+          </label>
+        </div>
+        <button type="button" class="wdm-cfg-action-btn" data-action="configureBook">
+          <i class="fa-solid fa-book-bookmark"></i> Configure Book…
+        </button>
+        <p class="wdm-cfg-hint">{{bookSummary}}</p>
+      {{else}}
+        <p class="wdm-cfg-hint">Book System homebrew is OFF — enable it in world settings for study books to work.</p>
+      {{/if}}
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">Description</div>
+      <textarea class="wdm-cfg-textarea is-tall" name="system.description"
+                placeholder="What this book is about, where it came from, what it's worth…">{{source.description}}</textarea>
+
+      <div class="wdm-cfg-section">Details</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span title="Stack size">Quantity</span>
+          <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="Weight per unit">Weight (kg)</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="Sale value per unit">Cost</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="Market rarity on the RAW availability scale">Availability</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+      </div>
+
+    </div>
+  </div>
+
+</div>

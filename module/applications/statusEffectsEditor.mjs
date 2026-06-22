@@ -29,32 +29,52 @@ import { SYSTEM_ID, STATUS_OVERRIDE_SETTING, readStatusOverride } from "../mecha
  * and fall back to a default presentation for ids the seed doesn't carry. */
 function buildEditableRegistry() {
     const out = Object.fromEntries(
-        STATUS_EFFECTS.map(s => [s.id, { name: s.name, img: s.img }])
+        STATUS_EFFECTS.map(s => [s.id, { name: s.name, img: s.img, rimColor: s.rimColor }])
     );
     // Conservative icon defaults for clause-only ids. Mirrors what
     // setup/statusEffects.mjs assigns to drunk/hunger/hangover when registered.
+    /* Status icon directory — local SVGs shipped in /assets/icons/statuses/.
+     * Mirror the registry entries in setup/statusEffects.mjs. */
+    const ICON_DIR = "systems/witcher-ttrpg-death-march/assets/icons/statuses";
     const ICON_FALLBACKS = {
-        "drunk-1": "icons/svg/tankard.svg", "drunk-2": "icons/svg/tankard.svg",
-        "drunk-3": "icons/svg/tankard.svg", "drunk-4": "icons/svg/tankard.svg",
-        "drunk-5": "icons/svg/tankard.svg", "drunk-6": "icons/svg/tankard.svg",
-        "drunk-7": "icons/svg/skull.svg",   "drunk-8": "icons/svg/skull.svg",
-        gorged:   "icons/svg/regen.svg",
-        full:     "icons/svg/up.svg",
-        fed:      "icons/svg/aura.svg",
-        peckish:  "icons/svg/down.svg",
-        hungry:   "icons/svg/degen.svg",
-        famished: "icons/svg/skull.svg",
-        hangover: "icons/svg/sleep.svg",
-        "food-sickness":          "icons/svg/poison.svg",
-        // Stress homebrew — mental break / boon presentation. Must mirror the
-        // STRESS_BREAKS / STRESS_BOONS entries in setup/statusEffects.mjs so the
-        // editor row shows the same icon the runtime registration uses.
-        "break-scared":           "icons/svg/eye.svg",
-        "break-depressive":       "icons/svg/degen.svg",
-        "break-violent":          "icons/svg/blood.svg",
-        "boon-focused":           "icons/svg/upgrade.svg",
-        "boon-determined-grit":   "icons/svg/regen.svg",
-        "boon-smile-at-death":    "icons/svg/lightning.svg"
+        // Drunk ladder — files named drunk-1.svg … drunk-8.svg.
+        "drunk-1": `${ICON_DIR}/drunk-1.svg`,
+        "drunk-2": `${ICON_DIR}/drunk-2.svg`,
+        "drunk-3": `${ICON_DIR}/drunk-3.svg`,
+        "drunk-4": `${ICON_DIR}/drunk-4.svg`,
+        "drunk-5": `${ICON_DIR}/drunk-5.svg`,
+        "drunk-6": `${ICON_DIR}/drunk-6.svg`,
+        "drunk-7": `${ICON_DIR}/drunk-7.svg`,
+        "drunk-8": `${ICON_DIR}/drunk-8.svg`,
+        gorged:   `${ICON_DIR}/gorged.svg`,
+        // full / fed are clause-only (not registered as actual statuses) —
+        // borrow the gorged / peckish icons for the editor preview.
+        full:     `${ICON_DIR}/gorged.svg`,
+        fed:      `${ICON_DIR}/peckish.svg`,
+        peckish:  `${ICON_DIR}/peckish.svg`,
+        hungry:   `${ICON_DIR}/hungry.svg`,
+        famished: `${ICON_DIR}/famished.svg`,
+        hangover: `${ICON_DIR}/hangover.svg`,
+        "food-sickness":          `${ICON_DIR}/food-sickness.svg`,
+        // Stress homebrew — mental break / boon presentation. Mirror the
+        // STRESS_BREAKS / STRESS_BOONS entries in setup/statusEffects.mjs.
+        "break-indulgent":        `${ICON_DIR}/break-indulgent.svg`,
+        "break-paranoid":         `${ICON_DIR}/break-paranoid.svg`,
+        "break-scared":           `${ICON_DIR}/break-scared.svg`,
+        "break-depressive":       `${ICON_DIR}/break-depressive.svg`,
+        "break-impulsive":        `${ICON_DIR}/break-impulsive.svg`,
+        "break-self-harming":     `${ICON_DIR}/break-self-harming.svg`,
+        "break-selfish":          `${ICON_DIR}/break-selfish.svg`,
+        "break-violent":          `${ICON_DIR}/break-violent.svg`,
+        "boon-stoic":             `${ICON_DIR}/boon-stoic.svg`,
+        "boon-optimistic":        `${ICON_DIR}/boon-optimistic.svg`,
+        "boon-hopeful":           `${ICON_DIR}/boon-hopeful.svg`,
+        "boon-defiant":           `${ICON_DIR}/boon-defiant.svg`,
+        "boon-focused":           `${ICON_DIR}/boon-focused.svg`,
+        "boon-stalwart":          `${ICON_DIR}/boon-stalwart.svg`,
+        "boon-determined-grit":   `${ICON_DIR}/boon-determined-grit.svg`,
+        "boon-unbreakable":       `${ICON_DIR}/boon-unbreakable.svg`,
+        "boon-smile-at-death":    `${ICON_DIR}/boon-smile-at-death.svg`
     };
     const NAME_FALLBACKS = {
         "drunk-1": "Drunk I",   "drunk-2": "Drunk II",  "drunk-3": "Drunk III",
@@ -64,11 +84,22 @@ function buildEditableRegistry() {
         peckish: "Peckish", hungry: "Hungry", famished: "Famished",
         hangover: "Hangover",
         "food-sickness":         "Food Sickness",
+        "break-indulgent":       "Indulgent",
+        "break-paranoid":        "Paranoid",
         "break-scared":          "Scared",
         "break-depressive":      "Depressive",
+        "break-impulsive":       "Impulsive",
+        "break-self-harming":    "Self-Harming",
+        "break-selfish":         "Selfish",
         "break-violent":         "Violent",
+        "boon-stoic":            "Stoic",
+        "boon-optimistic":       "Optimistic",
+        "boon-hopeful":          "Hopeful",
+        "boon-defiant":          "Defiant",
         "boon-focused":          "Focused",
+        "boon-stalwart":         "Stalwart",
         "boon-determined-grit":  "Determined Grit",
+        "boon-unbreakable":      "Unbreakable",
         "boon-smile-at-death":   "Smile at Death"
     };
     // Clause-only ids the editor must NOT surface as editable rows:
@@ -116,6 +147,30 @@ const END_KINDS = [
 const DEFAULT_PRESENTATION = buildEditableRegistry();
 const DEFAULT_IDS = new Set(Object.keys(DEFAULT_PRESENTATION));
 
+/* Map a status id to its homebrew family (if any). Returning null = always
+ * shown regardless of toggles. Currently keyed off the id-prefix conventions
+ * the codebase uses in setup/statusEffects.mjs — kept in sync with the
+ * STRESS / FOOD_DRINK arrays there. */
+function homebrewFor(id) {
+    if (id.startsWith("break-")) return "stress";
+    if (id.startsWith("boon-"))  return "stress";
+    if (id.startsWith("drunk-")) return "foodAndDrink";
+    if (["gorged","full","fed","peckish","hungry","famished","hangover","food-sickness"].includes(id)) {
+        return "foodAndDrink";
+    }
+    return null;
+}
+
+/* True when this status should be HIDDEN from the editor because its
+ * homebrew toggle is currently off. Settings are read directly so we don't
+ * depend on `game.system.api` being wired yet. */
+function isHomebrewGatedOff(id) {
+    const fam = homebrewFor(id);
+    if (!fam) return false;
+    try { return !game.settings?.get?.(SYSTEM_ID, `homebrew.${fam}`); }
+    catch { return false; }  // settings not yet registered — show by default
+}
+
 /* Localize an i18n-key name for display; pass literals through unchanged. */
 function displayName(name) {
     const s = String(name ?? "");
@@ -143,7 +198,8 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
             addStatus:    StatusEffectsEditor.#onAddStatus,
             removeStatus: StatusEffectsEditor.#onRemoveStatus,
             resetAll:     StatusEffectsEditor.#onResetAll,
-            pickIcon:     StatusEffectsEditor.#onPickIcon
+            pickIcon:     StatusEffectsEditor.#onPickIcon,
+            clearRim:     StatusEffectsEditor.#onClearRim
         }
     };
 
@@ -168,6 +224,7 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
             id,
             name: displayName(pres?.name ?? id),
             img: pres?.img ?? DEFAULT_ICON,
+            rimColor: pres?.rimColor ?? "",
             isDefault: DEFAULT_IDS.has(id),
             description: clause?.description ?? "",
             stats,
@@ -187,7 +244,12 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
             clearsAtOwnTurn: clause?.clearsAt === "ownTurnStart",
             clearOnHit: !!clause?.clearOnHit,
             periodicEvery: clause?.periodic?.everyRounds ?? "",
-            periodicRollUnder: clause?.periodic?.rollUnder ?? ""
+            periodicRollUnder: clause?.periodic?.rollUnder ?? "",
+            // Stress shield (Stoic / Hopeful) — declarative absorb buffer
+            // wired through statusEngine.onApply. "none" means this status is
+            // not a shield (default for every clause that doesn't opt in).
+            stressShieldKind: clause?.stressShield?.kind ?? "none",
+            stressShieldDice: String(clause?.stressShield?.dice ?? "")
         };
     }
 
@@ -202,6 +264,9 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
      * exactly when nothing changed. */
     static #entryFromRow(row) {
         const entry = { name: row.name, img: row.img };
+        if (row.rimColor && /^#[0-9a-f]{3,8}$/i.test(String(row.rimColor).trim())) {
+            entry.rimColor = String(row.rimColor).trim();
+        }
         if (row.description) entry.description = row.description;
 
         const stats = {};
@@ -247,6 +312,16 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
             entry.periodic = { everyRounds: every };
             if (row.periodicRollUnder) entry.periodic.rollUnder = row.periodicRollUnder;
         }
+
+        // Stress shield — only persisted when kind is points / sources. Dice
+        // default to "1d6" if the GM left the field blank but picked a kind,
+        // so the buffer still has SOMETHING to roll against.
+        if (row.stressShieldKind === "points" || row.stressShieldKind === "sources") {
+            entry.stressShield = {
+                kind: row.stressShieldKind,
+                dice: row.stressShieldDice || "1d6"
+            };
+        }
         return entry;
     }
 
@@ -260,19 +335,25 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
         for (const id of DEFAULT_IDS) {
             const o = override[id];
             if (o?.removed) continue;
+            if (isHomebrewGatedOff(id)) continue;  // hide if its toggle is off
             const clause = o ? StatusEffectsEditor.#stripPresentation(o) : STATUS_CLAUSES[id];
-            const pres = { name: o?.name ?? DEFAULT_PRESENTATION[id].name, img: o?.img ?? DEFAULT_PRESENTATION[id].img };
+            const pres = {
+                name:     o?.name     ?? DEFAULT_PRESENTATION[id].name,
+                img:      o?.img      ?? DEFAULT_PRESENTATION[id].img,
+                rimColor: o?.rimColor ?? DEFAULT_PRESENTATION[id].rimColor
+            };
             rows.push(StatusEffectsEditor.#rowFromClause(id, pres, clause));
         }
         for (const [id, o] of Object.entries(override)) {
             if (DEFAULT_IDS.has(id) || !o || o.removed) continue;
-            rows.push(StatusEffectsEditor.#rowFromClause(id, { name: o.name, img: o.img }, StatusEffectsEditor.#stripPresentation(o)));
+            if (isHomebrewGatedOff(id)) continue;
+            rows.push(StatusEffectsEditor.#rowFromClause(id, { name: o.name, img: o.img, rimColor: o.rimColor }, StatusEffectsEditor.#stripPresentation(o)));
         }
         this.#working = rows;
     }
 
     static #stripPresentation(entry) {
-        const { name, img, removed, ...clause } = entry;
+        const { name, img, rimColor, removed, ...clause } = entry;
         return clause;
     }
 
@@ -292,6 +373,7 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
                 id: String(r.id || "").trim(),
                 name: String(r.name ?? "").trim(),
                 img: String(r.img ?? "").trim() || DEFAULT_ICON,
+                rimColor: String(r.rimColor ?? "").trim(),
                 isDefault: r.isDefault === true || r.isDefault === "true",
                 description: String(r.description ?? "").trim(),
                 stats,
@@ -311,7 +393,9 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
                 clearsAtOwnTurn: !!r.clearsAtOwnTurn,
                 clearOnHit: !!r.clearOnHit,
                 periodicEvery: r.periodicEvery === "" || r.periodicEvery == null ? "" : Number(r.periodicEvery),
-                periodicRollUnder: String(r.periodicRollUnder || "")
+                periodicRollUnder: String(r.periodicRollUnder || ""),
+                stressShieldKind: String(r.stressShieldKind || "none"),
+                stressShieldDice: String(r.stressShieldDice || "").trim()
             });
         }
         this.#working = next;
@@ -330,7 +414,33 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
 
         ctx.statuses = this.#working.map((row, index) => this.#statusView(row, index, skillKeys));
         ctx.buttons = [{ type: "submit", icon: "fa-solid fa-floppy-disk", label: "Save & Reload" }];
+        // Gate the per-card "Stress shield" section behind the stress
+        // homebrew toggle — if stress is off, the editor doesn't expose any
+        // stress-shaped controls anywhere.
+        try { ctx.showStressShield = !!game.settings?.get?.(SYSTEM_ID, "homebrew.stress"); }
+        catch { ctx.showStressShield = false; }
         return ctx;
+    }
+
+    /* Wire the rim-color picker ↔ text input pairs. The text field is the
+     * canonical form value (Foundry's FormDataExtended only reads named
+     * inputs); the color picker is unnamed and exists purely for the visual
+     * "pick a hex" UX. Two-way sync: typing in the text updates the swatch;
+     * picking a color overwrites the text. */
+    _onRender(context, options) {
+        super._onRender?.(context, options);
+        const root = this.element;
+        if (!root) return;
+        for (const pick of root.querySelectorAll("input[data-rim-picker]")) {
+            const idx = pick.dataset.rimPicker;
+            const text = root.querySelector(`input[data-rim-text="${idx}"]`);
+            if (!text) continue;
+            pick.addEventListener("input", () => { text.value = pick.value; });
+            text.addEventListener("input", () => {
+                const v = text.value.trim();
+                if (/^#[0-9a-f]{6}$/i.test(v)) pick.value = v;
+            });
+        }
     }
 
     #skillLabel(key) {
@@ -351,6 +461,7 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
             id: row.id,
             name: row.name,
             img: row.img,
+            rimColor: row.rimColor || "",
             isDefault: row.isDefault,
             description: row.description,
             statRows: STAT_KEYS.map(k => ({ key: k, label: this.#statLabel(k), value: row.stats?.[k] || 0 })),
@@ -372,7 +483,14 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
             clearOnHit: row.clearOnHit,
             periodicEvery: row.periodicEvery,
             rollUnderOptions: [opt("", "—", !row.periodicRollUnder)]
-                .concat(STAT_KEYS.map(k => opt(k, this.#statLabel(k), row.periodicRollUnder === k)))
+                .concat(STAT_KEYS.map(k => opt(k, this.#statLabel(k), row.periodicRollUnder === k))),
+            stressShieldKind: row.stressShieldKind || "none",
+            stressShieldDice: row.stressShieldDice || "",
+            stressShieldOptions: [
+                opt("none",    "None (not a shield)",          row.stressShieldKind === "none" || !row.stressShieldKind),
+                opt("points",  "Absorbs N points of stress",   row.stressShieldKind === "points"),
+                opt("sources", "Absorbs N stress sources",     row.stressShieldKind === "sources")
+            ]
         };
     }
 
@@ -402,13 +520,28 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
         if (!ok) return;
         this.#working = Object.keys(STATUS_CLAUSES)
             .filter(id => DEFAULT_IDS.has(id))
+            .filter(id => !isHomebrewGatedOff(id))
             .map(id => StatusEffectsEditor.#defaultRow(id));
         // Include any default presentation ids without a clause (markers).
         for (const id of DEFAULT_IDS) {
             if (this.#working.some(r => r.id === id)) continue;
+            if (isHomebrewGatedOff(id)) continue;
             this.#working.push(StatusEffectsEditor.#rowFromClause(id, DEFAULT_PRESENTATION[id], STATUS_CLAUSES[id]));
         }
         this.render();
+    }
+
+    /* Clear the rim-color override for a card so it falls back to the family
+     * default (or the RAW amber if no family). Reset both the text input
+     * (which is the canonical form value) and the visual color picker beside
+     * it. No re-render — the form change is in-place. */
+    static async #onClearRim(event, target) {
+        const index = Number(target.dataset.index);
+        if (!Number.isInteger(index)) return;
+        const text = this.element.querySelector(`input[name="s.${index}.rimColor"]`);
+        if (text) text.value = "";
+        const pick = this.element.querySelector(`input[data-rim-picker="${index}"]`);
+        if (pick) pick.value = "#c8a878";
     }
 
     static async #onPickIcon(event, target) {

@@ -1,0 +1,80 @@
+/* =============================================================================
+   CANVAS TOKEN RULER — Foundry V13's drag-distance HUD
+   ---------------------------------------------------------------------------
+   When you drag a token in V13 a floating label appears at each waypoint of
+   the planned path showing distance / cost / elevation. The label DOM
+   structure is fixed by Foundry (templates/hud/waypoint-label.hbs):
+       <div class="waypoint-label …">
+         <i class="icon …"></i>                  ← action icon (or .img)
+         <span class="total-measurement">5 ft</span>
+         <span class="delta-measurement">(+5)</span>
+         <i class="icon"></i>                    ← elevation icon
+         <span class="total-elevation">0 ft</span>
+       </div>
+   We restyle that DOM to match the chrome dock (dark amber gradients,
+   hairline borders, Bebas-style display font for the numbers). Doesn't
+   touch the PIXI dashed line / waypoint dots — those are restyled by the
+   TokenRuler subclass (witcher-token-style.mjs).
+   =============================================================================*/
+
+.waypoint-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    background:
+        radial-gradient(ellipse 140px 60px at 50% 0%, rgba(184, 148, 100, 0.13), transparent 75%),
+        linear-gradient(180deg, rgba(22, 18, 13, 0.96) 0%, rgba(10, 9, 8, 0.96) 100%);
+    border: 1px solid var(--wdm-amber-dim, #6e5224);
+    border-radius: 0;
+    box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(0, 0, 0, 0.4),
+        inset 0 0 0 1px rgba(184, 148, 100, 0.08);
+    font-family: var(--wdm-font-display, "Bebas Neue", sans-serif);
+    font-size: 12px;
+    letter-spacing: 0.10em;
+    color: var(--wdm-ink-hi, #cac4b0);
+    line-height: 1;
+    white-space: nowrap;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.85);
+    pointer-events: none;
+}
+
+.waypoint-label .icon {
+    font-size: 11px;
+    color: var(--wdm-amber-hi, #b89464);
+}
+.waypoint-label .img {
+    width: 14px;
+    height: 14px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    filter: brightness(1.05) drop-shadow(0 1px 0 rgba(0, 0, 0, 0.6));
+}
+.waypoint-label .action-label {
+    color: var(--wdm-amber-hi, #b89464);
+    text-transform: uppercase;
+}
+
+/* Headline number — the running total. Brighter amber, slightly larger
+ * so it reads at a glance from across the map. */
+.waypoint-label .total-measurement {
+    font-size: 13px;
+    color: var(--wdm-amber-bright, #c8a878);
+    font-weight: 600;
+}
+
+/* The (+N) delta that follows the total — secondary, dimmer. */
+.waypoint-label .delta-measurement,
+.waypoint-label .delta-elevation {
+    font-size: 10px;
+    color: var(--wdm-ink-dim, #8a857a);
+    opacity: 0.85;
+}
+
+.waypoint-label .total-elevation {
+    font-size: 11px;
+    color: var(--wdm-ink, #b0a994);
+}

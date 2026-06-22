@@ -110,6 +110,17 @@ async function removeSceneCard(scene, cardId) {
 
 const RARITY_SCORE = { witcher: 100, rare: 60, poor: 30, common: 15, everywhere: 5 };
 
+/* True for a weapon/shield item that's been worn down to zero
+ * Reliability — matches the rule used by the DOM broken-weapon
+ * decorator so the canvas card stays in sync with sheet/dock visuals. */
+function isBrokenForCard(item) {
+    if (!item || (item.type !== "weapon" && item.type !== "shield")) return false;
+    const max = Number(item.system?.reliability?.max) || 0;
+    if (max <= 0) return false;
+    const cur = Number(item.system?.reliability?.value) || 0;
+    return cur <= 0;
+}
+
 /** Up to four items to show on the card: pinned first, then weighted-random. */
 function computeFeaturedItems(merchant) {
     const items = Array.from(merchant.items).filter(i => (Number(i.system.quantity) || 0) > 0);
@@ -129,7 +140,10 @@ function computeFeaturedItems(merchant) {
         if (result.length >= FEATURED_SLOTS) break;
         const hit = scored.find(s => s.item.id === id);
         if (!hit) continue;
-        result.push({ name: hit.item.name, img: hit.item.img, price: hit.price, rarity: hit.rarity });
+        result.push({
+            name: hit.item.name, img: hit.item.img, price: hit.price, rarity: hit.rarity,
+            broken: isBrokenForCard(hit.item)
+        });
         used.add(id);
     }
 
@@ -138,7 +152,10 @@ function computeFeaturedItems(merchant) {
         .slice(0, FEATURED_SLOTS * 3);
     while (result.length < FEATURED_SLOTS && pool.length) {
         const pick = pool.splice(Math.floor(Math.random() * Math.min(pool.length, FEATURED_SLOTS)), 1)[0];
-        result.push({ name: pick.item.name, img: pick.item.img, price: pick.price, rarity: pick.rarity });
+        result.push({
+            name: pick.item.name, img: pick.item.img, price: pick.price, rarity: pick.rarity,
+            broken: isBrokenForCard(pick.item)
+        });
     }
     return result;
 }
@@ -273,6 +290,14 @@ async function buildCardContainer(merchant, featured, opacity = 0.9) {
             s.x = x + (SLOT_SIZE - s.width) / 2;
             s.y = ROW_Y + (SLOT_SIZE - s.height) / 2;
             s.eventMode = "none";
+            /* Broken weapon / shield → grayscale the sprite, matching the
+             * DOM decorator's `filter: grayscale(1)` on every other
+             * surface this item appears in. */
+            if (item.broken) {
+                const cmf = new PIXI.ColorMatrixFilter();
+                cmf.desaturate();
+                s.filters = [cmf];
+            }
             root.addChild(s);
         }
 
@@ -585,6 +610,19 @@ export function registerMerchantCards() {
     });
     Hooks.on("createItem", (item) => { if (item.parent?.type === "merchant" && canvas?.scene) scheduleRefresh(canvas.scene); });
     Hooks.on("deleteItem", (item) => { if (item.parent?.type === "merchant" && canvas?.scene) scheduleRefresh(canvas.scene); });
+    /* updateItem — refresh when a merchant item's broken / quantity / img
+     * changes. Without this hook, a weapon breaking (reliability → 0)
+     * or being repaired wouldn't update the canvas card's grayscale. */
+    Hooks.on("updateItem", (item, changes) => {
+        if (item.parent?.type !== "merchant") return;
+        if (!canvas?.scene) return;
+        const relevant =
+            foundry.utils.hasProperty(changes, "system.reliability") ||
+            foundry.utils.hasProperty(changes, "system.quantity") ||
+            foundry.utils.hasProperty(changes, "img") ||
+            foundry.utils.hasProperty(changes, "name");
+        if (relevant) scheduleRefresh(canvas.scene);
+    });
 
     // GM drops a merchant actor on the canvas → place a card (no token).
     Hooks.on("dropCanvasData", (cv, data) => {

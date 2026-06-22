@@ -1328,6 +1328,47 @@ body.witcher-ttrpg-death-march #sidebar #combat {
   overflow: hidden;
 }
 
+/* --- target indicator ------------------------------------------------------ */
+/* `data-wdm-targeted="1"` is stamped on each combatant <li> whose actor is
+ * a current target of the local user (see policy/combat-tracker-targets.mjs).
+ * Heavy visual treatment:
+ *   - 6px gradient bar on the left edge in bright amber
+ *   - full-row red-amber tint background
+ *   - faint outline ring around the whole row
+ *   - large pulsing crosshair badge in the top-right corner
+ * Plays nicely with the existing active / defeated / hidden modifiers. */
+body.witcher-ttrpg-death-march #sidebar #combat .combatant[data-wdm-targeted="1"] {
+  position: relative;
+  background:
+    linear-gradient(90deg, rgba(200,168,120,0.28), rgba(200,168,120,0.05) 70%, transparent),
+    rgba(60, 30, 30, 0.18);
+  box-shadow:
+    inset 6px 0 0 0 var(--wdm-amber-bright),
+    inset 0 0 0 1px rgba(200,168,120,0.45),
+    0 0 12px -2px rgba(200,168,120,0.45);
+}
+body.witcher-ttrpg-death-march #sidebar #combat .combatant[data-wdm-targeted="1"]::after {
+  content: "\f05b";                  /* fa-crosshairs */
+  font-family: "Font Awesome 6 Free", "Font Awesome 6 Pro";
+  font-weight: 900;
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: var(--wdm-amber-bright);
+  text-shadow:
+    0 0 6px rgba(255, 220, 140, 0.9),
+    0 0 14px rgba(200, 168, 120, 0.6);
+  pointer-events: none;
+  z-index: 3;
+  animation: wdm-target-pulse 1.6s ease-in-out infinite;
+}
+@keyframes wdm-target-pulse {
+  0%, 100% { opacity: 0.85; transform: translateY(-50%) scale(1.00); }
+  50%      { opacity: 1.00; transform: translateY(-50%) scale(1.18); }
+}
+
 /* --- header ----------------------------------------------------------------- */
 body.witcher-ttrpg-death-march #sidebar #combat .combat-tracker-header {
   flex: 0 0 auto;

@@ -48,6 +48,22 @@ export const combatRoundMixin = (Base) => class extends Base {
         ) ?? false;
     }
 
+    /** True only when it's CURRENTLY this actor's turn in the active combat.
+     *  Off-turn actors get zero budget — they can't move and can't act on
+     *  the canvas or the dock. Matches by tokenId first so unlinked tokens
+     *  resolve to the right combatant; falls back to actorId for the linked
+     *  / no-token-context case. */
+    get _isMyTurn() {
+        const c = game?.combat;
+        if (!c?.started) return false;
+        const cb = c.combatant;
+        if (!cb) return false;
+        const tokenId = this.token?.id ?? null;
+        if (tokenId && cb.tokenId === tokenId) return true;
+        if ((cb.actorId ?? cb.actor?.id) === this.id) return true;
+        return false;
+    }
+
     /** Current / max STA, defaulting to 0. */
     get _sta() {
         const sta = this.system?.derivedStats?.sta ?? {};
@@ -130,45 +146,86 @@ export const combatRoundMixin = (Base) => class extends Base {
      *     meters reach SPD.
      */
     async recordMovement(meters) {
-        if (this._actionLocked) return notify(this._actionLockMsg);
-        if (!this._inActiveCombat) return;             // out of combat: free, untracked
-        if (this._locked) return notify("Turn is committed to a full-round action.");
+        if (this._actionLocked) { notify(this._actionLockMsg); return false; }
+        if (!this._inActiveCombat) return true;        // out of combat: free, untracked
+        /* Off-turn → zero budget. The actor whose turn it ISN'T can't act
+         * or move on the canvas; the dock buttons refuse via the same
+         * gate. Use _isMyTurn (the strict "current combatant" check) so
+         * being merely in the tracker isn't enough. */
+        if (!this._isMyTurn) { notify("Not your turn."); return false; }
+        if (this._locked) { notify("Turn is committed to a full-round action."); return false; }
         const m   = Math.max(0, Math.round(Number(meters) || 0));
         const spd = Number(this.system?.stats?.spd?.value) || 0;
         const split = isHomebrewEnabled("splitMovement");
 
+        /* Run (full-round): SPD×3 movement budget, locks all other slots.
+         * `runUsed` is the "spent the full-round action on Run" flag set
+         * by recordRun; when on, the movement cap is tripled and other
+         * action slots are already blocked by the _locked check above. */
+        const runMul = this._round.runUsed ? 3 : 1;
+        const cap = spd ? spd * runMul : 0;
+
         if (!split) {
             // RAW: movement must precede any action; acting forfeits it.
             if (this._round.actionUsed || this._round.extraUsed) {
-                return notify("You've already acted this turn — movement is forfeit (enable Split Movement to interleave).");
+                notify("You've already acted this turn — movement is forfeit (enable Split Movement to interleave).");
+                return false;
             }
-            if (this._round.movementUsed) return notify("Already moved this turn.");
-            if (spd && m > spd) notify(`Moved ${m}m — over your SPD of ${spd}m (Run is a full-round action for SPD×3).`);
+            if (this._round.movementUsed) { notify("Already moved this turn."); return false; }
+            /* HARD CAP — refuse over-budget moves instead of recording with
+             * a warning. Canvas drags snap back on `return false` so the
+             * visual position matches the budget. */
+            if (cap && m > cap) {
+                notify(`Can't move ${m}m — exceeds cap of ${cap}m${runMul > 1 ? " (Run, SPD×3)" : ` (SPD; Run for ${spd*3}m)`}.`);
+                return false;
+            }
             await this.update({
                 "system.combatRound.movementUsed": true,
                 "system.combatRound.movementMeters": m
             });
-            return;
+            return true;
         }
 
-        // Split Movement: accumulate up to total SPD, in any order.
-        if (this._round.movementUsed) return notify("You've used all your movement this turn.");
+        // Split Movement: accumulate up to total cap (SPD or SPD×3 if Run), in any order.
+        if (this._round.movementUsed) { notify("You've used all your movement this turn."); return false; }
         const prior     = Number(this._round.movementMeters) || 0;
-        const remaining = spd ? Math.max(0, spd - prior) : Infinity;
-        if (spd && m > remaining) {
-            notify(`Only ${remaining}m of movement left this turn (SPD ${spd}).`);
+        const remaining = cap ? Math.max(0, cap - prior) : Infinity;
+        /* HARD CAP — refuse if this move would push past the remaining
+         * budget. Same reasoning as the RAW branch: canvas drag snaps back. */
+        if (cap && m > remaining) {
+            notify(`Only ${remaining}m of movement left this turn (cap ${cap}m${runMul > 1 ? ", Run" : ""}).`);
+            return false;
         }
-        const applied = spd ? Math.min(prior + m, spd) : prior + m;
+        const applied = cap ? Math.min(prior + m, cap) : prior + m;
         await this.update({
             "system.combatRound.movementMeters": applied,
-            "system.combatRound.movementUsed": spd ? applied >= spd : false
+            "system.combatRound.movementUsed": cap ? applied >= cap : false
         });
+        return true;
+    }
+
+    /** Spend the full-round action on Run: locks all other action slots,
+     *  triples the movement cap to SPD×3 for the remainder of the turn.
+     *  Mirrors the existing fullRound flag pattern. */
+    async recordRun() {
+        if (this._actionLocked) { notify(this._actionLockMsg); return false; }
+        if (!this._inActiveCombat) return true;
+        if (!this._isMyTurn) { notify("Not your turn."); return false; }
+        if (this._locked) { notify("Turn is committed to a full-round action."); return false; }
+        if (this._round.actionUsed || this._round.extraUsed) { notify("You've already acted this turn — can't Run."); return false; }
+        await this.update({
+            "system.combatRound.fullRound": true,
+            "system.combatRound.fullRoundLabel": "Run",
+            "system.combatRound.runUsed": true
+        });
+        return true;
     }
 
     /** Spend the single action with a display `label`. Returns false if gone. */
     async recordAction(label = "Action") {
         if (this._actionLocked) { notify(this._actionLockMsg); return false; }
         if (!this._inActiveCombat) return true;        // out of combat: free, untracked
+        if (!this._isMyTurn) { notify("Not your turn."); return false; }
         if (this._locked) { notify("Turn is committed to a full-round action."); return false; }
         if (this._round.actionUsed) { notify("Action already spent — use the Extra Action (3 STA)."); return false; }
         await this.update({
@@ -182,6 +239,7 @@ export const combatRoundMixin = (Base) => class extends Base {
     async recordExtraAction(label = "Extra Action") {
         if (this._actionLocked) { notify(this._actionLockMsg); return false; }
         if (!this._inActiveCombat) return true;        // out of combat: free, no STA cost
+        if (!this._isMyTurn) { notify("Not your turn."); return false; }
         if (this._locked) { notify("Turn is committed to a full-round action."); return false; }
         if (!this._round.actionUsed) { notify("Use your action first — the extra action is a second action."); return false; }
         if (this._round.extraUsed) { notify("Extra action already spent this turn."); return false; }
@@ -384,9 +442,26 @@ export const combatRoundMixin = (Base) => class extends Base {
             "system.combatRound.extraLabel": "",
             "system.combatRound.fullRound": false,
             "system.combatRound.fullRoundLabel": "",
+            "system.combatRound.runUsed": false,
             "system.combatRound.defenseCount": 0,
             "system.combatRound.activelyDodging": false,
             "system.combatRound.reloadedThisTurn": false
         });
+
+        /* Also clear Foundry V13's per-token `_movementHistory`. The combat
+         * flow does this on the GM client via `_clearMovementHistoryOnStartTurn`,
+         * but the DB write may not have propagated to other clients by the
+         * time their next canvas drag fires — leaving canvas-movement's
+         * history-total reader to pick up STALE waypoints from the previous
+         * turn and stamp them as the new total. Belt-and-suspenders clear
+         * here from the same iShouldWrite gate that just zeroed the budget. */
+        const tokens = (typeof this.getActiveTokens === "function")
+            ? (this.getActiveTokens(false, true) ?? [])
+            : [];
+        for (const td of tokens) {
+            if (typeof td?.clearMovementHistory !== "function") continue;
+            try { await td.clearMovementHistory(); }
+            catch (_) { /* token may have been destroyed mid-turn */ }
+        }
     }
 };

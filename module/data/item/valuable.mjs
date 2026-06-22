@@ -1,22 +1,20 @@
 /**
- * ValuableData — miscellaneous items (books, trophies, generic valuables).
+ * ValuableData — miscellaneous items (trophies, generic valuables).
  *
  * Schema additions over base:
- *   type : "book" | "trophy" | ""  (subtype)
+ *   type : "trophy" | ""  (subtype)
  *
- * Map and Remains are no longer valuable subtypes; they live as their own
- * first-class item types (`map`, `remains`). The "Map" / "Remains" options
- * in the subtype <select> were removed at the same time — existing items
- * that still carry one of those legacy strings render as generic valuables.
+ * Map, Remains, and Book are no longer valuable subtypes; they live as
+ * their own first-class item types (`map`, `remains`, `book`). The legacy
+ * options were removed from the subtype <select>; existing items that
+ * still carry one of those legacy strings render as generic valuables
+ * until the migration in migrateLegacyFlags.mjs promotes them.
  *
- * Homebrew (ADR 0003): the book system stores its configuration on
- * valuables of subtype "book". The book mechanic is opt-in via
- * isHomebrewEnabled("bookSystem"); the schema field is always present so
- * disabling+re-enabling doesn't lose configuration.
- *
- * bookConfig shape:
- *   bookType : "monster" | "skill" | "stress"
- *   monster / skill / stress : per-type ObjectField
+ * The `bookConfig` field stays on the schema as a frozen migration target
+ * — when the v5 migration walks the world, it reads `bookConfig` off
+ * legacy valuable-books to seed the new first-class `book` documents.
+ * Removing the field would strip that data before the migration could
+ * read it. Once a world has run migration v5, this field is inert.
  *
  * RAW-only system: no charges / drunk / alchemyBase blocks. For
  * multi-dose items use `quantity`.

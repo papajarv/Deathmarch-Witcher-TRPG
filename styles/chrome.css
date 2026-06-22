@@ -676,6 +676,65 @@ body.witcher-ttrpg-death-march #wou-dock .bs-grid {
   margin: 0 auto;
 }
 
+/* ──────────────────────────────────────────────────────────────────
+   MONSTER MODE — when #wou-dock[data-actor-type="monster"], hide the
+   PC-specific widgets (vigor arc, stress arc, adrenaline / stress /
+   shield counters, sober badge, pinned spells, sign-tray peace
+   buttons that only apply to PCs). Everything else (HP sawtooth, STA
+   arc, action budget, SP figure, weapon list, combat sign tray with
+   Crit/Fumble/Init) is reused as-is. */
+body.witcher-ttrpg-death-march #wou-dock[data-actor-type="monster"] .vigor-arc,
+body.witcher-ttrpg-death-march #wou-dock[data-actor-type="monster"] .arc-fill[data-bind="stress-arc"],
+body.witcher-ttrpg-death-march #wou-dock[data-actor-type="monster"] .arc-track:nth-of-type(1),
+body.witcher-ttrpg-death-march #wou-dock[data-actor-type="monster"] .counters-row .counter[data-kind="adrenaline"],
+body.witcher-ttrpg-death-march #wou-dock[data-actor-type="monster"] .counters-row .counter[data-kind="stress"],
+body.witcher-ttrpg-death-march #wou-dock[data-actor-type="monster"] .counters-row .counter[data-kind="shield"],
+body.witcher-ttrpg-death-march #wou-dock[data-actor-type="monster"] .identity-combat .spells-row,
+body.witcher-ttrpg-death-march #wou-dock[data-actor-type="monster"] .sober-badge,
+body.witcher-ttrpg-death-march #wou-dock[data-actor-type="monster"] .sign-tray.peace-signs .sign[data-action="sober-up"],
+body.witcher-ttrpg-death-march #wou-dock[data-actor-type="monster"] .sign-tray.peace-signs .sign[data-action="heal"] {
+  display: none !important;
+}
+/* Monster "race" line carries the category text — make it look like a
+   stat label rather than a free-form race line. */
+body.witcher-ttrpg-death-march #wou-dock[data-actor-type="monster"] .race {
+  text-transform: capitalize;
+  font-style: italic;
+  color: #b09b7a;
+  letter-spacing: 0.04em;
+}
+/* Inline monster attack rows in the weapon list — distinct from item
+   weapons (no parry button, no occupancy tags, no oil/ammo bar). */
+body.witcher-ttrpg-death-march #wou-dock .weapon-item.is-monster-inline .fa-paw {
+  color: #b09b7a;
+}
+body.witcher-ttrpg-death-march #wou-dock .weapon-item.is-monster-inline .weapon-qualities {
+  font-size: 0.78em;
+  color: #b09b7a;
+}
+body.witcher-ttrpg-death-march #wou-dock .weapon-item.is-monster-inline .weapon-dmg {
+  font-family: monospace;
+  color: #f7d77e;
+  margin-right: 2px;
+}
+body.witcher-ttrpg-death-march #wou-dock .weapon-item.is-monster-inline .weapon-rof {
+  font-size: 0.72em;
+  color: #b09b7a;
+  font-weight: 400;
+  margin-left: 6px;
+  letter-spacing: 0.04em;
+}
+body.witcher-ttrpg-death-march #wou-dock .weapon-item.is-monster-inline .weapon-monster-skill {
+  font-size: 0.7em;
+  color: #888;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+body.witcher-ttrpg-death-march #wou-dock .weapon-item.is-monster-inline.is-no-action {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+
 /* Peace + combat states share the same center grid cell — but only ONE is
    in the DOM layout at a time so the inactive state doesn't push the grid
    columns out of balance.  Toggle via body's .in-encounter class.
@@ -876,9 +935,34 @@ body.witcher-ttrpg-death-march #wou-dock .combat-state .action-row .action-btn {
   letter-spacing: 0.16em;
   text-indent: 0.16em;
   line-height: 1;
+  /* Anchor for the absolutely-positioned movement counter. */
+  position: relative;
 }
 body.witcher-ttrpg-death-march #wou-dock .combat-state .action-row .action-btn i {
   font-size: 14px;
+}
+
+/* Big "spent/cap" readout overlaid on the Movement button, anchored to
+ * the right edge so it reads at a glance without resizing the cell. The
+ * span is empty out of combat (paintActionBudget clears its text) and
+ * empty:before makes the readout vanish cleanly when there's no value.
+ * Only renders when the .mov-counter span has text content. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-row .action-btn .mov-counter {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--wdm-font-display, inherit);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-indent: 0;
+  color: var(--wdm-amber-bright, #c8a878);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.85);
+  pointer-events: none;
+  white-space: nowrap;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-row .action-btn .mov-counter:empty {
+  display: none;
 }
 
 /* Spent slot — dimmed, struck, but still clickable (movement can be
@@ -967,6 +1051,22 @@ body.witcher-ttrpg-death-march #wou-dock .combat-state .action-row .action-btn.i
 }
 body.witcher-ttrpg-death-march #wou-dock .combat-state .action-row .action-btn.is-blocked i {
   color: var(--wdm-amber-dim, #6e5224);
+}
+
+/* Off-turn (in combat, not the active combatant): the whole budget panel
+ * desaturates to read as "you have nothing to spend right now." Individual
+ * slots are also marked .is-blocked by paintActionBudget so clicks refuse,
+ * but the panel-level dim makes the state read at a glance — distinct from
+ * a SPENT (is-used) slot, which keeps full color but gets the strike-out.
+ * Out of combat the .is-off-turn class is never set, so the panel reads as
+ * normal even when no combatant is active. */
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-budget.is-off-turn {
+  filter: grayscale(0.7) brightness(0.55);
+  opacity: 0.7;
+}
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-budget.is-off-turn .action-btn,
+body.witcher-ttrpg-death-march #wou-dock .combat-state .action-budget.is-off-turn .action-btn i {
+  color: var(--wdm-ink-faint, #5a574e) !important;
 }
 
 body.witcher-ttrpg-death-march #wou-dock .combat-state .counters-row {

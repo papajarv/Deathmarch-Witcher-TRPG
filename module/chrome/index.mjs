@@ -213,6 +213,9 @@ export function wireChromeReady() {
     Hooks.on("updateCombat", scheduleRebindDock);
     Hooks.on("combatStart",  scheduleRebindDock);
     Hooks.on("combatTurn",   scheduleRebindDock);
+    // Fires AFTER the turn update applies — so combat.combatant is the new
+    // combatant and our off-turn paint can flip correctly the same frame.
+    Hooks.on("combatTurnChange", scheduleRebindDock);
     Hooks.on("combatRound",  scheduleRebindDock);
     // Catch coatings that expired while the world was closed (no worldTime hook fires then).
     sweepExpiredOilCoatings();

@@ -28,6 +28,33 @@ const PARAM_TYPES = [
     { value: "text",    label: "Text / formula" }
 ];
 
+/* Calculator-side flags a quality can carry — surfaced as a checkbox grid
+ * per quality.  Mirrors the keys the damage calculator and socket handler
+ * recognize; adding a new flag here makes it editable without code changes
+ * elsewhere. */
+const DAMAGE_FLAG_KEYS = [
+    { key: "armorPiercing",         label: "Armor Piercing (negates DR)"           },
+    { key: "improvedArmorPiercing", label: "Improved AP (negates DR + halves SP)"  },
+    { key: "ablating",              label: "Ablating (-1 SP on penetrating hit)"   },
+    { key: "bypassesWornArmor",     label: "Bypasses Worn Armor"                   },
+    { key: "bypassesNaturalArmor",  label: "Bypasses Natural Armor"                },
+    { key: "bypassesShield",        label: "Bypasses Shield (Quen)"                },
+    { key: "isSilver",              label: "Counts as Silver (vs monster resists)" }
+];
+
+/* Post-hit rider kinds — pick one per quality. */
+const RIDER_KINDS = [
+    { value: "none",     label: "No rider"                            },
+    { value: "auto",     label: "Auto (applies on every damaging hit)"},
+    { value: "percent",  label: "Percent (rolls d100 vs parameter)"   },
+    { value: "stunSave", label: "Stun Save (target rolls Stun at param)"}
+];
+
+/* Hit-location keys that the stunSave rider can be gated to.  Mirrors
+ * ATTACK_LOCATIONS — duplicated here so the editor doesn't have to import
+ * config at load time. */
+const RIDER_LOCATION_KEYS = ["head", "torso", "leftArm", "rightArm", "leftLeg", "rightLeg", "tailWing"];
+
 /* Per-catalog wiring: the form-field prefix, the settings key, and the
  * seed catalog it diffs against. */
 const CATALOGS = {
@@ -74,6 +101,9 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
 
     static #rowFromEntry(key, entry, isDefault) {
         const p = entry?.param ?? null;
+        const flags = {};
+        for (const { key: fk } of DAMAGE_FLAG_KEYS) flags[fk] = !!entry?.damageFlags?.[fk];
+        const rider = entry?.rider ?? null;
         return {
             key,
             label: entry?.label ?? key,
@@ -81,6 +111,14 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
             paramType: p?.type ?? "none",
             paramPlaceholder: p?.placeholder ?? "",
             paramSuffix: p?.suffix ?? "",
+            flags,
+            riderKind:      rider?.kind     ?? "none",
+            riderStatus:    rider?.statusId ?? "",
+            // Locations are a comma-joined string in the form (simpler than an
+            // ArrayField on FormDataExtended); split / re-join at the IO edges.
+            riderLocations: rider?.locations?.length ? rider.locations.join(",") : "",
+            // Tactical flags — read by combat-flow code (not the damage pipeline).
+            ignoresRepositionDistance: !!entry?.ignoresRepositionDistance,
             isDefault
         };
     }
@@ -96,6 +134,21 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
             if (row.paramSuffix) param.suffix = row.paramSuffix;
             entry.param = param;
         }
+        // Damage flags — only persist truthy flags so the diff-against-default
+        // stays tight (an entry with no flags === default no-flags shape).
+        const flagsOut = {};
+        for (const { key: fk } of DAMAGE_FLAG_KEYS) if (row.flags?.[fk]) flagsOut[fk] = true;
+        if (Object.keys(flagsOut).length) entry.damageFlags = flagsOut;
+        // Rider — only persist when a real kind + status is set.
+        if (row.riderKind && row.riderKind !== "none" && row.riderStatus) {
+            const rider = { kind: row.riderKind, statusId: row.riderStatus };
+            const locs = String(row.riderLocations ?? "")
+                .split(",").map(s => s.trim()).filter(Boolean);
+            if (locs.length) rider.locations = locs;
+            entry.rider = rider;
+        }
+        // Tactical flags — only persist when set, same diff-tightness rule.
+        if (row.ignoresRepositionDistance) entry.ignoresRepositionDistance = true;
         return entry;
     }
 
@@ -116,7 +169,15 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
                 const o = override[key];
                 if (o?.removed) continue;
                 const entry = o
-                    ? { label: o.label ?? defEntry.label, description: o.description ?? defEntry.description, param: o.param ?? defEntry.param ?? null }
+                    ? {
+                        label:       o.label       ?? defEntry.label,
+                        description: o.description ?? defEntry.description,
+                        param:       o.param       ?? defEntry.param ?? null,
+                        damageFlags: o.damageFlags ?? defEntry.damageFlags ?? {},
+                        rider:       o.rider       ?? defEntry.rider ?? null,
+                        ignoresRepositionDistance:
+                            o.ignoresRepositionDistance ?? defEntry.ignoresRepositionDistance ?? false
+                    }
                     : defEntry;
                 rows.push(QualitiesEditor.#rowFromEntry(key, entry, true));
             }
@@ -143,6 +204,8 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
             const next = [];
             for (const idx of Object.keys(rows).sort((a, b) => Number(a) - Number(b))) {
                 const r = rows[idx];
+                const flags = {};
+                for (const { key: fk } of DAMAGE_FLAG_KEYS) flags[fk] = !!(r.flags?.[fk]);
                 next.push({
                     key: String(r.key ?? "").trim(),
                     label: String(r.label ?? "").trim(),
@@ -150,6 +213,12 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
                     paramType: String(r.paramType || "none"),
                     paramPlaceholder: String(r.paramPlaceholder ?? "").trim(),
                     paramSuffix: String(r.paramSuffix ?? "").trim(),
+                    flags,
+                    riderKind:      String(r.riderKind   || "none"),
+                    riderStatus:    String(r.riderStatus ?? "").trim(),
+                    riderLocations: String(r.riderLocations ?? "").trim(),
+                    ignoresRepositionDistance:
+                        r.ignoresRepositionDistance === true || r.ignoresRepositionDistance === "true" || r.ignoresRepositionDistance === "on",
                     isDefault: r.isDefault === true || r.isDefault === "true"
                 });
             }
@@ -162,15 +231,21 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
     async _prepareContext(options) {
         const ctx = await super._prepareContext(options);
         if (!this.#working) this.#initWorking();
+        // Status-effect ids for the rider dropdown.  Reads at render time
+        // so any GM additions in the Status Effects editor show up.
+        const statusIds = (CONFIG.statusEffects ?? [])
+            .map(s => ({ id: s.id, label: game.i18n?.localize?.(s.name) ?? s.name ?? s.id }))
+            .filter(s => s.id)
+            .sort((a, b) => a.label.localeCompare(b.label));
         ctx.catalogs = [
-            this.#catalogView("weapon", "Weapons"),
-            this.#catalogView("armor", "Armor")
+            this.#catalogView("weapon", "Weapons", statusIds),
+            this.#catalogView("armor", "Armor",   statusIds)
         ];
         ctx.buttons = [{ type: "submit", icon: "fa-solid fa-floppy-disk", label: "Save" }];
         return ctx;
     }
 
-    #catalogView(name, label) {
+    #catalogView(name, label, statusIds) {
         const cfg = CATALOGS[name];
         const rows = this.#working[name].map((row, index) => ({
             index,
@@ -181,7 +256,24 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
             paramTypeOptions: PARAM_TYPES.map(p => ({ value: p.value, label: p.label, selected: row.paramType === p.value })),
             hasParam: row.paramType !== "none",
             paramPlaceholder: row.paramPlaceholder,
-            paramSuffix: row.paramSuffix
+            paramSuffix: row.paramSuffix,
+            // Damage-pipeline flag checkboxes (catalog-driven via DAMAGE_FLAG_KEYS).
+            flagControls: DAMAGE_FLAG_KEYS.map(f => ({
+                key: f.key,
+                label: f.label,
+                checked: !!row.flags?.[f.key]
+            })),
+            // Rider config — kind picker + status-effect dropdown + optional
+            // location filter (only meaningful when kind = stunSave).
+            riderKindOptions: RIDER_KINDS.map(k => ({
+                value: k.value, label: k.label, selected: row.riderKind === k.value
+            })),
+            riderStatusOptions: [{ value: "", label: "— pick a status —", selected: !row.riderStatus }]
+                .concat(statusIds.map(s => ({ value: s.id, label: `${s.label} (${s.id})`, selected: row.riderStatus === s.id }))),
+            riderHasLocations: row.riderKind === "stunSave",
+            riderLocationKeysHint: RIDER_LOCATION_KEYS.join(", "),
+            riderLocations: row.riderLocations ?? "",
+            ignoresRepositionDistance: !!row.ignoresRepositionDistance
         }));
         return { name, prefix: cfg.prefix, label, rows };
     }

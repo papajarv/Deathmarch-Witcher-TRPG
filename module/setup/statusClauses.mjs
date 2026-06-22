@@ -177,6 +177,11 @@ export const STATUS_CLAUSES = {
     restrained: {
         description: "Movement is blocked. Break free with an Athletics or Brawling check."
     },
+    entangled: {
+        description: "Wrapped up: −5 SPD and −2 to all physical actions. On your turn, a DC 18 Dodge/Escape or Contortionist check breaks free; an ally may spend an action to remove it.",
+        mods: { stats: { spd: -5 }, roll: { attack: -2, defense: -2 } },
+        endCheck: { kind: "skill", skill: "dodgeescape", dc: 18 }
+    },
     unconscious: {
         description: "Out cold: treated as stunned — no actions, no defense, auto-hit. Wakes at 20+ STA with a passed Stun save.",
         restrict: { act: true, defend: true, hard: true },
@@ -235,7 +240,7 @@ export const STATUS_CLAUSES = {
 
     // Markers handled procedurally elsewhere — description only.
     fastDraw: {
-        description: "You snap-drew a weapon and must attack the same turn: roll into initiative at +3, but take −3 on that attack. Clears at the start of your next turn."
+        description: "You snap-drew a weapon and MUST make an attack with it this turn (RAW Core p.165). Roll into initiative at +3 and take −3 on that attack. If the turn ends without attacking, the snap-draw is wasted and Fast Draw clears with a chat warning. Cleared automatically when the attack lands."
     },
     aim: {
         description: "Aim N: a full-round action grants +1 to your next ranged attack, stacking to +3 over consecutive rounds. Applied automatically and cleared when you fire."
@@ -385,11 +390,13 @@ export const STATUS_CLAUSES = {
         mods: { stats: { ref: 1 } }
     },
 
-    /* ── Homebrew: stress boons (nat-1 on the WILL save). Boons that grant
-     *      lasting bonuses (Focused, Smile at Death) attach a status whose
-     *      clause defines the mod; instant boons (Optimistic / Stalwart /
-     *      Determined / Unbreakable stress clears) don't need a clause and are
-     *      handled imperatively in mechanics/stress.mjs#applyBoonEffect. ── */
+    /* ── Homebrew: stress boons (nat-1 on the WILL save). Every boon now
+     *      registers a status — the three "lasting" ones below carry mods,
+     *      the instant clears / absorb buffers / reroll marker carry no mods
+     *      but exist as registered statuses so they appear in the Status
+     *      Effects editor and the token HUD's status panel for manual
+     *      application. Mechanical behavior of the absorb / reroll / clear
+     *      boons is wired imperatively in mechanics/stress.mjs. ── */
     "boon-focused": {
         description: "Focused — +1 to attack rolls for the rest of the day.",
         mods: { roll: { attack: 1 } }
@@ -401,6 +408,67 @@ export const STATUS_CLAUSES = {
     "boon-smile-at-death": {
         description: "Smile at Death — accepting the end made you sharper: +2 REF, ignore wound penalties, +2d6 temp HP/STA. When combat ends you're thrown back into the Death state.",
         mods: { stats: { ref: 2 } }
+    },
+    /* Marker-only boons — registered so the GM can apply them via the token
+     * HUD (e.g. to manually trigger a Stoic buffer outside the WILL-save
+     * flow). The actual mechanical effect — the absorb buffer (Stoic /
+     * Hopeful), the reroll flag (Defiant), the instant clears (Optimistic /
+     * Stalwart / Unbreakable) — is set up by applyBoonEffect when the boon
+     * is rolled; manually applying these via the HUD is a presentation/marker
+     * action only, and won't itself top up the buffer. */
+    "boon-stoic": {
+        description: "Stoic — ignores the next 1d6 points of STRESS. Buffer persists until depleted.",
+        mods: { },
+        // Declarative absorb buffer: when this status lands on a character,
+        // statusEngine.onApply rolls the dice and writes the result into the
+        // AE's stressAbsorbPoints flag. preUpdateActor reads it on each
+        // stress raise. `kind` is "points" (per-point) or "sources" (per-event).
+        stressShield: { kind: "points", dice: "1d6" }
+    },
+    "boon-optimistic": {
+        description: "Optimistic — cleared 1 STRESS.",
+        mods: { }
+    },
+    "boon-hopeful": {
+        description: "Hopeful — ignores the next 2d6 SOURCES of STRESS. Persists until depleted.",
+        mods: { },
+        stressShield: { kind: "sources", dice: "2d6" }
+    },
+    "boon-defiant": {
+        description: "Defiant — rolls twice and takes the best on the next mental break.",
+        mods: { }
+    },
+    "boon-stalwart": {
+        description: "Stalwart — cleared 2 STRESS.",
+        mods: { }
+    },
+    "boon-unbreakable": {
+        description: "Unbreakable — cleared all STRESS. While active (3 turns): ignores wound-threshold and death-state penalties, and auto-passes the next 3 death saves taken in combat.",
+        mods: { }
+    },
+    /* Marker clauses for the 5 flavor-only mental breaks. Their mechanical
+     * effect is roleplay, not a stat mod — they exist as registered statuses
+     * so the GM can apply them manually via the HUD and the Status Effects
+     * editor lets the GM tune their presentation per the homebrew pattern. */
+    "break-indulgent": {
+        description: "Indulgent — This is too much. You need your vice. You need comfort. Eat food until you are gorged.",
+        mods: { }
+    },
+    "break-paranoid": {
+        description: "Paranoid — Can you really trust anyone but yourself? Are you being watched? Something is out to get you. Isolate.",
+        mods: { }
+    },
+    "break-impulsive": {
+        description: "Impulsive — Just do something. Anything. Not the time to think about it.",
+        mods: { }
+    },
+    "break-self-harming": {
+        description: "Self-Harming — Stupid, stupid, stupid. This is all your fault. You did this. Take 1d6 damage on a random body part.",
+        mods: { }
+    },
+    "break-selfish": {
+        description: "Selfish — This is not the time to think of others. You need to look out for yourself.",
+        mods: { }
     }
 };
 

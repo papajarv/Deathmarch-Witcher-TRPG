@@ -146,8 +146,16 @@ const DIFFICULTY_LABEL = { easy: "Easy", medium: "Medium", hard: "Hard", excepti
    PUBLIC HELPERS
    ========================================================================= */
 
+/* A "book" item is either the first-class `book` document type (Phase 1
+ * promotion — see data/item/book.mjs) OR the legacy valuable subtype that
+ * predates the promotion (`valuable + system.type === "book"`). The
+ * migration in migrateLegacyFlags.mjs rewrites legacy items to the new
+ * type; in the meantime, both paths classify as books here so the chrome
+ * study UI, context menus, and inventory filters keep working uniformly. */
 export function isBookItem(item) {
-  return item?.type === "valuable"
+  if (!item) return false;
+  if (item.type === "book") return true;
+  return item.type === "valuable"
       && String(item?.system?.type ?? "").toLowerCase() === BOOK_TYPE_SLUG;
 }
 

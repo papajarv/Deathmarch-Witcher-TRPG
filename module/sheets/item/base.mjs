@@ -1838,6 +1838,11 @@ export class WitcherValuableSheet extends WitcherItemSheet {
         // confuse the author.
         ctx.showSubtypeSelect = docType === "valuable";
 
+        // "book" is no longer a valuable subtype — it's its own first-class
+        // item type now (see data/item/book.mjs + WitcherBookSheet). Legacy
+        // valuable items with `system.type === "book"` still render via this
+        // sheet until the migration in migrateLegacyFlags.mjs rewrites them,
+        // so the label fallback covers that grace-period case.
         const SUBTYPE_LABELS = { "": "Valuable", book: "Book", map: "Map", remains: "Remains", trophy: "Trophy" };
         ctx.subtypeLabel = SUBTYPE_LABELS[subtype] ?? "Valuable";
 
@@ -1847,6 +1852,8 @@ export class WitcherValuableSheet extends WitcherItemSheet {
         }
 
         if (subtype === "book") {
+            // Legacy valuable-with-book-subtype still works until the
+            // migration converts the document to a `book` item.
             ctx.bookEnabled = game.system.api.homebrew.isEnabled("bookSystem");
             const bc = src?.bookConfig ?? {};
             ctx.bookType = bc.bookType ?? "monster";
@@ -1854,7 +1861,6 @@ export class WitcherValuableSheet extends WitcherItemSheet {
             ctx.bookTypeLabel = TYPE_LABELS[ctx.bookType] ?? "Monster Lore";
             ctx.bookSummary = summarizeBookConfig(bc);
 
-            // Per-reader progress (only when the item is owned by an actor).
             ctx.bookProgress = null;
             const actor = this.item.actor;
             if (actor) {
@@ -1902,6 +1908,52 @@ export class WitcherValuableSheet extends WitcherItemSheet {
             };
         }
 
+        return ctx;
+    }
+}
+
+/**
+ * WitcherBookSheet — first-class book sheet (item.type === "book"). Pure
+ * book content — no subtype machinery — since the document type alone
+ * carries that information now. Reuses the same context shape the legacy
+ * valuable-book sheet exposed (`bookEnabled`, `bookType`, `bookTypeLabel`,
+ * `bookSummary`, `bookProgress`) so the chrome book dialog and the
+ * progress-render helpers don't need to know which sheet rendered the item.
+ */
+export class WitcherBookSheet extends WitcherItemSheet {
+    static PARTS = partsFor("book");
+
+    static DEFAULT_OPTIONS = {
+        actions: { configureBook: WitcherBookSheet._onConfigureBook }
+    };
+
+    /* Lazy-imported chrome dialog launcher — keeps the data layer decoupled
+     * from the chrome bundle the same way WitcherValuableSheet did. */
+    static async _onConfigureBook(event, target) {
+        const { openBookConfigDialog } = await import("../../chrome/sheets/valuable-study.js");
+        await openBookConfigDialog(this.item);
+    }
+
+    async _prepareContext(options) {
+        const ctx = await super._prepareContext(options);
+        const src = ctx.source ?? this.item.toObject().system;
+
+        ctx.bookEnabled = game.system.api.homebrew.isEnabled("bookSystem");
+        const bc = src?.bookConfig ?? {};
+        ctx.bookType = bc.bookType ?? "monster";
+        const TYPE_LABELS = { monster: "Monster Lore", skill: "Skill", stress: "Novel / Lore" };
+        ctx.bookTypeLabel = TYPE_LABELS[ctx.bookType] ?? "Monster Lore";
+        ctx.bookSummary = summarizeBookConfig(bc);
+
+        // Per-reader progress — only meaningful when the book is owned.
+        ctx.bookProgress = null;
+        const actor = this.item.actor;
+        if (actor) {
+            try {
+                const { getBookProgress } = await import("../../chrome/sheets/valuable-study.js");
+                ctx.bookProgress = getBookProgress(this.item, actor);
+            } catch (_) { /* chrome module unavailable — skip progress */ }
+        }
         return ctx;
     }
 }

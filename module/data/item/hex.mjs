@@ -59,6 +59,11 @@ export class HexData extends foundry.abstract.TypeDataModel {
         if (typeof data.defense === "string") {
             data.defense = /resist|magic|will/i.test(data.defense) ? "resistmagic"
                          : (data.defense.trim() === "" ? "resistmagic" : "none");
+        } else if (Array.isArray(data.defense)) {
+            // Roll back the brief array shape from earlier development —
+            // pick the first real entry (or "resistmagic" if none).
+            const first = data.defense.find(d => d && d !== "none");
+            data.defense = first ?? (data.defense.includes("none") ? "none" : "resistmagic");
         }
         // duration: legacy free string → { value, unit }.
         if (typeof data.duration === "string") {

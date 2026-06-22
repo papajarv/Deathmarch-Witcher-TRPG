@@ -18,6 +18,18 @@ import { registerStatusImmunity } from "../policy/status-immunity.mjs";
 import { registerWoundStatuses } from "../policy/wound-statuses.mjs";
 import { registerToxicity } from "../policy/toxicity.mjs";
 import { registerProfessionSkills } from "../policy/profession-skills.mjs";
+import { registerRingPortraitButton } from "../policy/ring-portrait-button.mjs";
+import { registerWitcherTokenHUD } from "../policy/witcher-token-hud.mjs";
+import { registerWitcherTokenStyle } from "../policy/witcher-token-style.mjs";
+import { registerCanvasMovement } from "../policy/canvas-movement.mjs";
+import { registerCanvasRotation } from "../policy/canvas-rotation.mjs";
+import { registerCanvasAutoFace } from "../policy/canvas-auto-face.mjs";
+import { registerHideTargetPips } from "../policy/canvas-hide-target-pips.mjs";
+import { registerCanvasAutoSelectTurn } from "../policy/canvas-auto-select-turn.mjs";
+import { registerBrokenWeaponIndicator } from "../policy/broken-weapon-indicator.mjs";
+import { registerCombatTrackerTakeControl } from "../policy/combat-tracker-take-control.mjs";
+import { registerHealthStateVisuals } from "../policy/health-state-visuals.mjs";
+import { registerCombatTrackerTargets } from "../policy/combat-tracker-targets.mjs";
 import { installAttackChatHandlers } from "../documents/mixins/weaponAttackMixin.mjs";
 import { installDefenseChatHandlers } from "../documents/mixins/defenseMixin.mjs";
 
@@ -94,7 +106,83 @@ export function registerHooks() {
     // does still require reload — Foundry caches CONFIG.statusEffects).
     registerFoodAndDrink();
 
-    // Defense chat cards — wire the Block "spend SP" and Parry "Apply Stagger"
-    // buttons on defense cards. See documents/mixins/defenseMixin.mjs.
+    // Attack chat cards — wire the "Roll Damage" button on attack cards so
+    // clicking it rolls the damage formula into a new chat message. See
+    // documents/mixins/weaponAttackMixin.mjs#installAttackChatHandlers.
+    installAttackChatHandlers();
+
+    // Defense chat cards — wire the Block "spend SP" button on defense cards.
+    // (Parry's stagger is auto-applied; no button.)
     installDefenseChatHandlers();
+
+    // Chat sidebar Combat chip is wired by sidebar-chat.js (sb-subnav).
+    // Combat-flagged messages get `data-wou-type="combat"`; the chip sets
+    // `data-wou-filter="combat"` on #chat and the CSS in sidebar.css does
+    // the hiding. No standalone install needed here.
+
+    // Token Configuration → Dynamic Ring → "Crop From Portrait" button.
+    // Injects the launcher next to Subject Texture so a GM can drop the
+    // actor's portrait into the ring without leaving the dialog. See
+    // policy/ring-portrait-button.mjs.
+    registerRingPortraitButton();
+
+    // Witcher Token HUD — full custom replacement for Foundry's default
+    // token HUD. Activates whenever a token is selected on the canvas.
+    // See policy/witcher-token-hud.mjs.
+    registerWitcherTokenHUD();
+
+    // Witcher Token Style — chrome-themed canvas overlays for the selection
+    // border, target reticle, and combat turn marker. Patches Token proto-
+    // type methods so all three overlays render in the dock's amber palette.
+    // See policy/witcher-token-style.mjs.
+    registerWitcherTokenStyle();
+
+    // Canvas drag → action-economy bridge. In combat, a token's canvas
+    // drag charges the actor's movement budget (recordMovement) and is
+    // hard-cancelled when the actor is stunned / full-round-locked. Out
+    // of combat the drag is free. See policy/canvas-movement.mjs.
+    registerCanvasMovement();
+    /* Token rotation costs movement budget while in combat — 90° = 1m,
+     * accumulating. Stationary-facing changes only; drags are handled
+     * by canvas-movement.mjs from the x/y delta. */
+    registerCanvasRotation();
+    /* Targeting another token auto-rotates the user's controlled token
+     * to face it (free — no movement charge). Lets the table see facing
+     * without manual rotation gymnastics. See policy/canvas-auto-face.mjs. */
+    registerCanvasAutoFace();
+    /* Suppress Foundry's cross-user target pips (the small colored dots
+     * above tokens showing OTHER users that are targeting / controlling
+     * them). The GM running a solo / small-table session wanted these
+     * gone — they clutter the canvas with no useful info the tracker
+     * doesn't already convey. See policy/canvas-hide-target-pips.mjs. */
+    registerHideTargetPips();
+    /* On every combat turn change, auto-select the current combatant's
+     * token IFF the local user is the sole owner (no other active
+     * player owns the actor). Lets the GM jump straight to controlling
+     * whichever NPC's turn it is. Skips player tokens so it never
+     * pulls selection out from under a connected player. */
+    registerCanvasAutoSelectTurn();
+    /* Visual indicator for broken weapons / shields (reliability max>0,
+     * value=0): adds .wdm-item-broken + data-wdm-broken="1" to every
+     * [data-item-id] node referring to a broken item, across all
+     * inventory surfaces (sheets, containers, merchant, dock, HUD).
+     * Styled in styles/base.css. */
+    registerBrokenWeaponIndicator();
+    /* Combat tracker GM affordances:
+     *   - Right-click "Take Control" entry on each combatant row
+     *   - Footer "Take control on turn" toggle (auto-take on turn change)
+     * Uses the existing view-as override pipeline so dock + inventory +
+     * every view-as-aware surface re-render against the taken actor. */
+    registerCombatTrackerTakeControl();
+    /* Token visual treatment driven by actor.system.healthState:
+     *   Wounded (HP < woundThreshold)  → red ColorMatrix tint, inner-glow
+     *                                    blood vignette, blood streaks
+     *   Dying   (HP ≤ 0)              → grayscale ColorMatrix, ~20%
+     *                                    skull glyph centered on token
+     * The portrait is never obscured. See policy/health-state-visuals.mjs. */
+    registerHealthStateVisuals();
+    /* Combat tracker target indicators — paint a marker on the row of
+     * every combatant the current user is targeting (token target or
+     * tokenless actor-target flag). See policy/combat-tracker-targets.mjs. */
+    registerCombatTrackerTargets();
 }

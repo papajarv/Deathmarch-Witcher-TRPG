@@ -15,6 +15,49 @@
     "esmodules": [
         "module/main.mjs"
     ],
+    "documentTypes": {
+        "Actor": {
+            "character":  {},
+            "monster":    {},
+            "loot":       {},
+            "merchant":   {}
+        },
+        "Item": {
+            "weapon":        {},
+            "ammo":          {},
+            "armor":         {},
+            "shield":        {},
+            "container":     {},
+            "component":     {},
+            "mutagen":       {},
+            "diagrams":      {},
+            "valuable":      {},
+            "book":          {},
+            "map":           {},
+            "remains":       {},
+            "die":           {},
+            "food":          {},
+            "criticalWound": {},
+            "profession":    {},
+            "race":          {},
+            "perk":          {},
+            "note":          {},
+            "alchemical":    {},
+            "enhancement":   {},
+            "homeland":      {},
+            "spell":         {},
+            "hex":           {},
+            "ritual":        {}
+        },
+        "ChatMessage": {
+            "attack":   {},
+            "defense":  {},
+            "damage":   {}
+        },
+        "ActiveEffect": {
+            "temporaryItemImprovement": {}
+        }
+    },
     "styles": [
         "styles/tokens.css",
         "styles/base.css",
@@ -42,7 +85,10 @@
         "styles/farkle.css",
         "styles/dicepoker.css",
         "styles/merchant.css",
-        "styles/food-and-drink-config.css"
+        "styles/food-and-drink-config.css",
+        "styles/ring-portrait-cropper.css",
+        "styles/witcher-token-hud.css",
+        "styles/canvas-ruler.css"
     ],
     "languages": [
         {

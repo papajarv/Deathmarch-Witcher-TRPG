@@ -296,6 +296,58 @@ function collectEffects(actor) {
    BADGE HTML
    ========================================================================= */
 
+/* Hunger / hangover / food-sickness ids that classify as the food-and-drink
+ * homebrew family. Drunk ids are detected by prefix below. Kept in sync with
+ * the registrations in setup/statusEffects.mjs. */
+const FOOD_DRINK_STATUS_IDS = new Set([
+  "gorged", "full", "fed", "peckish", "hungry", "famished",
+  "hangover", "food-sickness"
+]);
+
+const SYSTEM_ID = "witcher-ttrpg-death-march";
+
+/* Map an effect's statuses to a homebrew family for rim/ring coloring.
+ *   stress-break  →  break-* ids (Scared, Depressive, Violent ...)
+ *   stress-boon   →  boon-*  ids (Focused, Determined Grit, Smile at Death)
+ *   food-drink    →  drunk-N + hunger ladder + hangover + food-sickness
+ *   null          →  use the default amber ring (RAW statuses, custom AEs)
+ *
+ * The system flags (`stressBreakdown`, `stressBoon`, …) take precedence over
+ * status-id pattern matching: many break / boon markers are flag-only and
+ * carry no status (e.g. Indulgent / Paranoid / Selfish breaks, and every
+ * instant-clear boon marker). Without the flag check those AEs would fall
+ * through to the default amber ring even though they ARE a homebrew source. */
+function effectFamily(effect) {
+  const flags = effect?.flags?.[SYSTEM_ID];
+  if (flags?.stressBreakdown || flags?.stressBreakdownCombatEffect) return "stress-break";
+  if (flags?.stressBoon) return "stress-boon";
+
+  const statuses = effect?.statuses;
+  if (!statuses?.size) return null;
+  for (const id of statuses) {
+    if (id.startsWith("break-")) return "stress-break";
+    if (id.startsWith("boon-"))  return "stress-boon";
+    if (id.startsWith("drunk-")) return "food-drink";
+    if (FOOD_DRINK_STATUS_IDS.has(id)) return "food-drink";
+  }
+  return null;
+}
+
+/* Per-status rim color override. The Status Effects editor lets the GM set a
+ * `rimColor` on any registered status; if any of the AE's status ids carries
+ * one, that color wins over the family default. Returned as a raw CSS color
+ * string ready to embed into the badge's inline `--ring-color` variable. */
+function effectRimColor(effect) {
+  const statuses = effect?.statuses;
+  if (!statuses?.size) return null;
+  const reg = CONFIG.statusEffects ?? [];
+  for (const id of statuses) {
+    const entry = reg.find?.(s => s?.id === id);
+    if (entry?.rimColor) return String(entry.rimColor);
+  }
+  return null;
+}
+
 function statusBadgeHTML(effect) {
   const icon = effect.img || effect.icon || "icons/svg/aura.svg";
   const name = effect.name ?? "Effect";
@@ -332,10 +384,26 @@ function statusBadgeHTML(effect) {
     "cursor: help"
   ].join("; ");
 
+  // Family hook — appears as `data-family="stress-break"` etc. on the badge
+  // root so the CSS in statuses.css can color .ring-fill / .ring-track per
+  // homebrew family. RAW statuses get no attribute and fall through to the
+  // default amber ring.
+  const family = effectFamily(effect);
+  const familyAttr = family ? ` data-family="${escapeAttr(family)}"` : "";
+
+  // Per-status override — wins over the family default. Inline style sets
+  // the `--ring-color` CSS variable that .ring-fill reads in statuses.css.
+  // Inline always beats stylesheet rules, so a GM-set per-status color stays
+  // on top of both the family default and the amber fallback.
+  const rim = effectRimColor(effect);
+  const fullBadgeStyle = rim
+    ? `${badgeStyle}; --ring-color: ${escapeAttr(rim)}`
+    : badgeStyle;
+
   return `
-    <div class="wou-status-badge" style="${badgeStyle}"
+    <div class="wou-status-badge" style="${fullBadgeStyle}"
          data-wou-tooltip='${escapeAttr(tooltipHTML)}'
-         data-effect-id="${escapeAttr(effect.id)}">
+         data-effect-id="${escapeAttr(effect.id)}"${familyAttr}>
       <svg class="wou-status-ring" viewBox="0 0 30 30" aria-hidden="true"
            style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;">
         <circle class="ring-track" cx="15" cy="15" r="12"

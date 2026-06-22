@@ -15,6 +15,7 @@ import { WitcherActorSheet } from "./base.mjs";
 import { getActiveWeaponQualities, WEAPON_QUALITIES } from "../../setup/config.mjs";
 import { openFumbleDialog }   from "../../chrome/chrome/fumble-dialog.js";
 import { openCriticalDialog } from "../../chrome/chrome/critical-roll.js";
+import { buildMonsterVirtualWeapon } from "../../combat/monsterVirtualWeapon.mjs";
 
 const SYSTEM_ID  = "witcher-ttrpg-death-march";
 const MONSTER_TABS = ["combat", "skills", "knowledge", "loot", "inventory", "effects", "notes"];
@@ -162,6 +163,21 @@ export class WitcherMonsterSheet extends WitcherActorSheet {
         ctx.threatOptions     = WitcherMonsterSheet._opts(W.monster.threat,     sys.threat?.difficulty);
         ctx.complexityOptions = WitcherMonsterSheet._opts(W.monster.complexity, sys.threat?.complexity);
 
+        /* Optional novel-rule weapon weakness (Core p.175). Independent of
+         * the per-type damage profile below — they stack multiplicatively:
+         * a Slashing-resistant + Silver-vulnerable monster takes 1/4 from
+         * a non-silver slashing hit (typed DR halves, then non-silver
+         * halves) and 1/2 from a silver slashing hit (typed DR halves;
+         * silver bypasses the non-silver stage). */
+        const WEAKNESS_LABELS = {
+            none:      "None",
+            silver:    "Half from non-silver (RAW Core p.162 / novel)",
+            meteorite: "Half from non-meteorite (novel rule p.175)"
+        };
+        ctx.weaponWeaknessOptions = Object.entries(WEAKNESS_LABELS).map(([value, label]) => ({
+            value, label, selected: (sys.combat?.weaponWeakness ?? "none") === value
+        }));
+
         // Per-damage-type reaction rows.
         const reactions = W.monster.damageReactions;
         ctx.damageRows = Object.entries(W.damageTypes ?? {}).map(([key, label]) => ({
@@ -237,13 +253,27 @@ export class WitcherMonsterSheet extends WitcherActorSheet {
         // bring their own, edited on the item but surfaced here too.
         const qCatalog = getActiveWeaponQualities() ?? {};
 
-        ctx.attacks = (sys.combat?.attacks ?? []).map((row, i) => ({
-            ...row,
-            index: i,
-            qualities: formatQualityList(row.qualities, row.qualityValues, qCatalog),
-            addableQualities: addableQualities(row.qualities, qCatalog),
-            skillOptions: skillOptions.map(o => ({ ...o, selected: o.value === row.skill }))
-        }));
+        /* Damage-type checkboxes per attack — read DAMAGE_TYPES from
+         * config and mark which ones the attack carries. Lets per-type
+         * target reactions (resistant/vulnerable/immune) apply correctly
+         * to monster attacks (previously they rolled as typeless). */
+        const dmgTypeDefs = CONFIG.WITCHER?.damageTypes ?? {};
+        const dmgTypeKeys = Object.keys(dmgTypeDefs);
+        ctx.attacks = (sys.combat?.attacks ?? []).map((row, i) => {
+            const selectedTypes = new Set(Array.isArray(row.damageTypes) ? row.damageTypes : []);
+            return {
+                ...row,
+                index: i,
+                qualities: formatQualityList(row.qualities, row.qualityValues, qCatalog),
+                addableQualities: addableQualities(row.qualities, qCatalog),
+                skillOptions: skillOptions.map(o => ({ ...o, selected: o.value === row.skill })),
+                damageTypeOptions: dmgTypeKeys.map(key => ({
+                    key,
+                    label:    game.i18n.localize(dmgTypeDefs[key] ?? key),
+                    checked:  selectedTypes.has(key)
+                }))
+            };
+        });
         ctx.abilities = idx(sys.combat?.specialAbilities);
         ctx.vulns = idx(sys.combat?.vulnerabilities);
         // Random-loot pools collapse by default so a large pool (e.g. the
@@ -570,6 +600,18 @@ export class WitcherMonsterSheet extends WitcherActorSheet {
                 const i = Number(k);
                 if (Number.isInteger(i) && current[i] && patch && typeof patch === "object") {
                     foundry.utils.mergeObject(current[i], patch);
+                    /* Multi-input checkbox rows (damageTypes; qualities via
+                     * add-then-remove cycles) round-trip unchecked slots as
+                     * nulls. Strip null / empty-string entries from any array
+                     * field on the row so downstream consumers — the dock
+                     * (renderWeaponList) and the attack pipeline
+                     * (weaponAttackMixin localizeTypes) — don't see
+                     * [null,null,...] sparse junk that crashes string coercion. */
+                    for (const [field, val] of Object.entries(current[i])) {
+                        if (Array.isArray(val)) {
+                            current[i][field] = val.filter(v => v != null && v !== "");
+                        }
+                    }
                 }
             }
             foundry.utils.setProperty(data, `system.${path}`, current);
@@ -603,45 +645,52 @@ export class WitcherMonsterSheet extends WitcherActorSheet {
         await this.actor.update({ [`system.${path}`]: arr });
     }
 
-    /* Roll an inline monster attack (Core p.163): to-hit = 1d10 + the
-     * attack's chosen combat skill (stat + rank + mods, already summed into
-     * skill.total), plus a damage roll. Both land in one chat card. */
+    /* Build a virtual weapon item from a monster attack declaration so
+     * the unified weaponAttack() flow can roll it the same way it rolls
+     * a character's weapon. The object quacks like a WitcherItem of
+     * type "weapon" — has .type, .name, .img, .id, .uuid, .actor, and
+     * a .system shaped like the weapon data model — without actually
+     * being an embedded document on the actor. The attack flow's reads
+     * are all non-mutating (no .update() on the weapon), so a plain
+     * object works.
+     *
+     * Carries through:
+     *   - damage formula (system.damage / system.effective.damage)
+     *   - weapon qualities + values (Bleeding, AP, Silver — fed to the
+     *     post-hit rider pipeline + the damage calculator's quality flags)
+     *   - damage types (per-type reaction lookup on target)
+     *   - chosen combat skill (skillKey)
+     *
+     * Stubs ammo APIs to no-ops so the bow/crossbow branches in the
+     * attack flow stay quiescent for natural attacks. */
+    _buildVirtualWeapon(attack, index) {
+        return buildMonsterVirtualWeapon(this.actor, attack, index);
+    }
+
+    /* Roll an inline monster attack through the same flow that handles
+     * character weapons (Core p.163 — monster to-hit = 1d10 + skill).
+     * Routes through actor.weaponAttack() with a virtual weapon so the
+     * resulting chat card carries the same collapsible summary, verdict
+     * chips, Roll Damage button, status riders, crit wound auto-apply,
+     * and target damage application that PCs get. Per RAW (Core p.153)
+     * monsters cannot use Strong / Fast strikes — we pass skipDialog
+     * so the default normal-strike declaration is used; the action-gate
+     * is also skipped since RAW Core p.151 has monsters firing per ROF
+     * each round rather than burning the character action budget. */
     static async _onRollMonsterAttack(event, target) {
         const index = Number(target.dataset.index);
         const attack = this.actor.system?.combat?.attacks?.[index];
         if (!attack) return;
-
-        const skillMap  = CONFIG.WITCHER?.skillMap ?? {};
-        const skillKey  = attack.skill || "melee";
-        const statKey   = skillMap[skillKey]?.statKey ?? "ref";
-        const total     = Number(this.actor.system?.skills?.[statKey]?.[skillKey]?.total) || 0;
-        const skillLbl  = game.i18n.localize(CONFIG.WITCHER?.skillLabel?.(skillKey) ?? skillKey);
-
-        const hitRoll = await new Roll(`1d10 + ${total}`).evaluate();
-
-        const dmgFormula = (attack.damage ?? "").trim();
-        let dmgRoll = null;
-        if (dmgFormula) {
-            try { dmgRoll = await new Roll(dmgFormula).evaluate(); } catch { dmgRoll = null; }
+        const virtualWeapon = this._buildVirtualWeapon(attack, index);
+        try {
+            await this.actor.weaponAttack(virtualWeapon, {
+                skipDialog:       true,
+                skipActionGate:   true
+            });
+        } catch (err) {
+            console.warn("witcher-ttrpg-death-march | monster attack failed", err);
+            ui.notifications?.error("Monster attack failed — see console.");
         }
-
-        const name   = attack.name || game.i18n.localize("WITCHER.Monster.Attacks");
-        const rof    = Number(attack.rof) || 1;
-        const effect = (attack.effect ?? "").trim();
-        const sign   = total >= 0 ? "+" : "";
-        const dmgLine = dmgRoll
-            ? `<div style="font-size:11px;opacity:0.85">${game.i18n.localize("WITCHER.Monster.ColDamage")}: <strong>${dmgRoll.total}</strong> <span style="opacity:0.6">(${dmgFormula})</span></div>`
-            : (dmgFormula ? `<div style="font-size:11px;opacity:0.85">${game.i18n.localize("WITCHER.Monster.ColDamage")}: <strong>${dmgFormula}</strong></div>` : "");
-
-        await hitRoll.toMessage({
-            speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-            flavor: `<h3>${this.actor.name} — ${name} <span style="font-size:10px;opacity:0.65">×${rof}</span></h3>
-                     <div style="font-size:11px;opacity:0.85">${game.i18n.localize("WITCHER.Monster.Attack")}: ${skillLbl} ${sign}${total}</div>
-                     ${dmgLine}
-                     ${effect ? `<div style="font-size:11px;opacity:0.85">${game.i18n.localize("WITCHER.Monster.ColEffect")}: ${effect}</div>` : ""}`
-        });
-
-        if (dmgRoll && game.dice3d) game.dice3d.showForRoll(dmgRoll, game.user, true);
     }
 
     /* Cycle a status id's reaction: none → resistant → immune → none.

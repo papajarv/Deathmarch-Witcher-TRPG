@@ -39,6 +39,7 @@ import {
     WitcherCriticalWoundSheet,
     WitcherDiagramsSheet,
     WitcherValuableSheet,
+    WitcherBookSheet,
     WitcherDieSheet,
     WitcherFoodSheet
 } from "../sheets/item/base.mjs";
@@ -98,6 +99,11 @@ export function registerSheets() {
     // header + a type-specific config section (image picker for map,
     // source-monster link for remains, subtype select for plain valuables).
     DSC.registerSheet(Item, SYSTEM_ID, WitcherValuableSheet,      { types: ["valuable", "map", "remains"], makeDefault: true, label: "WITCHER.SheetClassItem" });
+    // Books are now a first-class item type — own data model, own sheet, own
+    // template. Legacy `valuable + system.type === "book"` items still render
+    // via WitcherValuableSheet until the migration in migrateLegacyFlags.mjs
+    // rewrites them to the `book` type.
+    DSC.registerSheet(Item, SYSTEM_ID, WitcherBookSheet,          { types: ["book"],          makeDefault: true, label: "WITCHER.SheetClassItem" });
     DSC.registerSheet(Item, SYSTEM_ID, WitcherDieSheet,           { types: ["die"],           makeDefault: true, label: "WITCHER.SheetClassItem" });
     DSC.registerSheet(Item, SYSTEM_ID, WitcherFoodSheet,          { types: ["food"],          makeDefault: true, label: "WITCHER.SheetClassItem" });
     DSC.registerSheet(Item, SYSTEM_ID, WitcherNoteSheet,          { types: ["note"],          makeDefault: true, label: "WITCHER.SheetClassItem" });

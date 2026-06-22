@@ -83,6 +83,68 @@
                    placeholder="e.g. %" />
           </label>
         </div>
+
+        {{!-- Damage-pipeline flags — wired into the damage calculator on
+              every hit involving this quality.  Checkboxes are derived from
+              DAMAGE_FLAG_KEYS so adding a new flag is one-line. --}}
+        <div class="wdm-qe-section-label">Damage Flags</div>
+        <div class="wdm-qe-flags">
+          {{#each q.flagControls as |f|}}
+          <label class="wdm-se-check">
+            <input type="checkbox" name="{{../cat.prefix}}.{{../q.index}}.flags.{{f.key}}"
+                   {{#if f.checked}}checked{{/if}} />
+            <span>{{f.label}}</span>
+          </label>
+          {{/each}}
+        </div>
+
+        {{!-- Tactical flags — read by combat-flow code (not the damage
+              pipeline). Currently exposes "Ignores Reposition Distance"
+              (Long Reach): when set, a defender's successful Reposition
+              against this weapon does NOT void follow-up Fast-attack swings. --}}
+        <div class="wdm-qe-section-label">Tactical Flags</div>
+        <div class="wdm-qe-flags">
+          <label class="wdm-se-check">
+            <input type="checkbox" name="{{cat.prefix}}.{{q.index}}.ignoresRepositionDistance"
+                   {{#if q.ignoresRepositionDistance}}checked{{/if}} />
+            <span>Ignores Reposition Distance (weapon has reach beyond original square)</span>
+          </label>
+        </div>
+
+        {{!-- Status rider — pick a kind and a status effect to apply when
+              the hit lands.  Status dropdown is fed from CONFIG.statusEffects
+              so any GM-added status appears here automatically.  Stun-save
+              kind reveals the optional location filter. --}}
+        <div class="wdm-qe-section-label">Status Rider <span class="wdm-qe-section-sub">(applied on a damaging hit)</span></div>
+        <div class="wdm-qe-rider">
+          <label class="wdm-se-mini">
+            <span>Kind</span>
+            <select name="{{cat.prefix}}.{{q.index}}.riderKind">
+              {{#each q.riderKindOptions as |o|}}
+              <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
+              {{/each}}
+            </select>
+          </label>
+          <label class="wdm-se-mini">
+            <span>Status Effect</span>
+            <select name="{{cat.prefix}}.{{q.index}}.riderStatus">
+              {{#each q.riderStatusOptions as |o|}}
+              <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
+              {{/each}}
+            </select>
+          </label>
+          {{#if q.riderHasLocations}}
+          <label class="wdm-se-mini wdm-qe-rider-locs">
+            <span title="Comma-separated location keys this rider fires on (defaults to head, torso for Stun Save). Available: {{q.riderLocationKeysHint}}">Locations</span>
+            <input type="text" name="{{cat.prefix}}.{{q.index}}.riderLocations"
+                   value="{{q.riderLocations}}" placeholder="head, torso" />
+          </label>
+          {{else}}
+          {{!-- Preserve the value when kind is not stunSave so toggling
+                back doesn't lose the user's previous location filter. --}}
+          <input type="hidden" name="{{cat.prefix}}.{{q.index}}.riderLocations" value="{{q.riderLocations}}" />
+          {{/if}}
+        </div>
         </div>
       </details>
       {{/each}}

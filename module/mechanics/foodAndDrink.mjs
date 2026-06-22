@@ -495,7 +495,7 @@ export async function applyHangover(actor, peak, opts = {}) {
     // somewhere in the validate/preCreate chain, log it instead of red-toasting.
     try { await actor.createEmbeddedDocuments("ActiveEffect", [{
         name:        def?.name || "Hangover",
-        img:         def?.img  || "icons/svg/sleep.svg",
+        img:         def?.img  || "systems/witcher-ttrpg-death-march/assets/icons/statuses/hangover.svg",
         description: dynamicDesc,
         disabled:    false,
         statuses:    ["hangover"],
@@ -1314,7 +1314,7 @@ async function applySpoiledHazard(actor, itemName) {
     try {
         await actor.createEmbeddedDocuments("ActiveEffect", [{
             name:        def?.name || "Food Sickness",
-            img:         def?.img  || "icons/svg/poison.svg",
+            img:         def?.img  || "systems/witcher-ttrpg-death-march/assets/icons/statuses/food-sickness.svg",
             description: descriptionFor("food-sickness") || def?.description || "Food sickness from spoiled food.",
             disabled:    false,
             statuses:    ["food-sickness"],
