@@ -373,6 +373,6 @@
     "primaryTokenAttribute": "derivedStats.hp",
     "secondaryTokenAttribute": "derivedStats.sta",
     "url": "https://github.com/papajarv/Deathmarch-Witcher-TRPG",
-    "manifest": "https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/download/1.2/system.json",
-    "download": "https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/download/1.2/witcher-ttrpg-death-march-1.2.zip"
+    "manifest": "https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/latest/download/system.json",
+    "download": "https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/latest/download/witcher-ttrpg-death-march.zip"
 }
