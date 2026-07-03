@@ -214,6 +214,9 @@ I am more than willing to answer questions and troubleshoot with you :)
 ## Credits
 Medallion art in system's /assets: https://www.deviantart.com/ari-m94 
 
+Combat Extended module is a mix of houserules I picked and choose from
+the homebrew "Equipment Overhaul" by The Duderonomist
+
 ---
 
 ## The legal bit
