@@ -17,8 +17,10 @@ import { lifepathSchema }     from "./templates/lifepath.mjs";
 import { countersSchema }     from "./templates/counters.mjs";
 import { combatRoundSchema }  from "./templates/combatRound.mjs";
 import { combatModsSchema }   from "./templates/combatMods.mjs";
+import { guardSchema }        from "./templates/guard.mjs";
 import { applyConditionActions, applyEventLedger } from "../../setup/config.mjs";
 import { derivedMods } from "../../mechanics/statusEngine.mjs";
+import { isEoArmorModelOn, totalEffectiveEv, EO_HALF_EV_SKILLS } from "../../mechanics/eoArmorModel.mjs";
 
 const fields = foundry.data.fields;
 
@@ -41,6 +43,10 @@ export class CharacterData extends foundry.abstract.TypeDataModel {
             ...countersSchema(),
             ...combatRoundSchema(),
             ...combatModsSchema(),
+            // Combat Extended guard-stance state (gated on the
+            // extendedCombat homebrew toggle at runtime; schema present
+            // unconditionally so values survive a toggle flip).
+            ...guardSchema(),
 
             // Homebrew (ADR 0003): stress mechanic. Schema always present;
             // sheet renders the stress tab + accumulation logic gates on
@@ -107,6 +113,43 @@ export class CharacterData extends foundry.abstract.TypeDataModel {
     }
 
     /**
+     * Pre-AE preparation — runs BEFORE the "initial" AE phase. Used to seed
+     * any field that AEs are expected to add on top of, so a +N AE landing
+     * on the field stacks instead of being absorbed by a floor.
+     *
+     * Vigor (Core p.38) is fully ADDITIVE:
+     *      displayed_vigor = profession_baseline + source_invested + AE_bonus
+     * No floor / max — every term contributes its full value. The profession
+     * grants its baseline regardless of investment; the player invests source
+     * on top of (not in place of) that baseline; AE perks add on top of both.
+     *
+     * Mechanics of the stack:
+     *   - source.derivedStats.vigor is the player's invested points (what the
+     *     stepper writes). Read here as `this.derivedStats.vigor` because
+     *     no AE has applied yet — the value is the unmodified source.
+     *   - profession_baseline comes from the highest-vigor profession on the
+     *     actor (multi-profession is an edge case; highest wins).
+     *   - AE_bonus comes from the "initial" phase that runs after this hook.
+     *
+     * Concretely with profession=2, AE=+2, source=0:
+     *      prepareBaseData → vigor = 0 + 2 = 2
+     *      AE initial      → vigor = 2 + 2 = 4
+     *   +1 click: source 0→1, vigor = 1+2 = 3, AE adds 2 → 5  (display +1)
+     *   +1 click: source 1→2, vigor = 2+2 = 4, AE adds 2 → 6  (display +1)
+     *   −1 click: source N→N-1, vigor drops by 1 cleanly.
+     */
+    prepareBaseData() {
+        super.prepareBaseData?.();
+        if (!this.derivedStats) return;
+        let profVigor = 0;
+        for (const it of this.parent?.items ?? []) {
+            if (it.type === "profession") profVigor = Math.max(profVigor, Number(it.system?.vigor) || 0);
+        }
+        const invested = Number(this.derivedStats.vigor) || 0;
+        this.derivedStats.vigor = invested + profVigor;
+    }
+
+    /**
      * Derived data — RAW Witcher TRPG (Core p.48 master table, p.176
      * verbal combat, p.156 wound threshold, p.162 death state).
      *
@@ -137,6 +180,21 @@ export class CharacterData extends foundry.abstract.TypeDataModel {
      *
      * Player-set: hp.value, sta.value, shield, vigor.
      */
+    /** Pre-validation migration. Runs once per load before schema validation,
+     *  so legacy stored shapes are reshaped silently:
+     *    - `lifepathModifiers.ignoredArmorEncumbrance: true`  → 99 (full ignore)
+     *    - `lifepathModifiers.ignoredArmorEncumbrance: false` →  0
+     *    The field was BooleanField until Witchers Reborn added Bear · Juggernaut
+     *    which needs a partial-ignore (6 EV). The type flipped to NumberField;
+     *    this coercion keeps existing worlds loading without validation errors. */
+    static migrateData(data) {
+        const lp = data?.lifepathModifiers;
+        if (lp && typeof lp.ignoredArmorEncumbrance === "boolean") {
+            lp.ignoredArmorEncumbrance = lp.ignoredArmorEncumbrance ? 99 : 0;
+        }
+        return super.migrateData(data);
+    }
+
     prepareDerivedData() {
         // (0a) Fold each core stat's ActiveEffect `modifier` into its prepared
         //      `value`. The base value is clamped 1-10 at the schema (IP can't
@@ -172,18 +230,46 @@ export class CharacterData extends foundry.abstract.TypeDataModel {
         //     apply that roll penalty; we don't fold it into the skill
         //     totals here because it only applies to magic rolls, not the
         //     general skill check.
-        const armorPieces = this.lifepathModifiers?.ignoredArmorEncumbrance
+        /* Full-ignore lifepath modifier (99+ = "skip EV entirely") short-circuits
+         * the whole calc. Numeric values below 99 subtract from the running total
+         * further down, so Witchers Reborn's Bear · Juggernaut (`+6`) composes
+         * cleanly with the RAW check without needing its own branch. */
+        const ignoreEV = Number(this.lifepathModifiers?.ignoredArmorEncumbrance) || 0;
+        const armorPieces = ignoreEV >= 99
             ? []
             : (this.parent?.items?.filter?.(
                 i => i.type === "armor" && i.system?.equipped &&
                      (i.system?.location !== "Shield" && i.system?.armorType !== "shield")
             ) ?? []);
-        let evTotal = 0;
-        for (const a of armorPieces) evTotal += Number(a.system?.encumbranceValue) || 0;
+        /* EV total — under the EO model a worn Superior Arming Suit
+         * reduces each worn Difficult piece's contributed EV by 1.
+         * Under RAW the sum is straight. The CE toggle check returns
+         * false in non-Foundry contexts (tests), defaulting to RAW.
+         *
+         * Read the EFFECTIVE EV (post-socketed-enhancement) when it's
+         * been derived — e.g. a Gnomish enhancement applies `evMod: -1`
+         * via deriveArmorEffective. Falls back to base EV when no
+         * effective overlay is present. */
+        const evOf = (a) => Number(a?.system?.effective?.encumbranceValue ?? a?.system?.encumbranceValue) || 0;
+        const eoOn = isEoArmorModelOn();
+        let evTotal = eoOn
+            ? totalEffectiveEv(armorPieces, { evOf })
+            : armorPieces.reduce((s, a) => s + evOf(a), 0);
+        /* Partial ignore from lifepath modifier — subtract from the pre-tolerance
+         * total. `ignoreEV >= 99` was already short-circuited above (armorPieces
+         * is empty), so this branch only fires for numeric partial-ignore values
+         * like Juggernaut's 6. */
+        if (ignoreEV > 0 && ignoreEV < 99) {
+            evTotal = Math.max(0, evTotal - ignoreEV);
+        }
         // Schools that tolerate encumbrance (combatMods.evTolerance) ignore that
         // many points of EV (Bear School ignores armor penalties entirely).
         evTotal = Math.max(0, evTotal - (Number(this.combatMods?.evTolerance) || 0));
-        if (evTotal > 0) {
+        /* RAW: subtract EV from REF and DEX with a floor of 1.
+         * EO:  EV does NOT touch REF/DEX — it reduces max STA + RUN and
+         *      applies a half-EV penalty to a specific set of skills
+         *      (handled below in the STA/RUN derive and skill loop). */
+        if (!eoOn && evTotal > 0) {
             for (const k of ["ref", "dex"]) {
                 if (this.stats?.[k]) {
                     this.stats[k].value = Math.max(1, (Number(this.stats[k].value) || 0) - evTotal);
@@ -191,6 +277,7 @@ export class CharacterData extends foundry.abstract.TypeDataModel {
             }
         }
         this.armorEV = evTotal;
+        this._eoArmorModelOn = eoOn;     // consumed in the STA/RUN derive + skill loop
 
         // (1) Base wound threshold — needed BEFORE any penalty is applied
         //     so the dying/wounded decision uses the un-penalized number.
@@ -246,6 +333,18 @@ export class CharacterData extends foundry.abstract.TypeDataModel {
         const applyDeath = dying && !suppressDeath;
         const applyWound = !applyDeath && (wounded || dying) && !suppressWound;
 
+        /* Snapshot the unmodified stat values BEFORE the wound/death halving
+         * mutates them. Mirrors the monster.mjs snapshot so consumers that
+         * compute `penalty = unmodified − current` (e.g. monsterVirtualWeapon
+         * for flat-bonus attacks) work uniformly across actor types. PCs
+         * don't currently route attacks through the flat-bonus path, but
+         * keeping the schema field populated avoids a silent 0 for any
+         * future feature that does. */
+        this.derivedStats.refUnmodified  = Number(this.stats?.ref?.value)  || 0;
+        this.derivedStats.dexUnmodified  = Number(this.stats?.dex?.value)  || 0;
+        this.derivedStats.intUnmodified  = Number(this.stats?.int?.value)  || 0;
+        this.derivedStats.willUnmodified = Number(this.stats?.will?.value) || 0;
+
         if (applyDeath) {
             // All primary stats (incl. SPD, LUCK) and toxicity × 1/3.
             // Derived numbers will reduce on their own once stats reduce.
@@ -271,6 +370,23 @@ export class CharacterData extends foundry.abstract.TypeDataModel {
         const body = Number(this.stats?.body?.value) || 0;
         const will = Number(this.stats?.will?.value) || 0;
         const intl = Number(this.stats?.int?.value)  || 0;
+        /* Phase 8 — Armor SPD Penalty (EO p.8): equipped armor pieces with
+         * the `spdPenalty` quality subtract their authored magnitude from
+         * SPD before any derived numbers (RUN / leap) compute. Mutates
+         * `stats.spd.value` like EV/wound do for REF/DEX. Floor at 1 so
+         * RUN never goes negative. */
+        let spdPenSum = 0;
+        for (const a of (this.parent?.items ?? [])) {
+            if (a.type !== "armor" || !a.system?.equipped) continue;
+            const qs = a.system?.effective?.qualities ?? a.system?.qualities ?? [];
+            if (!qs.includes("spdPenalty")) continue;
+            const vals = a.system?.effective?.qualityValues ?? a.system?.qualityValues ?? {};
+            const v = Number(vals.spdPenalty);
+            if (Number.isFinite(v) && v !== 0) spdPenSum += (v > 0 ? v : -v);
+        }
+        if (spdPenSum > 0 && this.stats?.spd) {
+            this.stats.spd.value = Math.max(1, (Number(this.stats.spd.value) || 0) - spdPenSum);
+        }
         const spd  = Number(this.stats?.spd?.value)  || 0;
         const bwHalf = Math.floor((body + will) / 2);
         const wiHalf = Math.floor((will + intl) / 2);
@@ -313,16 +429,27 @@ export class CharacterData extends foundry.abstract.TypeDataModel {
         this.derivedStats.run            = spd * 3;
         this.derivedStats.leap           = Math.floor((spd * 3) / 5);
 
-        // Vigor floor — the profession's starting Vigor allowance (Core p.38)
-        // is a baseline the character can't drop below. The stored vigor is
-        // player-set (+ any AE modifiers, already applied this prepare cycle);
-        // we only raise it to the profession floor, never lower it. Multiple
-        // profession items (edge case) → the highest baseline wins.
-        let profVigor = 0;
-        for (const it of this.parent?.items ?? []) {
-            if (it.type === "profession") profVigor = Math.max(profVigor, Number(it.system?.vigor) || 0);
+        /* EO armor model: EV reduces max STA by totalEv and RUN by
+         * totalEv (RUN floor = 2×SPD). Applied AFTER the base derives so
+         * the food/drink staMaxFraction multiplier compounds with the
+         * EV reduction. The half-EV skill penalty lands in the skill
+         * loop below via EO_HALF_EV_SKILLS. Leap derives from run/5 so
+         * it must be recomputed AFTER the RUN reduction or it'd report
+         * the pre-EO distance. STA current value is clamped down so the
+         * EV reduction doesn't leave the player with above-cap stamina. */
+        if (this._eoArmorModelOn && evTotal > 0) {
+            this.derivedStats.sta.max = Math.max(0, this.derivedStats.sta.max - evTotal);
+            if ((Number(this.derivedStats.sta.value) || 0) > this.derivedStats.sta.max) {
+                this.derivedStats.sta.value = this.derivedStats.sta.max;
+            }
+            const runFloor = spd * 2;
+            this.derivedStats.run  = Math.max(runFloor, this.derivedStats.run - evTotal);
+            this.derivedStats.leap = Math.floor(this.derivedStats.run / 5);
         }
-        this.derivedStats.vigor = Math.max(Number(this.derivedStats.vigor) || 0, profVigor);
+
+        // Vigor floor — applied PRE-AE in prepareBaseData() so AE bonuses
+        // (Gryphon Witcher +2, etc.) stack on the floor rather than racing
+        // it. Nothing to do here.
 
         // (4) BODY-table brawling math (p.48). Formula derived to match
         //     the printed table exactly:
@@ -342,17 +469,55 @@ export class CharacterData extends foundry.abstract.TypeDataModel {
         //     (RAW Core p.49 — the 10 two-cost skills) so the sheet can
         //     mark them without re-reading config in the template.
         const skillMap = globalThis.CONFIG?.WITCHER?.skillMap ?? {};
+        /* Pre-compute the EO half-EV penalty so the inner loop stays tight.
+         * RAW uses the full EV total on magic skills only; EO uses half EV
+         * on a larger explicit skill set (EO_HALF_EV_SKILLS).
+         *
+         * IMPORTANT: the EV penalty lands on `skill.total` (not by
+         * mutating `skill.modifier`). prepareDerivedData runs every time
+         * an item / system field changes — mutating the source-derived
+         * field stacks the penalty on each call. Folding into `total`
+         * keeps the math idempotent. The penalty is also surfaced as
+         * `skill.evPenalty` so sheet templates / roll dialogs can
+         * label the contribution. */
+        const halfEvPenalty = (this._eoArmorModelOn && evTotal > 0) ? Math.floor(evTotal / 2) : 0;
+        /* Snapshot pre-AE (source) rank values so we can compute how much
+         * an ActiveEffect adds to `skill.value`. Displayed on the sheet so
+         * the user knows why the effective rank is what it is, and used to
+         * cap the input's `max` at `10 - aeAddend` so total rank can't be
+         * pushed past 10 by editing the base while an AE is active. */
+        const srcSkills = this.parent?._source?.system?.skills ?? this._source?.skills ?? {};
         for (const [statKey, group] of Object.entries(this.skills ?? {})) {
             const statVal = Number(this.stats?.[statKey]?.value) || 0;
             for (const [skillKey, skill] of Object.entries(group)) {
-                // Fold the armor EV penalty into the magic skills' modifier
-                // (evTotal is already 0 when ignoredArmorEncumbrance).
-                if (evTotal > 0 && EV_MAGIC_SKILLS.has(skillKey)) {
-                    skill.modifier = (Number(skill.modifier) || 0) - evTotal;
+                let evSkillPen = 0;
+                /* RAW: full EV penalty on the three magic skills (Core p.78). */
+                if (!this._eoArmorModelOn && evTotal > 0 && EV_MAGIC_SKILLS.has(skillKey)) {
+                    evSkillPen += evTotal;
                 }
-                const rank = Number(skill?.value)    || 0;
+                /* EO: half-EV on the listed set (covers magic + the wider
+                 * physical-skill set). */
+                if (halfEvPenalty > 0 && EO_HALF_EV_SKILLS.has(skillKey)) {
+                    evSkillPen += halfEvPenalty;
+                }
+                /* AE contribution to `.value` = post-AE minus source. Only
+                 * positive contributions count (a debuff AE would target
+                 * `.modifier`, not `.value`, in practice). */
+                const srcRank = Number(srcSkills?.[statKey]?.[skillKey]?.value) || 0;
+                const postAeRank = Number(skill?.value) || 0;
+                const aeAddend = Math.max(0, postAeRank - srcRank);
+                /* RAW rank cap: 10. AE addend can push post-AE above 10 (the
+                 * schema max applies to source, not derived), so clamp for
+                 * both the sheet display AND the roll math. Without this, an
+                 * item AE that ADDs +2 on top of a source-10 rank would sail
+                 * to 12 and roll with +12 — over the RAW cap. */
+                const rank = Math.max(0, Math.min(10, postAeRank));
                 const mod  = Number(skill?.modifier) || 0;
-                skill.total = statVal + rank + mod;
+                skill.value = rank;                        // clamp visible + downstream reads
+                skill.aeAddend = aeAddend;                 // how much AE contributed
+                skill.baseRankMax = Math.max(0, 10 - aeAddend); // sheet input cap
+                skill.evPenalty = evSkillPen;
+                skill.total = statVal + rank + mod - evSkillPen;
                 skill.isDifficult = skillMap[skillKey]?.costMultiplier === 2;
             }
         }

@@ -402,7 +402,7 @@ class ParchmentRenderer {
             emitRemoveSceneParchment({ sceneId: this.scene.id, entryId: this.entry.id });
         } catch (err) {
             console.error(`${MODULE_ID} | failed to swipe parchment to ${target.name}:`, err);
-            ui.notifications.error(`Parchments: ${err.message}`);
+            ui.notifications.error(game.i18n.format("WITCHER.Notify.Parchments.Error", { msg: err.message }));
         }
     }
 
@@ -625,7 +625,7 @@ async function postNoteToScene(scene, item, { x, y } = {}) {
         }
     } catch (err) {
         console.error(`${MODULE_ID} | failed to post parchment to scene:`, err);
-        ui.notifications.error(`Parchments: ${err.message}`);
+        ui.notifications.error(game.i18n.format("WITCHER.Notify.Parchments.Error", { msg: err.message }));
     }
 }
 

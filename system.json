@@ -2,7 +2,7 @@
     "id": "witcher-ttrpg-death-march",
     "title": "Death March: Unofficial Witcher TRPG",
     "description": "Death March is a unified, stand-alone Foundry VTT game system for tabletop play in the world of The Witcher. Death March is unofficial content provided under the Homebrew Content Policy of R. Talsorian Games and is not approved or endorsed by RTG. This content references materials that are the property of R. Talsorian Games and its licensees.",
-    "version": "1.1",
+    "version": "1.2",
     "authors": [
         {
             "name": "papajarv"
@@ -112,6 +112,84 @@
             }
         },
         {
+            "name": "eo-armor",
+            "label": "Equipment Overhaul — Armor & Shields",
+            "path": "packs/eo-armor",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "EO armor + shield catalog (J. Obadiah Ridinger, Equipment for the Witcher v1.04). Organized into folders: Armor (by origin → light/medium/heavy), Shields (by origin), and Arming Suits. Consumed when the Combat Extended → EO armor model subsystem toggle is on."
+                }
+            }
+        },
+        {
+            "name": "eo-weapons",
+            "label": "Equipment Overhaul — Weapons & Ammunition",
+            "path": "packs/eo-weapons",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "EO weapon + ammunition catalog. Organized into folders: Weapons (by origin → weapon skill) and Ammunition (by origin)."
+                }
+            }
+        },
+        {
+            "name": "eo-armor-enhancements",
+            "label": "Equipment Overhaul — Armor Enhancements",
+            "path": "packs/eo-armor-enhancements",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "EO glyphs and physical armor mods. Glyphs consume from the En. pool; physical mods consume from per-location AE slots when the EO armor model toggle is on."
+                }
+            }
+        },
+        {
+            "name": "eo-components",
+            "label": "Equipment Overhaul — Crafting Components",
+            "path": "packs/eo-components",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "EO-introduced crafting components (Biraq Steel, Tretagor Steel, Sapphire Dust, Sinews, Drake Oil, Ogre Wax, etc.) plus artisan-tier materials the EO crafting tables reference but Core didn't define."
+                }
+            }
+        },
+        {
+            "name": "eo-diagrams",
+            "label": "Equipment Overhaul — Diagrams",
+            "path": "packs/eo-diagrams",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "Crafting diagrams paired one-to-one with EO catalog items. Each diagram links to its output item via UUID; components left empty for the GM to author since EO doesn't enumerate them at the item level."
+                }
+            }
+        },
+        {
+            "name": "eo-witcher-alchemy",
+            "label": "Equipment Overhaul — Witcher Alchemy",
+            "path": "packs/eo-witcher-alchemy",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "EO Witcher Kit alchemy section: twelve witcher formulae (Bindweed, De Vries' Extract, Kiss, Rook, Shrike, Stammelford's Philter, Tiara, Willow, Wolf, Wolverine, White Gull, Black Seagull) plus twenty-five witcher decoctions AND their crafting recipes (formerly split between eo-witcher-formulae and eo-diagrams). Paraphrased from Equipment Overhaul pp.30, 33-34, 59 & 62. Decoctions default to toxicity 75 / 30-min duration. Rebuild via `node tools/gen-eo-witcher-kit.mjs && node tools/build-packs.mjs`."
+                }
+            }
+        },
+        {
             "name": "generalGear",
             "label": "General Gear",
             "path": "packs/generalGear",
@@ -121,6 +199,32 @@
             "flags": {
                 "witcher-ttrpg-death-march": {
                     "purpose": "Mount gear (saddles, barding), tool kits, general gear, containers, food & drink, and clothing. Transcribed from the Core Rulebook (pp.91-97). Rebuild via `npm run build:packs` after editing packs-src/generalGear/."
+                }
+            }
+        },
+        {
+            "name": "food",
+            "label": "Food & Drink",
+            "path": "packs/food",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "Regional Continent cuisine and drinks. 10 cultures × 80 meals (Food/Aedirn, Food/Skellige, …) + 10 cultures × 24 drinks (Drinks/Alcoholic/Aedirn, Drinks/Non-Alcoholic/Aedirn, …). Meals drive the bland-diet stress mechanic and food-bonus AE axes (STA max / Recovery / HP max). Alcoholic drinks drive the drunk-level mechanic and (where applicable) configure as Alchemy Reborn potion bases per the −2/−1/0/+2/+4/+6 baseMod ladder. Sourced from witcher_continent_gastronomy.pdf. Rebuild via `npm run build:packs` after editing packs-src/food/."
+                }
+            }
+        },
+        {
+            "name": "books",
+            "label": "Books — Lore, Novels & Verse",
+            "path": "packs/books",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "Stress-type books illustrating the Continent in the year 1022. Organized into folders: Lore (~100 encyclopedic volumes — kingdoms, roads, village life, guilds, elder ruins), Novels (~55 narrative works — mysteries, road tales, character studies), Odd (~20 niche field manuals and curiosities), Romance (~10 risqué pieces). Each book is a sequential reader: per-chapter stress swings form a rollercoaster, but every book nets either -1 (most) or 0 total — calming with character. Honors the book homebrew toggle (`bookSystem`). Sourced from witcher_foundry_knowledge_base/{CommonDescriptiveBooks,Novels,Odd Books,Romance}.js. Regenerate via `node tools/gen-books.mjs && node tools/build-packs.mjs books`."
                 }
             }
         },
@@ -203,6 +307,19 @@
             }
         },
         {
+            "name": "witcher-reborn",
+            "label": "Witchers Reborn",
+            "path": "packs/witcher-reborn",
+            "type": "Item",
+            "system": "witcher-ttrpg-death-march",
+            "private": false,
+            "flags": {
+                "witcher-ttrpg-death-march": {
+                    "purpose": "Witchers Reborn — six school race items (Cat / Wolf / Bear / Griffin / Viper / Manticore) each with four passive perks + a heroic action + skill bonus. Content only functions when the `witcherReborn` homebrew toggle is on. Rebuild via `npm run build:packs` after editing packs-src/witcher-reborn/."
+                }
+            }
+        },
+        {
             "name": "criticalWounds",
             "label": "Critical Wounds",
             "path": "packs/criticalWounds",
@@ -256,6 +373,6 @@
     "primaryTokenAttribute": "derivedStats.hp",
     "secondaryTokenAttribute": "derivedStats.sta",
     "url": "https://github.com/papajarv/Deathmarch-Witcher-TRPG",
-    "manifest": "https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/download/1.1/system.json",
-    "download": "https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/download/1.1/witcher-ttrpg-death-march-1.1.zip"
+    "manifest": "https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/download/1.2/system.json",
+    "download": "https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/download/1.2/witcher-ttrpg-death-march-1.2.zip"
 }

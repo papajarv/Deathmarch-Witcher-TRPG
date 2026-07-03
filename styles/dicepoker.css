@@ -27,7 +27,7 @@
 }
 .wdm-dp-seat-n .wdm-fk-score { align-items: center; text-align: center; }
 .wdm-dp-seat-s {
-    bottom: calc(var(--fk-pad-y, 0px) + 1rem + 45px);
+    bottom: calc(var(--fk-pad-y, 0px) + 1rem + 2.8125rem);
     left: 50%;
     transform: translateX(-50%);
 }
@@ -97,7 +97,7 @@
  * absolute positioning to guess at). ~10px gap under the hand; fades in. */
 .wdm-dp-action {
     display: inline-block;
-    margin-top: 10px;
+    margin-top: 0.625rem;
     padding: 0.18rem 0.6rem;
     border-radius: 0.6rem;
     background: rgba(20, 16, 12, 0.82);
@@ -143,7 +143,7 @@
 }
 .wdm-dp-kick:hover {
     border-color: var(--wdm-danger, #d98b73);
-    box-shadow: 0 0 8px rgba(217, 139, 115, 0.3);
+    box-shadow: 0 0 0.5rem rgba(217, 139, 115, 0.3);
 }
 
 /* "Folded" badge: a seat that bowed out of the CURRENT hand (still in the
@@ -206,5 +206,5 @@
 .wdm-fk-btn-bad:hover:not(:disabled) {
     border-color: var(--wdm-danger, #d98b73);
     color: var(--wdm-danger, #d98b73);
-    box-shadow: inset 0 1px 0 rgba(217, 139, 115, 0.2), 0 0 10px rgba(217, 139, 115, 0.3);
+    box-shadow: inset 0 1px 0 rgba(217, 139, 115, 0.2), 0 0 0.625rem rgba(217, 139, 115, 0.3);
 }

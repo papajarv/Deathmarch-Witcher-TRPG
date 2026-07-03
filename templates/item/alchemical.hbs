@@ -28,6 +28,19 @@
           <h1 class="wdm-w3-title">{{item.name}}</h1>
           <div class="wdm-w3-subtitle">{{typeLabel}}</div>
         </div>
+        {{!-- Always-visible Use button (player-flow audit critical #2).
+              The chrome inventory + system Items sidebar register a
+              context-menu Consume entry, but the alchemical sheet
+              itself had no direct affordance — a GM viewing a potion
+              had View+Delete only, with no obvious way to apply it.
+              This button calls the same consumeItem helper. Only
+              renders on owned items (no actor → nowhere to apply). --}}
+        {{#if item.isOwned}}
+          <button type="button" class="wdm-w3-use" data-action="use"
+                  title="Consume {{item.name}} — applies the active effect to the carrier">
+            <i class="fa-solid fa-flask"></i> Use
+          </button>
+        {{/if}}
       </header>
 
       <div class="wdm-w3-hero">
@@ -43,15 +56,40 @@
           {{#if source.range}}
             <li class="wdm-w3-stat">
               <span class="val">{{source.range}}</span>
-              <span class="lbl">Throwing Range</span>
+              <span class="lbl">{{localize 'WITCHER.Sheet.Alchemical.Text.ThrowingRange'}}</span>
             </li>
           {{/if}}
           {{#unless (eq source.area 0)}}
             <li class="wdm-w3-stat">
               <span class="val">{{source.area}}m</span>
-              <span class="lbl">Area of Effect</span>
+              <span class="lbl">{{localize 'WITCHER.Sheet.Alchemical.Text.AreaOfEffect'}}</span>
             </li>
           {{/unless}}
+        {{/if}}
+        {{!-- Oil mechanic summary. Shown on every oil with a bonus
+              regardless of toggle — the bonus damage / target are an
+              authoring property of the oil itself, not a Reborn-only
+              concept. --}}
+        {{#if isOil}}
+          {{!-- Charges (Reborn) / duration (RAW) are surfaced in the
+                hero; only the bonus-damage / target row goes here so we
+                don't repeat the same number twice on the display layer. --}}
+          {{#if source.oilBonusDamage}}
+            <li class="wdm-w3-stat">
+              <span class="val">+{{source.oilBonusDamage}}</span>
+              <span class="lbl">{{#if source.oilTarget}}vs {{localize (lookup WITCHER.monster.types source.oilTarget)}}{{else}}{{localize "WITCHER.AlchemyReborn.Oil.Target.Any"}}{{/if}}</span>
+            </li>
+          {{/if}}
+        {{/if}}
+        {{!-- Alchemy Reborn brew-base summary. baseSummary is built by the
+              sheet context only when the toggle is on AND the item is
+              configured as a base, so the row hides itself in every other
+              case without needing a {{#if alchemyRebornOn}} wrapper. --}}
+        {{#if baseSummary}}
+          <li class="wdm-w3-stat" data-base-type="{{baseSummary.key}}">
+            <span class="val">{{baseSummary.modSigned}} DC</span>
+            <span class="lbl">{{baseSummary.typeLabel}}</span>
+          </li>
         {{/if}}
       </ul>
 
@@ -62,9 +100,9 @@
       {{!-- Footer mirrors the weapon display: weight + qty + conceal on
            the left, availability + price anchored right. --}}
       <div class="wdm-w3-footer">
-        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Alchemical.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
         {{#unless (eq source.quantity 1)}}
-          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+          <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Alchemical.Tooltip.Quantity'}}"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
         {{/unless}}
         {{#if source.conceal}}
           {{#unless (eq source.conceal "N/A")}}
@@ -73,7 +111,7 @@
         {{/if}}
         <span class="wdm-w3-foot-spacer"></span>
         <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
-        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Sheet.Alchemical.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
       </div>
 
     </div>
@@ -86,13 +124,13 @@
     <div class="wdm-cfg-form">
 
       <div class="wdm-cfg-head">
-        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
-        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Alchemical name" />
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Alchemical.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Alchemical.Hint.AlchemicalName'}}" />
       </div>
 
-      <div class="wdm-cfg-section">Classification</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Alchemical.Text.Classification'}}</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span>Type</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Alchemical.Text.Type'}}</span>
           <select name="system.type">
             {{#each WITCHER.alchemical.types}}
               <option value="{{@key}}" {{#if (eq @key ../source.type)}}selected{{/if}}>{{localize this}}</option>
@@ -100,31 +138,82 @@
           </select>
         </label>
         {{#if hasToxicity}}
-          <label class="wdm-cfg-row"><span>Toxicity</span>
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Alchemical.Text.Toxicity'}}</span>
             <input type="number" min="0" name="system.toxicity" value="{{source.toxicity}}"
                    title="Added to the Toxicity pool when consumed; pool > 100 → damage (Core p.84)" />
           </label>
         {{/if}}
         {{#unless isBomb}}
-          <label class="wdm-cfg-row"><span>Duration</span>
-            <input type="text" name="system.duration" value="{{source.duration}}" placeholder="e.g. 1 hour, 10 rounds" />
-          </label>
+          {{#unless isOil}}
+            {{!-- Free-text duration for potions / decoctions / items.
+                  Oils get their own structured oilDuration block below
+                  (RAW mode) and don't read this string. --}}
+            <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Alchemical.Text.Duration'}}</span>
+              <input type="text" name="system.duration" value="{{source.duration}}" placeholder="e.g. 1 hour, 10 rounds" />
+            </label>
+          {{/unless}}
         {{/unless}}
         {{#if isConsumableType}}
-          <label class="wdm-cfg-row"><span>Consumable</span>
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Alchemical.Text.Consumable'}}</span>
             <input type="checkbox" name="system.consumable" {{#if source.consumable}}checked{{/if}}
-                   title="When used (hotbar / right-click), spend one dose and apply this item's effects to the holder." />
+                   title="{{localize 'WITCHER.Sheet.Alchemical.Tooltip.WhenUsedHotbarRightClickSpendOneDoseAndA'}}" />
           </label>
         {{/if}}
       </div>
 
-      {{#if isBomb}}
-        <div class="wdm-cfg-section">Bomb</div>
+      {{#if isOil}}
+        {{!-- Oil mechanic — replaces the AE-on-oil approach. An oil declares
+              what monster category it bites, how much bonus damage it adds,
+              and how long a coating lasts (RAW). Alchemy Reborn ignores the
+              duration and runs the coating off charges instead (Normal=5,
+              Enhanced=10, Superior=15, tier from item-name suffix). --}}
+        <div class="wdm-cfg-section">{{localize "WITCHER.AlchemyReborn.Oil.Section"}}</div>
         <div class="wdm-cfg-grid">
-          <label class="wdm-cfg-row"><span>Damage</span>
+          <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Oil.Target.Label"}}</span>
+            <select name="system.oilTarget" title="{{localize 'WITCHER.AlchemyReborn.Oil.Target.Hint'}}">
+              <option value="" {{#if (eq source.oilTarget "")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Oil.Target.Any"}}</option>
+              {{#each WITCHER.monster.types}}
+                <option value="{{@key}}" {{#if (eq @key ../source.oilTarget)}}selected{{/if}}>{{localize this}}</option>
+              {{/each}}
+            </select>
+          </label>
+          <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Oil.Bonus.Label"}}</span>
+            <input type="number" min="0" step="1" name="system.oilBonusDamage" value="{{source.oilBonusDamage}}"
+                   title="{{localize 'WITCHER.AlchemyReborn.Oil.Bonus.Hint'}}" />
+          </label>
+          {{#if alchemyRebornOn}}
+            {{!-- Reborn replaces duration with a charge counter — the
+                  coating lasts N successful-damaging hits regardless of
+                  wall-clock time. Authored per-oil so the GM (or the
+                  install macro) can set Normal=5 / Enhanced=10 / Superior=15
+                  to match the source-sheet tier table. --}}
+            <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Oil.Charges.Label"}}</span>
+              <input type="number" min="0" step="1" name="system.oilCharges" value="{{source.oilCharges}}"
+                     title="{{localize 'WITCHER.AlchemyReborn.Oil.Charges.Hint'}}" />
+            </label>
+          {{else}}
+            <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Oil.Duration.Value"}}</span>
+              <input type="number" min="0" step="1" name="system.oilDuration.value" value="{{source.oilDuration.value}}" />
+            </label>
+            <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Oil.Duration.Units"}}</span>
+              <select name="system.oilDuration.units">
+                <option value="seconds" {{#if (eq source.oilDuration.units "seconds")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Oil.Duration.Seconds"}}</option>
+                <option value="minutes" {{#if (eq source.oilDuration.units "minutes")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Oil.Duration.Minutes"}}</option>
+                <option value="hours"   {{#if (eq source.oilDuration.units "hours")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Oil.Duration.Hours"}}</option>
+                <option value="days"    {{#if (eq source.oilDuration.units "days")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Oil.Duration.Days"}}</option>
+              </select>
+            </label>
+          {{/if}}
+        </div>
+      {{/if}}
+
+      {{#if isBomb}}
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Alchemical.Text.Bomb'}}</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Alchemical.Text.Damage'}}</span>
             <input type="text" name="system.damage" value="{{source.damage}}" placeholder="5d6" />
           </label>
-          <label class="wdm-cfg-row"><span>Damage Type</span>
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Alchemical.Text.DamageType'}}</span>
             <select name="system.damageType">
               <option value="" {{#if (eq source.damageType "")}}selected{{/if}}>— none —</option>
               {{#each WITCHER.damageTypes}}
@@ -132,16 +221,20 @@
               {{/each}}
             </select>
           </label>
-          <label class="wdm-cfg-row"><span>Range</span>
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Alchemical.Text.Range'}}</span>
             <input type="text" name="system.range" value="{{source.range}}" placeholder="e.g. 10 or BODYx4" />
           </label>
-          <label class="wdm-cfg-row"><span>Area (m)</span>
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Alchemical.Text.AreaM'}}</span>
             <input type="number" min="0" name="system.area" value="{{source.area}}" />
           </label>
         </div>
       {{/if}}
 
-      <div class="wdm-cfg-section">Effects <span class="wdm-cfg-sub">(Foundry Active Effects)</span></div>
+      {{!-- Effects tab — hidden for oils. Oils declare their mechanic
+            via the structured fields above (oilTarget / oilBonusDamage /
+            oilDuration); no per-item AE bundle to author. --}}
+      {{#unless isOil}}
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Alchemical.Text.Effects'}} <span class="wdm-cfg-sub">(Foundry Active Effects)</span></div>
       <div class="wdm-cfg-effects">
         {{#if effects.length}}
           <ul class="wdm-effect-list">
@@ -154,51 +247,80 @@
                   <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
                     <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
                   </a>
-                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
-                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Alchemical.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Alchemical.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
                 </div>
               </li>
             {{/each}}
           </ul>
         {{else}}
-          <p class="wdm-empty">No effects configured.</p>
+          <p class="wdm-empty">{{localize 'WITCHER.Sheet.Alchemical.Text.NoEffectsConfigured'}}</p>
         {{/if}}
         <button type="button" class="wdm-add-effect" data-action="createEffect">
           <i class="fa-solid fa-plus"></i> Add Effect
         </button>
       </div>
+      {{/unless}}
 
-      <div class="wdm-cfg-section">Procurement</div>
+      {{!-- Alchemy Reborn: configure this alchemical as a brew base. Most
+            commonly used for oil bases (Sunflower Oil etc.); potion bases
+            usually live on food (drinks) instead. Hidden when the homebrew
+            toggle is off so the RAW alchemical sheet stays uncluttered. --}}
+      {{#if alchemyRebornOn}}
+        <div class="wdm-cfg-section">{{localize "WITCHER.AlchemyReborn.Section.Base"}}</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Base.Enable.Label"}}</span>
+            <input type="checkbox" name="system.alchemyBase.enabled" {{#if source.alchemyBase.enabled}}checked{{/if}}
+                   title="{{localize 'WITCHER.AlchemyReborn.Base.Enable.Hint'}}" />
+          </label>
+          {{#if source.alchemyBase.enabled}}
+            <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Base.Type.Label"}}</span>
+              <select name="system.alchemyBase.baseType">
+                <option value=""          {{#if (eq source.alchemyBase.baseType "")}}selected{{/if}}>— choose —</option>
+                <option value="potion"    {{#if (eq source.alchemyBase.baseType "potion")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Base.Type.Potion"}}</option>
+                <option value="oil"       {{#if (eq source.alchemyBase.baseType "oil")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Base.Type.Oil"}}</option>
+                <option value="bomb"      {{#if (eq source.alchemyBase.baseType "bomb")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Base.Type.Bomb"}}</option>
+              </select>
+            </label>
+            <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Base.Mod.Label"}}</span>
+              <input type="number" step="1" name="system.alchemyBase.baseMod" value="{{source.alchemyBase.baseMod}}"
+                     title="{{localize 'WITCHER.AlchemyReborn.Base.Mod.Hint'}}" />
+            </label>
+          {{/if}}
+        </div>
+      {{/if}}
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Alchemical.Text.Procurement'}}</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span>Availability</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Alchemical.Text.Availability'}}</span>
           <select name="system.availability">
             {{#each WITCHER.availability}}
               <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>Conceal</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Alchemical.Text.Conceal'}}</span>
           <select name="system.conceal">
             {{#each WITCHER.concealment}}
               <option value="{{@key}}" {{#if (eq @key ../source.conceal)}}selected{{/if}}>{{localize this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>Weight (kg)</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Alchemical.Text.WeightKg'}}</span>
           <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
         </label>
-        <label class="wdm-cfg-row"><span>Cost</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Alchemical.Text.Cost'}}</span>
           <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
         </label>
-        <label class="wdm-cfg-row"><span>Quantity</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Alchemical.Text.Quantity'}}</span>
           <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
         </label>
       </div>
 
       {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
 
-      <div class="wdm-cfg-section">Description</div>
-      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="Alchemical lore, appearance, provenance…">{{source.description}}</textarea>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Alchemical.Text.Description'}}</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="{{localize 'WITCHER.Sheet.Alchemical.Hint.AlchemicalLoreAppearanceProvenance'}}">{{source.description}}</textarea>
 
     </div>
   </div>

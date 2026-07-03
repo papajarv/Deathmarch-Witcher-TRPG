@@ -133,11 +133,14 @@ export const WEAPON_TYPES = Object.freeze({
 });
 
 /* Ammunition class — what a ranged weapon fires and what a projectile is.
- * A weapon only loads ammo whose `ammoType` matches its own (arrows go in
- * bows, bolts in crossbows). */
+ * A weapon only loads ammo whose `ammoType` matches its own (arrows in
+ * bows, bolts in crossbows, sling bullets in slings, siege rounds in
+ * scorpios / ballistas / mangonels / trebuchets). */
 export const AMMO_TYPES = Object.freeze({
-    arrow: "WITCHER.Ammo.TypeArrow",
-    bolt:  "WITCHER.Ammo.TypeBolt"
+    arrow:       "WITCHER.Ammo.TypeArrow",
+    bolt:        "WITCHER.Ammo.TypeBolt",
+    slingBullet: "WITCHER.Ammo.TypeSlingBullet",
+    siege:       "WITCHER.Ammo.TypeSiege"
 });
 
 /* Armor type — Core p.79. The light/medium/heavy distinction drives the
@@ -195,6 +198,26 @@ export const ARMOR_LOCATIONS = Object.freeze({
     legs:   "WITCHER.Armor.LocLegs",
     full:   "WITCHER.Armor.LocFull",
     Shield: "WITCHER.Armor.LocShield"   // capital S preserved — chrome reads exactly this
+});
+
+/* Coverage map for the armor `location` enum (RAW Core p.78-79).
+ *   "torso" covers torso AND arms — the book lists Brigandine et al. as
+ *     "Torso (covers torso and arms)". The "arms" location is for
+ *     arm-only pieces like bracers or vambraces.
+ *   "legs" covers both legs (typical Witcher armor doesn't split L/R).
+ *   "full" covers every slot — for plate hauberks.
+ *   "Shield" reserves the enum value but contributes no per-location SP
+ *     (shields work through the Block reaction, not the SP grid).
+ * Single source of truth for sheet authoring + ablation derivation +
+ * preUpdate field cleanup. Keep in lockstep with ARMOR_SLOTS below. */
+export const ARMOR_SLOTS = Object.freeze(["head", "torso", "leftArm", "rightArm", "leftLeg", "rightLeg"]);
+export const ARMOR_LOCATION_COVERAGE = Object.freeze({
+    head:   Object.freeze(["head"]),
+    torso:  Object.freeze(["torso", "leftArm", "rightArm"]),
+    arms:   Object.freeze(["leftArm", "rightArm"]),
+    legs:   Object.freeze(["leftLeg", "rightLeg"]),
+    full:   Object.freeze(["head", "torso", "leftArm", "rightArm", "leftLeg", "rightLeg"]),
+    Shield: Object.freeze([])
 });
 
 /* Availability — common to weapons + armor + consumables (Core p.73, p.78). */
@@ -265,6 +288,82 @@ export const SPELL_SCHOOLS = Object.freeze({
     fire:  "WITCHER.Magic.SchoolFire",
     water: "WITCHER.Magic.SchoolWater",
     mixed: "WITCHER.Magic.SchoolMixed"
+});
+
+/* Damage element enum — what type of magic damage the cast deals.
+ * Separate axis from SPELL_SCHOOLS: an Igni-school (mixed) sign that
+ * does raw fire damage keys off THIS field, not `school`. Corpus audit
+ * revealed the school-only axis was too coarse — earth spells often
+ * deal physical damage (Cenlly Graig thrown stones, Bekker's Rockslide
+ * torso), air spells split into electrical (Alzur's Thunder, Ball
+ * Lightning, Lightning Storm) vs pure air (Zephyr push), and water
+ * spells frequently deal cold damage (Rhewi freeze, Waves of the
+ * Naglfar, Tryferi Gaeaf). The expanded enum lets those cases resolve
+ * accurately against the target's per-type resist / immunity lists in
+ * the damage calculator. */
+export const SPELL_DAMAGE_ELEMENTS = Object.freeze({
+    none:       "WITCHER.Magic.ElementNone",
+    physical:   "WITCHER.Magic.ElementPhysical",
+    earth:      "WITCHER.Magic.ElementEarth",
+    air:        "WITCHER.Magic.ElementAir",
+    fire:       "WITCHER.Magic.ElementFire",
+    water:      "WITCHER.Magic.ElementWater",
+    electrical: "WITCHER.Magic.ElementElectrical",
+    cold:       "WITCHER.Magic.ElementCold",
+    mixed:      "WITCHER.Magic.ElementMixed"
+});
+
+/* Damage type enum — WHAT resource the damage drains. HP is the default
+ * (most damaging spells hit health). But the corpus has real variety:
+ *   sta         → drains current STA (Blaze of Korath, Light of Penance,
+ *                 Ainfra's Extraction, Anialwch, Suffocate)
+ *   ablation    → damages armor SP (Rusting, Cinder Door, Smith's Touch)
+ *   reliability → damages weapon reliability (Rusting variant, Smith's
+ *                 Touch variant)
+ *   shieldHp    → establishes a protective HP pool (Quen, Active Shield)
+ *                 — really "grants" not "deals" damage; kept in the enum
+ *                 so authors can flag it and downstream code skips normal
+ *                 damage application for these */
+export const SPELL_DAMAGE_TYPES = Object.freeze({
+    none:        "WITCHER.Magic.DamageTypeNone",
+    hp:          "WITCHER.Magic.DamageTypeHp",
+    sta:         "WITCHER.Magic.DamageTypeSta",
+    ablation:    "WITCHER.Magic.DamageTypeAblation",
+    reliability: "WITCHER.Magic.DamageTypeReliability",
+    shieldHp:    "WITCHER.Magic.DamageTypeShieldHp"
+});
+
+/* Area-of-effect shape — the geometry the cast projects. Combined with
+ * `areaSize` (meters) so a "cone 3m" reads as `{shape:"cone", size:3}`.
+ *   none    → single-target (default)
+ *   cone    → V-shape from caster (Wave of Fire 3m, Korath's Breath 3m)
+ *   radius  → sphere around a point (Aard Sweep 4m, Igni burst)
+ *   cube    → axis-aligned volume (Deluge 20m cube, Cinder Door 2m cube)
+ *   line    → straight beam (Alzur's Thunder pierces, Sagitta Aurea)
+ *   touch   → requires physical contact (Cadfan's Grasp)
+ *   self    → the caster's own space (buffs) */
+export const SPELL_AREA_SHAPES = Object.freeze({
+    none:    "WITCHER.Magic.AreaShapeNone",
+    cone:    "WITCHER.Magic.AreaShapeCone",
+    radius:  "WITCHER.Magic.AreaShapeRadius",
+    cube:    "WITCHER.Magic.AreaShapeCube",
+    line:    "WITCHER.Magic.AreaShapeLine",
+    touch:   "WITCHER.Magic.AreaShapeTouch",
+    self:    "WITCHER.Magic.AreaShapeSelf"
+});
+
+/* Area anchor — WHERE the template originates when placed.
+ *   caster → origin locked to the caster's token; only the direction
+ *            is aimable (mouse points, wheel fine-tunes). Signs and
+ *            self-emanating cones/lines/domes (Aard, Igni, Quen,
+ *            Aard Sweep) — the geometry projects out of the caster.
+ *   free   → origin free to place anywhere in line of sight; mouse
+ *            moves the origin, wheel rotates. Ranged zone spells
+ *            (Fire Wall in the distance, Lightning Storm, Cinder
+ *            Door, Wrath of Nature). */
+export const SPELL_AREA_ANCHORS = Object.freeze({
+    caster: "WITCHER.Magic.AreaAnchorCaster",
+    free:   "WITCHER.Magic.AreaAnchorFree"
 });
 
 /* Spell form — distinguishes mage spell from witcher sign from priest
@@ -508,9 +607,20 @@ export const STRIKE_TYPES = Object.freeze({
     charge: { labelKey: "WITCHER.Attack.StrikeCharge", toHit: -3, dmgMult: 2, attacks: 1, meleeOnly: true, fullRound: true, note: "WITCHER.Attack.NoteCharge" },
     pommel: { labelKey: "WITCHER.Attack.StrikePommel", toHit:  0, dmgMult: 0.5, attacks: 1, meleeOnly: true, nonLethal: true, note: "WITCHER.Attack.NotePommel" },
     disarm: { labelKey: "WITCHER.Attack.StrikeDisarm", toHit:  0, dmgMult: 1, attacks: 1, meleeOnly: true, noDamage: true, note: "WITCHER.Attack.NoteDisarm" },
-    trip:   { labelKey: "WITCHER.Attack.StrikeTrip",   toHit:  0, dmgMult: 1, attacks: 1, meleeOnly: true, noDamage: true, note: "WITCHER.Attack.NoteTrip" },
+    /* Trip (RAW): "By making a weapon attack, you can attempt to strike
+     * the target's legs and knock them prone. If you succeed, the
+     * opponent falls flat." Normal weapon damage aimed at a leg (fixedLoc
+     * so the picker locks to it). Prone auto-applied on a successful
+     * hit via appliesStatus — weaponAttackMixin's post-verdict block
+     * emits the status when delta > 0. */
+    trip:   { labelKey: "WITCHER.Attack.StrikeTrip",   toHit:  0, dmgMult: 1, attacks: 1, meleeOnly: true, fixedLoc: "leftLeg", appliesStatus: "prone", noDamage: true, note: "WITCHER.Attack.NoteTrip" },
     feint:  { labelKey: "WITCHER.Attack.StrikeFeint",  toHit:  0, dmgMult: 1, attacks: 1, meleeOnly: true, firstRollSkill: "deceit", noDamage: true, note: "WITCHER.Attack.NoteFeint" },
-    joint:  { labelKey: "WITCHER.Attack.StrikeJoint",  toHit: -3, dmgMult: 1, attacks: 2, meleeOnly: true, offhand: true, note: "WITCHER.Attack.NoteJoint" }
+    joint:  { labelKey: "WITCHER.Attack.StrikeJoint",  toHit: -3, dmgMult: 1, attacks: 2, meleeOnly: true, offhand: true, note: "WITCHER.Attack.NoteJoint" },
+    /* EO p.7 — Throwing context. The weapon is hurled as a single attack;
+     * the strike sets `thrown: true` so the Throwing open-category bonus
+     * (mechanics/openCategoryBonuses) fires. RAW: a thrown weapon leaves
+     * the wielder's hand and lands at the target. */
+    throw:  { labelKey: "WITCHER.Attack.StrikeThrow",  toHit:  0, dmgMult: 1, attacks: 1, meleeOnly: true, thrown: true, note: "WITCHER.Attack.NoteThrow" }
 });
 
 /* ── Unarmed / brawling combat (Core p.159-160 "Fist Fighting" + grappling) ──
@@ -546,26 +656,98 @@ export const STRIKE_TYPES = Object.freeze({
  *                     (pin/choke/throw); a warning posts when it isn't.
  */
 export const BRAWL_ACTIONS = Object.freeze({
-    block:    { labelKey: "WITCHER.Brawl.Block",    kind: "defense", note: "WITCHER.Brawl.NoteBlock" },
     punch:    { labelKey: "WITCHER.Brawl.Punch",    kind: "attack",  damage: "punch", strikes: true, location: true, note: "WITCHER.Brawl.NotePunch" },
     kick:     { labelKey: "WITCHER.Brawl.Kick",     kind: "attack",  damage: "kick",  strikes: true, location: true, note: "WITCHER.Brawl.NoteKick" },
     pushKick: { labelKey: "WITCHER.Brawl.PushKick", kind: "attack",  damage: "punch", half: true, fixedLoc: "torso", pushBackFormula: "body/3", note: "WITCHER.Brawl.NotePushKick" },
     charge:   { labelKey: "WITCHER.Brawl.Charge",   kind: "attack",  damage: "punch", forceStrike: "strong", fullRound: true, note: "WITCHER.Brawl.NoteCharge" },
     disarm:   { labelKey: "WITCHER.Brawl.Disarm",   kind: "grapple", note: "WITCHER.Brawl.NoteDisarm" },
     grapple:  { labelKey: "WITCHER.Brawl.Grapple",  kind: "grapple", status: "grappled", note: "WITCHER.Brawl.NoteGrapple" },
+    /* Pin / Choke / Throw — RAW p.160 explicitly gates all three on an
+     * active Grapple: "While grappling, you can pin your opponent" /
+     * "After grappling a target, you can roll to attempt to choke them" /
+     * "While grappling, you can roll to throw your opponent." Grapple
+     * itself is "a prerequisite to pins, chokes, and throws." So the
+     * `needsGrapple` flag lives on the base meta — this IS the RAW
+     * ruleset. Combat Extended keeps the same gate (and layers on top:
+     * Trip/Disarm/Ride become grapple-gated too under CE). */
     pin:      { labelKey: "WITCHER.Brawl.Pin",      kind: "grapple", status: "pinned", needsGrapple: true, note: "WITCHER.Brawl.NotePin" },
-    choke:    { labelKey: "WITCHER.Brawl.Choke",    kind: "grapple", status: "suffocation", needsGrapple: true, note: "WITCHER.Brawl.NoteChoke" },
-    throw:    { labelKey: "WITCHER.Brawl.Throw",    kind: "grapple", damage: "punch", status: "prone", needsGrapple: true, triggerStunSave: { mod: -1 }, note: "WITCHER.Brawl.NoteThrow" },
-    trip:     { labelKey: "WITCHER.Brawl.Trip",     kind: "grapple", status: "prone", note: "WITCHER.Brawl.NoteTrip" }
+    choke:    { labelKey: "WITCHER.Brawl.Choke",    kind: "grapple", status: "chokeheld",   needsGrapple: true, note: "WITCHER.Brawl.NoteChoke" },
+    throw:    { labelKey: "WITCHER.Brawl.Throw",    kind: "grapple", damage: "punch", status: "prone", location: true, needsGrapple: true, triggerStunSave: { mod: -1 }, note: "WITCHER.Brawl.NoteThrow" },
+    /* Trip (RAW): "By making a weapon attack, you can attempt to strike
+     * the target's legs and knock them prone. If you succeed, the
+     * opponent falls flat." Same for brawling — kick to the legs. Just
+     * a normal attack aimed at the legs (fixedLoc → leg) that applies
+     * prone on a successful hit. No damage doubling, no tumble, no
+     * grapple enhancement. */
+    trip:     { labelKey: "WITCHER.Brawl.Trip",     kind: "attack",  noDamage: true, status: "prone", fixedLoc: "leftLeg", note: "WITCHER.Brawl.NoteTrip" },
+    /* Escape — RAW Core "Brawling & Wrestling": a held actor can attempt
+     * a Dodge/Escape roll vs the grappler's Brawling every turn to slip
+     * loose. Mirrors the CE `escape` action so RAW-mode games also have
+     * a first-class way out of a hold. On success, the pair is cleared
+     * and the status is stripped. Doesn't deal damage. Requires the
+     * escaper to CURRENTLY be in a hold pair (any kind). */
+    escape:   { labelKey: "WITCHER.Brawl.Escape",   kind: "grapple", note: "WITCHER.Brawl.NoteEscape", isEscape: true, requiresHeld: true },
+    /* Ride — CE Combat Extended (2026-07-03). Requires an active
+     * grapple on the target (per user: Ride joins Trip/Disarm/Pin/
+     * Choke as a grapple-gated follow-up — the earlier "higher
+     * ground" alternative is retracted). Opposed Brawling; on hit
+     * the `mounted` hold pair is created (rider = holder, mount =
+     * target; rider gets `isMounted` w/ cannotMove; mount gets
+     * `mounted` visible). The needsGrapple runtime layer in
+     * brawlMixin catches the missing-grapple case with a warning. */
+    ride:     { labelKey: "WITCHER.Brawl.Ride",     kind: "grapple", status: "mounted", note: "WITCHER.Brawl.NoteRide", isRide: true },
+    /* Push — CE Combat Extended (2026-07-03). Standalone shove: punch
+     * damage to the torso + push floor(Physique/5) meters. Unarmed
+     * variant only in the brawl picker; the weapon variants (shield /
+     * hafted / bludgeoning using Melee or Staff/Spear skill) belong
+     * on the weapon attack dialog under their own strike-type entry
+     * — GM adjudicates via the sheet-side attack path for now. */
+    push:     { labelKey: "WITCHER.Brawl.Push",     kind: "attack",  damage: "punch", fixedLoc: "torso", pushBackFormula: "phy/5", note: "WITCHER.Brawl.NotePush" },
+    /* Reverse Grapple — CE Combat Extended (2026-07-03).
+     *
+     * Available only to an actor currently GRAPPLED (and not pinned or
+     * choked — the CE spec says "The dominant position may be reversed
+     * if the target is not in any hold besides grappling"). Opposed
+     * Brawling: reverser rolls Brawling vs the current holder's Brawling.
+     * On win, the pair record's holderUuid/targetUuid swap; the
+     * `isGrappling` visible status moves with the swap. On loss, no
+     * change (the reverser's turn/action was spent).
+     *
+     * Behaves like `escape` in the flow: fast-path from the dock's
+     * Action menu, doesn't need a canvas target (the grapple partner
+     * is discovered from the hold pair), no damage. */
+    reverseGrapple: { labelKey: "WITCHER.Brawl.ReverseGrapple", kind: "grapple", note: "WITCHER.Brawl.NoteReverseGrapple", isReverseGrapple: true, requiresGrappledOnly: true },
+    /* Release Grapple — voluntary end. Both RAW and CE:
+     *   RAW p.161 says the target of a grapple can attempt an Escape
+     *   roll every turn; the grappler themselves can also just let go.
+     *   RAW doesn't spell that release out explicitly because there's
+     *   no roll — releasing is a free choice on the grappler's part.
+     *
+     * Semantics:
+     *   Only visible in the picker when the actor is currently the HOLDER
+     *   of at least one hold pair (grappled / pinned / chokeheld / mounted).
+     *   No opposed check, no damage. On confirm, the runtime clears all
+     *   the actor's holder-side pairs and strips the target-side statuses
+     *   plus the actor's own `isGrappling` / `isPinning` / `isChoking` /
+     *   `isMounted` visible statuses. Fast-path from the dock's Action
+     *   menu, doesn't need a canvas target — the partner is discovered
+     *   from the hold pair registry. */
+    releaseGrapple: { labelKey: "WITCHER.Brawl.ReleaseGrapple", kind: "grapple", note: "WITCHER.Brawl.NoteReleaseGrapple", isReleaseGrapple: true, requiresHolder: true }
 });
 
 /* Display grouping for the brawl dialog's action picker. Order is the order
- * shown; `block` lives in its own group last. */
+ * shown. Block is intentionally NOT here — defensive Brawling ("Body Block")
+ * is offered on the defense prompt when the actor is attacked, not as a
+ * self-service attacker option. */
 export const BRAWL_GROUPS = Object.freeze([
-    { labelKey: "WITCHER.Brawl.GroupStrikes", actions: ["punch", "kick", "pushKick"] },
-    { labelKey: "WITCHER.Brawl.GroupSpecial", actions: ["charge", "disarm"] },
-    { labelKey: "WITCHER.Brawl.GroupGrapple", actions: ["grapple", "pin", "choke", "throw", "trip"] },
-    { labelKey: "WITCHER.Brawl.GroupDefense", actions: ["block"] }
+    { labelKey: "WITCHER.Brawl.GroupStrikes", actions: ["punch", "kick", "pushKick", "push"] },
+    /* Charge intentionally NOT here — it's a full-round action driven
+     * from the dock's Full Round menu (Dock → Full Round → Charge),
+     * not a brawl-picker choice. BRAWL_ACTIONS.charge stays defined so
+     * any code that references it (e.g. openChargeFlow for an unarmed
+     * charge, if we add that later) still resolves. */
+    { labelKey: "WITCHER.Brawl.GroupSpecial", actions: ["disarm"] },
+    { labelKey: "WITCHER.Brawl.GroupGrapple", actions: ["grapple", "releaseGrapple", "pin", "choke", "throw", "trip", "ride", "escape", "reverseGrapple"] }
 ]);
 
 /* Extra action (Core p.152): a second action this turn at -3 to hit, costing
@@ -709,8 +891,12 @@ export const DAMAGE_REACTIONS = Object.freeze({
  *   damageFlags : flags the damage calculator ORs onto the damageSource
  *                 when the weapon has this quality.  Recognized keys:
  *                   armorPiercing | improvedArmorPiercing | ablating |
- *                   bypassesWornArmor | bypassesNaturalArmor |
- *                   bypassesShield | isSilver
+ *                   doubleAblation | bypassesWornArmor | bypassesNaturalArmor |
+ *                   bypassesShield | isSilver | isMeteorite | deniesParry
+ *                 deniesParry is read at defense-prompt time (strips Parry
+ *                 when the attacker's weapon carries it — Crushing Force).
+ *                 doubleAblation pairs with `ablating` to bump SP chip from
+ *                 −1 to −2 per contributing armor item.
  *   rider       : post-hit status application.  Shape:
  *                   { kind, statusId, locations? }
  *                 kind ∈ percent | auto | stunSave
@@ -736,31 +922,184 @@ const wq = (label, description, param = null, extra = null) => Object.freeze({
      *   ignoresRepositionDistance — the weapon's reach is long enough that
      *     a defender Repositioning out of the original square does NOT
      *     escape the engagement; follow-up Fast-attack swings still resolve.
-     *     See Long Reach (Core p.118). */
-    ignoresRepositionDistance: Boolean(extra?.ignoresRepositionDistance ?? false)
+     *     See Long Reach (Core p.118).
+     *   addsDamageToUnarmed — when wielded, the weapon's damage formula is
+     *     added to the wielder's unarmed strikes (Brawling = cestus, spiked
+     *     gauntlet — Core p.165). Consumed in brawlMixin. */
+    ignoresRepositionDistance: Boolean(extra?.ignoresRepositionDistance ?? false),
+    addsDamageToUnarmed:       Boolean(extra?.addsDamageToUnarmed       ?? false),
+    /* Numeric / string effect fields — consumed by various engine sites
+     * (defenseMixin, castSpellMixin, weaponAttackMixin). All optional;
+     * each engine consumer treats unset / 0 / "" as "no effect".
+     *   parryPenaltyDelta   — shaved off the −3 parry penalty when defending
+     *                         with this weapon (Parrying = 2).
+     *   spellDCBonus        — +N to the cast roll when this weapon is the
+     *                         caster's focus (Greater Focus = 2).
+     *   reliabilityBonus    — added to the weapon's max Reliability
+     *                         (Meteorite = 5). Engine consumer: TODO.
+     *   chargeBonusPerMeter — bonus damage dice per meter charged on a
+     *                         mounted charge (Charging = 1, i.e. +1d6/m).
+     *                         Engine consumer: TODO (needs charge flow).
+     *   skillOverride       — forces the to-hit roll onto this skillMap
+     *                         key (Brawling weapon = "brawling"). */
+    parryPenaltyDelta:   Number(extra?.parryPenaltyDelta) || 0,
+    spellDCBonus:        Number(extra?.spellDCBonus)      || 0,
+    reliabilityBonus:    Number(extra?.reliabilityBonus)  || 0,
+    chargeBonusPerMeter: Number(extra?.chargeBonusPerMeter) || 0,
+    skillOverride:       String(extra?.skillOverride ?? ""),
+    /* ── Equipment Overhaul (homebrew) additions ─────────────────────────
+     * Consumed by Combat Extended code paths (guard stances, clinch,
+     * defense pipeline). All optional; engine consumers default to 0 / false
+     * when the field is unset.
+     *   defenseBonus              — flat +N to parry/block when this weapon
+     *                               is the defender's tool (Guard / Superior
+     *                               Guard from the EO).
+     *   defensePenaltyBothSides   — applied as −N to parry/block whether the
+     *                               weapon is on the offence or the defence
+     *                               (Indirect: flails / morningstars).
+     *   clinchBonus / grappleBonus
+     *                             — additive bonus on grapple / clinch rolls
+     *                               (Close Quarters).
+     *   mountedOnly / groundedOnly
+     *                             — gate the chargeBonusPerMeter to its
+     *                               permitted mode (Cavalry = mounted-only,
+     *                               EO Charging = grounded-only).
+     *   requiresMinPhysique       — penalty when the wielder's PHY < N (the
+     *                               Physique quality from the EO).
+     *   drawStaReduction          — reduces extra-action draw STA cost by N
+     *                               (Nimble).
+     *   aimAppliesToCrit          — Stable Aim: the Aim bonus also folds into
+     *                               crit confirmation.
+     *   rangeBonusMeters          — +N (or −N) to listed range (Improved /
+     *                               Reduced Range, parameterized).
+     *   foragingBonus / isCraftingTool
+     *                             — utility flags for foraging / crafting
+     *                               flow consumers (Foraging, Crafting). */
+    defenseBonus:            Number(extra?.defenseBonus)            || 0,
+    defensePenaltyBothSides: Number(extra?.defensePenaltyBothSides) || 0,
+    clinchBonus:             Number(extra?.clinchBonus)             || 0,
+    grappleBonus:            Number(extra?.grappleBonus)            || 0,
+    mountedOnly:             Boolean(extra?.mountedOnly             ?? false),
+    groundedOnly:            Boolean(extra?.groundedOnly            ?? false),
+    requiresMinPhysique:     Number(extra?.requiresMinPhysique)     || 0,
+    drawStaReduction:        Number(extra?.drawStaReduction)        || 0,
+    aimAppliesToCrit:        Boolean(extra?.aimAppliesToCrit        ?? false),
+    rangeBonusMeters:        Number(extra?.rangeBonusMeters)        || 0,
+    foragingBonus:           Number(extra?.foragingBonus)            || 0,
+    isCraftingTool:          Boolean(extra?.isCraftingTool          ?? false),
+    /* Defense interactions (EO):
+     *   heftyDeniesNonSturdy — Hefty: can only be parried/blocked by a
+     *                          Sturdy / Very Sturdy weapon or shield.
+     *   counterHefty         — Sturdy: this weapon/shield may parry/block
+     *                          a Hefty attack normally.
+     *   counterCrushingForce — Very Sturdy (shield only): may parry an
+     *                          attack with the Crushing Force flag. */
+    heftyDeniesNonSturdy:    Boolean(extra?.heftyDeniesNonSturdy    ?? false),
+    counterHefty:            Boolean(extra?.counterHefty            ?? false),
+    counterCrushingForce:    Boolean(extra?.counterCrushingForce    ?? false),
+    /* ── Reach mechanics (EO Long/Superior/Extreme Reach) ─────────────
+     * `reachExtendMeters`        — extra reach beyond normal melee (1 grid =
+     *   2m, so Long Reach = 2, Superior = 4, Extreme = 6).
+     * `reachAdjacentPenalty`     — penalty (signed, usually negative) to
+     *   Block / Parry / attack rolls when targeting an adjacent opponent
+     *   (Long = -1, Superior = -3, Extreme = -5).
+     * `reachAdjacentPommelOnly`  — true → at melee range, can ONLY use a
+     *   pommel strike (Superior Reach).
+     * `reachAdjacentNoAttack`    — true → at melee range, can't attack at
+     *   all, even with pommel (Extreme Reach). */
+    reachExtendMeters:       Number(extra?.reachExtendMeters)       || 0,
+    reachAdjacentPenalty:    Number(extra?.reachAdjacentPenalty)    || 0,
+    reachAdjacentPommelOnly: Boolean(extra?.reachAdjacentPommelOnly ?? false),
+    reachAdjacentNoAttack:   Boolean(extra?.reachAdjacentNoAttack   ?? false),
+    /* ── Feeble / Hefty interactions (EO p.7) ──────────────────────────
+     * Feeble:
+     *   feebleParryRestrictedToFeeble — true → can only Parry other Feeble
+     *     weapons; non-Feeble parry attempts fail / are refused.
+     *   feebleBlockHalfDamage          — true → when used to Block a
+     *     non-Feeble weapon, the defender still takes HALF damage on a
+     *     successful block.
+     *   feebleBlockHalfNonlethalVsHefty — true → when used to Block a
+     *     Hefty weapon, half of the half-damage is non-lethal.
+     * Hefty:
+     *   heftyBlocksFastStrike          — true → Fast Strike is unavailable
+     *     with this weapon (use Single Attack instead). House change from
+     *     EO's "Fast Strike attacks once with Hefty" — clearer to filter
+     *     the option out than to clamp it.
+     *   heftyBlockHalfNonlethal        — true → when successfully Blocked,
+     *     the blocker still takes half the damage as non-lethal damage. */
+    feebleParryRestrictedToFeeble:  Boolean(extra?.feebleParryRestrictedToFeeble  ?? false),
+    feebleBlockHalfDamage:          Boolean(extra?.feebleBlockHalfDamage          ?? false),
+    feebleBlockHalfNonlethalVsHefty:Boolean(extra?.feebleBlockHalfNonlethalVsHefty?? false),
+    heftyBlocksFastStrike:          Boolean(extra?.heftyBlocksFastStrike          ?? false),
+    heftyBlockHalfNonlethal:        Boolean(extra?.heftyBlockHalfNonlethal        ?? false),
+    /* ── Charging variants (EO p.7) ────────────────────────────────────
+     * `chargingMode`     — "mounted" (Cavalry: 1d6/m mounted) | "onfoot"
+     *   (EO Charging: 1d6/2m on a Charge action) | "" (none).
+     *   `chargeBonusPerMeter` above carries the magnitude.
+     * `nimbleAttackStaReduction` — Nimble: extra-action STA cost when
+     *   ATTACKING with this weapon is reduced by N (separate from
+     *   `drawStaReduction` for the draw case; EO covers both). */
+    chargingMode:            String(extra?.chargingMode ?? ""),
+    nimbleAttackStaReduction: Number(extra?.nimbleAttackStaReduction) || 0,
+    /* ── Meteorite (EO p.7) ────────────────────────────────────────────
+     * EO Meteorite (when NOT using monster-susceptibility rules): the
+     * weapon/shield gets +1 enchantment slot for runes, up to 3 total.
+     * Reliability bonus is a separate (non-EO) house add — left in place
+     * for backward compat with the existing entry. */
+    meteoriteExtraEnchantSlot: Boolean(extra?.meteoriteExtraEnchantSlot ?? false),
+    /* ── Restricted Vision (house variant of EO p.8) extra hooks ───────
+     * `armorHalvesCombatStaRecovery` — true → wearing this HALVES the
+     *   in-combat STA recovery (Take Breath / Recover action returns
+     *   floor(REC/2) instead of the full REC). House change from EO
+     *   which fully blocks recovery — this softens it so closed-visor
+     *   wearers can still catch some breath, just at half pace. */
+    armorHalvesCombatStaRecovery: Boolean(extra?.armorHalvesCombatStaRecovery ?? false),
+    /* ── Deprecated markers ────────────────────────────────────────────
+     * EO explicitly retires some Core qualities. We keep them in the
+     * catalog for legacy items but display a deprecation note. */
+    deprecated:              Boolean(extra?.deprecated              ?? false),
+    deprecationNote:         String(extra?.deprecationNote ?? ""),
+    /* ── displayOnly marker ────────────────────────────────────────────
+     * Some qualities have no engine consumer — they describe an effect
+     * the GM resolves at the table (concealment checks, crew reload,
+     * deployable shield, etc.) or sit alongside a separate canonical
+     * field that owns the mechanic (the `difficult` chip vs the
+     * `system.difficult` boolean). Set `displayOnly: true` to mark
+     * these honestly in the UI: the chip renders with a hint icon and
+     * a tooltip explaining the GM-resolution path, so players don't
+     * expect an automatic effect. */
+    displayOnly:             Boolean(extra?.displayOnly             ?? false)
 });
 export const WEAPON_QUALITIES = Object.freeze({
-    ablating:              wq("Ablating",                "Penetrating hits chip stopping power off armor (1d6/2 SP damage).",
+    ablating:              wq("Ablating",                "On a penetrating hit, deals an additional 1d6/2 SP damage to the target's armor (rolled per hit, 0–3 extra SP off the location's value, on top of the standard −1 SP chip every penetrating hit causes).",
                               null, { damageFlags: { ablating: true } }),
     armorPiercing:         wq("Armor Piercing",          "Ignores the target armor's damage resistance.",
                               null, { damageFlags: { armorPiercing: true } }),
-    improvedArmorPiercing: wq("Improved Armor Piercing", "Ignores damage resistance AND halves the armor's SP on hit.",
+    improvedArmorPiercing: wq("Improved Armor Piercing", "Ignores armor's damage resistance, halves the armor's SP on hit, and bypasses monster per-type resistances + immunities. Does NOT bypass the 'vulnerable only to silver' or 'vulnerable only to meteorite' weakness gates.",
                               null, { damageFlags: { improvedArmorPiercing: true } }),
     balanced:              wq("Balanced",                "Better criticals: roll 2d6+2 (or 1d6+1 if aimed) for severity."),
     bleeding:              wq("Bleeding",                "On damage, chance to inflict Bleeding (see Status Effects).",
                               { type: "percent", placeholder: "25", suffix: "%" },
                               { rider: { kind: "percent", statusId: "bleed" } }),
-    brawling:              wq("Brawling",                "Uses Brawling skill; adds weapon damage to unarmed strikes."),
-    charging:              wq("Charging",                "Used from a mount in motion: add 1d6 bonus damage per meter charged, rather than the usual half."),
-    concealment:           wq("Concealment",             "+2 to checks made to conceal this weapon on your person."),
+    brawling:              wq("Brawling",                "The weapon's damage is added to your normal punch or kick damage, and it changes your punch or kick damage to the type shown.",
+                              null, { addsDamageToUnarmed: true }),
+    /* "charging" here matches the EO RENAME of Core "Charging": EO calls
+     * this the Cavalry quality and reserves the name "Charging" for an
+     * on-foot Charge bonus (see `cavalry` and `footCharging` below).
+     * The legacy entry is preserved at this key for backward compat
+     * with items that already carry it. */
+    charging:              wq("Charging (legacy Core)",  "Legacy Core ‘Charging’ — used from a mount in motion: add 1d6 bonus damage per meter charged, rather than the usual half. Equipment Overhaul renames this to ‘Cavalry’ (see below); use that key for new items.",
+                              null, { chargeBonusPerMeter: 1, chargingMode: "mounted" }),       // engine consumer: TODO (needs charge flow + meters prompt)
+    concealment:           wq("Concealment",             "+2 to checks made to conceal this weapon on your person. (GM-resolved — no auto Conceal-check surface.)",
+                              null, { displayOnly: true }),
     knockdown:             wq("Knock-Down",              "On a damaging hit, chance to knock the target prone.",
                               { type: "percent", placeholder: "50", suffix: "%" },
                               { rider: { kind: "percent", statusId: "prone" } }),
     disease:               wq("Disease",                 "On a damaging hit, chance to inflict the Disease condition (see Status Effects).",
                               { type: "percent", placeholder: "25", suffix: "%" },
                               { rider: { kind: "percent", statusId: "diseased" } }),
-    crushingForce:         wq("Crushing Force",          "Cannot be parried; inflicts double ablation on weapons, shields, and armor.",
-                              null, { damageFlags: { ablating: true } }),
+    crushingForce:         wq("Crushing Force",          "Cannot be parried; doubles the standard −1 SP chip to −2 on every penetrating hit (on weapons, shields, and armor).",
+                              null, { damageFlags: { doubleAblation: true, deniesParry: true } }),
     fire:                  wq("Fire",                    "On a damaging hit, chance to set the target alight (see Burning status).",
                               { type: "percent", placeholder: "25", suffix: "%" },
                               { rider: { kind: "percent", statusId: "burning" } }),
@@ -769,21 +1108,28 @@ export const WEAPON_QUALITIES = Object.freeze({
     freeze:                wq("Freeze",                   "On a damaging hit, chance to chill the target solid (see Frozen status).",
                               { type: "percent", placeholder: "25", suffix: "%" },
                               { rider: { kind: "percent", statusId: "freeze" } }),
-    grappling:             wq("Grappling",               "Can be used to grapple and trip opponents in reach."),
+    grappling:             wq("Grappling",               "Can be used to grapple and trip opponents in reach. (Use the CE Grapple action; the prereq check is in actions.mjs, not this quality.)",
+                              null, { displayOnly: true }),
     entangling:            wq("Entangling",              "On a hit the target is entangled: -5 SPD and -2 to all physical actions; each turn a DC 18 Dodge/Escape or Contortionist check breaks free, or an ally may spend an action to remove it.",
                               null, { rider: { kind: "auto", statusId: "entangled" } }),
     magicalAnchoring:      wq("Magically Anchoring",     "While a creature touches the weapon it cannot turn invisible or intangible or teleport away; any already invisible or intangible creature is forced visible and solid."),
     bladeCatcher:          wq("Blade Catcher",           "When you block a melee attack with it, both weapons lock together and are useless until the attacker beats your Small Blades check with a Physique or Sleight of Hand check, or you let go."),
-    crewReload:            wq("Crew Reload",             "Reloading takes 2 actions, which two people may split between them."),
-    mounted:               wq("Mounted",                 "Fixed in place; it must be set up before use and packed away (an action each) before it can be moved."),
-    injector:              wq("Injector",                "Can be charged (an action) with a dose of poison or elixir; a damaging hit drives the dose deep, making a poison 3 harder to resist or an elixir last 3 rounds longer."),
-    greaterFocus:          wq("Greater Focus",           "Spells cast through this weapon treat DC as +2."),
-    longReach:             wq("Long Reach",              "Strikes targets up to 2m away. A defender Repositioning out of the original square does NOT escape this weapon — the follow-up Fast-attack swing still resolves.",
-                              null, { ignoresRepositionDistance: true }),
-    meteorite:             wq("Meteorite",               "Full damage vs meteorite-vulnerable monsters; +5 Reliability.",
-                              null, { damageFlags: { isMeteorite: true } }),
-    nonLethal:             wq("Non-Lethal",              "Deals non-lethal damage with no normal penalty."),
-    parrying:              wq("Parrying",                "Parrying with this weapon lowers the parry penalty by 2."),
+    crewReload:            wq("Crew Reload",             "Reloading takes 2 actions, which two people may split between them. (GM-resolved — no multi-actor reload pipeline.)",
+                              null, { displayOnly: true }),
+    mounted:               wq("Mounted",                 "Fixed in place; it must be set up before use and packed away (an action each) before it can be moved. (GM-resolved — no setup/pack-away action surface; chargeBonusPerMeter on cavalry/charging IS engine-wired.)",
+                              null, { displayOnly: true }),
+    injector:              wq("Injector",                "Can be charged (an action) with a dose of poison or elixir; a damaging hit drives the dose deep, making a poison 3 harder to resist or an elixir last 3 rounds longer. (GM-resolved — no charge-with-poison UI; rider note posts on hit.)",
+                              null, { displayOnly: true }),
+    greaterFocus:          wq("Greater Focus",           "Spells cast through this weapon treat DC as +2.",
+                              null, { spellDCBonus: 2 }),
+    longReach:             wq("Long Reach",              "You can attack targets 2 meters beyond your normal melee Reach (2 grid squares away) with this weapon. You take −1 to Block, Parry, or attack adjacent opponents.",
+                              null, { ignoresRepositionDistance: true, reachExtendMeters: 2, reachAdjacentPenalty: -1 }),
+    meteorite:             wq("Meteorite",               "Full damage vs meteorite-vulnerable monsters. Per Equipment Overhaul, if you don't use the alternate optional rules for monster susceptibilities, this quality instead grants the weapon (or shield) an extra enchantment slot for runes (up to 3 total). Legacy house-rule kept Reliability +5 for backward compatibility.",
+                              null, { damageFlags: { isMeteorite: true }, reliabilityBonus: 5, meteoriteExtraEnchantSlot: true }),   // reliability max consumer: TODO
+    nonLethal:             wq("Non-Lethal (deprecated)", "Equipment Overhaul retires this quality — eligible weapons are now given N(on-lethal) as a damage type option instead. Kept in the catalog for backward compatibility with items that still reference it; new items should set damage type to Non-lethal.",
+                              null, { deprecated: true, deprecationNote: "Use a Non-lethal damage type on the weapon instead." }),
+    parrying:              wq("Parrying",                "Parrying with this weapon lowers the parry penalty by 2.",
+                              null, { parryPenaltyDelta: 2 }),
     poison:                wq("Poison",                   "On a damaging hit, chance to envenom the target (see Poisoned status).",
                               { type: "percent", placeholder: "25", suffix: "%" },
                               { rider: { kind: "percent", statusId: "poisoned" } }),
@@ -796,7 +1142,72 @@ export const WEAPON_QUALITIES = Object.freeze({
                               { rider: { kind: "percent", statusId: "staggered" } }),
     stun:                  wq("Stun",                    "Head/torso hits force a Stun save at the listed penalty.",
                               { type: "text", placeholder: "-2" },
-                              { rider: { kind: "stunSave", statusId: "stunned", locations: ["head", "torso"] } })
+                              { rider: { kind: "stunSave", statusId: "stunned", locations: ["head", "torso"] } }),
+    /* ── Equipment Overhaul (homebrew) — weapon qualities ───────────────
+     * Sourced verbatim from "Equipment for the Witcher" v1.04 by J.
+     * Obadiah Ridinger. Each description is the EO canonical wording;
+     * mechanical fields below register the consumer hooks. Engine
+     * wiring for the new mechanics is gated on the Combat Extended
+     * homebrew toggle. */
+    superiorReach:         wq("Superior Reach",          "You can attack targets 2-4 meters beyond your normal melee Reach (2-3 grid squares away) with this weapon. You take −3 to Block, Parry, or attack adjacent opponents, and can only attack them with pommel strikes.",
+                              null, { ignoresRepositionDistance: true, reachExtendMeters: 4, reachAdjacentPenalty: -3, reachAdjacentPommelOnly: true }),
+    extremeReach:          wq("Extreme Reach",           "You can attack targets 2-6 meters beyond your normal melee Reach (2-4 grid squares away) with this weapon. You take −5 to Block or Parry adjacent opponents, and can't attack them, even with pommel strikes.",
+                              null, { ignoresRepositionDistance: true, reachExtendMeters: 6, reachAdjacentPenalty: -5, reachAdjacentNoAttack: true }),
+    guard:                 wq("Guard",                   "The weapon adds a +1 bonus to defense rolls when it is used to Block or Parry.",
+                              null, { defenseBonus: 1 }),
+    superiorGuard:         wq("Superior Guard",          "The weapon adds a +2 bonus to defense rolls when it is used to Block or Parry.",
+                              null, { defenseBonus: 2 }),
+    feeble:                wq("Feeble",                  "This weapon can only Parry other Feeble weapons, and if used to Block a non-Feeble weapon, the defender still takes half damage if they succeed. If used to Block a Hefty weapon, the defender takes half damage as lethal and half as non-lethal.",
+                              null, { feebleParryRestrictedToFeeble: true, feebleBlockHalfDamage: true, feebleBlockHalfNonlethalVsHefty: true }),
+    hefty:                 wq("Hefty",                   "Too heavy for a Fast Strike — Fast Strike is unavailable with this weapon (use Single Attack instead). Its attacks can't be Parried, and it deals half damage as non-lethal damage when successfully Blocked.",
+                              null, { heftyBlocksFastStrike: true, heftyDeniesNonSturdy: true, heftyBlockHalfNonlethal: true,
+                                      damageFlags: { deniesParry: true } }),
+    sturdy:                wq("Sturdy",                  "Sturdy weapons can Block and Parry attacks from Hefty weapons normally.",
+                              null, { counterHefty: true }),
+    indirect:              wq("Indirect",                "The weapon's flexibility or curvature allows it to reach behind an opponent's guard. Attempts to Block or Parry its attacks are always rolled at −2. However, this makes it awkward in defense, so it also Blocks and Parries at −2.",
+                              null, { defensePenaltyBothSides: 2, damageFlags: { indirect: true } }),
+    nimble:                wq("Nimble",                  "When you use an Extra Action to draw or attack with this weapon, the Stamina cost is reduced by 2.",
+                              null, { drawStaReduction: 2, nimbleAttackStaReduction: 2 }),
+    cavalry:               wq("Cavalry",                 "When used to attack while mounted, the weapon adds a damage die for every 1m of movement instead of 2m. (Equipment Overhaul's rename of the legacy Core ‘Charging’ quality.)",
+                              null, { chargeBonusPerMeter: 1, chargingMode: "mounted", mountedOnly: true }),
+    footCharging:          wq("Charging",                "When used to Charge, this weapon deals an extra damage die per 2m moved, up to the maximum shown. This is in addition to the extra damage gained from movement during mounted combat. (EO's redefined ‘Charging’ — distinct from the legacy Core entry kept at the `charging` key.)",
+                              null, { chargeBonusPerMeter: 0.5, chargingMode: "onfoot" }),
+    closeQuarters:         wq("Close Quarters",          "Gains the indicated benefits when used to attack an enemy that is involved in a grapple, pin, choke-hold, or clinch with the attacker.",
+                              { type: "text", placeholder: "+1 WA, +1d6 Dmg" },
+                              { grappleBonus: 2, clinchBonus: 1 }),     /* legacy numeric defaults — actual bonus is per-item text per EO */
+    throwing:              wq("Throwing",                "When thrown, this weapon gains the indicated benefits.",
+                              { type: "text", placeholder: "+1 WA, +1d6 Dmg" }),
+    twoHand:               wq("Two-Hand",                "When used as a two-handed weapon instead of a one-handed weapon, this weapon gains the indicated benefits.",
+                              { type: "text", placeholder: "+1 WA, +1d6 Dmg" }),
+    strangling:            wq("Strangling",              "The weapon can be used to execute a choke hold, gaining the indicated benefits.",
+                              { type: "text", placeholder: "+2 WA, ×2 suffocation" }),
+    physique:              wq("Physique",                "If your Physique skill base is lower than the listed number, your attack rolls suffer a penalty equal to the difference.",
+                              { type: "number", placeholder: "8" },
+                              { requiresMinPhysique: 8 }),
+    grounded:              wq("Grounded",                "You can't load or shoot this weapon if riding an animal or driving a vehicle. You can still load and shoot as a passenger on a boat, wagon, or cart, but you must stand upright and may be penalized.",
+                              null, { groundedOnly: true }),
+    stableAim:             wq("Stable Aim",              "When this weapon strikes a Critical Wound, you add your Aim action bonus, if any, to the critical hit roll.",
+                              null, { aimAppliesToCrit: true }),
+    /* Ammo range modifiers — wired in attackDialog.resolveWeaponRange:
+     * when the loaded round has improvedRange/reducedRange the dialog's
+     * range-bracket distances and the to-hit pipeline use the scaled value. */
+    improvedRange:         wq("Improved Range",          "This ammunition improves the range of the weapon by 50%."),
+    reducedRange:          wq("Reduced Range",           "This ammunition halves the range of the weapon."),
+    foraging:              wq("Foraging",                "When used to forage for the listed type of resource, you gain +1 unit of that resource.",
+                              { type: "text", placeholder: "carcasses" },
+                              { foragingBonus: 1 }),
+    crafting:              wq("Crafting",                "Counts as a tool for the listed constructions or activities, reducing penalties if you lack Crafting Tools.",
+                              { type: "text", placeholder: "fortifications" },
+                              { isCraftingTool: true }),
+    /* EO sling weapons — wired in reloadMixin: when this weapon quality is
+     * present, firing doesn't decrement the carried stack of ammo. The
+     * weapon (sling, staff-sling) collects from environment for free. */
+    freeAmmunition:        wq("Free Ammunition",         "This weapon can use rocks, sticks, or other improvised projectiles from the environment as ammunition at no cost."),
+    /* EO ammunition modifier — wired in weaponAttackMixin.damageFor: the
+     * weapon's base damage formula is wrapped in floor(/2) before silver +
+     * adrenaline are appended. Half-damage rounds: Whistling Bullet,
+     * Markee Howler, Flaming Arrow/Bolt, Incendiary, etc. */
+    halfDamage:            wq("Half Damage",             "This ammunition deals half the weapon's base damage (rounded down). Usually paired with a debuff or status rider in lieu of damage.")
 });
 
 /* Armor qualities — the Core Rulebook armor section doesn't have a
@@ -808,16 +1219,124 @@ export const WEAPON_QUALITIES = Object.freeze({
  *
  * Descriptions are paraphrased mechanical summaries in my own words. */
 export const ARMOR_QUALITIES = Object.freeze({
-    restrictedVision: wq("Restricted Vision", "With the visor down, vision narrows to a forward cone; witchers lose their Awareness bonus and Scent Tracking."),
-    fullCover:        wq("Full Cover",        "Pavise-sized; can be crouched behind for full cover. Incoming hits must exceed the shield's Reliability before reaching the wielder, and each hit removes 1 SP."),
+    restrictedVision: wq("Restricted Vision", "You have a reduced field of vision and lose scent tracking abilities, and you only recover HALF your normal Stamina from in-combat recovery (Take Breath). On many helms you can open a visor or mask as an Action to negate this, but that removes any resistance to piercing attacks the helmet has and reduces SP by 5.",
+                          null, { armorHalvesCombatStaRecovery: true }),
+    fullCover:        wq("Full Cover (deprecated)", "Equipment Overhaul retires this quality — it is mechanically subsumed by any shield with a Cover Value of 6 or more. Kept in the catalog for backward compatibility with pavise-style items; new shields should set CV ≥ 6 instead.",
+                          null, { deprecated: true, deprecationNote: "Set the shield's Cover Value to 6 or more instead." }),
     // Witcher school-armor critical triggers (DLC: Witcher's Tools).
     criticalDecimation:   wq("Critical Decimation",   "When you score a critical wound with a witcher weapon, treat it as one tier more severe (a Simple critical becomes Complex, and so on)."),
     criticalFlurry:       wq("Critical Flurry",       "When you score a critical wound with a witcher weapon, immediately attempt a Disarm or Trip at no extra penalty and without spending extra Stamina."),
     criticalSpellcasting: wq("Critical Spellcasting", "When you score a critical wound with a witcher weapon, immediately make a Spellcasting check to cast a Sign at no extra penalty and without spending Stamina beyond the Sign's own cost."),
     criticalBlock:        wq("Critical Block",        "When you beat an attacker by more than 4 on a Block or Parry with your Manticore shield, immediately make a Shield Strike that knocks them back 4m and prone, at no extra penalty or Stamina."),
     criticalRiposte:      wq("Critical Riposte",      "When you beat an attacker by more than 4 on a Parry with a witcher weapon, immediately Strike with a held weapon at no extra penalty or Stamina."),
-    criticalMomentum:     wq("Critical Momentum",     "When you score a critical wound with a witcher weapon, immediately make a single Strike with a held weapon at no extra penalty or Stamina.")
+    criticalMomentum:     wq("Critical Momentum",     "When you score a critical wound with a witcher weapon, immediately make a single Strike with a held weapon at no extra penalty or Stamina."),
+    /* ── Equipment Overhaul (homebrew) — armor & shield qualities ────────
+     * Sourced verbatim from "Equipment for the Witcher" v1.04 by J.
+     * Obadiah Ridinger. Each description is the EO canonical wording. */
+    poorVision:           wq("Poor Vision",           "You have a reduced field of vision and lose scent tracking abilities, and you only recover HALF your normal Stamina from in-combat recovery (Take Breath). With Poor Vision, you also take a −2 to Awareness and ranged attacks, and a −1 penalty to all other vision-dependent checks. On many helms you can open a visor or mask as an Action to negate this, but that removes any resistance to piercing attacks the helmet has and reduces SP by 5.",
+                              null, { armorHalvesCombatStaRecovery: true }),
+    /* `difficult` — the engine enforces the arming-jack requirement via
+     * `system.difficult` (mechanics/eoArmorModel.mjs). The chip toggle
+     * wires through to that boolean via the armor sheet's quality
+     * binding, so checking/unchecking the chip is functionally identical
+     * to flipping the canonical boolean. NOT displayOnly — it's a real,
+     * wired quality. */
+    difficult:            wq("Difficult",             "This piece of armor must be worn with an Arming Jack and can't be equipped without assistance.",
+                              null, {}),
+    stifling:             wq("Stifling",              "You can not rest while wearing this piece of armor and it can't be layered with other stifling armor pieces."),
+    lanceRest:            wq("Lance Rest",            "Allows you to use your Full Turn to make a one-handed charging attack with a lance while mounted, without the usual penalty for attacking one-handed with a two-handed weapon. (GM-resolved — no first-class mount + lance flow.)",
+                              null, { displayOnly: true }),
+    superiorLanceRest:    wq("Superior Lance Rest",   "As Lance Rest, and also eliminates the Strong Strike penalty while doing so. (GM-resolved.)",
+                              null, { displayOnly: true }),
+    options:              wq("Options",               "You can get a variation of this armor that doesn't cover the arms and has its EV penalties mitigated by the parenthetical amount. If it normally covers the legs you can also get it in a shorter version that doesn't, also reducing its EV by the same amount. Using either option reduces the weight and price by 20%, and using both options reduces the weight and price by 40%. (GM-resolved — the GM hand-creates the variant item; no auto-derive.)",
+                              null, { displayOnly: true }),
+    /* Shield-specific. The runtime branches on item.type === 'shield' before
+     * applying these — having them in the armor table is just a flat catalog
+     * choice (shields share the same data model as armor). */
+    /* Shield-side qualities reuse the weapon's display label — the
+     * suffix "(Shield)" was redundant since the item type already
+     * carries the context. The underlying KEY stays distinct
+     * (`sturdyShield` vs `sturdy`) so the engine knows which mechanic
+     * to apply, but the chip text is clean. */
+    sturdyShield:         wq("Sturdy",                "Sturdy shields can Block and Parry attacks from Hefty weapons normally.",
+                              null, { counterHefty: true }),
+    verySturdy:           wq("Very Sturdy",           "Very Sturdy shields can Block and Parry attacks from Hefty weapons normally, and can also Parry monster attacks with the Crushing Force effect.",
+                              null, { counterCrushingForce: true, counterHefty: true }),
+    parryingShield:       wq("Parrying",              "When using this shield to Parry, the usual −3 parry penalty is reduced to 0 — Parry at no penalty.",
+                              null, { parryPenaltyDelta: 3 }),
+    bladeCatcherArmor:    wq("Blade Catcher",         "Functions just like the weapon effect, but for shields. When you Block or Parry an attack with the shield, you can detain it so the opponent can't attack or defend with it until they beat you at an opposed weapon skill check (you use Melee for the shield). (Mirror of the weapon-side `bladeCatcher` rider note — GM-resolved opposed check.)",
+                              null, { displayOnly: true }),
+    deployable:           wq("Deployable",            "You can use an Action to prop this shield up as a portable fortification. (GM-resolved — no portable-cover token state.)",
+                              null, { displayOnly: true }),
+    silverContact:        wq("Silver Contact",        "Silver-susceptible monsters become staggered whenever they hit this armor piece with their natural weapons, or whenever either of you hit each other with, or maintain, brawling maneuvers. Additionally, if applied to arms or legs, it grants your punches or kicks the Silver effect."),
+    meteoriteContact:     wq("Meteorite Contact",     "Meteorite-susceptible monsters become staggered whenever they hit this armor piece with their natural weapons, or whenever either of you hit each other with, or maintain, brawling maneuvers. Additionally, if applied to arms or legs, it grants your punches or kicks the Meteorite effect."),
+    monsterResistance:    wq("Monster Resistance",    "Built-in witcher-school resistance to a listed monster damage profile (e.g. Necrophages, Specters). Parameter records the resistance set; engine consumer reads it during damage resolution. (GM-resolved — no per-monster-set damage ledger; parameter text surfaces on the chip.)",
+                              { type: "text", placeholder: "Necrophages" },
+                              { displayOnly: true }),
+    setBonus:             wq("Set Bonus",             "Item is part of a named set (witcher school kit, etc.). Wearing the complete set unlocks the set's signature bonus — encoded on the set definition, not here. (Engine fires a rider note when all worn pieces share a set parameter; the per-set BONUS still requires a set-definition lookup, which is GM-resolved.)",
+                              null, { displayOnly: true }),
+    fireproof:            wq("Fireproof",             "Reduces fire damage by half and confers immunity to the Burning status."),
+    bleedResistance:      wq("Resistance to Bleeding","Reduces the chance of the Bleeding status taking hold by the listed amount (-25% by default).",
+                              { type: "percent", placeholder: "25", suffix: "%" }),
+    hidden:               wq("Hidden",                "Concealed under clothing: requires an Awareness check at the listed DC to detect. (GM-resolved — no automatic Awareness detection surface; the DC chip is for hand-roll reference.)",
+                              { type: "number", placeholder: "20" },
+                              { displayOnly: true }),
+    /* EO armor narrative qualities. These are mostly descriptive — they
+     * surface as chips on the item but the engine doesn't currently
+     * auto-apply the bonus / penalty. The GM resolves them at the table. */
+    archeryShield:        wq("Archery Shield",        "Strapped to the forearm, allows you to wield a bow or crossbow at no penalty. Block / Parry rolls with the shield take -1, and any close combat weapon used with the shield arm takes -1 to attacks, Blocks, and Parries. (GM-resolved — no auto -1 chip on shield Block/Parry from this quality; the +ranged-while-shielded waiver requires a CE-specific flow not yet wired.)",
+                              null, { displayOnly: true }),
+    rangedPenalty:        wq("Ranged Penalty",        "Heavy or restrictive armor on the arms imposes a flat penalty to ranged attack rolls. The parameter records the penalty value (-1, -2, …).",
+                              { type: "number", placeholder: "1", suffix: "" }),
+    spdPenalty:           wq("SPD Penalty",           "Heavy or restrictive armor on the legs imposes a flat penalty to your SPD stat. The parameter records the penalty value (-1, -2, …).",
+                              { type: "number", placeholder: "1", suffix: "" })
 });
+
+/* Per-item-type filters for the qualities catalogs. The full catalogs
+ * cover several domains (a 1H sword shares the table with arrows; a
+ * pavise shield shares the table with chausses), so the sheet layer
+ * filters the visible checkbox list down to the qualities that
+ * actually make sense on that item type.
+ *
+ *   isAmmoQuality(entry)   — qualities that travel with a projectile:
+ *                            status riders (Bleeding, Fire, Stun, …)
+ *                            and damage-affecting flags (Armor Piercing,
+ *                            Ablating, Silver, Meteorite). Weapon-only
+ *                            wield/reach/skill qualities are filtered.
+ *   isShieldQuality(key)   — shield-only entries inside ARMOR_QUALITIES
+ *                            (Sturdy shield, Parrying shield, Deployable,
+ *                            Blade Catcher, Archery Shield, Very Sturdy,
+ *                            deprecated Full Cover).
+ *   isArmorPieceQuality(k) — everything in ARMOR_QUALITIES that ISN'T
+ *                            shield-specific. */
+const SHIELD_QUALITY_KEYS = new Set([
+    "sturdyShield", "verySturdy", "parryingShield",
+    "bladeCatcherArmor", "deployable", "archeryShield", "fullCover"
+]);
+export function isShieldQuality(key) {
+    return SHIELD_QUALITY_KEYS.has(key);
+}
+export function isArmorPieceQuality(key) {
+    return !SHIELD_QUALITY_KEYS.has(key);
+}
+export function isAmmoQuality(entry) {
+    if (!entry) return false;
+    if (entry.rider?.kind && entry.rider.kind !== "none") return true;
+    const f = entry.damageFlags ?? {};
+    return !!(f.armorPiercing || f.improvedArmorPiercing
+        || f.ablating || f.doubleAblation
+        || f.bypassesWornArmor || f.bypassesNaturalArmor
+        || f.isSilver || f.isMeteorite);
+}
+export function filterAmmoQualities(catalog) {
+    return Object.fromEntries(Object.entries(catalog ?? {}).filter(([, e]) => isAmmoQuality(e)));
+}
+export function filterShieldQualities(catalog) {
+    return Object.fromEntries(Object.entries(catalog ?? {}).filter(([k]) => isShieldQuality(k)));
+}
+export function filterArmorPieceQualities(catalog) {
+    return Object.fromEntries(Object.entries(catalog ?? {}).filter(([k]) => isArmorPieceQuality(k)));
+}
 
 /**
  * Homebrew toggle enumeration (ADR 0003). Each entry becomes a world
@@ -840,10 +1359,21 @@ export const HOMEBREW = Object.freeze({
     bookSystem:        homebrew(),              // 3-type book mechanic on valuables
     stress:            homebrew(),              // stress counter on characters
     foodAndDrink:      homebrew(),              // food/drink charges + drunkenness
-    extendedCombat:    homebrew(true,  "content"), // optional combat overhaul (guard stances etc.) — WIP; lives in the Homebrew Content menu
+    extendedCombat:    homebrew(false, "content"), // optional combat overhaul — guard stances, raise shield, revised attack/defense costs, GM-tunable action editor. Default OFF; lives in the Homebrew Content menu
     farkleTable:       homebrew(),              // Farkle gambling table (GM-opened betting game)
     dicePokerTable:    homebrew(),              // Witcher dice poker table (GM-opened betting game)
     merchant:          homebrew(),              // merchant actor: shops, dynamic pricing, buy/sell
+    // "Alchemy Reborn" — ported homebrew port from the old googlesheet ruleset.
+    // Components and mutagens carry per-item potency that feeds tier resolution
+    // (Normal / Enhanced / Superior) on craft outputs. Bases (configurable on
+    // alchemical / food drinks / food ingredients) contribute a DC modifier.
+    // Diagram outputs split per-tier (outputNormal/Enhanced/Superior). Oils get
+    // a 24h charge-per-hit application. Toxicity tier DoT, plus new formulae
+    // / witcher potions, ride this flag.
+    // Internal key kept as `alchemyPotency` since the headless mechanics/alchemy.mjs
+    // already references it; display label is "Alchemy Reborn" for the GM-facing
+    // settings list (lang/en.json WITCHER.HOMEBREW.alchemyPotency.*).
+    alchemyPotency:    homebrew(true,  "content"),
     // House rule, default OFF (RAW): when ON, movement may be split across the
     // turn and interleaved with actions up to total SPD; when OFF, all movement
     // must be taken before any action (acting forfeits remaining movement).
@@ -852,7 +1382,13 @@ export const HOMEBREW = Object.freeze({
     // toxicity over your cap inflicts the Overdosed status (poison-like DoT)
     // until it drops to cap or a DC 18 Endurance check purges the last potion.
     // OFF → toxicity is still tracked but never harms you (house-rule friendly).
-    rawToxicity:       homebrew(true, "rule")
+    rawToxicity:       homebrew(true, "rule"),
+    // Witchers Reborn — school-specific perk overhaul. Replaces the flat RAW
+    // witcher-school bonuses with six per-school training packs (Cat / Wolf /
+    // Bear / Griffin / Viper / Manticore), each with four passive perks + a
+    // heroic action + skill bonus. Content lives in the `witcher-reborn`
+    // compendium pack. Consumers gate on isHomebrewEnabled("witcherReborn").
+    witcherReborn:     homebrew(false, "content")
 });
 
 /* ── Active Effect editor — friendly targets + modes ──────────────────
@@ -1535,17 +2071,25 @@ export const WITCHER = Object.freeze({
     availability: AVAILABILITY,
     concealment:  CONCEALMENT,
     magic: Object.freeze({
-        schools:       SPELL_SCHOOLS,
-        forms:         SPELL_FORMS,
-        tiers:         SPELL_TIERS,
-        targets:       SPELL_TARGETS,
-        defenses:      SPELL_DEFENSES,
-        durationUnits: SPELL_DURATION_UNITS
+        schools:         SPELL_SCHOOLS,
+        forms:           SPELL_FORMS,
+        tiers:           SPELL_TIERS,
+        targets:         SPELL_TARGETS,
+        defenses:        SPELL_DEFENSES,
+        durationUnits:   SPELL_DURATION_UNITS,
+        damageElements:  SPELL_DAMAGE_ELEMENTS,
+        damageTypes:     SPELL_DAMAGE_TYPES,
+        areaShapes:      SPELL_AREA_SHAPES,
+        areaAnchors:     SPELL_AREA_ANCHORS
     }),
     hex: Object.freeze({
-        defenses:      HEX_DEFENSES,
-        durationUnits: HEX_DURATION_UNITS,
-        danger:        HEX_DANGER
+        defenses:        HEX_DEFENSES,
+        durationUnits:   HEX_DURATION_UNITS,
+        danger:          HEX_DANGER,
+        damageElements:  SPELL_DAMAGE_ELEMENTS,
+        damageTypes:     SPELL_DAMAGE_TYPES,
+        areaShapes:      SPELL_AREA_SHAPES,
+        areaAnchors:     SPELL_AREA_ANCHORS
     }),
     ritual: Object.freeze({
         // Tier + school reuse the magic catalogs (a ritual is graded by the

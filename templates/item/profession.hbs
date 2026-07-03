@@ -24,7 +24,7 @@
       <header class="wdm-prof-head">
         <img class="wdm-prof-portrait" src="{{item.img}}" alt="" />
         <div class="wdm-prof-head-titles">
-          <div class="wdm-prof-eyebrow">Profession</div>
+          <div class="wdm-prof-eyebrow">{{localize 'WITCHER.Sheet.Profession.Text.Profession'}}</div>
           <h1 class="wdm-prof-title">{{item.name}}</h1>
         </div>
       </header>
@@ -35,7 +35,7 @@
 
       {{#if source.definingSkill.skillName}}
         <section class="wdm-prof-defining-card">
-          <div class="wdm-prof-card-eyebrow">Defining Skill</div>
+          <div class="wdm-prof-card-eyebrow">{{localize 'WITCHER.Sheet.Profession.Text.DefiningSkill'}}</div>
           <div class="wdm-prof-defining-row">
             <span class="wdm-prof-defining-name">{{source.definingSkill.skillName}}</span>
             <span class="wdm-prof-stat-badge{{#unless source.definingSkill.stat}} is-na{{/unless}}">{{lookup statLabels source.definingSkill.stat}}</span>
@@ -47,7 +47,7 @@
       {{/if}}
 
       {{#if treesDisplay.length}}
-        <div class="wdm-prof-section-label">Skill Trees</div>
+        <div class="wdm-prof-section-label">{{localize 'WITCHER.Sheet.Profession.Text.SkillTrees'}}</div>
         <div class="wdm-prof-trees">
           {{#each treesDisplay}}
             <section class="wdm-prof-tree is-{{tone}}">
@@ -67,7 +67,7 @@
       {{/if}}
 
       {{#if packageGroups.length}}
-        <div class="wdm-prof-section-label">Profession Skills</div>
+        <div class="wdm-prof-section-label">{{localize 'WITCHER.Sheet.Profession.Text.ProfessionSkills'}}</div>
         <div class="wdm-prof-package">
           {{#each packageGroups}}
             <div class="wdm-prof-pkg-group">
@@ -83,7 +83,7 @@
       {{/if}}
 
       {{#if skillPackagesDisplay.length}}
-        <div class="wdm-prof-section-label">Skill Packages</div>
+        <div class="wdm-prof-section-label">{{localize 'WITCHER.Sheet.Profession.Text.SkillPackages'}}</div>
         <div class="wdm-prof-package">
           {{#each skillPackagesDisplay}}
             <div class="wdm-prof-pkg-group">
@@ -108,30 +108,30 @@
     <div class="wdm-cfg-form">
 
       <div class="wdm-cfg-head">
-        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
-        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Profession (e.g. Witcher)" />
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Profession.Hint.ProfessionEGWitcher'}}" />
       </div>
 
-      <div class="wdm-cfg-section">Medallion Icon <span class="wdm-cfg-sub">(SVG shown in the dock medallion)</span></div>
-      <label class="wdm-cfg-row"><span>Icon path</span>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Profession.Text.MedallionIcon'}} <span class="wdm-cfg-sub">(SVG shown in the dock medallion)</span></div>
+      <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Profession.Text.IconPath'}}</span>
         <input type="text" name="system.medallionIcon" value="{{source.medallionIcon}}"
                placeholder="icons/skills/trades/academics-book-study-purple.webp"
                data-action="editImage" data-edit="system.medallionIcon"
-               title="Click to pick an SVG/image" readonly />
+               title="{{localize 'WITCHER.Sheet.Profession.Tooltip.ClickToPickAnSvgImage'}}" readonly />
       </label>
 
-      <div class="wdm-cfg-section">Vigor <span class="wdm-cfg-sub">(starting allowance — Core p.38; a floor the character can't lose)</span></div>
-      <label class="wdm-cfg-row"><span>Baseline vigor</span>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Profession.Text.Vigor'}} <span class="wdm-cfg-sub">(starting allowance — Core p.38; a floor the character can't lose)</span></div>
+      <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Profession.Text.BaselineVigor'}}</span>
         <input type="number" name="system.vigor" value="{{source.vigor}}" min="0" step="1"
-               title="Per-round Vigor threshold this profession grants. 0 for non-casters." />
+               title="{{localize 'WITCHER.Sheet.Profession.Tooltip.PerRoundVigorThresholdThisProfessionGran'}}" />
       </label>
 
-      <div class="wdm-cfg-section">Defining Skill</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Profession.Text.DefiningSkill'}}</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span>Skill name</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Profession.Text.SkillName'}}</span>
           <input type="text" name="system.definingSkill.skillName" value="{{source.definingSkill.skillName}}" placeholder="e.g. Witcher Training" />
         </label>
-        <label class="wdm-cfg-row"><span>Governing stat</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Profession.Text.GoverningStat'}}</span>
           <select name="system.definingSkill.stat">
             {{#each definingStatOptions}}
               <option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>
@@ -140,19 +140,19 @@
         </label>
       </div>
       <textarea class="wdm-cfg-textarea" name="system.definingSkill.definition"
-                placeholder="What the defining skill does…">{{source.definingSkill.definition}}</textarea>
+                placeholder="{{localize 'WITCHER.Sheet.Profession.Hint.WhatTheDefiningSkillDoes'}}">{{source.definingSkill.definition}}</textarea>
 
       {{#each treesConfig}}
         <div class="wdm-cfg-section">{{label}}</div>
-        <label class="wdm-cfg-row"><span>Path name</span>
-          <input type="text" name="system.{{prefix}}.pathName" value="{{pathName}}" placeholder="Tree name" />
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Profession.Text.PathName'}}</span>
+          <input type="text" name="system.{{prefix}}.pathName" value="{{pathName}}" placeholder="{{localize 'WITCHER.Sheet.Profession.Hint.TreeName'}}" />
         </label>
         {{#each skills}}
           <div class="wdm-prof-cfg-slot">
             <label class="wdm-cfg-row"><span>Skill {{n}}</span>
-              <input type="text" name="system.{{prefix}}.{{slot}}.skillName" value="{{skillName}}" placeholder="Skill name" />
+              <input type="text" name="system.{{prefix}}.{{slot}}.skillName" value="{{skillName}}" placeholder="{{localize 'WITCHER.Sheet.Profession.Hint.SkillName'}}" />
             </label>
-            <label class="wdm-cfg-row"><span>Stat</span>
+            <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Profession.Text.Stat'}}</span>
               <select name="system.{{prefix}}.{{slot}}.stat">
                 {{#each statOptions}}
                   <option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>
@@ -160,12 +160,12 @@
               </select>
             </label>
             <textarea class="wdm-cfg-textarea" name="system.{{prefix}}.{{slot}}.definition"
-                      placeholder="What this skill does…">{{definition}}</textarea>
+                      placeholder="{{localize 'WITCHER.Sheet.Profession.Hint.WhatThisSkillDoes'}}">{{definition}}</textarea>
           </div>
         {{/each}}
       {{/each}}
 
-      <div class="wdm-cfg-section">Profession Skills <span class="wdm-cfg-sub">(the regular skills this profession grants)</span></div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Profession.Text.ProfessionSkills'}} <span class="wdm-cfg-sub">(the regular skills this profession grants)</span></div>
       {{#each skillGroups}}
         <div class="wdm-prof-pick-group">
           <div class="wdm-prof-pick-stat">{{statLabel}}</div>
@@ -187,21 +187,21 @@
       {{#each skillPackages}}
         <div class="wdm-prof-pkg" data-package="{{index}}">
           <div class="wdm-prof-pkg-head">
-            <span class="wdm-prof-pkg-word">Choose</span>
+            <span class="wdm-prof-pkg-word">{{localize 'WITCHER.Sheet.Profession.Text.Choose'}}</span>
             <button type="button" class="wdm-prof-pkg-step" data-action="stepPackageChoose"
-                    data-index="{{index}}" data-delta="-1" title="Fewer">&minus;</button>
+                    data-index="{{index}}" data-delta="-1" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.Fewer'}}">&minus;</button>
             <span class="wdm-prof-pkg-num">{{choose}}</span>
             <button type="button" class="wdm-prof-pkg-step" data-action="stepPackageChoose"
-                    data-index="{{index}}" data-delta="1" title="More">+</button>
+                    data-index="{{index}}" data-delta="1" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.More'}}">+</button>
             <span class="wdm-prof-pkg-word">of:</span>
             <button type="button" class="wdm-prof-pkg-remove" data-action="removeSkillPackage"
-                    data-index="{{index}}" title="Remove this package"><i class="fa-solid fa-trash"></i></button>
+                    data-index="{{index}}" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.RemoveThisPackage'}}"><i class="fa-solid fa-trash"></i></button>
           </div>
           <div class="wdm-prof-pkg-opts">
             {{#each options}}
               <span class="wdm-prof-pkg-chip">{{label}}<button type="button"
                     class="wdm-prof-pkg-chip-x" data-action="removePackageOption"
-                    data-index="{{../index}}" data-skill="{{key}}" title="Remove">&times;</button></span>
+                    data-index="{{../index}}" data-skill="{{key}}" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.Remove'}}">&times;</button></span>
             {{/each}}
             {{#if addable.length}}
               <select class="wdm-prof-pkg-add" data-index="{{index}}">
@@ -218,13 +218,13 @@
 
       {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
 
-      <div class="wdm-cfg-section">Description</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Profession.Text.Description'}}</div>
       <textarea class="wdm-cfg-textarea is-tall" name="system.description"
-                placeholder="The profession's flavour and role…">{{source.description}}</textarea>
+                placeholder="{{localize 'WITCHER.Sheet.Profession.Hint.TheProfessionSFlavourAndRole'}}">{{source.description}}</textarea>
 
       {{!-- School passives: transfer Active Effects applied to whoever has this
             profession (target Combat passives via the AE editor). --}}
-      <div class="wdm-cfg-section">Passives <span class="wdm-cfg-sub">(Active Effects — applied to the character)</span></div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Profession.Text.Passives'}} <span class="wdm-cfg-sub">(Active Effects — applied to the character)</span></div>
       <div class="wdm-cfg-effects">
         {{#if effects.length}}
           <ul class="wdm-effect-list">
@@ -236,14 +236,14 @@
                   <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
                     <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
                   </a>
-                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
-                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
                 </div>
               </li>
             {{/each}}
           </ul>
         {{else}}
-          <p class="wdm-empty">No passives configured.</p>
+          <p class="wdm-empty">{{localize 'WITCHER.Sheet.Profession.Text.NoPassivesConfigured'}}</p>
         {{/if}}
         <button type="button" class="wdm-add-effect" data-action="createEffect">
           <i class="fa-solid fa-plus"></i> Add Passive

@@ -22,10 +22,46 @@
 
 import {
     STRIKE_TYPES, ATTACK_MODIFIERS, ATTACK_LOCATIONS, RANGE_BRACKETS,
-    SIZE_MODIFIERS, EXTRA_ACTION, AIM_BONUS_PER_TURN, AIM_BONUS_CAP
+    SIZE_MODIFIERS, EXTRA_ACTION, AIM_BONUS_PER_TURN, AIM_BONUS_CAP,
+    DAMAGE_TYPES
 } from "../setup/config.mjs";
+import { getActiveStrikeTable } from "../data/combatExtended/actions.mjs";
+import { WEAPON_QUALITIES as WQ_CATALOG } from "../setup/config.mjs";
+import { ceTuneable, isCombatExtendedEnabled } from "../api/homebrew.mjs";
+import { guardAttackMod, guardOf } from "../data/combatExtended/guards.mjs";
+
+/* Map BOTH legacy (RAW) and Combat Extended strike keys to a canonical
+ * category, used by the combat-mod-reduction lookups below ("the Strong-
+ * Strike penalty reduction applies regardless of which ruleset names the
+ * strike"). Legacy key → same category; CE rename → same category. New
+ * CE-only categories map to themselves; an unknown key falls back to the
+ * key itself, so dialog logic still works (just with no mod reduction
+ * lookup hit). */
+const STRIKE_CATEGORY = Object.freeze({
+    normal: "normal",  single: "normal",
+    strong: "strong",  strongAttack: "strong",
+    fast:   "fast",    fastAttack: "fast",
+    joint:  "joint",   jointAttack: "joint",
+    charge: "charge",
+    pommel: "pommel",  pommelStrike: "pommel",
+    disarm: "disarm",
+    trip:   "trip",
+    feint:  "feint"
+});
+const cat = (key) => STRIKE_CATEGORY[key] ?? key;
+
+/* Pick the first strike key in the active table whose category matches —
+ * lets call sites say "the default plain swing" without caring whether
+ * the active ruleset names it "normal" (RAW) or "single" (CE). */
+const keyForCategory = (table, category) => {
+    for (const [k, _v] of Object.entries(table)) {
+        if (cat(k) === category) return k;
+    }
+    return null;
+};
 import { getActiveWeatherModifiers } from "../mechanics/weather-modifiers.mjs";
 import { isAdrenalineEnabled, adrenalineStaPerDie } from "../api/adrenaline.mjs";
+import { getActorTargets } from "../chrome/chrome/context-menu-actor.js";
 
 /** Fast Draw status: drawing + attacking the same turn is -3 to hit. */
 const FAST_DRAW_PENALTY = -3;
@@ -58,10 +94,14 @@ const esc = (s) => Handlebars.escapeExpression(String(s ?? ""));
 const L   = (k) => game.i18n.localize(k);
 const signed = (n) => `${n >= 0 ? "+" : ""}${n}`;
 
-/** Ranged-style weapon (accrues range/weather/point-blank). */
+/** Ranged-style weapon (accrues range/weather/point-blank). Only true
+ *  for bows, crossbows, siege pieces — the dedicated ranged weaponType.
+ *  Melee weapons that HAPPEN to have a range field (throwable) are NOT
+ *  ranged in the "shoot from range" sense; the throw path is handled
+ *  separately via canThrow + isThrownMode + isThrowStrike. */
 export function isRangedWeapon(weapon) {
     const wt = weapon?.system?.weaponType;
-    return wt === "ranged" || wt === "thrown";
+    return wt === "ranged";
 }
 
 /** Strong/Fast are available to melee weapons and to bows (arrow ammo);
@@ -117,7 +157,7 @@ function fastDrawPenalty(actor) {
  * is evaluated via a Roll (safe — validated to digits/operators only).
  * Returns null when it can't be resolved (so bands show without distances).
  */
-async function resolveWeaponRange(weapon, actor) {
+export async function resolveWeaponRange(weapon, actor, ammo = null) {
     let raw = String(weapon?.system?.range ?? "").trim();
     if (!raw) return null;
 
@@ -126,23 +166,41 @@ async function resolveWeaponRange(weapon, actor) {
     raw = raw.replace(/\s*(?:m|meters?|metres?)\s*$/i, "").trim();
     if (!raw) return null;
 
+    let base = null;
     const n = Number(raw);
-    if (Number.isFinite(n)) return n;
-
-    const stats = actor?.system?.stats ?? {};
-    const expr = raw
-        .replace(/x/gi, "*")
-        .replace(/[a-z]+/gi, (tok) => {
-            const v = stats[tok.toLowerCase()]?.value;
-            return v != null ? String(v) : tok;
-        });
-    if (!/^[\d+\-*/().\s]+$/.test(expr)) return null;
-    try {
-        const r = await new Roll(expr).evaluate();
-        return Number.isFinite(r.total) ? Math.round(r.total) : null;
-    } catch (_) {
-        return null;
+    if (Number.isFinite(n)) base = n;
+    else {
+        const stats = actor?.system?.stats ?? {};
+        /* Accept multiple multiplication marks: ASCII x/X, Unicode × (U+00D7),
+         * Unicode · (U+00B7), and asterisk (already valid). EO's pack ships
+         * "BODY×1" with the Unicode × so the ASCII-x-only replace missed
+         * it — parser returned null and the auto-bracket defaulted to
+         * Close (0 mod), letting throws land with no distance penalty. */
+        const expr = raw
+            .replace(/[x×·]/gi, "*")
+            .replace(/[a-z]+/gi, (tok) => {
+                const v = stats[tok.toLowerCase()]?.value;
+                return v != null ? String(v) : tok;
+            });
+        if (!/^[\d+\-*/().\s]+$/.test(expr)) return null;
+        try {
+            const r = await new Roll(expr).evaluate();
+            base = Number.isFinite(r.total) ? r.total : null;
+        } catch (_) {
+            return null;
+        }
     }
+    if (base == null) return null;
+
+    /* Ammo range modifier qualities (EO p.13 etc.):
+     *   improvedRange → ×1.5, reducedRange → ×0.5
+     * Both stack if a hypothetical ammo carried both, which would resolve
+     * to ×0.75 — RAW doesn't address that case, fine to multiply through. */
+    const ammoQs = ammo ? (ammo.system?.qualities ?? []) : [];
+    if (ammoQs.includes("improvedRange")) base *= 1.5;
+    if (ammoQs.includes("reducedRange"))  base *= 0.5;
+
+    return Math.round(base);
 }
 
 /** Label one range band with its real reach for this weapon. */
@@ -158,17 +216,30 @@ function buildContent(ctx) {
     const { weapon, offhandChoices, aimMod, weather, baseRange, fastDraw, forcedExtra, usesAmmo, ammoChoices, selectedAmmoId, aimRank, adrenaline, canFullRound } = ctx;
     const { ranged, variants, melee, aimBonus } = modeView(ctx);
     const cm = ctx.actor?.system?.combatMods ?? {};
+    /* Read the active strike table once. When Combat Extended is OFF this
+     * is STRIKE_TYPES verbatim (legacy keys); ON, it's the CE actions
+     * reshaped to the STRIKE_TYPES contract. Storing it on ctx so collect
+     * / refresh below can reuse it without re-resolving the setting. */
+    const STRIKE_TABLE = getActiveStrikeTable(STRIKE_TYPES);
+    ctx._strikeTable = STRIKE_TABLE;
 
     // Strike-type options. Basic strikes (normal/strong/fast) honour `variants`
     // (crossbows are normal-only). The Special Attacks are melee-only and live
     // under their own optgroup. Bows default to a Fast strike (two arrows);
     // everything else defaults to Normal.
-    const defaultStrike = (usesAmmo && variants) ? "fast" : "normal";
+    const NORMAL_KEY = keyForCategory(STRIKE_TABLE, "normal") ?? "normal";
+    const FAST_KEY   = keyForCategory(STRIKE_TABLE, "fast")   ?? "fast";
+    /* Thrown mode: default the strike to "throw" so the Throwing bonus
+     * fires on submit. Computed after the canThrow gate below so we don't
+     * read it before its definition — placeholder set here and overridden
+     * once isThrownMode is known. */
+    let defaultStrike = (usesAmmo && variants) ? FAST_KEY : NORMAL_KEY;
     const strikeOption = ([key, s]) => {
         const bits = [];
-        const stRed = key === "strong" ? cm.strongStrikePenaltyReduction
-                    : key === "charge" ? cm.chargePenaltyReduction
-                    : key === "joint"  ? cm.offhandPenaltyReduction : 0;
+        const category = cat(key);
+        const stRed = category === "strong" ? cm.strongStrikePenaltyReduction
+                    : category === "charge" ? cm.chargePenaltyReduction
+                    : category === "joint"  ? cm.offhandPenaltyReduction : 0;
         const toHit = s.toHit < 0 ? Math.min(0, s.toHit + (Number(stRed) || 0)) : s.toHit;
         if (toHit)           bits.push(signed(toHit));
         if (s.noDamage)      bits.push("no dmg");
@@ -184,14 +255,137 @@ function buildContent(ctx) {
         const sel  = (key === defaultStrike && !blocked) ? " selected" : "";
         return `<option value="${key}"${sel}${blocked ? " disabled" : ""}>${esc(L(s.labelKey))}${esc(tail)}</option>`;
     };
-    const entries = Object.entries(STRIKE_TYPES);
-    const basicOpts = entries
-        .filter(([key, s]) => !s.meleeOnly && (variants || key === "normal"))
-        .map(strikeOption).join("");
+    /* Prereq gate for CE-only strikes (Pin / Chokehold / Ride require
+     * an active grapple state on the attacker; Escape requires any
+     * hold). Returns true when the strike CAN be picked. Strikes
+     * without a prereq pass through. Status keys checked: "grappled"
+     * (RAW + CE) for grappling, plus pinned / suffocation for anyHold. */
+    const passesPrereq = (s) => {
+        const need = s?.prereq;
+        if (!need) return true;
+        const have = ctx.actor?.statuses ?? new Set();
+        if (need === "grappling") return have.has?.("grappled");
+        if (need === "anyHold")   return have.has?.("grappled") || have.has?.("pinned") || have.has?.("suffocation");
+        return true;
+    };
+    /* Hefty (house variant): a Hefty weapon can't perform a Fast Strike —
+     * the option is removed from the picker entirely. The player uses
+     * Single Attack (RAW Normal) for one-swing, or Strong for one-swing-
+     * at-bonus-damage. This is a clean filter rather than a clamp. */
+    const weaponQualities = weapon?.system?.effective?.qualities ?? weapon?.system?.qualities ?? [];
+    const heftyOnWeapon = weaponQualities.some(q => WQ_CATALOG[q]?.heftyBlocksFastStrike === true);
+    /* Gate: the heftyBlocksFastStrike tuneable defaults ON (house variant
+     * — filter Fast Strike out). When OFF, the picker still offers Fast
+     * Strike on a Hefty weapon, and weaponAttackMixin clamps it to 1
+     * attack as the EO RAW fallback. */
+    const heftyBlocksFastOn = ceTuneable("heftyBlocksFastStrike") !== false;
+    const passesHefty = (key) => {
+        if (!(heftyOnWeapon && heftyBlocksFastOn)) return true;
+        return cat(key) !== "fast";    /* hides "fast" + "fastAttack" */
+    };
+    const entries = Object.entries(STRIKE_TABLE);
+    /* Throw strike gate:
+     *
+     *   - Combat Extended ON: ANY weapon with a range value can be
+     *     thrown (one-handed OR two-handed — user spec: "every weapon
+     *     in combat extended can be throwing"). The `throwing` quality
+     *     still grants a per-weapon accuracy bonus on top; it isn't a
+     *     gate.
+     *   - RAW (CE off): gated to one-handed weapons with a non-empty
+     *     range. The `range` field IS the throwability marker — the
+     *     legacy `weaponType: "thrown"` distinction was collapsed into
+     *     "melee with a range" (see WeaponData.migrateData).
+     *
+     * The throw itself always rolls Athletics (see weaponAttackMixin's
+     * throwProf branch), and the chat card surfaces the weapon's range
+     * so the defender knows the arc. */
+    const wHands = weapon?.system?.hands ?? "one";
+    const wRange = String(weapon?.system?.range ?? "").trim();
+    /* `N/A` (case-insensitive) is the pack convention for "no throwable
+     * range" — a bullwhip, bagh nakh, or medical syringe carries the
+     * field so the sheet renders cleanly but shouldn't unlock the throw
+     * strike. `--` and `-` are alternative sentinels seen in the wild. */
+    const hasRealRange = wRange.length > 0
+        && !/^n\/?a$/i.test(wRange)
+        && wRange !== "-"
+        && wRange !== "--";
+    let ceOn = false;
+    try { ceOn = isCombatExtendedEnabled(); } catch (_) { /* settings not ready */ }
+    /* Throw eligibility.
+     *   CE  : ANY melee weapon (any hand count) with a non-empty Range
+     *         value can be thrown. Two-handed weapons included — user
+     *         spec: "every weapon in combat extended can be throwing".
+     *   RAW : gated to one-handed weapons that are natively thrown or
+     *         carry the Throwing quality (preserves core-rules behavior). */
+    const canThrow = ceOn
+        ? hasRealRange
+        : (wHands === "one" && hasRealRange);
+    /* In THROWN mode (active mode on the dialog), the only strike is Throw —
+     * the player committed to releasing the weapon. Surface it as the basic
+     * (and only) option so the dialog doesn't show a hollow "Normal" pick
+     * that silently skips the Throwing bonus. */
+    const isThrownMode = canThrow
+        && (ctx.mode === "thrown" || ctx.weapon?.system?.slot === "quick");
+    if (isThrownMode) defaultStrike = "throw";
+    /* Charging status locks the strike picker to Strong only. The
+     * dock's Charge full-round action applies the `charging` status;
+     * weaponAttack detects it and translates the Strong strike →
+     * Charge strike post-dialog so the fullRound + prone-on-block
+     * rider machinery fires. Under CE the active strike table renames
+     * keys (`strong` → `strongAttack`, `charge` → CE's own charge
+     * entry), so we resolve the KEY via keyForCategory rather than
+     * hardcoding — the same category ("strong") maps to whichever
+     * key the active ruleset uses. */
+    const _isCharging = !!ctx.actor?.statuses?.has?.("charging");
+    const STRONG_KEY = keyForCategory(STRIKE_TABLE, "strong") ?? "strong";
+    let basicOpts;
+    if (isThrownMode) {
+        basicOpts = entries
+            .filter(([key]) => key === "throw")
+            .map(strikeOption).join("");
+    } else if (_isCharging) {
+        basicOpts = entries
+            .filter(([key]) => key === STRONG_KEY)
+            .map(strikeOption).join("");
+        if (basicOpts) defaultStrike = STRONG_KEY;
+    } else {
+        basicOpts = entries
+            /* Charge is a full-round action driven from the dock's
+             * Full Round menu (Dock → Full Round → Charge), not a
+             * per-attack strike variant. Excluding it from the
+             * attack-dialog picker so a player can't accidentally
+             * pick it here and end up in an inconsistent state
+             * (charge grants SPD×3 movement, which only the
+             * full-round flow sets). The strike entry itself stays
+             * in STRIKE_TYPES because `openChargeFlow` passes
+             * `strike: "charge"` when it opens this dialog. */
+            .filter(([key, s]) => !s.meleeOnly && (variants || cat(key) === "normal") && passesPrereq(s) && passesHefty(key) && key !== "charge")
+            .map(strikeOption).join("");
+    }
     // Off-hand strikes (Joint Attack) only appear when a valid off-hand weapon
     // exists; with a two-handed main weapon there are none, so joint is hidden.
-    const specialOpts = melee
-        ? entries.filter(([, s]) => s.meleeOnly && (!s.offhand || offhandChoices.length))
+    // Monster mode also excludes Feint per RAW (Sage's Answers — monsters
+    // can't fast/strong/joint/feint).
+    const excluded = ctx.excludedSpecials ?? null;
+    /* Charging locks us to Strong only — no special attacks either. */
+    const specialOpts = (melee && !isThrownMode && !_isCharging)
+        ? entries.filter(([key, s]) =>
+                s.meleeOnly
+                && (!s.offhand || offhandChoices.length)
+                && !(excluded && excluded.has(key))
+                && passesPrereq(s)
+                && passesHefty(key)
+                /* Throw is its own basic strike in thrown mode (see
+                 * isThrownMode → basicOpts above). Don't ALSO put it in
+                 * the melee specials menu — the dialog UI in melee mode
+                 * doesn't render range brackets, so a player who picked
+                 * Throw here would throw without range/weather applied.
+                 * Players who want to throw must flip the mode toggle. */
+                && key !== "throw"
+                /* Charge lives in the Full Round menu — see filter
+                 * comment on basicOpts above. Exclude here too so it
+                 * doesn't appear in the Special Attacks optgroup. */
+                && key !== "charge")
             .map(strikeOption).join("")
         : "";
     const strikeOpts = specialOpts
@@ -209,12 +403,62 @@ function buildContent(ctx) {
             <select name="offhand">${offhandOpts}</select>
         </div>` : "";
 
+    /* Target-assignment picker.  Shown when at least one actor is
+     * currently targeted (canvas or tracker).  The player MUST assign
+     * each shot to one specific target — Strong Strike / Trip / Feint
+     * / Joint / Normal all resolve as one attack against one opponent,
+     * so they get a single dropdown.  Fast Strike gets a second
+     * dropdown that reveals itself in `refresh()` — the two shots may
+     * hit the same target or two different targets.  Targets left
+     * unassigned (Fast shot 2 with no selection) simply don't get
+     * struck; the mixin `continue`s that iteration. */
+    const targetPool = Array.isArray(ctx.targetPool) ? ctx.targetPool : [];
+    const targetOpts = targetPool
+        .map(a => `<option value="${esc(a.uuid)}">${esc(a.name)}</option>`).join("");
+    const targetBlock = targetPool.length ? `
+        <div class="wdm-atk-targets-block" data-targets-block>
+            <div class="wdm-atk-section-label">${esc(L("WITCHER.Attack.AssignTargets") || "Assign Target(s)")}</div>
+            <div class="wdm-atk-grid">
+                <div class="wdm-atk-field" data-target-row="1">
+                    <label data-target-shot-label>${esc(L("WITCHER.Attack.TargetShot1") || "Target")}</label>
+                    <select name="target1">${targetOpts}</select>
+                </div>
+                <div class="wdm-atk-field" data-target-row="2" style="display:none;">
+                    <label>${esc(L("WITCHER.Attack.TargetShot2") || "Second Shot")}</label>
+                    <select name="target2">${targetOpts}</select>
+                </div>
+            </div>
+        </div>` : "";
+
     // Adrenaline dice field — each die adds +1d6 to the damage roll and costs
     // 10 STA when the attack is rolled. Only shown when the actor has a pool.
     const adrenalineField = adrenaline > 0 ? `
         <div class="wdm-atk-field">
             <label>${esc(L("WITCHER.Attack.AdrenalineDice"))}</label>
             <input type="number" name="adrenaline" step="1" min="0" max="${adrenaline}" value="0" data-adr-max="${adrenaline}" />
+        </div>` : "";
+
+    /* Damage-type picker. A weapon can list multiple damageTypes (a
+     * spear does slashing OR piercing, a flaming sword does slashing OR
+     * fire). The player picks ONE type per swing — radio buttons, not
+     * checkboxes — so a hit lands as a single damage type against the
+     * target's resistances/weaknesses. Bows/crossbows draw their damage
+     * type from the loaded ammo (weapon has none), so the picker is
+     * hidden for them. Only shown when there are ≥ 2 choices; a
+     * single-type weapon needs no picker. */
+    const weaponDamageTypes = (weapon?.system?.effective?.damageTypes ?? weapon?.system?.damageTypes ?? [])
+        .filter(t => typeof t === "string" && t.length > 0);
+    const showDamageTypePicker = !weapon?.system?.requiresAmmo && weaponDamageTypes.length >= 2;
+    const damageTypeBlock = showDamageTypePicker ? `
+        <div class="wdm-atk-dmgtype-block" data-dmgtype-block>
+            <div class="wdm-atk-section-label">${esc(L("WITCHER.Attack.DamageTypes"))}</div>
+            <div class="wdm-atk-checks">${
+                weaponDamageTypes.map((t, i) => `
+                    <label class="wdm-atk-check">
+                        <input type="radio" name="dmgtype" value="${esc(t)}"${i === 0 ? " checked" : ""} />
+                        <span>${esc(L(DAMAGE_TYPES[t] ?? t))}</span>
+                    </label>`).join("")
+            }</div>
         </div>` : "";
 
     // Unaware / inanimate target: the shot is resolved against a flat range DC
@@ -267,8 +511,25 @@ function buildContent(ctx) {
         `<option value="${s.value}"${s.value === "medium" ? " selected" : ""}>${esc(L(s.labelKey))}${s.mod ? ` (${signed(s.mod)})` : ""}</option>`
     ).join("");
 
-    // Range bracket (ranged/thrown only). Each band is labelled with its real
-    // reach for this weapon, derived from the listed range.
+    /* Range bracket (ranged/thrown only). Each band is labelled with its
+     * real reach for this weapon, derived from the listed range.
+     *
+     * Auto-select the bracket that matches the target's actual token
+     * distance when a target + measurable range are both present. The
+     * player can still change it — this is a convenience default, not
+     * a lock. Falls back to `close` when we can't measure (theater of
+     * mind, no target set, or `baseRange` unresolved). */
+    const targetDistanceM = Number(ctx.targetDistanceMeters);
+    const autoBracketKey = (Number.isFinite(targetDistanceM) && Number.isFinite(baseRange) && baseRange > 0)
+        ? (() => {
+            if (targetDistanceM <= 0.5) return "pointBlank";
+            for (const b of RANGE_BRACKETS) {
+                if (b.frac == null) continue;
+                if (targetDistanceM <= baseRange * b.frac) return b.value;
+            }
+            return "extreme";
+          })()
+        : "close";
     const rangeBlock = ranged ? `
         <div class="wdm-atk-field">
             <label>${esc(L("WITCHER.Attack.RangeBracket"))}</label>
@@ -277,7 +538,7 @@ function buildContent(ctx) {
                     const dist = rangeDistanceLabel(r, baseRange);
                     const distTxt = dist ? ` — ${dist}` : "";
                     const modTxt  = r.mod ? ` (${signed(r.mod)})` : "";
-                    return `<option value="${r.value}"${r.value === "close" ? " selected" : ""}>${esc(L(r.labelKey))}${esc(distTxt)}${esc(modTxt)}</option>`;
+                    return `<option value="${r.value}"${r.value === autoBracketKey ? " selected" : ""}>${esc(L(r.labelKey))}${esc(distTxt)}${esc(modTxt)}</option>`;
                 }).join("")}
             </select>
         </div>` : "";
@@ -336,19 +597,46 @@ function buildContent(ctx) {
 
     // Mode toggle (dual-mode thrown weapons only): throw it or strike in hand.
     // Changing it re-renders the card (see openAttackDialog render hook).
+    // Melee is listed FIRST so a browser that ignores the `selected` attribute
+    // (or the user popping the dropdown quickly) defaults to the in-hand swing
+    // for a melee weapon — throwing your sword should be the deliberate pick,
+    // not the accidental one.
+    /* Hover tooltip explains the throw-eligibility rule so the player
+     * knows WHY the Thrown option is available (or isn't). Under the new
+     * schema throwability = the weapon's Range field. CE lets any weapon
+     * with a range be thrown (2h included); RAW only allows 1h. */
+    const modeTip = ctx.dualMode
+        ? "Throw eligibility: any weapon with a Range value (Combat Extended) or a one-handed weapon with a Range value (RAW)."
+        : "";
     const modeField = ctx.dualMode ? `
-            <div class="wdm-atk-field">
+            <div class="wdm-atk-field" title="${esc(modeTip)}">
                 <label>${esc(L("WITCHER.Attack.Mode"))}</label>
                 <select name="mode">
-                    <option value="thrown"${ctx.mode === "thrown" ? " selected" : ""}>${esc(L("WITCHER.Attack.ModeThrown"))}</option>
                     <option value="melee"${ctx.mode === "melee" ? " selected" : ""}>${esc(L("WITCHER.Attack.ModeMelee"))}</option>
+                    <option value="thrown"${ctx.mode === "thrown" ? " selected" : ""}>${esc(L("WITCHER.Attack.ModeThrown"))}</option>
                 </select>
+            </div>` : "";
+    /* Raw weapon-range display in thrown mode. Users want to see the
+     * exact "Range" string from the weapon sheet (e.g. "10/20/30" or
+     * "BODY×2") in the dialog when they've flipped to Thrown, without
+     * having to interpret the parsed range brackets below. */
+    const rawWeaponRange = String(ctx.weapon?.system?.range ?? "").trim();
+    const isThrownModeView = ctx.dualMode && ctx.mode === "thrown";
+    /* Use the weapon-sheet Range i18n key (which exists in every locale)
+     * with a plain "Range" fallback in case of a locale miss — the
+     * previous `WITCHER.Attack.Range` key wasn't defined, so the label
+     * rendered as the raw key text. */
+    const weaponRangeField = (isThrownModeView && rawWeaponRange) ? `
+            <div class="wdm-atk-field">
+                <label>${esc(L("WITCHER.Sheet.Weapon.Text.Range") || "Range")}</label>
+                <div class="wdm-atk-readonly">${esc(rawWeaponRange)}</div>
             </div>` : "";
 
     return `
     <div class="wdm-atk" data-ranged="${ranged ? "1" : "0"}">
         <div class="wdm-atk-grid">
             ${modeField}
+            ${weaponRangeField}
             <div class="wdm-atk-field">
                 <label>${esc(L("WITCHER.Attack.Strike"))}</label>
                 <select name="strike">${strikeOpts}</select>
@@ -370,6 +658,7 @@ function buildContent(ctx) {
         </div>
 
         <div class="wdm-atk-note" data-strike-note></div>
+        ${targetBlock}
         ${offhandBlock}
         ${ranged ? inanimateBlock : ""}
         ${extraActionBlock}
@@ -381,6 +670,7 @@ function buildContent(ctx) {
             <div class="wdm-atk-checks">${sitRows}</div>
         </div>
 
+        ${damageTypeBlock}
         ${fastDrawBlock}
         ${weatherBlock}
 
@@ -408,8 +698,14 @@ function collect(root, ctx) {
     }
     const { ranged, base } = modeView(ctx);
 
-    const strikeKey = q('[name="strike"]')?.value || "normal";
-    const strike    = STRIKE_TYPES[strikeKey] ?? STRIKE_TYPES.normal;
+    /* Active strike table — built once in buildContent and stashed on
+     * ctx, so the dialog reads from a single resolved snapshot whether
+     * CE is on or off. Falls back to STRIKE_TYPES if some earlier path
+     * hasn't run buildContent (defensive). */
+    const STRIKE_TABLE = ctx._strikeTable ?? STRIKE_TYPES;
+    const NORMAL_KEY = keyForCategory(STRIKE_TABLE, "normal") ?? "normal";
+    const strikeKey = q('[name="strike"]')?.value || NORMAL_KEY;
+    const strike    = STRIKE_TABLE[strikeKey] ?? STRIKE_TABLE[NORMAL_KEY] ?? STRIKE_TYPES.normal;
 
     // Off-hand weapon for a Joint Attack (Dual Wielding, Core p.163): the second
     // attack is rolled with this weapon. Only read when the strike requires it.
@@ -445,11 +741,17 @@ function collect(root, ctx) {
     const adrenalineDice = Math.min(adrPool, Math.max(0, Math.round(Number(q('[name="adrenaline"]')?.value) || 0)));
 
     // Location — switched off (no called shots / damage multiplier) against an
-    // inanimate target.
+    // inanimate target. Strikes that carry `fixedLoc` (e.g. Trip → leftLeg)
+    // override the dialog picker: RAW Trip is a leg strike by definition,
+    // not a called shot the player chooses.
     const locVal = q('[name="location"]')?.value || "random:human";
     let location;
     if (inanimate) {
         location = { mode: "none", penalty: 0, mult: 1, label: "" };
+    } else if (strike?.fixedLoc && ATTACK_LOCATIONS[strike.fixedLoc]) {
+        const key = strike.fixedLoc;
+        const loc = ATTACK_LOCATIONS[key];
+        location = { mode: "specific", key, penalty: (loc?.penalty ?? 0), mult: loc?.mult ?? 1, label: L(loc?.labelKey ?? key) };
     } else if (locVal.startsWith("random:")) {
         location = { mode: "random", kind: locVal.split(":")[1] || "human", penalty: 0, mult: null, label: L(locVal.endsWith("monster") ? "WITCHER.Attack.LocRandomMonster" : "WITCHER.Attack.LocRandomHuman") };
     } else {
@@ -494,9 +796,10 @@ function collect(root, ctx) {
     // AEs on the profession/gear; this folds them into the live total + roll.
     const cm = ctx.actor?.system?.combatMods ?? {};
     const reduce = (pen, amt) => pen < 0 ? Math.min(0, pen + (Number(amt) || 0)) : pen;
-    const strikeRed = strikeKey === "strong" ? cm.strongStrikePenaltyReduction
-                    : strikeKey === "charge" ? cm.chargePenaltyReduction
-                    : strikeKey === "joint"  ? cm.offhandPenaltyReduction
+    const strikeCat = cat(strikeKey);
+    const strikeRed = strikeCat === "strong" ? cm.strongStrikePenaltyReduction
+                    : strikeCat === "charge" ? cm.chargePenaltyReduction
+                    : strikeCat === "joint"  ? cm.offhandPenaltyReduction
                     : 0;
 
     if (strike.toHit) add(L(strike.labelKey), reduce(strike.toHit, strikeRed));
@@ -510,7 +813,64 @@ function collect(root, ctx) {
     if (range.mod) add(range.label, range.mod);
     if (fastDraw) add(L("WITCHER.Attack.FastDraw"), reduce(fastDraw, cm.fastDrawPenaltyReduction));
     if (ranged && weather.total) add(L("WITCHER.Attack.Weather"), weather.total);
+    /* Combat Extended guard contribution to the attack — Closed = −2,
+     * Fool's = +2, Warding / Balanced = 0. Rolled into the dialog's
+     * running total + chip breakdown so the player can see it BEFORE
+     * committing to the shot; the resulting modTotal carries the
+     * contribution into the roll formula. When CE / the guards
+     * subsystem is off, `guardAttackMod` returns 0 and this is a
+     * no-op. Live at dialog scope so switching guards mid-dialog isn't
+     * a supported edge case (guards change out of the dialog, then you
+     * open it). */
+    const guardAtk = guardAttackMod(ctx.actor);
+    if (guardAtk) add(`Guard (${guardOf(ctx.actor).key})`, guardAtk);
+
+    /* Witchers Reborn — feint follow-up preview. A successful feint
+     * (RAW or CE — both go through the same `feintAdvantage` flag)
+     * stamps the feinted target's UUID on the attacker; if the
+     * currently targeted actor matches, surface the +3 base + any
+     * Pirouette add-on as their own chips so the player sees the
+     * payoff BEFORE committing to the shot. The flag never applies
+     * to the feint strike itself — only to the follow-up. */
+    if (strikeKey !== "feint") {
+        const SYS = "witcher-ttrpg-death-march";
+        const feintAdvTargetUuid = ctx.actor?.getFlag?.(SYS, "feintAdvantage") || null;
+        if (feintAdvTargetUuid) {
+            const target = [...(game.user?.targets ?? [])][0]?.actor;
+            if (target && target.uuid === feintAdvTargetUuid) {
+                add("Feint", 3);
+                const pir = Number(ctx.actor?.getFlag?.(SYS, "wr.pirouetteBonus")) || 0;
+                if (pir > 0) add("Pirouette", pir);
+            }
+        }
+    }
+
     if (otherMod) add(L("WITCHER.Attack.OtherMod"), otherMod);
+
+    /* Damage-type picker: one type per swing (radio). No picker rendered
+     * (single-type weapon or bow/crossbow) → override stays null so
+     * downstream code falls back to the weapon's full damage-type list. */
+    const pickedDmgType = root.querySelector('input[name="dmgtype"]:checked')?.value || null;
+    const damageTypesOverride = pickedDmgType ? [pickedDmgType] : null;
+
+    /* Per-shot target assignment.  Null when no picker was rendered
+     * (target pool empty) → mixin falls back to its single-defender
+     * resolution.  Non-null → array of UUIDs where index i is the
+     * assigned target for shot i; Fast Strike carries up to 2, every
+     * other strike carries 1. Empty string entries mean "unassigned"
+     * (Fast shot 2 with no picked target) — the mixin skips that shot. */
+    let targetUuids = null;
+    const targetsBlock = root.querySelector("[data-targets-block]");
+    if (targetsBlock) {
+        const t1 = q('[name="target1"]')?.value || "";
+        const isFast = cat(strikeKey) === "fast";
+        if (isFast) {
+            const t2 = q('[name="target2"]')?.value || "";
+            targetUuids = [t1, t2].filter(Boolean);
+        } else {
+            targetUuids = t1 ? [t1] : [];
+        }
+    }
 
     return {
         mode: ctx.dualMode ? ctx.mode : null,
@@ -518,9 +878,11 @@ function collect(root, ctx) {
         extraAction, aimBonus, aimRank: ctx.aimRank ?? 0,
         location, range, size, situational, otherMod, fastDraw, ammo,
         inanimate, targetDC,
+        damageTypes: damageTypesOverride,
         weather: ranged ? weather : { total: 0, parts: [] },
         chips, modTotal,
-        grandMod: (base?.total ?? 0) + modTotal
+        grandMod: (base?.total ?? 0) + modTotal,
+        targetUuids
     };
 }
 
@@ -545,34 +907,55 @@ function refresh(root, ctx) {
 
     // Off-hand weapon picker: shown only for a strike that requires one (Joint
     // Attack). Hidden for every other strike.
-    const strikeKey = root.querySelector('[name="strike"]')?.value || "normal";
+    const STRIKE_TABLE = ctx._strikeTable ?? STRIKE_TYPES;
+    const NORMAL_KEY = keyForCategory(STRIKE_TABLE, "normal") ?? "normal";
+    const strikeKey = root.querySelector('[name="strike"]')?.value || NORMAL_KEY;
 
-    // Info box: describe the selected strike (every STRIKE_TYPES entry carries a
-    // `note`). Updated here because the card isn't rebuilt on a strike change.
+    // Info box: describe the selected strike (every strike-table entry
+    // carries a `note`). Updated here because the card isn't rebuilt on a
+    // strike change.
     const noteEl = root.querySelector("[data-strike-note]");
     if (noteEl) {
-        const noteKey = STRIKE_TYPES[strikeKey]?.note;
+        const noteKey = STRIKE_TABLE[strikeKey]?.note;
         noteEl.innerHTML = noteKey ? `<i class="fa-solid fa-circle-info"></i> ${esc(L(noteKey))}` : "";
         noteEl.style.display = noteKey ? "" : "none";
     }
 
-    const needsOffhand = !!STRIKE_TYPES[strikeKey]?.offhand;
+    const needsOffhand = !!STRIKE_TABLE[strikeKey]?.offhand;
     const offhandField = root.querySelector("[data-offhand-field]");
     if (offhandField) offhandField.style.display = needsOffhand ? "" : "none";
 
     // A Fast strike looses two arrows — reveal the second ammo picker and
-    // relabel the first as "1st shot".
-    const fast = (root.querySelector('[name="strike"]')?.value || "normal") === "fast";
+    // relabel the first as "1st shot". Category-based so RAW "fast" and
+    // CE "fastAttack" both trigger the second slot.
+    const fast = cat(strikeKey) === "fast";
     const ammo2 = root.querySelector("[data-ammo2]");
     if (ammo2) ammo2.style.display = fast ? "" : "none";
     const ammo1Label = root.querySelector("[data-ammo1-label]");
     if (ammo1Label) ammo1Label.textContent = L(fast ? "WITCHER.Attack.AmmoShot1" : "WITCHER.Attack.Ammo");
 
+    /* Target picker — Fast is the only strike where the second shot can
+     * hit a different target than the first. Every other strike (Normal,
+     * Strong, Trip, Feint, Joint) resolves as a single attack against
+     * one target, so shot 2 stays hidden and shot 1's label drops the
+     * "1st" qualifier. Joint's second roll still lands on the first-
+     * shot's target — the mixin's per-shot loop reuses index 0 for
+     * shot 1's UUID when the strike carries `offhand`. */
+    const targetRow2 = root.querySelector('[data-target-row="2"]');
+    if (targetRow2) targetRow2.style.display = fast ? "" : "none";
+    const targetShotLabel = root.querySelector("[data-target-shot-label]");
+    if (targetShotLabel) targetShotLabel.textContent = fast
+        ? (L("WITCHER.Attack.TargetShot1") || "First Shot")
+        : (L("WITCHER.Attack.Target") || "Target");
+
     // Inanimate target: hide the defender-only sections, reveal the DC list,
     // and highlight the band whose DC this shot is rolling against.
     const inanimate = !!root.querySelector('[name="inanimate"]')?.checked;
     const show = (sel, on) => { const el = root.querySelector(sel); if (el) el.style.display = on ? "" : "none"; };
-    show("[data-loc-field]", !inanimate);
+    // Strikes with fixedLoc (e.g. RAW Trip → leftLeg) force the location —
+    // hide the picker so the player can't override the strike's rule.
+    const fixedLocStrike = !!STRIKE_TABLE[strikeKey]?.fixedLoc;
+    show("[data-loc-field]", !inanimate && !fixedLocStrike);
     show("[data-sit-block]", !inanimate);
     show("[data-dc-list]", inanimate);
     // Size only matters on the ranged target-DC path (unaware/inanimate) — hide
@@ -603,13 +986,65 @@ function refresh(root, ctx) {
  * @returns {Promise<object|null>}  the collect() result, or null on cancel
  */
 export async function openAttackDialog(weapon, actor, opts = {}) {
-    const ranged    = isRangedWeapon(weapon);
-    const variants  = allowsStrikeVariants(weapon);
-    const melee     = weapon?.system?.weaponType === "melee";
-    // A thrown weapon with a melee skill can be struck in hand OR thrown; the
-    // card offers a mode toggle. Default to thrown (its primary use).
-    const dualMode  = weapon?.system?.weaponType === "thrown" && !!weapon?.system?.meleeSkillKey;
-    const mode      = "thrown";
+    /* Monster mode (RAW Core p.153 — Sage's Answers): monsters can't use
+     * Strong / Fast / Joint / Feint, but they CAN still do the other
+     * special attacks (Charge, Pommel, Disarm, Trip) and the standard
+     * Normal swing. The system also doesn't model range for monster
+     * ranged attacks, so range/weather/ammo controls are stripped.
+     *   variants = false   → strips Strong/Fast from the basic-strike list
+     *   melee    = weapon's natural value → keeps the Special Attacks
+     *                                       optgroup populated
+     *   ranged   = false   → strips range bracket + weather + ammo picker
+     *   offhandChoices = [] (below) → strips Joint Attack (gated on it)
+     *   excludedSpecials  → drops Pommel Strike for monsters (no pommel
+     *                       on a claw or bite). Feint stays — a wraith
+     *                       can fake a high swing as much as a fencer.
+     * The modifier panel + target row stay. */
+    const monsterMode      = !!opts.monsterMode;
+    const excludedSpecials = monsterMode ? new Set(["pommel"]) : null;
+    /* Quick-slot equip = the actor's main hand is busy with a 2H weapon
+     * or a different primary; the quick item is drawn ONLY to throw. No
+     * melee strikes; mode is forced to thrown. */
+    const inQuickSlot = weapon?.system?.slot === "quick";
+    /* Dual-mode (Melee | Throw toggle): a melee weapon that has a range
+     * value is throwable — the range field IS the throwability marker
+     * under the new schema. Examples:
+     *   - Iron Sword (range BODY×2)                 → dual-mode, no throw bonus
+     *   - Dagger (range + throwing quality)         → dual-mode + throw bonus
+     *   - Dart (was weaponType=thrown, now melee)   → dual-mode
+     *   - Bow / Crossbow (weaponType=ranged)        → NOT dual-mode
+     *   - Plain sword with no range                 → NOT dual-mode */
+    const wType     = weapon?.system?.weaponType;
+    /* Mirror the canThrow logic from buildContent (kept inline to avoid a
+     * circular dep — buildContent needs the same answer derived from ctx).
+     * CE: any weapon with a Range is throwable (2H included per user
+     * spec). RAW: one-handed with a Range. Ranged weapons (bows,
+     * crossbows) are never dual-mode — they have their own shot flow. */
+    let setupCeOn = false;
+    try { setupCeOn = isCombatExtendedEnabled(); } catch (_) { /* fall through */ }
+    const wHandsSetup = weapon?.system?.hands ?? "one";
+    const wRangeSetup = String(weapon?.system?.range ?? "").trim();
+    const setupCanThrow = setupCeOn
+        ? wRangeSetup.length > 0
+        : (wHandsSetup === "one" && wRangeSetup.length > 0);
+    const rawDualMode = setupCanThrow && wType === "melee";
+    /* Quick-slot collapses dual-mode → throw-only. */
+    const dualMode = monsterMode ? false : (rawDualMode && !inQuickSlot);
+    /* Default mode picks the weapon's primary use:
+     *   - Quick slot → always thrown (hands are busy with the main weapon)
+     *   - Dual-mode weapon (melee with a range) → ALWAYS melee — melee
+     *     is the standard use, throwing is the deliberate one-off act.
+     *   - Everything else → melee. */
+    const mode = inQuickSlot ? "thrown"
+                : dualMode   ? "melee"
+                :              "melee";
+    const ranged    = monsterMode ? false
+                     : inQuickSlot ? true
+                     : isRangedWeapon(weapon) || (dualMode && mode === "thrown");
+    const variants  = monsterMode ? false
+                     : inQuickSlot ? false   /* thrown shots are normal-only */
+                     : allowsStrikeVariants(weapon) || (dualMode && mode === "melee");
+    const melee     = (wType === "melee" && !inQuickSlot);
 
     // Off-hand candidates for a Joint Attack: the actor's OTHER EQUIPPED
     // one-handed melee or thrown weapons (a quick throwing axe equipped in the
@@ -623,18 +1058,35 @@ export async function openAttackDialog(weapon, actor, opts = {}) {
     // candidate list for it too (the joint strike is still hidden unless melee
     // mode is the active one — see specialOpts gating).
     const mainTwoHanded = weapon?.system?.hands === "two";
-    const offhandChoices = ((melee || dualMode) && !mainTwoHanded)
+    const offhandChoices = (!monsterMode && (melee || dualMode) && !mainTwoHanded)
         ? (actor?.items ?? []).filter(i =>
               i.type === "weapon" && i.id !== weapon.id
-              && (i.system?.weaponType === "melee" || i.system?.weaponType === "thrown")
+              && i.system?.weaponType === "melee"
               && i.system?.hands !== "two"
               && i.system?.equipped)
             .map(i => ({ id: i.id, name: i.name }))
         : [];
-    const aimMod    = Number(actor?.system?.derivedStats?.aimMod) || 0;
+    const aimMod    = monsterMode ? 0 : (Number(actor?.system?.derivedStats?.aimMod) || 0);
     const weather   = ranged ? weatherRangedPenalty() : { total: 0, parts: [] };
-    const baseRange = ranged ? await resolveWeaponRange(weapon, actor) : null;
-    const fastDraw  = fastDrawPenalty(actor);
+    /* Pick up the currently-loaded/selected ammo before resolving range so
+     * improvedRange/reducedRange ammo qualities scale the bracket distances
+     * the dialog displays. */
+    const loadedAmmo = weapon?.getSelectedAmmo?.()?.item ?? null;
+    /* Parse the weapon's range whenever it CAN be thrown — not just when
+     * `ranged` is already true. For a dual-mode weapon that opens in
+     * melee mode, `ranged` is false at first render but the player can
+     * flip to Thrown mid-dialog. Without this the bracket labels lose
+     * their per-distance suffix and the auto-bracket falls back to
+     * "close" because baseRange stays null. */
+    const baseRange = (ranged || setupCanThrow)
+        ? await resolveWeaponRange(weapon, actor, loadedAmmo)
+        : null;
+    /* Monsters don't fast-draw — they're never holstering a sheathed
+     * weapon. Force the penalty to 0 (the same numeric shape the regular
+     * path returns), so the fast-draw row hides cleanly via its truthy
+     * check at render time. Passing an object here was producing NaN /
+     * "[object Object]" in the to-hit total and the chip list. */
+    const fastDraw  = monsterMode ? 0 : fastDrawPenalty(actor);
     // The dock gates on hasActionSlot before opening, so if no normal action
     // remains the only slot left is the extra action — forced, with its -3.
     const forcedExtra = actor?.nextActionSlot === "extra";
@@ -642,7 +1094,7 @@ export async function openAttackDialog(weapon, actor, opts = {}) {
     // Bow ammo selection: bows (no chamber) draw a round at fire time, so the
     // player picks which eligible arrow to loose. Crossbows fire what's already
     // chambered, so they get no picker here.
-    const usesAmmo = !!weapon.usesAmmo && !weapon.hasChamber;
+    const usesAmmo = !monsterMode && (!!weapon.usesAmmo && !weapon.hasChamber);
     const ammoChoices = usesAmmo
         ? (weapon.getEligibleAmmo?.() ?? []).map(e => ({ id: e.item.id, name: e.item.name, qty: e.qty }))
         : [];
@@ -650,12 +1102,15 @@ export async function openAttackDialog(weapon, actor, opts = {}) {
 
     // Aim is read from the actor's Aim status (built by the full-round Aim
     // action) and applies to ranged shots only. The mixin clears it after firing.
-    const aimRank  = ranged ? (Number(actor?.aimRank) || 0) : 0;
+    const aimRank  = (!monsterMode && ranged) ? (Number(actor?.aimRank) || 0) : 0;
     const aimBonus = Math.min(AIM_BONUS_CAP, aimRank * AIM_BONUS_PER_TURN);
 
     // Adrenaline pool (optional rule, Core p.176): each die the player commits
     // adds +1d6 to this attack's damage. Capped at the actor's current pool.
-    const adrenaline = isAdrenalineEnabled() ? Math.max(0, Number(actor?.system?.adrenaline?.value) || 0) : 0;
+    // Monsters don't have an adrenaline pool — force 0 in monster mode.
+    const adrenaline = (!monsterMode && isAdrenalineEnabled())
+        ? Math.max(0, Number(actor?.system?.adrenaline?.value) || 0)
+        : 0;
 
     // Attacking with the off-hand weapon itself is -3 (added in collect for
     // non-joint strikes; joint carries its own -3).
@@ -666,7 +1121,77 @@ export async function openAttackDialog(weapon, actor, opts = {}) {
     // the getter (out-of-combat / non-combatant).
     const canFullRound = actor?.canTakeFullRound !== false;
 
-    const ctx = { weapon, actor, base: opts.base ?? { total: 0, chips: [] }, meleeBase: opts.meleeBase ?? null, dualMode, mode, ranged, variants, melee, offhandChoices, mainIsOffhand, aimMod, weather, baseRange, fastDraw, forcedExtra, usesAmmo, ammoChoices, selectedAmmoId, aimRank, aimBonus, adrenaline, canFullRound };
+    /* Compute target-to-attacker token distance in metres so the range
+     * bracket auto-selects sensibly (auto-select but overrideable, per
+     * user spec). Reads Foundry's grid measure when both tokens exist;
+     * falls back to null when either side is tokenless (theatre-of-mind)
+     * so the dropdown reverts to its "close" default. */
+    let targetDistanceMeters = null;
+    try {
+        const aTok = actor?.getActiveTokens?.()?.[0] ?? null;
+        /* Target resolution order:
+         *   1. Foundry canvas token target (game.user.targets)
+         *   2. Tokenless combat-tracker target (actorTargetUuid flag) —
+         *      if that target actor has a token on canvas, use it.
+         * Without step 2 the auto-bracket + out-of-range gate silently
+         * default to their "no target" behavior when the user is
+         * targeting via the combat tracker rather than clicking the
+         * enemy's token. */
+        let dTok = Array.from(game.user?.targets ?? [])[0] ?? null;
+        if (!dTok) {
+            try {
+                const uuid = game.user?.getFlag?.("witcher-ttrpg-death-march", "actorTargetUuid");
+                if (uuid) {
+                    const targetActor = await fromUuid(uuid);
+                    dTok = targetActor?.getActiveTokens?.()?.[0] ?? null;
+                }
+            } catch (_) { /* leave null */ }
+        }
+        if (aTok && dTok && canvas?.grid) {
+            /* Chebyshev-in-meters: matches the Witcher system's grid model
+             * (diagonal-adjacent = 2 m at 1.5 m/tile, NOT 2.12 / 3 m).
+             * Foundry's canvas.grid.measureDistance respects the scene's
+             * diagonal-cost setting (5-10-5 / Euclidean) and would
+             * misreport diagonals, so we inline max(|dx|, |dy|) instead. */
+            const a = aTok.center ?? aTok;
+            const b = dTok.center ?? dTok;
+            const ax = Number(a?.x), ay = Number(a?.y);
+            const bx = Number(b?.x), by = Number(b?.y);
+            if (Number.isFinite(ax) && Number.isFinite(bx)) {
+                const chebyPx = Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+                const sz = Number(canvas?.scene?.grid?.size)     || 100;
+                const gd = Number(canvas?.scene?.grid?.distance) || 1.5;
+                targetDistanceMeters = (chebyPx / sz) * gd;
+            }
+        }
+    } catch (_) { /* keep targetDistanceMeters null */ }
+
+    /* Target assignment pool — every actor currently targeted (canvas
+     * token + tokenless-flag list), deduped, minus the attacker. The
+     * dialog surfaces a per-shot picker when this is non-empty: pool
+     * = [] falls through to the mixin's single-defender resolution
+     * (options.forceDefender / game.user.targets[0] / getActorTarget).
+     * Pool ≥ 1 with N shot slots (Fast = 2, everything else = 1) forces
+     * the player to assign each shot to a specific target so a Strong
+     * Strike doesn't auto-broadcast to N enemies. */
+    let targetPool = Array.from(game.user?.targets ?? [])
+        .map(t => t?.actor)
+        .filter(Boolean);
+    if (!targetPool.length) {
+        try {
+            const tokenless = await getActorTargets();
+            if (Array.isArray(tokenless) && tokenless.length) targetPool = tokenless;
+        } catch (_) { /* soft-fail — leave empty */ }
+    }
+    const _seenTPool = new Set();
+    targetPool = targetPool.filter(a => {
+        if (!a || a === actor) return false;
+        if (_seenTPool.has(a.uuid)) return false;
+        _seenTPool.add(a.uuid);
+        return true;
+    });
+
+    const ctx = { weapon, actor, base: opts.base ?? { total: 0, chips: [] }, meleeBase: opts.meleeBase ?? null, dualMode, mode, ranged, variants, melee, offhandChoices, mainIsOffhand, aimMod, weather, baseRange, targetDistanceMeters, fastDraw, forcedExtra, usesAmmo, ammoChoices, selectedAmmoId, aimRank, aimBonus, adrenaline, canFullRound, excludedSpecials, targetPool };
 
     const content = buildContent(ctx);
 

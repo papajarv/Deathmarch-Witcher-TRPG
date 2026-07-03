@@ -21,18 +21,24 @@ import { sheathWeapon, dropWeaponToWorld, occupancyOf } from "./inventory.js";
 import { injectStatusesRow, describeDuration } from "./dock-statuses.js";
 import { openFumbleDialog, installFumbleChatHandler } from "./fumble-dialog.js";
 import { openCriticalDialog, installCritChatHandler } from "./critical-roll.js";
-import { isHomebrewEnabled } from "../../api/homebrew.mjs";
+import { isHomebrewEnabled, isCESubsystemEnabled } from "../../api/homebrew.mjs";
 import { reloadWithPrompt } from "../lib/reload.js";
 import { getActiveWeaponQualities, WEAPON_QUALITIES, AIM_BONUS_CAP, AIM_BONUS_PER_TURN, DAMAGE_TYPES } from "../../setup/config.mjs";
 import { selfClearOptions, actionEndCheckOptions, performActionEndCheck } from "../../mechanics/statusEngine.mjs";
 import { isAdrenalineEnabled, adrenalineStaPerDie } from "../../api/adrenaline.mjs";
+import { hasWRPerk, wrHeroic } from "../../api/witcherReborn.mjs";
 import { getActiveWeatherModifiers } from "../../mechanics/weather-modifiers.mjs";
 import { suppressWeatherVisuals } from "../../mechanics/scene-weather-mode.mjs";
 
+import { t, tFormat } from "../lib/i18n.js";
 const AIM_MAX_RANK = Math.max(1, Math.ceil(AIM_BONUS_CAP / AIM_BONUS_PER_TURN));
 
 /* Install the chat-button handler for Apply-Critical-Wound on module load. */
 installCritChatHandler();
+/* Deadly Focus (Cat) lives on the attack card, not the crit-apply card
+ * — it must fire BEFORE the damage roll so the upgraded severity's +N
+ * crit bonus lands on damage. Its chat handler is wired inside
+ * weaponAttackMixin.installAttackChatHandlers. */
 /* Install the chat-button handler for the elemental-fumble picker. */
 installFumbleChatHandler();
 
@@ -88,7 +94,7 @@ const DOCK_HTML = `
                 fill="none" stroke-width="3" stroke-linecap="butt"
                 pathLength="100" stroke-dasharray="0 100"/>
 
-          <!-- STA arc — right half-moon (radius 38, 3px). -->
+          <!-- STA arc — right half-moon (radius 38, 0.1875rem). -->
           <path class="arc-track"
                 d="M 45 83 A 38 38 0 0 0 45 7"
                 fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="3"/>
@@ -150,7 +156,7 @@ const DOCK_HTML = `
           </button>
           <div class="action-divider" aria-hidden="true"></div>
           <div class="action-row">
-            <button type="button" class="action-btn" data-action="movement" title="Movement">
+            <button type="button" class="action-btn" data-action="movement" title=t("WITCHER.Dock.MovementLabel", "Movement")>
               <i class="fa-solid fa-shoe-prints"></i>
               <span class="nm">Movement</span>
               <!-- Live in-combat readout: spent/cap, painted by
@@ -483,11 +489,12 @@ function wireShieldDecDelegation(dock) {
   });
 }
 
-/** Click the Adrenaline counter to spend points as temporary HP. Opens a
- *  prompt for how many points to commit; each point rolls 1d6 and the total
- *  is added to system.derivedStats.hp.temp (stacking with any existing temp,
- *  which also counts toward staying above the wound threshold / out of death
- *  state). Drains that many adrenaline points. */
+/** Click the Adrenaline counter to spend points. Default action is
+ *  "convert to temp HP" (the RAW use). If the actor owns a Witchers
+ *  Reborn heroic action that also spends adrenaline (Flow and Ebb,
+ *  Lightning Fast), a chooser dialog opens first so the player picks
+ *  which spend path to take. Owners with no WR heroic go straight to
+ *  the temp-HP prompt (unchanged from before). */
 function wireAdrenalineDelegation(dock) {
   if (dock.dataset.wouAdrWired === "1") return;
   dock.dataset.wouAdrWired = "1";
@@ -498,8 +505,96 @@ function wireAdrenalineDelegation(dock) {
     ev.stopPropagation();
     const actor = getAssignedActor();
     if (!actor) return;
-    await promptAdrenalineTempHp(actor);
+    await openAdrenalineChooser(actor);
   });
+}
+
+/** Chooser: if the actor has a WR adrenaline-spending heroic, show a
+ *  dialog with options — "Temp HP" (RAW), "Flow and Ebb" (Griffin —
+ *  refund N vigor / round), "Lightning Fast" (Viper — roll Nd6 m of
+ *  bonus movement). Otherwise skip the chooser and go straight to the
+ *  temp-HP prompt (previous behavior). */
+async function openAdrenalineChooser(actor) {
+  const DialogV2 = foundry?.applications?.api?.DialogV2;
+  if (!DialogV2 || !actor) return;
+  const heroic = wrHeroic(actor);
+  const hasFlowAndEbb    = heroic === "flowAndEbb";
+  const hasLightningFast = heroic === "lightningFast";
+  if (!hasFlowAndEbb && !hasLightningFast) {
+    await promptAdrenalineTempHp(actor);
+    return;
+  }
+  const buttons = [
+    { action: "tempHp", label: "Temp HP (roll Nd6)", default: true }
+  ];
+  if (hasFlowAndEbb)    buttons.push({ action: "flowAndEbb", label: "Flow and Ebb — refund N vigor" });
+  if (hasLightningFast) buttons.push({ action: "lightningFast", label: "Lightning Fast — roll Nd6 bonus movement" });
+  buttons.push({ action: "cancel", label: "Cancel" });
+  let choice = null;
+  try {
+    choice = await DialogV2.wait({
+      window: { title: `${actor.name} — spend adrenaline` },
+      content: `<div style="padding:8px 0; font-size:0.8125rem;"><p>Pick how ${actor.name} spends adrenaline.</p></div>`,
+      buttons: buttons.map(b => ({
+        action: b.action, label: b.label, default: !!b.default,
+        callback: () => b.action
+      })),
+      rejectClose: false
+    });
+  } catch (_) { choice = null; }
+  if (!choice || choice === "cancel") return;
+  if (choice === "tempHp")        { await promptAdrenalineTempHp(actor); return; }
+  if (choice === "flowAndEbb")    { await promptFlowAndEbb(actor); return; }
+  if (choice === "lightningFast") { await promptLightningFast(actor); return; }
+}
+
+/** Small dialog wrapper around game.system.api.wr.flowAndEbb — asks
+ *  for the number of adrenaline dice to spend, then invokes the API.
+ *  Bounded by the actor's current adrenaline pool (and additionally
+ *  clamped inside the API to "vigor actually spent this round"). */
+async function promptFlowAndEbb(actor) {
+  const DialogV2 = foundry?.applications?.api?.DialogV2;
+  if (!DialogV2 || !actor) return;
+  const pool = Math.max(0, Number(actor.system?.adrenaline?.value) || 0);
+  if (pool <= 0) { ui.notifications?.info(t("WITCHER.Notify.Dock.NoAdrenaline", "No adrenaline to spend.")); return; }
+  const dice = await DialogV2.prompt({
+    window: { title: `Flow and Ebb — ${actor.name}` },
+    content: `<div style="padding:8px 0; font-size:0.8125rem;">
+      <label style="display:flex; gap:10px; align-items:center;">
+        <span style="min-width:60px;">Dice</span>
+        <input type="number" name="d" min="1" max="${pool}" step="1" value="1" autofocus />
+      </label>
+      <p class="hint" style="opacity:0.7; margin-top:6px;">Refund 1 vigor per adrenaline die spent (capped at vigor you've poured out this round). Costs 1 adrenaline + STA per die.</p>
+    </div>`,
+    ok: { label: "Spend", callback: (_e, b) => Number(b.form?.elements?.d?.value) || 0 },
+    rejectClose: false
+  }).catch(() => null);
+  if (!dice || dice <= 0) return;
+  await game.system?.api?.wr?.flowAndEbb?.(actor, dice);
+}
+
+/** Small dialog wrapper around game.system.api.wr.lightningFast — asks
+ *  for the number of adrenaline dice, then invokes the API. Bounded by
+ *  the actor's current adrenaline pool. */
+async function promptLightningFast(actor) {
+  const DialogV2 = foundry?.applications?.api?.DialogV2;
+  if (!DialogV2 || !actor) return;
+  const pool = Math.max(0, Number(actor.system?.adrenaline?.value) || 0);
+  if (pool <= 0) { ui.notifications?.info(t("WITCHER.Notify.Dock.NoAdrenaline", "No adrenaline to spend.")); return; }
+  const dice = await DialogV2.prompt({
+    window: { title: `Lightning Fast — ${actor.name}` },
+    content: `<div style="padding:8px 0; font-size:0.8125rem;">
+      <label style="display:flex; gap:10px; align-items:center;">
+        <span style="min-width:60px;">Dice</span>
+        <input type="number" name="d" min="1" max="${pool}" step="1" value="1" autofocus />
+      </label>
+      <p class="hint" style="opacity:0.7; margin-top:6px;">Roll Nd6 and add the total to this round's movement cap. Costs 1 adrenaline + STA per die.</p>
+    </div>`,
+    ok: { label: "Spend", callback: (_e, b) => Number(b.form?.elements?.d?.value) || 0 },
+    rejectClose: false
+  }).catch(() => null);
+  if (!dice || dice <= 0) return;
+  await game.system?.api?.wr?.lightningFast?.(actor, dice);
 }
 
 /** Spend N adrenaline (≤ current pool) → roll Nd6 → add the total to temp HP.
@@ -509,15 +604,21 @@ async function promptAdrenalineTempHp(actor) {
   if (!DialogV2 || !actor) return;
   if (!isAdrenalineEnabled()) return;
   const pool = Math.max(0, Number(actor.system?.adrenaline?.value) || 0);
-  if (pool <= 0) { ui.notifications?.info("No adrenaline to spend."); return; }
-  const staPer = adrenalineStaPerDie();
+  if (pool <= 0) { ui.notifications?.info(t("WITCHER.Notify.Dock.NoAdrenaline", "No adrenaline to spend.")); return; }
+  /* Witchers Reborn — Wolf · Calm Mind: adrenaline spent on temp HP
+   * (a non-heroic use of AE) costs HALF STA per die (round down). The
+   * dialog hint reflects the reduced number so the player sees the
+   * true cost before committing. */
+  const staPer = hasWRPerk(actor, "calmMind")
+    ? Math.floor(adrenalineStaPerDie() / 2)
+    : adrenalineStaPerDie();
   const content = `<div class="wou-adr-prompt">
     <label>Adrenaline dice → temp HP</label>
     <input type="number" name="dice" min="1" max="${pool}" step="1" value="${pool}" autofocus />
     <p class="hint">Spend up to ${pool} adrenaline. Each point rolls 1d6 (added as temp HP) and costs ${staPer} STA.</p>
   </div>`;
   const dice = await DialogV2.prompt({
-    window: { title: `Adrenaline → Temp HP — ${actor.name}` },
+    window: { title: tFormat("WITCHER.Dialog.Dock.AdrenalineToTempHp", { actor: actor.name }, "Adrenaline → Temp HP — {actor}") },
     content,
     ok: { label: "Roll", callback: (_e, btn) => Number(btn.form?.elements?.dice?.value) || 0 },
     rejectClose: false
@@ -633,18 +734,18 @@ function wireSPFigurePopover(dock) {
         position: fixed;
         z-index: 9200;
         display: none;
-        min-width: 130px;
-        padding: 8px 12px 9px;
+        min-width: 8.125rem;
+        padding: 0.5rem 0.75rem 0.5625rem;
         background:
-          radial-gradient(ellipse 200px 100px at 50% 0%, rgba(184,148,100,0.12), transparent 75%),
+          radial-gradient(ellipse 12.5rem 6.25rem at 50% 0%, rgba(184,148,100,0.12), transparent 75%),
           linear-gradient(180deg, rgba(22,18,13,0.98) 0%, rgba(10,9,8,0.98) 100%);
         background-color: rgba(10,9,8,0.98);
         border: 1px solid var(--wdm-amber-dim);
         border-radius: 2px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.85), inset 0 0 0 1px rgba(184,148,100,0.10);
+        box-shadow: 0 0.5rem 1.5rem rgba(0,0,0,0.85), inset 0 0 0 1px rgba(184,148,100,0.10);
         color: var(--wdm-ink-hi);
         font-family: var(--wdm-font-body);
-        font-size: 14px;
+        font-size: 0.875rem;
         line-height: 1.5;
         text-align: left;
         pointer-events: none;
@@ -653,17 +754,17 @@ function wireSPFigurePopover(dock) {
       #${SP_POP_ID} .sp-pop-loc {
         display: block;
         font-family: var(--wdm-font-display);
-        font-size: 12px; font-weight: 700;
+        font-size: 0.75rem; font-weight: 700;
         letter-spacing: 0.30em; text-transform: uppercase;
         color: var(--wdm-amber-bright);
-        margin-bottom: 4px;
-        padding-bottom: 4px;
+        margin-bottom: 0.25rem;
+        padding-bottom: 0.25rem;
         border-bottom: 1px dotted rgba(184,148,100,0.25);
       }
       #${SP_POP_ID} .sp-pop-row {
-        display: flex; justify-content: space-between; gap: 12px;
+        display: flex; justify-content: space-between; gap: 0.75rem;
         font-family: var(--wdm-font-display);
-        font-size: 12px; letter-spacing: 0.10em; text-transform: uppercase;
+        font-size: 0.75rem; letter-spacing: 0.10em; text-transform: uppercase;
         color: var(--wdm-ink);
       }
       #${SP_POP_ID} .sp-pop-row b {
@@ -755,6 +856,73 @@ function lerpHex(a, b, t) {
  * (6 o'clock → 9 o'clock). `vigor` segments along the arc; the upper ones
  * (toward 9 o'clock) stay `is-lit` (yellow→green), round Chaos eats them from
  * the bottom (`is-spent`, red). Hidden below 1 Vigor. Rebuilt each render. */
+/* Combat Extended — paint the dock's guard-stance button from the actor's
+ * current guard + open the guard config dialog on click. Re-attaches a
+ * fresh handler on every render via clone-replace so the listener never
+ * stacks. Hidden by the caller when the extendedCombat toggle is off. */
+function renderGuardButton(btn, actor) {
+  if (!btn || !actor) return;
+  /* Lazy-import the helpers so the dock never pays the import cost when
+   * Combat Extended is off (the caller already gates visibility). */
+  Promise.resolve().then(async () => {
+    let GUARDS, openGuardConfig;
+    try {
+      ({ GUARDS } = await import("../../data/combatExtended/guards.mjs"));
+      ({ openGuardConfig } = await import("../../applications/guardConfig.mjs"));
+    } catch (err) {
+      console.warn("witcher-ttrpg-death-march | guard button render failed", err);
+      return;
+    }
+    /* Which guard drives the dock face: `current` while a combat is
+     * live (the actor's active stance this fight), `preferred` when
+     * the actor's out of combat (the default stance they'll enter the
+     * next fight in). Out of combat, `current` sits at whatever the
+     * last combat left it as (typically "balanced" from the
+     * end-of-combat reset) — reading it there made the dock show
+     * "Balanced" even after the user saved Preferred: Closed, which
+     * is why the icon + name felt broken.
+     *
+     * The tooltip always names BOTH so the player can see what's
+     * active and what will be applied at the next combatStart. */
+    const inCombat = !!actor._inActiveCombat;
+    const curKey   = String(actor.system?.guard?.current   ?? "balanced");
+    const prefKey  = String(actor.system?.guard?.preferred ?? "balanced");
+    const key      = inCombat ? curKey : prefKey;
+    const g        = GUARDS[key] ?? GUARDS.balanced;
+    const gCur     = GUARDS[curKey]  ?? GUARDS.balanced;
+    const gPref    = GUARDS[prefKey] ?? GUARDS.balanced;
+    const label    = game.i18n?.localize?.(g.labelKey) ?? key;
+    const curLabel = game.i18n?.localize?.(gCur.labelKey)  ?? curKey;
+    const prefLbl  = game.i18n?.localize?.(gPref.labelKey) ?? prefKey;
+    /* Replace the button to drop any previous click binding (the dock
+     * re-renders frequently and we don't want stacked listeners). */
+    const clone = btn.cloneNode(true);
+    btn.replaceWith(clone);
+    clone.dataset.stance = key;
+    /* Two tooltip shapes — in-combat surfaces active guard + preferred
+     * for reference; out-of-combat clarifies that the shown face is
+     * the preferred and current is meaningless until combat starts. */
+    clone.title = inCombat
+      ? tFormat("WITCHER.Tooltip.Dock.GuardInCombat",
+          { current: curLabel, preferred: prefLbl },
+          "Sword guard: {current} (preferred: {preferred}). Click to configure.")
+      : tFormat("WITCHER.Tooltip.Dock.GuardOutOfCombat",
+          { preferred: prefLbl },
+          "Sword guard preferred: {preferred}. Applies at combat start. Click to configure.");
+    const labelEl = clone.querySelector(".nm");
+    if (labelEl) labelEl.textContent = label;
+    const iconEl = clone.querySelector("i.guard-sword, i");
+    if (iconEl) {
+      iconEl.className = `${g.icon} guard-sword`;
+    }
+    clone.addEventListener("click", async (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      try { await openGuardConfig(actor); }
+      catch (err) { console.warn("witcher-ttrpg-death-march | guard config open failed", err); }
+    });
+  });
+}
+
 function renderVigorBar(host, vigor, spent) {
   if (!host) return;
   const total = Math.max(0, Number(vigor) || 0);
@@ -764,8 +932,8 @@ function renderVigorBar(host, vigor, spent) {
   host.hidden = false;
   host.setAttribute("aria-label", `Vigor ${lit}/${total}`);
 
-  // Centre of the 110×110 viewBox; the 70px portrait has radius 35 here, so a
-  // radius of 50 floats the arc a clear ~12px off the medallion (concentric).
+  // Centre of the 110×110 viewBox; the 4.375rem portrait has radius 35 here, so a
+  // radius of 50 floats the arc a clear ~0.75rem off the medallion (concentric).
   const cx = 55, cy = 55, r = 50;
   const A0 = 180, A1 = 270;              // bottom → left (the lower-left quadrant)
   const step = (A1 - A0) / total;
@@ -827,12 +995,12 @@ function renderSpellsRow(host, actor) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "spell-btn" + (noActions ? " is-disabled" : "");
-    btn.title = noActions ? "No actions left this turn." : spell.name;
+    btn.title = noActions ? t("WITCHER.Notify.Dock.NoActions", "No actions left this turn.") : spell.name;
     btn.dataset.spellId = spell.id;
     btn.innerHTML = `<img src="${escapeHTML(spell.img ?? "")}" alt="${escapeHTML(spell.name)}" />`;
     btn.addEventListener("click", async (e) => {
       e.preventDefault(); e.stopPropagation();
-      if (noActions) { ui.notifications?.warn("No actions left this turn."); return; }
+      if (noActions) { ui.notifications?.warn(t("WITCHER.Notify.Dock.NoActions", "No actions left this turn.")); return; }
       try {
         if (typeof actor.castSpell !== "function") {
           if (typeof actor.useItem === "function") await actor.useItem(spell.id);
@@ -890,35 +1058,44 @@ function getWeaponSkill(weapon) {
   return sys.attackSkill || "swordsmanship";
 }
 
-/** Read the oil coating off a weapon. A coating is one or more ActiveEffects
- *  copied onto the weapon by inventory.js (tagged flags.<sys>.oilCoating); each
- *  carries the user-configured duration + a description with the bonus text.
- *  The representative is the soonest-expiring effect (drives the bar); we carry
- *  its live `duration` object out so the dock formats it through describeDuration
- *  — the SAME path potion badges and the inventory inspect use — so the weapon
- *  bar reads identically (rounds in combat, wall clock out). Returns null when
- *  there's no live coating. Pure read — no writes. */
+/** Read the oil coating off a weapon. The coating is stored as a single
+ *  structured snapshot on `weapon.system.appliedOil` (formalised in
+ *  WeaponData schema; applied by mechanics/alchemy.applyOilToWeapon).
+ *  We synthesise a `dur` object compatible with describeDuration so the
+ *  dock bar reads the same as the inventory inspect.
+ *
+ *  Under Alchemy Reborn the duration chip is a charge counter
+ *  ("3/10 charges"); under RAW it's the worldTime remaining until
+ *  `expireAt`. Returns null when no oil is applied or the RAW coating
+ *  has expired. */
 function getAppliedOilForWeapon(weapon) {
-  let repRem = Infinity, repDur = null, name = null;
-  const texts = [];
-  for (const e of weapon?.effects ?? []) {
-    if (e.disabled) continue;
-    const flag = e.getFlag?.("witcher-ttrpg-death-march", "oilCoating");
-    if (!flag) continue;
-    const secs = Number(e.duration?.seconds);
-    let remaining = Infinity;
-    if (secs > 0) {
-      // v14 computes secondsRemaining from start.time + value/units.
-      const rem = Number(e.duration?.secondsRemaining);
-      remaining = Number.isFinite(rem) ? rem : secs;
-    }
-    if (Number.isFinite(remaining) && remaining <= 0) continue;   // worn off
-    const d = String(e.description || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-    if (d) texts.push(d);
-    if (name == null || remaining < repRem) { repRem = remaining; repDur = e.duration; name = flag.oilName ?? e.name ?? "Oil"; }
+  const ao = weapon?.system?.appliedOil;
+  if (!ao || !ao.name) return null;
+  const now = game.time?.worldTime ?? 0;
+  const exp = Number(ao.expireAt) || 0;
+  const start = Number(ao.appliedAt) || 0;
+  const charges = Number(ao.charges) || 0;
+  const bonus  = Number(ao.oilBonusDamage) || 0;
+  const target = String(ao.oilTarget || "").trim();
+  const effect = bonus > 0
+    ? (target ? `+${bonus} vs ${target}` : `+${bonus} damage`)
+    : "";
+  if (charges > 0) {
+    const max = Number(ao.maxCharges) || charges;
+    return { name: ao.name, effect, dur: { label: `${charges}/${max}` } };
   }
-  if (name == null) return null;
-  return { name, effect: texts.join(" · "), dur: repDur };
+  if (exp > 0 && exp <= now) return null;   // worn off
+  if (exp <= 0) {
+    // No timed expiry authored — "until cleansed". Describe-duration
+    // returns total=0 so the dock won't render a bar; the tooltip
+    // still surfaces the label.
+    return { name: ao.name, effect, dur: { label: "Until cleansed" } };
+  }
+  // Timed coating — synthesise a {seconds, secondsRemaining} pair sized to
+  // the FULL coat duration so describeDuration produces a sensible % fill.
+  const total = Math.max(1, exp - start);
+  const remaining = Math.max(0, exp - now);
+  return { name: ao.name, effect, dur: { seconds: total, secondsRemaining: remaining } };
 }
 
 /** Resolve a weapon's quality KEYS to display labels via the active catalog
@@ -984,9 +1161,24 @@ function weaponListSig(actor) {
   const equipped = (actor?.items?.contents ?? actor?.items ?? [])
     .filter(i => (i.type === "weapon" || i.type === "shield") && i.system?.equipped);
   return inlineSig + "||" + equipped.map(w => {
+    /* Oil-coating fingerprint. Read the raw appliedOil snapshot off the
+     * weapon AND the describeDuration label so both modes invalidate
+     * the sig when their state changes:
+     *   Reborn (charge mode) — charges drop per damaging hit. describe-
+     *   Duration only sees { label } and collapses to "", so we MUST
+     *   include the live charge count in the sig directly; otherwise
+     *   the dock would skip the rebind and the bar would stay full.
+     *   RAW (time mode) — describeDuration returns the label + remaining
+     *   seconds; rounding per-second keeps the sig stable enough to
+     *   avoid thrash but lets every meaningful tick (worldTime advance
+     *   of 1+ seconds) invalidate it. */
     const oil = getAppliedOilForWeapon(w);
     const od  = oil ? describeDuration(oil.dur ?? {}) : null;
-    const oilKey = od ? `${od.label}:${Math.round(od.remaining)}` : "";
+    const ao  = w?.system?.appliedOil;
+    const chargeKey = ao && Number(ao.charges) > 0
+      ? `c${Number(ao.charges)}/${Number(ao.maxCharges) || 0}`
+      : "";
+    const oilKey = od ? `${od.label}:${Math.round(od.remaining)}:${chargeKey}` : "";
     const ammoKey = w.usesAmmo
       ? (w.hasChamber
           ? `c${Number(w.system?.loaded?.count) || 0}/${Math.max(1, Number(w.system?.loaded?.capacity) || 1)}:${w.system?.loaded?.uuid ?? ""}:p${Number(w.system?.loaded?.reloadProgress) || 0}`
@@ -1005,23 +1197,75 @@ function weaponListSig(actor) {
 /** Ask whether a defense is a Parry (−3, inflicts Staggered, no item wear) or
  *  a Block (no penalty, may spend the item's SP). Returns "parry" | "block" |
  *  null (cancelled). Shared by weapon and shield rows. */
+/* Read the "Other modifier" field from a dialog. Returns a rounded int
+ * (0 when empty / not a number). Used by both defense prompts below. */
+function readExtraMod(root) {
+  const v = root?.querySelector?.('[name="extraMod"]')?.value;
+  return Math.round(Number(v) || 0);
+}
+
+/* Inline HTML snippet for the "Other modifier" input row. Shared by the
+ * Parry/Block prompt and the Dodge/Reposition prompt so both manual-roll
+ * paths look and behave identically to the incoming-attack defense prompt. */
+const EXTRA_MOD_FIELD_HTML = `
+  <div class="wdm-defense-prompt-mods"
+       style="display:flex;align-items:center;gap:0.5rem;padding:0.25rem 0.125rem 0.125rem;border-top:1px solid #2a2520;margin-top:0.375rem;">
+    <label for="wdm-def-extra-mod" style="font-size:0.6875rem;letter-spacing:0.12em;text-transform:uppercase;color:#c8a878;flex:0 0 auto;">Other modifier</label>
+    <input id="wdm-def-extra-mod" type="number" name="extraMod" step="1" value="0"
+      style="width:4rem;padding:0.125rem 0.25rem;background:#0a0907;border:1px solid #6e5224;color:#e5d6b6;font-family:inherit;" />
+    <span style="font-size:0.6875rem;opacity:0.6;">applied to the defense roll</span>
+  </div>`;
+
+/* Parry / Block chooser for the dock's defend button. Returns
+ *   { mode: "parry"|"block", extraMod: number }
+ * or null on cancel. extraMod is the ad-hoc modifier from the inline
+ * input (0 when blank); the caller folds it into defendWith. */
 async function promptDefenseMode(item) {
   const DialogV2 = foundry?.applications?.api?.DialogV2;
-  if (!DialogV2) return "parry";
+  if (!DialogV2) return { mode: "parry", extraMod: 0 };
+  let captured = null;
   try {
-    return await DialogV2.wait({
-      window: { title: `Defend — ${item?.name ?? ""}` },
+    const action = await DialogV2.wait({
+      window: { title: tFormat("WITCHER.Dialog.Dock.Defend", { weapon: item?.name ?? "" }, "Defend — {weapon}") },
       modal: true,
-      content: `<div style="padding:8px 0;display:flex;flex-direction:column;gap:8px;">
+      content: `<div style="padding:0.5rem 0;display:flex;flex-direction:column;gap:0.5rem;">
           <p style="margin:0;"><strong>Parry</strong> — roll at −3; a success leaves the attacker Staggered.</p>
           <p style="margin:0;"><strong>Block</strong> — roll at no penalty; absorbing the hit spends 1 SP.</p>
-        </div>`,
+        </div>${EXTRA_MOD_FIELD_HTML}`,
       buttons: [
-        { action: "parry", label: "Parry (−3)", default: true, callback: () => "parry" },
-        { action: "block", label: "Block",      callback: () => "block" }
+        { action: "parry", label: "Parry (−3)", default: true,
+          callback: (_event, _button, dlg) => { captured = readExtraMod(dlg.element); return "parry"; } },
+        { action: "block", label: "Block",
+          callback: (_event, _button, dlg) => { captured = readExtraMod(dlg.element); return "block"; } }
       ],
       rejectClose: false
     });
+    if (!action) return null;
+    return { mode: action, extraMod: captured ?? 0 };
+  } catch (e) { return null; }
+}
+
+/* Standalone modifier confirmation for Dodge / Reposition. Returns the
+ * entered Other Modifier (0 when blank), or null on cancel. Keeps these
+ * two dock buttons in step with the unified defense-prompt UX. */
+async function promptDefenseModifier(label) {
+  const DialogV2 = foundry?.applications?.api?.DialogV2;
+  if (!DialogV2) return 0;
+  let captured = 0;
+  try {
+    const action = await DialogV2.wait({
+      window: { title: `${label}` },
+      modal: true,
+      content: `<div style="padding:0.25rem 0;">${EXTRA_MOD_FIELD_HTML}</div>`,
+      buttons: [
+        { action: "roll", label: `Roll ${label}`, default: true,
+          callback: (_event, _button, dlg) => { captured = readExtraMod(dlg.element); return "roll"; } },
+        { action: "cancel", label: "Cancel" }
+      ],
+      rejectClose: false
+    });
+    if (action !== "roll") return null;
+    return captured;
   } catch (e) { return null; }
 }
 
@@ -1088,7 +1332,11 @@ function renderWeaponList(host, actor) {
         });
       })();
       const subline = [...typeLabels, ...qLabels].join(" · ");
-      const skillName = attack?.skill ? attack.skill : "melee";
+      /* Flat attack bonus readout (`+N`). Monster attacks always roll
+       * 1d10 + flatBonus; wound/dying penalty is applied at roll time in
+       * buildMonsterVirtualWeapon, not shown here. */
+      const skillLabelText = `+${Number(attack?.flatBonus) || 0}`;
+      const skillTip = "Flat attack bonus — roll 1d10 + this (wound penalty applied automatically)";
       const exhausted = isActorInActiveCombat(actor) && rofLeft <= 0;
 
       const el = document.createElement("div");
@@ -1107,33 +1355,54 @@ function renderWeaponList(host, actor) {
               dmg ? `<span class="weapon-dmg">${escapeHTML(dmg)}</span>` : "",
               subline ? escapeHTML(subline) : ""
             ].filter(Boolean).join(" · ")}</span>` : ""}
-            <span class="weapon-monster-skill" title="Attack skill — monsters roll 1d10 + this">${escapeHTML(skillName.charAt(0).toUpperCase() + skillName.slice(1))}</span>
+            <span class="weapon-monster-skill" title="${escapeHTML(skillTip)}">${escapeHTML(skillLabelText)}</span>
           </span>
         </button>
       `;
       el.querySelector(".weapon-main").addEventListener("click", async (e) => {
         e.preventDefault(); e.stopPropagation();
         if (exhausted) {
-          ui.notifications?.warn("No swings left this round (ROF spent).");
+          ui.notifications?.warn(t("WITCHER.Notify.Dock.RofExhausted", "ROF exhausted for this burst — take another action."));
+          return;
+        }
+        /* Pre-gate the attack on the actor's action economy. weaponAttack
+         * itself will refuse if there's no slot left, but its return is
+         * `null` (silent), and we'd otherwise increment the ROF flag for a
+         * swing that didn't happen. Checking here surfaces a clear warning
+         * AND prevents the bogus ROF tick. */
+        if (isActorInActiveCombat(actor) && actor?.nextActionSlot == null) {
+          ui.notifications?.warn(tFormat("WITCHER.Notify.Dock.ActorNoActions", { actor: actor.name }, "{actor} has no actions left this turn."));
           return;
         }
         try {
           const { buildMonsterVirtualWeapon } = await import("../../combat/monsterVirtualWeapon.mjs");
           const vw = buildMonsterVirtualWeapon(actor, attack, i);
-          /* Monsters can't use Strong / Fast / Joint / Feint (Core p.153),
-           * so skip the strike-type dialog. The action-economy gate still
-           * fires below (movement-eats-action, action-already-spent). */
-          await actor.weaponAttack(vw, { skipDialog: true });
-          /* Increment per-attack ROF tally; spend an action slot like a
-           * regular weapon. Out of combat both no-op. */
+          /* Open the attack modifier dialog in monster mode: strike-variant
+           * tabs (Strong/Fast/Joint/Feint) are stripped per RAW p.153, and
+           * range/weather/ammo controls are skipped because monster ranged
+           * attacks don't model range the same way. The modifier panel +
+           * target row stay so the GM still gets the common-mods surface. */
+          const result = await actor.weaponAttack(vw, { monsterMode: true });
+          /* Bail on a null return (no target / broken / off-turn) — no swing
+           * happened, no ROF tick should be recorded. */
+          if (result === null) return;
+          /* ROF + action-slot accounting (in-combat only).
+           *   - Per-burst, per-weapon swing counter lives in the
+           *     `monsterAttackUsed` flag.
+           *   - The action slot is committed ONLY on the final swing of a
+           *     weapon's ROF (RAW: one "attack action" = one weapon swung
+           *     up to its ROF). Earlier swings ride the slot freely.
+           *   - On commit, ALL per-weapon counters reset so the next slot
+           *     (extra action) starts with a fresh ROF on whichever weapon
+           *     the GM picks. */
           if (isActorInActiveCombat(actor)) {
             const cur = actor.getFlag("witcher-ttrpg-death-march", "monsterAttackUsed") ?? {};
-            await actor.setFlag("witcher-ttrpg-death-march", "monsterAttackUsed", { ...cur, [i]: (Number(cur?.[i]) || 0) + 1 });
-            /* Only burn an action slot on the FIRST swing of the round
-             * — subsequent ROF shots ride the same action. (Per RAW the
-             * monster's listed ROF is the per-action shot count.) */
-            if ((Number(cur?.[i]) || 0) === 0) {
+            const nextCount = (Number(cur?.[i]) || 0) + 1;
+            if (nextCount >= rofMax) {
               await maybeSpendActionSlot(actor, `Attack: ${name}`);
+              await actor.unsetFlag("witcher-ttrpg-death-march", "monsterAttackUsed");
+            } else {
+              await actor.setFlag("witcher-ttrpg-death-march", "monsterAttackUsed", { ...cur, [i]: nextCount });
             }
           }
         } catch (err) {
@@ -1185,12 +1454,32 @@ function renderWeaponList(host, actor) {
     const oil = getAppliedOilForWeapon(w);
     const od  = oil ? describeDuration(oil.dur ?? {}) : null;
     const oilTimed = !!od && od.total > 0;
-    const oilPct   = oilTimed ? Math.max(0, Math.min(100, (od.remaining / od.total) * 100)) : 100;
-    const oilLabel = oilTimed ? od.label : "";
+    /* Bar fill: RAW timed coatings use the duration ratio. Reborn
+     * charge coatings use charges/maxCharges from the appliedOil
+     * snapshot (describeDuration can't see the charges, so we read
+     * them off the weapon directly). No coating → 100% (the absence
+     * of an oil already hides the bar via the `oil` check upstream). */
+    const aoLive = w?.system?.appliedOil;
+    const oilCharges    = Number(aoLive?.charges) || 0;
+    const oilMaxCharges = Number(aoLive?.maxCharges) || oilCharges;
+    let oilPct = 100;
+    if (oilTimed)                    oilPct = Math.max(0, Math.min(100, (od.remaining / od.total) * 100));
+    else if (oilMaxCharges > 0)      oilPct = Math.max(0, Math.min(100, (oilCharges / oilMaxCharges) * 100));
+    const oilLabel = oilTimed ? od.label : (oilMaxCharges > 0 ? `${oilCharges}/${oilMaxCharges}` : "");
 
     const occupancy = occupancyOf(w);             // right | left | both | quick
-    const isTwoHanded = w.system?.hands === "two";
+    const isTwoHanded = w.system?.hands === "two" || occupancy === "both";
     const blockedByQuick = isTwoHanded && hasQuick;
+    /* EO Two-Hand quality: a one-handed weapon that lists Two-Hand can
+     * be wielded with both hands at runtime for the authored bonus. Only
+     * expose the grip-mode toggle on those weapons; baseline 2H weapons
+     * (hands === "two") are always two-handed and don't need the toggle. */
+    const _wQs = w?.system?.effective?.qualities ?? w?.system?.qualities ?? [];
+    const canSwitchGrip = w.type === "weapon"
+        && w.system?.hands === "one"
+        && Array.isArray(_wQs)
+        && _wQs.includes("twoHand");
+    const inTwoHandMode = canSwitchGrip && w.system?.twoHandMode === true;
 
     // Which hand(s) the weapon occupies — shown as a small greyed tag after the
     // name (e.g. "Steel Sword (R)").
@@ -1282,6 +1571,17 @@ function renderWeaponList(host, actor) {
       <button type="button" class="weapon-parry${defendGate ? " is-disabled" : ""}" ${defendGate ? "disabled" : ""} title="${parryTitle}">
         <i class="fa-solid fa-shield-halved"></i>
       </button>
+      ${(w.type === "shield" && isCESubsystemEnabled("raiseShield"))
+        ? `<button type="button" class="weapon-raise-shield" title="Raise ${escapeHTML(w.name)} (Combat Extended — cover hit locations equal to CV)">
+             <i class="fa-solid fa-shield"></i>
+           </button>`
+        : ""}
+      ${canSwitchGrip
+        ? `<button type="button" class="weapon-grip-mode${inTwoHandMode ? " is-two" : ""}" title="${inTwoHandMode ? `Wielding ${escapeHTML(w.name)} two-handed — click to switch back to one-handed` : `Wielding ${escapeHTML(w.name)} one-handed — click to switch to two-handed (Two-Hand quality bonus)`}">
+             <i class="fa-solid ${inTwoHandMode ? "fa-hands" : "fa-hand"}"></i>
+             <span class="weapon-grip-mode-label">${inTwoHandMode ? "2H" : "1H"}</span>
+           </button>`
+        : ""}
       <button type="button" class="weapon-main${attackGate ? " is-disabled" : ""}" ${attackGate ? "disabled" : ""} title="${mainTitle}">
         <span class="weapon-icon-wrap">
           <i class="fa-solid ${iconCls}"></i>
@@ -1293,10 +1593,45 @@ function renderWeaponList(host, actor) {
             ? `<span class="weapon-qualities">${qualities.map(escapeHTML).join(", ")}</span>`
             : ""}
           ${ammoBadge}
+          ${(() => {
+            /* Combat Extended — Warding indicator. Visible only when the
+             * actor is currently in Warding stance AND this weapon (not
+             * shield — Warding is weapon-only per rules1) has a saved
+             * warded location. Quiet otherwise. */
+            if (w.type !== "weapon") return "";
+            if (!isCESubsystemEnabled("guards")) return "";
+            if (String(actor?.system?.guard?.current ?? "balanced") !== "warding") return "";
+            const loc = String(actor?.system?.guard?.wardingLocations?.[w.id] ?? "");
+            if (!loc) return "";
+            const LABEL = { head: "Head", torso: "Torso", leftArm: "Left Arm", rightArm: "Right Arm", leftLeg: "Left Leg", rightLeg: "Right Leg" };
+            const lbl = LABEL[loc] ?? loc;
+            return `<span class="weapon-warding" title="Warding ${escapeHTML(lbl)} — +2 parry/block at this location, −1 elsewhere">
+                      <i class="fa-solid fa-bullseye"></i> Warding ${escapeHTML(lbl)}
+                    </span>`;
+          })()}
+          ${(() => {
+            /* Combat Extended — Shield-raised indicator. Surfaces the
+             * covered locations + reliability state on the shield row
+             * when THIS shield is the actor's raised one. Click target
+             * is the Raise Shield button (separate icon) — this is just
+             * a passive readout. */
+            if (w.type !== "shield") return "";
+            if (!isCESubsystemEnabled("raiseShield")) return "";
+            const sr = actor?.system?.guard?.shieldRaised ?? {};
+            if (sr.itemId !== w.id) return "";
+            const locs = Array.isArray(sr.coveredLocations) ? sr.coveredLocations : [];
+            if (!locs.length) return "";
+            const LABEL = { head: "Head", torso: "Torso", leftArm: "Left Arm", rightArm: "Right Arm", leftLeg: "Left Leg", rightLeg: "Right Leg" };
+            const labels = locs.map(l => LABEL[l] ?? l).join(", ");
+            const headTag = sr.headCovered ? ` <i class="fa-solid fa-eye-slash" title="Head covered — Restricted Vision active"></i>` : "";
+            return `<span class="weapon-shield-raised" title="Shield raised — covering ${escapeHTML(labels)}; reliability acts as SP for those locations">
+                      <i class="fa-solid fa-shield"></i> Raised: ${escapeHTML(labels)}${headTag}
+                    </span>`;
+          })()}
         </span>
       </button>
       ${showReload
-        ? `<button type="button" class="weapon-reload${noActions ? " is-disabled" : ""}" ${noActions ? "disabled" : ""} title="${noActions ? "No actions left this turn." : `Reload ${escapeHTML(w.name)}`}"><i class="fa-solid fa-arrows-rotate"></i></button>`
+        ? `<button type="button" class="weapon-reload${noActions ? " is-disabled" : ""}" ${noActions ? "disabled" : ""} title="${noActions ? t("WITCHER.Notify.Dock.NoActions", "No actions left this turn.") : `Reload ${escapeHTML(w.name)}`}"><i class="fa-solid fa-arrows-rotate"></i></button>`
         : ""}
       ${canSheathe
         ? `<button type="button" class="weapon-sheath" title="Sheathe ${escapeHTML(w.name)}">
@@ -1322,13 +1657,62 @@ function renderWeaponList(host, actor) {
       e.preventDefault(); e.stopPropagation();
       if (blockedByQuick) return;
       try {
-        const mode = await promptDefenseMode(w);
-        if (!mode) return;
-        if (typeof actor.defendWith === "function") await actor.defendWith(w, mode);
+        const pick = await promptDefenseMode(w);
+        if (!pick) return;
+        if (typeof actor.defendWith === "function") {
+          await actor.defendWith(w, pick.mode, { extraMod: pick.extraMod });
+        }
       } catch (err) {
         console.warn("witcher-ttrpg-death-march | defense roll failed", err);
       }
     });
+    /* Raise Shield (Combat Extended — shields only). The button is only
+     * present when CE is on; the dialog handles the per-round slot check
+     * and the head-cover → Restricted Vision side-effect. */
+    const raiseBtn = el.querySelector(".weapon-raise-shield");
+    if (raiseBtn) {
+      raiseBtn.addEventListener("click", async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        try {
+          const { openRaiseShieldDialog } = await import("../../applications/raiseShieldDialog.mjs");
+          await openRaiseShieldDialog(actor, w);
+        } catch (err) {
+          console.warn("witcher-ttrpg-death-march | raise shield open failed", err);
+        }
+      });
+    }
+    /* Grip-mode toggle (Two-Hand EO quality on a 1H weapon). Flips
+     * system.twoHandMode; the change cascades — the open-category
+     * bonus engine reads it for the Two-Hand condition, and
+     * occupancyOf() promotes the weapon to "both" hands so a quick /
+     * off-hand item is gated as if the weapon were natively 2H.
+     * Switching INTO 2H requires the off-hand to be free; switching
+     * OUT is always allowed. */
+    const gripBtn = el.querySelector(".weapon-grip-mode");
+    if (gripBtn) {
+      gripBtn.addEventListener("click", async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const goingTwo = !inTwoHandMode;
+        if (goingTwo) {
+          /* Off-hand-free precondition: only the OFF-HAND ("left")
+           * blocks switching to 2H grip. Quick coexists with natively
+           * 2H weapons (the "resting Quick" carve-out), so it should
+           * coexist with hybrid 2H mode too. */
+          const eq = (actor.items?.contents ?? actor.items ?? [])
+            .filter(i => i.system?.equipped);
+          const blocker = eq.find(i => i !== w && occupancyOf(i) === "left");
+          if (blocker) {
+            ui.notifications?.warn(tFormat("WITCHER.Notify.Dock.TwoHandBlocked", { w: w.name, blocker: blocker.name }, "Can't wield {w} two-handed — {blocker} occupies the off-hand."));
+            return;
+          }
+        }
+        try {
+          await w.update({ "system.twoHandMode": goingTwo });
+        } catch (err) {
+          console.warn("witcher-ttrpg-death-march | grip-mode toggle failed", err);
+        }
+      });
+    }
     // Main button → attack with the weapon (blocked if a Quick is up).
     el.querySelector(".weapon-main").addEventListener("click", async (e) => {
       e.preventDefault(); e.stopPropagation();
@@ -1336,7 +1720,7 @@ function renderWeaponList(host, actor) {
       // No action slot left → refuse before the dialog/roll so we don't roll
       // the attack OR spend ammo for a shot that can't be taken.
       if (actor.hasActionSlot === false) {
-        ui.notifications?.warn("No actions left this turn.");
+        ui.notifications?.warn(t("WITCHER.Notify.Dock.NoActions", "No actions left this turn."));
         return;
       }
       let res;
@@ -1362,7 +1746,7 @@ function renderWeaponList(host, actor) {
       // In combat a reload costs an action — refuse when none remain (out of
       // combat the economy is untracked, so reloading is always free).
       if (actor.hasActionSlot === false) {
-        ui.notifications?.warn("No actions left this turn.");
+        ui.notifications?.warn(t("WITCHER.Notify.Dock.NoActions", "No actions left this turn."));
         return;
       }
       let res = null;
@@ -1433,7 +1817,7 @@ async function runPeaceSignAction(action, actor) {
       if (!isHomebrewEnabled("foodAndDrink")) return;
       const api = game.system?.api?.mechanics?.foodAndDrink;
       if (!api?.soberUp) {
-        ui.notifications?.warn("Food & drink API unavailable.");
+        ui.notifications?.warn(t("WITCHER.Notify.Dock.FoodApiUnavailable", "Food & drink API unavailable."));
         return;
       }
       await api.soberUp(actor);
@@ -1461,7 +1845,7 @@ async function runPeaceSignAction(action, actor) {
       if (!combat) {
         if (game.user.isGM && canvas.scene) {
           combat = await getDocumentClass("Combat").create({ scene: canvas.scene.id, active: true });
-        } else { ui.notifications?.warn("No active combat encounter."); return; }
+        } else { ui.notifications?.warn(t("WITCHER.Notify.Dock.NoCombat", "No active combat encounter.")); return; }
       }
       let existing = combat.combatants.filter(c => c.actorId === actor.id);
       // No combatant yet — create one per active token (or a tokenless one) so a
@@ -1587,7 +1971,7 @@ async function rollAwarenessWithModifiers(actor) {
     </div>`;
 
   const picked = await DialogV2.prompt({
-    window: { title: `Awareness — ${actor.name}` },
+    window: { title: tFormat("WITCHER.Dialog.Dock.Awareness", { actor: actor.name }, "Awareness — {actor}") },
     content,
     ok: {
       label: "Roll",
@@ -1624,7 +2008,7 @@ function wireSignDelegation(dock) {
     ev.stopPropagation();
     const actor = getAssignedActor();
     if (!actor) {
-      ui.notifications?.warn("No character assigned to this user.");
+      ui.notifications?.warn(t("WITCHER.Notify.Dock.NoCharacter", "No character assigned to this user."));
       return;
     }
     const isCombat = sign.closest(".sign-tray")?.classList.contains("combat-signs");
@@ -1707,12 +2091,7 @@ function wireOilPopoverDelegation(dock) {
    ========================================================================= */
 
 // Single-action options (Core p.151).
-// Attack and Cast Magic are informational here — you launch them from the
-// weapon list / spells row, which spends the slot for you. Shown greyed so
-// players know they're actions, but not clickable from this menu.
 const ACTION_OPTIONS = [
-  { key: "attack", icon: "fa-gavel",          label: "Attack",   info: "Use the weapon buttons to attack" },
-  { key: "cast",   icon: "fa-wand-sparkles",  label: "Cast Magic", info: "Use the spells row to cast" },
   { key: "skill",  icon: "fa-hand",           label: "Use a Skill" },
   { key: "draw",   icon: "fa-hand-fist",      label: "Draw / Pick Up Item" },
   { key: "verbal", icon: "fa-comments",       label: "Initiate Verbal Combat" }
@@ -1720,10 +2099,67 @@ const ACTION_OPTIONS = [
 // Full-round options (Core p.152) — use the whole turn (lock all three slots).
 const FULL_ROUND_OPTIONS = [
   { key: "run",      icon: "fa-person-running", label: "Run (SPD×3)" },
+  { key: "charge",   icon: "fa-person-rays",    label: "Charge (SPD×3 move + strong strike, -3 to hit)" },
   { key: "dodge",    icon: "fa-shield-halved",  label: "Actively Dodge" },
   { key: "aim",      icon: "fa-crosshairs",     label: "Aim (+1/round, max +3)" },
   { key: "recovery", icon: "fa-lungs",          label: "Recovery Action (regain REC STA)" }
 ];
+
+/** Charge full-round flow (RAW Core p.152).
+ *
+ *   "By taking a full round, you can execute a charge against a
+ *    target. A charge allows you to move up to your Run speed and
+ *    then make a strong strike. This strike still suffers a -3 to
+ *    hit, but if the attack is blocked you can make a Physique
+ *    check against the opponent's Physique roll to knock the target
+ *    prone."
+ *
+ * Charge doesn't fire the attack itself — it ARMS the next attack.
+ *   1. Grant SPD×3 movement (runUsed = true).
+ *   2. Set a per-actor flag `chargingNextAttack: true` — the next
+ *      weaponAttack OR brawlAttack the player launches this turn
+ *      picks the flag up and forces its strike to Charge (strong
+ *      strike + -3 to hit + fullRound + blocked-prone rider) then
+ *      clears the flag.
+ *   3. Set the full-round label so the dock shows "Charge" as the
+ *      committed action.
+ *
+ * The player then moves the token on the canvas (with SPD×3 budget)
+ * and clicks their weapon or brawl button as normal — the flag
+ * hijacks the strike selection. No weapon-picker dialog needed here. */
+async function openChargeFlow(actor) {
+  if (!actor) return;
+  /* Grant SPD×3 movement ONLY here. Do NOT set fullRound — that would
+   * lock the action slot before the strike can fire. STRIKE_TYPES.charge
+   * carries `fullRound: true`, so the post-strike path in weaponAttack
+   * calls `recordFullRound` AFTER the attack resolves. That's when the
+   * extra action gets locked out. Same holds for brawl charge (which
+   * routes through weaponAttack's brawl-side full-round pattern).
+   *
+   * The `charging` status effect is what drives the picker restrictions
+   * in attack + brawl dialogs. It's applied here and stripped when the
+   * strike commits. */
+  if (actor._inActiveCombat) {
+    try {
+      await actor.update({
+        "system.combatRound.runUsed": true
+      });
+    } catch (err) {
+      console.warn("witcher-ttrpg-death-march | charge run-budget grant failed", err);
+      return;
+    }
+  }
+  try {
+    if (!actor.statuses?.has?.("charging")) {
+      await actor.toggleStatusEffect?.("charging", { active: true });
+    }
+    ui.notifications?.info?.(
+      `${actor.name} is charging — SPD×3 movement + next attack is locked to Strong Strike.`
+    );
+  } catch (err) {
+    console.warn("witcher-ttrpg-death-march | charging status apply failed", err);
+  }
+}
 
 /** Spend an action slot for an attack / cast / draw, but only inside an
  *  active combat the actor is part of. No-op (and no warning) otherwise. */
@@ -1742,10 +2178,22 @@ async function openActionMenu(actor, slot) {
   if (!DialogV2 || !actor) return;
   const sections = [];
   if (slot === "action" || slot === "extra") {
+    /* Escape action (RAW Core "Brawling & Wrestling") — if the actor is
+     * currently in any hold pair (grappled / pinned / clinched /
+     * chokeheld), surface Escape as a first-class option here so the
+     * player doesn't have to hunt for it in the Brawl sub-dialog. The
+     * click handler routes straight to brawlAttack with `escape`
+     * pre-picked, keeping one code path for the opposed Dodge/Escape
+     * vs Brawling contest. */
+    const heldStatuses = ["grappled", "pinned", "clinched", "chokeheld"];
+    const isHeld = heldStatuses.some(s => actor?.statuses?.has?.(s));
+    const actionOpts = isHeld
+      ? [{ key: "escape", icon: "fa-arrow-right-from-bracket", label: "Escape (Dodge/Escape vs Brawling)" }, ...ACTION_OPTIONS]
+      : ACTION_OPTIONS;
     sections.push({
       group: "normal",
       title: slot === "extra" ? "Extra Action — 3 STA, at −3" : "Action",
-      opts: ACTION_OPTIONS
+      opts: actionOpts
     });
     // No-roll "shake it off" actions (Stand / Put Out Fire / Wash Off Acid),
     // sourced from the status clauses' selfClear field. An entry is clickable
@@ -1754,7 +2202,7 @@ async function openActionMenu(actor, slot) {
     const clearOpts = selfClearOptions().map(o => actor.statuses?.has?.(o.id)
       ? { key: `clear:${o.id}`, icon: o.icon, label: o.label }
       : { key: `clear:${o.id}`, icon: o.icon, label: o.label, info: `Requires the ${o.statusName} condition` });
-    if (clearOpts.length) sections.push({ group: "clear", title: "Clear a condition (1 action)", opts: clearOpts });
+    if (clearOpts.length) sections.push({ group: "clear", title: t("WITCHER.Dialog.Dock.ClearCondition", "Clear a condition (1 action)"), opts: clearOpts });
 
     // Roll-to-end actions (Overdose purge) — sourced from clauses whose endCheck
     // is `viaAction`. Costs 1 action AND rolls the check; repeatable (take it as
@@ -1763,7 +2211,29 @@ async function openActionMenu(actor, slot) {
     const checkOpts = actionEndCheckOptions().map(o => actor.statuses?.has?.(o.id)
       ? { key: `endcheck:${o.id}`, icon: o.icon, label: o.label }
       : { key: `endcheck:${o.id}`, icon: o.icon, label: o.label, info: `Requires the ${o.statusName} condition` });
-    if (checkOpts.length) sections.push({ group: "endcheck", title: "End a condition — roll (1 action)", opts: checkOpts });
+    if (checkOpts.length) sections.push({ group: "endcheck", title: t("WITCHER.Dialog.Dock.EndCondition", "End a condition — roll (1 action)"), opts: checkOpts });
+
+    // Monster special abilities (Amphibious, Feral, breath weapons, …). Sourced
+    // from system.combat.specialAbilities[]; clicking posts a chat card with
+    // the ability description and spends the slot like a normal action. Each
+    // cell is a single-line label; hovering surfaces a themed popup
+    // (wou-quality-tip) with the full HTML description so a long writeup
+    // doesn't expand the dialog.
+    if (actor.type === "monster") {
+      const abilityOpts = (Array.isArray(actor.system?.combat?.specialAbilities) ? actor.system.combat.specialAbilities : [])
+        .map((a, i) => ({ a, i }))
+        .filter(({ a }) => String(a?.name ?? "").trim() || String(a?.description ?? "").trim())
+        .map(({ a, i }) => {
+          const html = String(a?.description ?? "").trim();
+          return {
+            key:    `ability:${i}`,
+            icon:   "fa-burst",
+            label:  String(a?.name || "(unnamed ability)"),
+            tipHtml: html   // HTML body for the themed hover popup
+          };
+        });
+      if (abilityOpts.length) sections.push({ group: "ability", title: t("WITCHER.Dialog.Dock.SpecialAbilities", "Special Abilities"), opts: abilityOpts });
+    }
   }
   if (slot === "full") {
     // Aim caps at AIM_MAX_RANK — once there, show it greyed/informational
@@ -1781,20 +2251,32 @@ async function openActionMenu(actor, slot) {
         return { ...o, info: `Already at maximum aim (Aim ${AIM_MAX_RANK})` };
       return o;
     });
-    sections.push({ group: "full", title: "Full Round — uses your whole turn", opts: fullOpts });
+    sections.push({ group: "full", title: t("WITCHER.Dialog.Dock.FullRound", "Full Round — uses your whole turn"), opts: fullOpts });
   }
   const content = `<div class="wou-action-menu">
     <div class="wou-action-menu-help">${helpIconHTML(ACTION_ECON_TIP)}</div>
     ${sections.map(s => `
     <div class="wou-action-group">
       <div class="wou-action-group-title">${escapeHTML(s.title)}</div>
-      ${s.opts.map(o => o.info
-        ? `<div class="wou-action-cell is-info" data-key="${o.key}" title="${escapeHTML(o.info)}"><i class="fa-solid ${o.icon}"></i><span>${escapeHTML(o.label)}</span></div>`
-        : `<button type="button" class="wou-action-cell" data-group="${s.group}" data-key="${o.key}" data-label="${escapeHTML(o.label)}"><i class="fa-solid ${o.icon}"></i><span>${escapeHTML(o.label)}</span></button>`).join("")}
+      ${s.opts.map(o => {
+        if (o.info) {
+          return `<div class="wou-action-cell is-info" data-key="${o.key}" title="${escapeHTML(o.info)}"><i class="fa-solid ${o.icon}"></i><span>${escapeHTML(o.label)}</span></div>`;
+        }
+        /* Themed hover popup for ability cells (and any other cell that
+         * carries a `tipHtml` field). Foundry's tooltip layer reads the
+         * `data-tooltip` attribute and renders it into <aside id="tooltip">;
+         * `data-tooltip-class="wou-quality-tip"` swaps in our amber-themed
+         * panel (defined in styles/inventory.css). Plain-text `desc` falls
+         * back to the native `title` attribute for non-popover hover. */
+        const tipAttrs = o.tipHtml
+          ? ` data-tooltip="${escapeHTML(o.tipHtml)}" data-tooltip-direction="UP" data-tooltip-class="wou-quality-tip"`
+          : (o.desc ? ` title="${escapeHTML(o.desc)}"` : "");
+        return `<button type="button" class="wou-action-cell" data-group="${s.group}" data-key="${o.key}" data-label="${escapeHTML(o.label)}"${tipAttrs}><i class="fa-solid ${o.icon}"></i><span>${escapeHTML(o.label)}</span></button>`;
+      }).join("")}
     </div>`).join("")}</div>`;
 
   await DialogV2.wait({
-    window: { title: `Action — ${actor.name}` },
+    window: { title: tFormat("WITCHER.Dialog.Dock.Action", { actor: actor.name }, "Action — {actor}") },
     content,
     buttons: [{ action: "close", label: "Cancel", default: true }],
     rejectClose: false,
@@ -1827,7 +2309,63 @@ async function openActionMenu(actor, slot) {
               if (btn.dataset.key === "recovery") await actor.takeRecoveryAction();
               else if (btn.dataset.key === "aim") await actor.takeAimAction();
               else if (btn.dataset.key === "run") await actor.recordRun();
+              else if (btn.dataset.key === "charge") {
+                /* Close menu FIRST so the weapon-picker dialog isn't
+                 * shadowed by this one, then run the charge flow
+                 * (grants SPD×3 movement + opens weapon attack with
+                 * Charge strike pre-selected). */
+                dlg?.close?.();
+                await openChargeFlow(actor);
+                return;
+              }
               else await actor.recordFullRound(label);
+            } else if (btn.dataset.group === "ability") {
+              // Monster special ability: WHISPER a chat card with the
+              // description to the GM(s) + the actor's owners. Broadcasting
+              // to the table would leak monster lore to players who haven't
+              // researched the creature yet. Then spend the action slot.
+              const idx = Number(btn.dataset.key.slice("ability:".length)) || 0;
+              const ability = actor.system?.combat?.specialAbilities?.[idx];
+              if (ability) {
+                const name = String(ability.name || "Special Ability").trim();
+                const desc = String(ability.description || "").trim();
+                /* Recipient set: every active GM, plus every user with at
+                 * least OWNER permission on the actor. De-duped via Set. */
+                const recipients = new Set();
+                for (const u of (game.users ?? [])) {
+                    if (u.isGM) recipients.add(u.id);
+                    else if (actor.testUserPermission?.(u, "OWNER")) recipients.add(u.id);
+                }
+                await ChatMessage.create({
+                  speaker: ChatMessage.implementation.getSpeaker({ actor }),
+                  whisper: [...recipients],
+                  content: `<div class="wou-monster-ability"><strong>${escapeHTML(name)}</strong>${desc ? `<div class="wou-monster-ability-desc">${desc}</div>` : ""}</div>`
+                });
+              }
+              if (slot === "extra") await actor.recordExtraAction(label);
+              else await actor.recordAction(label);
+            } else if (btn.dataset.key === "escape") {
+              /* Escape (RAW Core "Brawling & Wrestling") — spend the
+               * slot, then invoke the brawl escape flow directly. The
+               * brawlAttack handler with an `escape` pre-declaration
+               * skips the dialog entirely and rolls Dodge/Escape vs
+               * each holder's Brawling, clearing whichever pairs the
+               * escaper beats. Close the menu FIRST so its focus
+               * doesn't intercept subsequent chat clicks.
+               *
+               * `escapeAttempt: true` bypasses the pinned / chokeheld
+               * act-restriction — held statuses aren't allowed to lock
+               * their own escape, otherwise a Pin is unbreakable. True
+               * incapacitation (Paralyzed / Unconscious) still blocks. */
+              const spent = slot === "extra"
+                ? await actor.recordExtraAction(label, { escapeAttempt: true })
+                : await actor.recordAction(label, { escapeAttempt: true });
+              dlg?.close?.();
+              if (spent && typeof actor.brawlAttack === "function") {
+                try { await actor.brawlAttack({ escape: true }); }
+                catch (err) { console.warn("witcher-ttrpg-death-march | escape action failed", err); }
+              }
+              return;
             } else if (slot === "extra") {
               await actor.recordExtraAction(label);
             } else {
@@ -1846,25 +2384,279 @@ async function promptMovement(actor) {
   const DialogV2 = foundry?.applications?.api?.DialogV2;
   if (!DialogV2 || !actor) return;
   const spd = Number(actor.system?.stats?.spd?.value) || 0;
+  /* Viper heroic — Lightning Fast: rolled Nd6 bonus meters ride on top of
+   * SPD for this round. Folded into the dialog's max so the input clamps
+   * to the extended budget, matching the dock's Movement pill and the
+   * canvas-movement cap. */
+  const lfBonus = Number(actor?.getFlag?.("witcher-ttrpg-death-march", "wr.lightningFastBonus")) || 0;
+  const cap = spd + lfBonus;
   const split = isHomebrewEnabled("splitMovement");
   const prior = Number(actor.system?.combatRound?.movementMeters) || 0;
-  const remaining = split && spd ? Math.max(0, spd - prior) : spd;
+  const remaining = split && cap ? Math.max(0, cap - prior) : cap;
+  const lfNote = lfBonus > 0 ? ` (+${lfBonus}m Lightning Fast)` : "";
   const hint = split
-    ? `Up to ${remaining}m left of your SPD ${spd}m this turn — movement can be split across actions. Running (SPD×3) is a full-round action.`
-    : `Up to your SPD of ${spd}m — moving locks the Move action, and acting forfeits remaining movement. Running (SPD×3) is a full-round action.`;
+    ? `Up to ${remaining}m left of your SPD ${spd}m${lfNote} this turn — movement can be split across actions. Running (SPD×3) is a full-round action.`
+    : `Up to your SPD of ${spd}m${lfNote} — moving locks the Move action, and acting forfeits remaining movement. Running (SPD×3) is a full-round action.`;
+  /* Move-budget actions catalog: walk-by-meters + any kind:"movement"
+   * entries (currently Clinch, EO p.5). When CE is off, the catalog is
+   * empty and only the meters input shows.
+   *
+   * Clinch rule (RAW + CE): a clinch consumes the ENTIRE movement action.
+   * You either move-by-meters OR clinch — never both, and if you've
+   * already spent any movement this turn, clinch is off the table.
+   *
+   * Break-clinch rule: if the actor is currently in any hold pair, the
+   * dialog surfaces a "Break clinch" radio. Picking it cascade-clears
+   * every pair the actor is in and consumes their movement action —
+   * matches the "any movement while clinched breaks it" rule but as
+   * an explicit UI choice for players who don't want to actually
+   * walk their token anywhere. */
+  const movementAlreadySpent = prior > 0;
+  /* Break-clinch UI check — purely STATUS-BASED (no registry lookup):
+   *
+   *   Break clinch shows only when ALL of these hold:
+   *     a) the actor currently has the `clinched` status,
+   *     b) the actor has a token on the canvas AND at least one
+   *        Chebyshev-adjacent token also carries `clinched`,
+   *     c) the actor has movement to spend this turn (break consumes
+   *        the full movement action).
+   *
+   * Rationale: "break clinch" means "step out of arm's reach". If
+   * you don't carry the status you're not in one; if no adjacent
+   * token carries the status you're not currently being clinched by
+   * anyone standing next to you. The check ignores the registry
+   * intentionally — orphan status (a `clinched` icon left over from
+   * before the fixes) still surfaces the option so the player can
+   * clear it. */
+  const actorIsClinched = !!actor?.statuses?.has?.("clinched");
+  let hasAdjacentClinchedToken = false;
+  try {
+      if (actorIsClinched) {
+          const actorTok = actor?.getActiveTokens?.()?.[0];
+          const actorCenter = actorTok
+              ? { x: actorTok.center?.x ?? actorTok.x ?? 0, y: actorTok.center?.y ?? actorTok.y ?? 0 }
+              : null;
+          const gridSize = Number(canvas?.scene?.grid?.size) || 0;
+          if (actorCenter && gridSize > 0) {
+              for (const t of (canvas?.tokens?.placeables ?? [])) {
+                  if (!t || t === actorTok) continue;
+                  if (!t.actor?.statuses?.has?.("clinched")) continue;
+                  const cx = t.center?.x ?? t.x ?? 0;
+                  const cy = t.center?.y ?? t.y ?? 0;
+                  const dx = Math.abs(actorCenter.x - cx) / gridSize;
+                  const dy = Math.abs(actorCenter.y - cy) / gridSize;
+                  if (Math.max(dx, dy) <= 1) { hasAdjacentClinchedToken = true; break; }
+              }
+          }
+      }
+  } catch (_) { hasAdjacentClinchedToken = false; }
+  let moveActions = [];
+  if (isHomebrewEnabled("extendedCombat")) {
+      try {
+          const { getActiveCombatActions } = await import("../../data/combatExtended/actions.mjs");
+          const all = getActiveCombatActions();
+          moveActions = Object.entries(all)
+              .filter(([, s]) => s.kind === "movement")
+              .map(([key, s]) => ({ key, label: game.i18n.localize(s.labelKey) }));
+      } catch (_) { /* CE module not present */ }
+  }
+  const clinchBlockedTooltip = movementAlreadySpent
+      ? ' title="You\'ve already spent movement this turn — clinch requires your full unspent movement action."'
+      : "";
+  /* Clinch / Break-clinch UI:
+   *   - Clinch shows only when the actor is NOT currently clinched
+   *     (you can't clinch someone else while you're already tied up).
+   *   - Break clinch shows only when ALL of these are true:
+   *       a. the actor is in a hold pair AND adjacent to a partner
+   *          (no point stepping out of a clinch that isn't in reach),
+   *       b. the actor still has movement to spend this turn
+   *          (breaking consumes the full movement action).
+   *   - Same movement-spent block as Clinch: both need a full unspent
+   *     movement action, so if you've moved already this turn neither
+   *     option surfaces. */
+  /* Break clinch is a low-cost "step out" — it consumes 1 metre of
+   * movement (not the whole action) and immediately clears the pair.
+   * Requires an adjacent partner (the person you're clinched with)
+   * AND at least 1m of unspent movement. Available alongside Walk /
+   * Run; a clinched actor could pick Break-clinch OR just walk
+   * (walking any distance while clinched breaks it too via the
+   * movement hook), the difference being that Break-clinch is only
+   * 1m so you keep the rest of your SPD for a follow-up. */
+  const breakClinchAvailable = actorIsClinched && hasAdjacentClinchedToken && remaining >= 1;
+  const breakClinchRadio = breakClinchAvailable
+      ? `<label><input type="radio" name="moveAction" value="breakClinch"> Break clinch (step out — costs 1m)</label>`
+      : "";
+  const shownMoveActions = moveActions.filter(a =>
+      /* Hide the clinch action itself while the actor is already
+       * clinched — Break clinch is the relevant option instead. */
+      !(a.key === "clinch" && actorIsClinched)
+  );
+  const showWalkOption = true;
+  const walkRadio = showWalkOption
+      ? `<label><input type="radio" name="moveAction" value="walk" checked> Walk / Run</label>`
+      : "";
+  const showRadios = walkRadio || shownMoveActions.length || breakClinchRadio;
+  const clinchedNote = actorIsClinched && !breakClinchAvailable
+      ? `<p class="hint" style="color:#b97;">Clinched — you can't walk. Break clinch requires an adjacent partner AND unspent movement this turn.</p>`
+      : "";
+  const actionRadios = showRadios
+      ? `<fieldset class="wou-move-actions"><legend>Move action</legend>
+           ${walkRadio}
+           ${shownMoveActions.map(a => {
+              const blocked = a.key === "clinch" && movementAlreadySpent;
+              return `<label${blocked ? ' class="is-blocked"' + clinchBlockedTooltip : ""}>` +
+                     `<input type="radio" name="moveAction" value="${a.key}"${blocked ? " disabled" : ""}> ${a.label}` +
+                     `</label>`;
+           }).join("")}
+           ${breakClinchRadio}
+         </fieldset>${clinchedNote}`
+      : clinchedNote;
+  /* Reposition counter — per-round cap on the defensive Reposition
+   * distance is total SPD. Shown here (adjacent to the movement input)
+   * so the player sees how much they've already burned before opening
+   * defenses on other actors' turns. Reads live from combatRound so
+   * it stays fresh across the round. */
+  const repositionPrior = Number(actor?.system?.combatRound?.repositionMeters) || 0;
+  const repositionNote = spd > 0
+      ? `<p class="hint">Reposition (defensive): <strong>${repositionPrior}</strong> / ${spd}m used this round. Half-SPD (${Math.floor(spd/2)}m) per defense; total capped by SPD.</p>`
+      : "";
   const content = `<div class="wou-move-prompt">
+    ${actionRadios}
     <label>Distance moved (m) ${helpIconHTML(ACTION_ECON_TIP)}</label>
     <input type="number" name="meters" min="0" max="${remaining}" step="1" value="${remaining}" autofocus />
     <p class="hint">${hint}</p>
+    ${repositionNote}
   </div>`;
-  const meters = await DialogV2.prompt({
-    window: { title: `Move — ${actor.name}` },
+  const result = await DialogV2.prompt({
+    window: { title: tFormat("WITCHER.Dialog.Dock.Move", { actor: actor.name }, "Move — {actor}") },
     content,
-    ok: { label: "Confirm", callback: (_e, btn) => Number(btn.form?.elements?.meters?.value) || 0 },
+    ok: { label: "Confirm", callback: (_e, btn) => ({
+        meters: Number(btn.form?.elements?.meters?.value) || 0,
+        moveAction: btn.form?.elements?.moveAction?.value || "walk"
+    }) },
+    render: (_e, dlg) => {
+        /* Wire meters input state based on the picked action:
+         *   - clinch:      full-movement action → input greyed out.
+         *   - breakClinch: fixed 1m cost → input greyed out at 1.
+         *   - walk / run:  free-form distance → input editable.
+         */
+        const form = dlg?.element?.querySelector?.("form") ?? dlg?.element;
+        if (!form) return;
+        const metersInput = form.querySelector?.('input[name="meters"]');
+        const setMetersState = () => {
+            const picked = form.querySelector?.('input[name="moveAction"]:checked')?.value ?? "walk";
+            if (!metersInput) return;
+            if (picked === "clinch") {
+                metersInput.disabled = true;
+                metersInput.classList.add("is-blocked");
+                metersInput.title = "Clinch consumes your full movement action — distance is not chosen.";
+            } else if (picked === "breakClinch") {
+                metersInput.disabled = true;
+                metersInput.classList.add("is-blocked");
+                metersInput.title = "Break clinch costs 1 metre of movement.";
+            } else {
+                metersInput.disabled = false;
+                metersInput.classList.remove("is-blocked");
+                metersInput.title = "";
+            }
+        };
+        setMetersState();
+        form.querySelectorAll?.('input[name="moveAction"]').forEach(el =>
+            el.addEventListener("change", setMetersState));
+    },
     rejectClose: false
   }).catch(() => null);
-  if (meters == null) return;
-  try { await actor.recordMovement(meters); }
+  if (!result) return;
+  const { meters, moveAction } = result;
+
+  if (moveAction === "clinch") {
+    /* Guard belt-and-suspenders against a stale dialog: someone could
+     * spend movement between the dialog opening and confirm. Refuse
+     * a clinch that would require an already-spent movement action. */
+    if (movementAlreadySpent) {
+        ui.notifications?.warn("Clinch requires your full unspent movement action — you've already moved this turn.");
+        return;
+    }
+    /* Single picked target required. Uses Foundry's current user targets. */
+    const tgt = [...(game.user?.targets ?? [])][0];
+    const target = tgt?.actor;
+    if (!target) {
+        ui.notifications?.warn("Clinch requires a single targeted token.");
+        return;
+    }
+    /* Clinch is NOT opposed — you just clinch (per design). Adjacency
+     * is enforced inside applyHoldLink (or its dialog prompt when the
+     * scene lacks tokens). Grapple / pin / choke / throw are the ones
+     * that oppose; clinch is a direct-apply movement action. */
+    try {
+        const { applyHoldLink } = await import("../../mechanics/holdLink.mjs");
+        await applyHoldLink(actor, target, "clinched");
+    } catch (err) { console.warn("witcher-ttrpg-death-march | clinch apply failed", err); }
+  }
+
+  if (moveAction === "breakClinch") {
+    /* Break clinch nukes the state end-to-end:
+     *   1. Cascade-clear every registry pair the actor is in.
+     *   2. Force-strip every hold status from THIS actor (both its
+     *      world and synthetic representations get toggled — the
+     *      canvas-token loop below covers the synthetic side).
+     *   3. Force-strip the same statuses from every adjacent token
+     *      that also carries `clinched` — those were the pair
+     *      partners under the bidirectional model, and the pair
+     *      break should bring their status down too.
+     *
+     * The intentionally-aggressive approach handles orphan status
+     * (icon left over from before the fixes, from a deleted target,
+     * or from an aborted apply). Repeat Break-clinch clicks converge
+     * to "nothing left carrying the status" instead of ping-ponging. */
+    try {
+        const { clearHoldLink, HOLD_STATUSES } = await import("../../mechanics/holdLink.mjs");
+        await clearHoldLink(actor, "movement");
+
+        const actorTok = actor?.getActiveTokens?.()?.[0];
+        const gridSize = Number(canvas?.scene?.grid?.size) || 0;
+        const actorCenter = actorTok
+            ? { x: actorTok.center?.x ?? actorTok.x ?? 0, y: actorTok.center?.y ?? actorTok.y ?? 0 }
+            : null;
+
+        const affected = new Set([actor]);
+        if (actorCenter && gridSize > 0) {
+            for (const t of (canvas?.tokens?.placeables ?? [])) {
+                if (!t || t === actorTok) continue;
+                if (!t.actor?.statuses?.has?.("clinched")) continue;
+                const cx = t.center?.x ?? t.x ?? 0;
+                const cy = t.center?.y ?? t.y ?? 0;
+                const dx = Math.abs(actorCenter.x - cx) / gridSize;
+                const dy = Math.abs(actorCenter.y - cy) / gridSize;
+                if (Math.max(dx, dy) <= 1 && t.actor) affected.add(t.actor);
+            }
+        }
+
+        for (const side of affected) {
+            for (const sid of HOLD_STATUSES) {
+                if (side?.statuses?.has?.(sid)) {
+                    try { await side.toggleStatusEffect(sid, { active: false }); }
+                    catch (_) { /* ignore */ }
+                }
+            }
+            try { await side?.unsetFlag?.("witcher-ttrpg-death-march", "holdLink"); }
+            catch (_) { /* legacy flag — best effort */ }
+        }
+    } catch (err) { console.warn("witcher-ttrpg-death-march | break-clinch failed", err); }
+  }
+  /* Consume movement:
+   *   - walk/run:      the entered meters value.
+   *   - clinch:        the entire remaining movement budget for the
+   *                    turn (moving INTO a grapple is a full-move
+   *                    action).
+   *   - breakClinch:   just 1 metre — you step out and stop, and the
+   *                    remaining SPD stays available if the player
+   *                    wants to walk further afterwards. */
+  const metersToConsume =
+      moveAction === "clinch"      ? remaining
+    : moveAction === "breakClinch" ? Math.min(1, remaining)
+    :                                meters;
+  try { await actor.recordMovement(metersToConsume); }
   catch (err) { console.warn("witcher-ttrpg-death-march | recordMovement failed", err); }
 }
 
@@ -1921,7 +2713,13 @@ function paintActionBudget(dock, cr, inCombat = false, sta = null, opts = {}) {
     const moved   = Number(c.movementMeters) || 0;
     const spd     = Number(c.spd) || 0;
     const runMul  = c.runUsed ? 3 : 1;
-    const cap     = spd * runMul;
+    /* Fold Lightning Fast bonus (Viper heroic — rolled Nd6 m stamped on
+     * flags.wr.lightningFastBonus) into the displayed cap so the "spent/cap"
+     * pill reflects the extended budget. Added AFTER the run multiplier
+     * (canvas-movement.mjs does the same) so the bonus is additive, not
+     * tripled by Run. Cleared on turn end. */
+    const lfBonus = Number(c.lightningFastBonus) || 0;
+    const cap     = spd * runMul + lfBonus;
     move.classList.toggle("is-used", !!c.movementUsed);
     // RAW (Split Movement off): acting forfeits any remaining movement, so
     // once an action/extra is spent the Move button is no longer available.
@@ -1929,10 +2727,10 @@ function paintActionBudget(dock, cr, inCombat = false, sta = null, opts = {}) {
     const moveLockedByAction = splitOff && !c.movementUsed && (c.actionUsed || c.extraUsed);
     move.classList.toggle("is-blocked", !!moveLockedByAction || stunned || offTurn);
     const nm = move.querySelector(".nm");
-    if (nm) nm.textContent = "Movement";
+    if (nm) nm.textContent = t("WITCHER.Dock.MovementLabel", "Movement");
     /* Big "spent / cap" counter to the right of the icon, painted only
      * while in combat (and only when SPD is set). Out of combat the
-     * counter span is emptied so CSS hides it and the .nm "Movement"
+     * counter span is emptied so CSS hides it and the .nm t("WITCHER.Dock.MovementLabel", "Movement")
      * label shows by itself, matching the other budget buttons. */
     const counter = move.querySelector('[data-bind="mov-counter"]');
     if (counter) counter.textContent = (cap > 0 && inCombat) ? `${moved}/${cap}` : "";
@@ -2079,7 +2877,20 @@ export function rebindDock() {
     round:     c?.round ?? 0,
     combatant: c?.combatant?.id ?? null
   });
-  const sig = JSON.stringify(data) + "|" + weaponListSig(actor) + "|" + armorSig + "|" + pinSig + "|" + statusSig + "|" + combatSig;
+  /* Combat Extended guard + shield-raised state. Without this in the
+   * sig, picking a new guard or raising/lowering a shield wouldn't
+   * trigger a dock rebind (data + weapons + armor sigs all unchanged),
+   * so the guard button face + the warding indicators on weapon rows
+   * would stay stale until the NEXT turn forced a fresh rebind. */
+  const guardState = actor?.system?.guard ?? {};
+  const guardSig = JSON.stringify({
+    cur:   guardState.current   ?? "balanced",
+    pref:  guardState.preferred ?? "balanced",
+    ward:  guardState.wardingLocations ?? {},
+    sh:    guardState.shieldRaised?.itemId ?? "",
+    shLoc: guardState.shieldRaised?.coveredLocations ?? []
+  });
+  const sig = JSON.stringify(data) + "|" + weaponListSig(actor) + "|" + armorSig + "|" + pinSig + "|" + statusSig + "|" + combatSig + "|" + guardSig;
   if (sig === _lastRebindSig) return;
   _lastRebindSig = sig;
 
@@ -2135,9 +2946,17 @@ export function rebindDock() {
   }
 
   // Guard-stance button — part of the optional combat overhaul. Hide it
-  // unless the `extendedCombat` homebrew toggle is enabled.
+  // unless the `extendedCombat` homebrew toggle is enabled. When visible,
+  // the face reflects the actor's CURRENT guard (icon + label) and the
+  // click opens the guard config dialog.
   const guard = dock.querySelector(".defense-col .guard-btn");
-  if (guard) guard.style.display = isHomebrewEnabled("extendedCombat") ? "" : "none";
+  if (guard) {
+    /* Gated on the per-subsystem `guards` toggle so a GM running CE
+     * with guards disabled doesn't see the stance button at all. */
+    const showGuard = isCESubsystemEnabled("guards");
+    guard.style.display = showGuard ? "" : "none";
+    if (showGuard) renderGuardButton(guard, actor);
+  }
 
   // TOX — fills the medallion's background from the top down via a gradient
   // stop driven by the `--tox-frac` custom property on the portrait.
@@ -2214,7 +3033,7 @@ export function rebindDock() {
     // defense possible) greys it; the dialog disables the ATTACK/grapple options
     // when no action slot remains.
     clone.classList.toggle("is-blocked", defStunned);
-    if (defStunned) clone.title = "Stunned at 0 STA — you can't defend until you recover";
+    if (defStunned) clone.title = t("WITCHER.Tooltip.Dock.Stunned", "Stunned at 0 STA — you can't defend until you recover");
     clone.addEventListener("click", async (e) => {
       e.preventDefault(); e.stopPropagation();
       if (clone.classList.contains("is-blocked")) return;
@@ -2238,7 +3057,11 @@ export function rebindDock() {
                 : action === "reposition" ? { skill: "athletics", label: "Reposition" }
                 : null;
       if (def && actor && typeof actor.defendBySkill === "function") {
-        try { await actor.defendBySkill(def.skill, { label: def.label }); }
+        // Ask for the ad-hoc Other Modifier first so manual rolls match the
+        // incoming-attack defense prompt. Cancel here cancels the action.
+        const extraMod = await promptDefenseModifier(def.label);
+        if (extraMod === null) return;
+        try { await actor.defendBySkill(def.skill, { label: def.label, extraMod }); }
         catch (err) { console.warn("witcher-ttrpg-death-march | defense roll failed", err); }
       }
     });
@@ -2272,13 +3095,13 @@ export function rebindDock() {
         badge.textContent = numeral;
         badge.classList.add("has-rank");
       }
-      soberSign.title = `Sober Up (currently Drunk ${numeral}) — roll 1d10 under BODY`;
+      soberSign.title = tFormat("WITCHER.Tooltip.Dock.SoberUpDrunk", { numeral: numeral }, "Sober Up (currently Drunk {numeral}) — roll 1d10 under BODY");
     } else {
       if (badge) {
         badge.textContent = "";
         badge.classList.remove("has-rank");
       }
-      soberSign.title = "Sober Up — currently sober";
+      soberSign.title = t("WITCHER.Tooltip.Dock.SoberUpSober", "Sober Up — currently sober");
     }
   }
 

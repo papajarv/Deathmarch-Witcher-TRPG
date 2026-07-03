@@ -29,6 +29,11 @@ const num = (initial = 0) => new fields.NumberField({ initial, integer: true, mi
 
 export function defensePropertiesSchema() {
     const out = {};
+    /* Per-location SP — one value per body slot so a hauberk can be
+     * 10 SP torso / 5 SP arms (and arm damage doesn't drain chest SP).
+     * The `location` enum (below) determines which of these slots the
+     * armor actually covers; uncovered slots are forced to 0 in the
+     * derivation step so stale values can't leak. */
     for (const loc of LOCATIONS) {
         out[`${loc}Stopping`]    = num();
         out[`${loc}MaxStopping`] = num();
@@ -66,8 +71,45 @@ export function defensePropertiesSchema() {
     out.appliedEnhancements = new fields.ArrayField(new fields.SchemaField({
         uuid: new fields.StringField({ initial: "" }),
         name: new fields.StringField({ initial: "" }),
-        img:  new fields.StringField({ initial: "" })
+        img:  new fields.StringField({ initial: "" }),
+        /* Under the EO armor model, armor-mod enhancements (type "armor")
+         * consume from a specific body-location's AE pool. This field
+         * records which location the slot was charged to. Empty under
+         * RAW (single-bucket) and for glyphs (which consume from the
+         * total enhancementSlots pool, location-agnostic). */
+        location: new fields.StringField({ initial: "" })
     }), { initial: [] });
+    /* Equipment Overhaul fields. All present unconditionally so values
+     * survive a CE-toggle flip; only consumed when isCESubsystemEnabled
+     * ("eoArmorModel") returns true.
+     *   aeSlots          per-location Armor Enhancement count map (EO p.4
+     *                    "AE slots ... tracked separately for each body
+     *                    location"). The sum is the piece's total
+     *                    physical-enhancement budget.
+     *   enhancementSlots TOTAL glyph (En.) slots for the piece (EO uses
+     *                    one number across all locations). Distinct from
+     *                    the RAW `armorEnhancement` single bucket.
+     *   armingJackKind   "none" | "jack" | "superiorSuit". Marks a piece
+     *                    of armor AS an arming jack or a superior arming
+     *                    suit.
+     *   armoredArmingJackUpgrade
+     *                    Same enum. For aketon-style armor that has paid
+     *                    the +100 / +750-crown upgrade to also function
+     *                    as a jack / superior suit (EO p.4).
+     *   difficult        Armor with the Difficult property — requires a
+     *                    worn arming jack to equip (EO p.4). */
+    out.aeSlots = new fields.SchemaField({
+        head:      num(),
+        torso:     num(),
+        leftArm:   num(),
+        rightArm:  num(),
+        leftLeg:   num(),
+        rightLeg:  num()
+    });
+    out.enhancementSlots         = num();
+    out.armingJackKind           = new fields.StringField({ initial: "none", choices: ["none", "jack", "superiorSuit"] });
+    out.armoredArmingJackUpgrade = new fields.StringField({ initial: "none", choices: ["none", "jack", "superiorSuit"] });
+    out.difficult                = new fields.BooleanField({ initial: false });
     return out;
 }
 

@@ -19,6 +19,37 @@ import { skillMod as statusSkillMod } from "../../mechanics/statusEngine.mjs";
 const esc = (s) => Handlebars.escapeExpression(String(s ?? ""));
 const signed = (n) => `${n >= 0 ? "+" : ""}${n}`;
 
+/* Skill key → auto-fumble category. Returns null for skills that don't
+ * fit a RAW fumble table (perception, cooking, intimidation, …) so
+ * extendedRoll just posts the fumble banner without auto-rolling. Combat
+ * mixins (weaponAttackMixin, defenseMixin, brawlMixin, castSpellMixin)
+ * pass their OWN fumble categories directly and never route through
+ * skillMixin for their primary flow — this mapping only fires for
+ * standalone skill checks (sheet buttons, macros, opposed skill tests).
+ *
+ * Mapping — user spec (2026-07-02):
+ *   armed attack   ← weapon-attack skills (melee / smallblades / swords / staffspear)
+ *   armed defense  ← parry / block are weapon actions (routed via defenseMixin, not here)
+ *   unarmed attack ← brawling (default; brawlMixin covers the combat-flow case)
+ *   unarmed defense← dodge, athletics (reposition + escape)
+ *   ranged attack  ← archery, crossbow
+ *   magic          ← spellcast, hexweave, ritcraft
+ */
+const SKILL_FUMBLE_CATEGORY = Object.freeze({
+    brawling:      "unarmedAttack",
+    dodge:         "unarmedDefense",
+    athletics:     "unarmedDefense",
+    melee:         "meleeAttack",
+    smallblades:   "meleeAttack",
+    swordsmanship: "meleeAttack",
+    staffspear:    "meleeAttack",
+    archery:       "rangedAttack",
+    crossbow:      "rangedAttack",
+    spellcast:     "magic",
+    hexweave:      "magic",
+    ritcraft:      "magic"
+});
+
 /** Localize a stat label, falling back to the upper-cased key when the
  *  i18n key is missing (localize returns the key unchanged in that case). */
 function statName(statKey) {
@@ -126,12 +157,22 @@ export const skillMixin = (Base) => class extends Base {
                 dc != null ? { label: "DC", value: dc } : null
             ]
         });
+        /* Every skill roll gets a fumble category — mapped ones go to
+         * their RAW combat table (melee / dodge / archery / magic /
+         * brawl / etc.); unmapped skills (perception, cooking,
+         * intimidation, …) fall through to "skillCheck", a generic
+         * category with no auto-roll table but which Balanced Stance
+         * can still gate a 5-STA skip on ("a fumble of any kind"). */
+        const fumbleCategory = SKILL_FUMBLE_CATEGORY[skillKey] ?? "skillCheck";
         const result = await extendedRoll(formula, {
             speaker: ChatMessage.getSpeaker({ actor: this }),
             flavor,
             messageMode,
             flags: { "witcher-ttrpg-death-march": { category: "skill" } }
-        }, dc != null ? { threshold: dc } : {});
+        }, {
+            ...(dc != null ? { threshold: dc } : {}),
+            fumbleCategory
+        });
         return { ...result, formula };
     }
 

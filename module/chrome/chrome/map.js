@@ -138,10 +138,10 @@ function positionBounds() {
   const left   = (leftOpen   && leftbar)? Math.max(0, leftbar.getBoundingClientRect().right) : 0;
   const right  = (rightOpen  && sidebar)? Math.max(0, W - sidebar.getBoundingClientRect().left) : 0;
 
-  panelEl.style.top    = `${top}px`;
-  panelEl.style.bottom = `${bottom}px`;
-  panelEl.style.left   = `${left}px`;
-  panelEl.style.right  = `${right}px`;
+  panelEl.style.top = `calc(${top}px / var(--wdm-scale, 1))`;
+  panelEl.style.bottom = `calc(${bottom}px / var(--wdm-scale, 1))`;
+  panelEl.style.left = `calc(${left}px / var(--wdm-scale, 1))`;
+  panelEl.style.right = `calc(${right}px / var(--wdm-scale, 1))`;
 
   const tab = document.querySelector('#wou-top-bar [data-tab="map"]');
   if (tab) {
@@ -152,7 +152,12 @@ function positionBounds() {
 }
 
 function wireChromeObservers() {
-  const reposition = () => requestAnimationFrame(positionBounds);
+  /* Coalesced: one positionBounds per frame regardless of trigger count. */
+  let _pending = 0;
+  const reposition = () => {
+    if (_pending) return;
+    _pending = requestAnimationFrame(() => { _pending = 0; positionBounds(); });
+  };
   if ("ResizeObserver" in window) {
     _chromeResizeObs = new ResizeObserver(reposition);
     for (const sel of CHROME_SELECTORS) {

@@ -24,6 +24,7 @@
 
 import { rasterizePortraitCrop, PORTRAIT_CROP_FLAG } from "../../applications/ringPortraitCropper.mjs";
 
+import { t, tFormat } from "../lib/i18n.js";
 const MODULE_ID = "witcher-ttrpg-death-march";
 
 /* Upper bound (inclusive) of each tier, as a fraction of toxicity.max. Tier i
@@ -342,7 +343,7 @@ export async function openVariablePortraitConfig(actor) {
   if (!(game.user?.isGM || actor.isOwner)) return;
   const DialogV2 = foundry?.applications?.api?.DialogV2;
   if (!DialogV2) {
-    ui.notifications?.error?.(`${MODULE_ID} | DialogV2 unavailable on this Foundry build.`);
+    ui.notifications?.error?.(tFormat("WITCHER.Notify.Portrait.DialogV2Unavailable", { mod: MODULE_ID }, "{mod} | DialogV2 unavailable on this Foundry build."));
     return;
   }
 
@@ -357,7 +358,7 @@ export async function openVariablePortraitConfig(actor) {
   }
 
   await DialogV2.wait({
-    window: { title: `Variable Portrait — ${actor.name}`, icon: "fa-solid fa-flask-vial" },
+    window: { title: tFormat("WITCHER.Dialog.Portrait.Variable", { actor: actor.name }, "Variable Portrait — {actor}"), icon: "fa-solid fa-flask-vial" },
     classes: ["wou-vp-dialog"],
     position: { width: 640 },
     content: `<div class="wou-vp-host">${gridHtml(actor, initial)}</div>`,
@@ -375,7 +376,7 @@ export async function openVariablePortraitConfig(actor) {
             schedule(actor);
           } catch (err) {
             console.error(`${MODULE_ID} | variable portrait save failed`, err);
-            ui.notifications?.error?.("Failed to save variable portrait config.");
+            ui.notifications?.error?.(t("WITCHER.Notify.Portrait.SaveFailed", "Failed to save variable portrait config."));
           }
         }
       },
@@ -418,7 +419,7 @@ export async function openVariablePortraitConfig(actor) {
           const cell = root.querySelector(`.wou-vp-cell[data-col="${col}"][data-tier="${tier}"]`);
           if (!cell) return;
           const FP = FilePickerImpl();
-          if (!FP) { ui.notifications?.error?.("FilePicker not available."); return; }
+          if (!FP) { ui.notifications?.error?.(t("WITCHER.Notify.Portrait.NoFilePicker", "FilePicker not available.")); return; }
           new FP({
             type: "image",
             current: cell.dataset.path || "",

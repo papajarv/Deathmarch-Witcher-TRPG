@@ -7,7 +7,151 @@
    Per-feature toggles add `.wou-<feature>` body classes on top.
    ============================================================================= */
 
+/* @import must come before any style rules per CSS spec — keep this line on
+ * top so Barlow / Barlow Condensed actually load from Google Fonts. The UI
+ * scale block sits below. */
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&family=Barlow:wght@300;400;500;600&display=swap');
+
+/* =============================================================================
+   UI SCALE — html font-size is the single source of truth.
+
+   All chrome CSS is rem-based, so anything that uses rem scales with this
+   value. Chrome overlays (Inventory, Character, Crafting, etc.) position
+   themselves via JS-measured pixel rectangles — that math still works
+   because rem changes the SIZE of content, not the coordinate space.
+
+   `--wdm-scale` is the user's knob (default 1.0 = 1.png baseline). The
+   slider in "Configure UI Scaling" multiplies above/below.
+
+   Foundry's native UI (sidebar tabs, hotbar, navigation, scene controls)
+   has its own font-size override below to fold them into the rem scale.
+   ============================================================================= */
+/* `--wdm-scale` defaults to 1 (a no-op for non-DM Foundry sessions).
+ * applyUIScale() in module/chrome/setup/ui-scale.js writes the user's
+ * value onto <html> at runtime. We apply the html font-size rule
+ * UNCONDITIONALLY (no :has(body.X) selector): Chromium's :has()
+ * invalidation is unreliable when the body class is added after page
+ * load — so a stale first paint would show scale=1 forever even after
+ * the JS wired --wdm-scale on the element. Default var keeps this
+ * rule inert until the system is active. */
+:root { --wdm-scale: 1; }
+html {
+  font-size: calc(16px * var(--wdm-scale, 1));
+}
+
+/* Fold every Foundry container that renders text into the scaled rem
+ * base. Two moves in one rule:
+ *   • Non-scale-aware containers (chrome, chat, notifications, popouts,
+ *     dialogs, tooltips, context menus) get font-size: 1rem so their
+ *     children inherit the scaled base rather than the browser's 16px.
+ *   • body itself gets the same anchor so any descendant relying on
+ *     inheritance (em, %, unset font-size) also scales.
+ * Without the body anchor, elements that use `em` end up cascading off
+ * a 16px browser-default parent and shrink relative to rem siblings. */
+body.witcher-ttrpg-death-march,
+body.witcher-ttrpg-death-march #sidebar,
+body.witcher-ttrpg-death-march #hotbar,
+body.witcher-ttrpg-death-march #scene-controls,
+body.witcher-ttrpg-death-march #navigation,
+body.witcher-ttrpg-death-march #players,
+body.witcher-ttrpg-death-march #ui-top,
+body.witcher-ttrpg-death-march #ui-middle,
+body.witcher-ttrpg-death-march #ui-bottom,
+body.witcher-ttrpg-death-march #ui-left,
+body.witcher-ttrpg-death-march #ui-right,
+body.witcher-ttrpg-death-march #notifications,
+body.witcher-ttrpg-death-march #tooltip,
+body.witcher-ttrpg-death-march #context-menu,
+body.witcher-ttrpg-death-march #chat-popout,
+body.witcher-ttrpg-death-march #chat,
+body.witcher-ttrpg-death-march #chat-log,
+body.witcher-ttrpg-death-march #chat-notifications,
+body.witcher-ttrpg-death-march #pause,
+body.witcher-ttrpg-death-march #players-list,
+body.witcher-ttrpg-death-march .window-app,
+body.witcher-ttrpg-death-march .application,
+body.witcher-ttrpg-death-march .chat-message,
+body.witcher-ttrpg-death-march .message,
+body.witcher-ttrpg-death-march .dialog {
+  font-size: 1rem;
+}
+
+/* Chrome overlay panels — use the same `zoom` + CSS var pattern the
+ * chrome-bars scale uses (chrome.css #wou-top-bar), because the html
+ * font-size rem chain isn't reaching the user's browser reliably for
+ * these panels in Foundry v14. `zoom` scales font, images, and spacing
+ * as one unit, which is exactly what "make the panel text bigger"
+ * means to a player dragging the slider. */
+body.witcher-ttrpg-death-march #wou-inventory,
+body.witcher-ttrpg-death-march #wou-journal,
+body.witcher-ttrpg-death-march #wou-character,
+body.witcher-ttrpg-death-march #wou-crafting,
+body.witcher-ttrpg-death-march #wou-bestiary,
+body.witcher-ttrpg-death-march #wou-map,
+body.witcher-ttrpg-death-march #wou-gm-panel {
+  zoom: var(--wdm-scale, 1);
+}
+
+/* Foundry popup windows — actor sheets, item sheets, dialogs, compendium
+ * browsers, journal popouts, roll config, all the ApplicationV2 windows
+ * players actually spend time in. Same `zoom` pattern the chrome
+ * overlays use, driven by the main UI Scale slider so a single slider
+ * controls text size across every popup surface.
+ *
+ * Selectors:
+ *   .window-app       — Foundry v10-v13 legacy windows (Application, Dialog)
+ *   .application[data-appid] — Foundry v13+ ApplicationV2 windows (data-appid
+ *                     is only present on floating instances, so this leaves
+ *                     inline apps like the sidebar alone)
+ *   .dialog           — plain confirm/prompt dialogs
+ *   #compendium       — the compendium browser sidebar tab when popped out
+ * Non-floating apps (chat log, combat tracker in the sidebar) don't match
+ * because they don't get `data-appid` on their root, so the sidebar scales
+ * via the sidebar zoom rule instead. */
+/* Foundry popup windows. `body > .application` (direct child) targets
+ * FLOATING popouts only — actor sheets, item sheets, dialogs, the
+ * compendium browser, roll config, etc. Foundry's sidebar tabs
+ * (chat, combat tracker, sidebar-nested apps) live INSIDE `#sidebar`
+ * and are excluded by the child-combinator so their event handlers
+ * (Clear Log button, tracker controls, chat commands) don't fight
+ * a zoom applied to their container.
+ *
+ * Legacy fallback: `.window-app` catches v10-v12 Application windows.
+ * Both `.dialog` and `#compendium` cover the classic dialog + popped-
+ * out compendium browser paths.
+ *
+ * Detailed mode overrides via `--wdm-popup-scale`; auto/manual sets it
+ * explicitly to include the viewport+DPI factor. */
+/* Popup scaling — applied via JS hooks (chrome/setup/popup-scale.js).
+ * Uses `zoom` instead of `transform: scale()` so it does not compose
+ * with Foundry's close animation (which drives `transform` itself).
+ *
+ * History: the previous `transform: scale()` version tried to work
+ * around that composition by having popup-scale.js strip the attribute
+ * on `closeApplicationV2`. But that hook fires AFTER `_animate("out")`
+ * in current Foundry V2 lifecycle for many app types, so the transform
+ * stayed applied while Foundry's close animation ran on top, giving a
+ * 2-second "black frame" while the two transforms fought and the
+ * `!important` max-width froze the layout box. `zoom` decouples from
+ * `transform` entirely — Foundry's close animation runs cleanly no
+ * matter when (or whether) the attribute is stripped.
+ *
+ * `zoom` scales layout, so no viewport-clamp calc is needed: a popup
+ * that fits at scale 1 also fits at scale ≤ viewport/popup ratio, and
+ * beyond that the popup just overflows scroll (same as an unscaled
+ * oversized popup would). Same pattern as `chrome.css` notifications
+ * and the overlay panels in this file. */
+body.witcher-ttrpg-death-march [data-wdm-scaled="1"] {
+  zoom: var(--wdm-popup-scale, var(--wdm-scale, 1));
+  /* No CSS max-height clamp. Foundry sets popup dimensions in CSS pixels
+   * assuming `1 CSS px == 1 visual px`; under our `zoom` that assumption
+   * breaks and its `height: window.innerHeight - 100` (Compendium and
+   * friends) overflows the viewport visually. Correction lives in JS
+   * where we can read Foundry's intended size and divide by zoom so the
+   * final visual matches its intent — see popup-scale.js#fitPopupToZoom.
+   * Solving it in CSS would either double-clamp or fight the JS. */
+}
+
 
 @font-face {
   font-family: 'PF DIN Text Cond Pro';
@@ -118,22 +262,22 @@ body.witcher-ttrpg-death-march {
   --wdm-track-extra:  0.40em;
 
   /* ============================  GEOMETRY  =============================== */
-  --wdm-radius-xs:    2px;
-  --wdm-radius-sm:    3px;
-  --wdm-radius:       4px;
+  --wdm-radius-xs:    0.125rem;
+  --wdm-radius-sm:    0.1875rem;
+  --wdm-radius:       0.25rem;
   --wdm-radius-pill:  999px;
 
-  --wdm-rule-1:       1px solid rgba(140,133,121,0.18);
-  --wdm-rule-2:       1px solid rgba(140,133,121,0.10);
-  --wdm-rule-amber:   1px solid var(--wdm-amber-dim);
+  --wdm-rule-1:       0.0625rem solid rgba(140,133,121,0.18);
+  --wdm-rule-2:       0.0625rem solid rgba(140,133,121,0.10);
+  --wdm-rule-amber:   0.0625rem solid var(--wdm-amber-dim);
 
   /* sawtooth bar tooth pitch (used by .wou-sawtooth) */
-  --wdm-tooth-w:      12.5px;
-  --wdm-tooth-h:      10px;
+  --wdm-tooth-w:      0.78125rem;
+  --wdm-tooth-h:      0.625rem;
 
   /* ============================  SHADOWS  ================================ */
-  --wdm-shadow-card:  0 6px 18px rgba(0,0,0,0.7);
-  --wdm-shadow-amber: 0 0 14px rgba(184,148,100,0.22);
+  --wdm-shadow-card:  0 0.375rem 1.125rem rgba(0,0,0,0.7);
+  --wdm-shadow-amber: 0 0 0.875rem rgba(184,148,100,0.22);
 
   /* ============================  MOTION  ================================ */
   --wdm-ease:         cubic-bezier(.2,.6,.25,1);
@@ -161,7 +305,7 @@ body.witcher-ttrpg-death-march {
 .wou-flavor     { font-family: var(--wdm-font-body); font-style: italic; color: var(--wdm-ink); }
 
 /* Hairline rule */
-.wou-rule       { height: 1px; background: linear-gradient(90deg, transparent, var(--wdm-amber-dim) 30%, var(--wdm-amber) 50%, var(--wdm-amber-dim) 70%, transparent); opacity: 0.5; }
+.wou-rule       { height: 0.0625rem; background: linear-gradient(90deg, transparent, var(--wdm-amber-dim) 30%, var(--wdm-amber) 50%, var(--wdm-amber-dim) 70%, transparent); opacity: 0.5; }
 
 /* ─────────────────────────────────────────────────────────────────────────
    Token HUD (click a token) — repaint Foundry's default HUD into the chrome's
@@ -171,7 +315,7 @@ body.witcher-ttrpg-death-march {
 body.witcher-ttrpg-death-march #token-hud .control-icon {
   background: var(--wdm-bg-deep, rgba(10, 9, 8, 0.88));
   border: 1px solid var(--wdm-amber-dim, #6b5a3a);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   color: var(--wdm-amber-bright, #c8a878);
   box-shadow: none;
 }
@@ -179,7 +323,7 @@ body.witcher-ttrpg-death-march #token-hud .control-icon > i { color: inherit; te
 body.witcher-ttrpg-death-march #token-hud .control-icon:hover {
   border-color: var(--wdm-amber-bright, #c8a878);
   color: var(--wdm-amber-bright, #c8a878);
-  box-shadow: 0 0 6px rgba(200, 168, 120, 0.45);
+  box-shadow: 0 0 0.375rem rgba(200, 168, 120, 0.45);
 }
 body.witcher-ttrpg-death-march #token-hud .control-icon.active {
   background: var(--wdm-amber-dim, #6b5a3a);
@@ -191,8 +335,8 @@ body.witcher-ttrpg-death-march #token-hud .control-icon.active {
 body.witcher-ttrpg-death-march #token-hud .palette {
   background: var(--wdm-bg-deep, rgba(10, 9, 8, 0.94));
   border: 1px solid var(--wdm-amber-dim, #6b5a3a);
-  border-radius: 5px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+  border-radius: 0.3125rem;
+  box-shadow: 0 2px 0.625rem rgba(0, 0, 0, 0.6);
 }
 body.witcher-ttrpg-death-march #token-hud .palette-list-entry {
   color: var(--wdm-ink, #cdbf9f);
@@ -207,7 +351,7 @@ body.witcher-ttrpg-death-march #token-hud .palette-list-entry.active {
 /* Status-effects palette icons. */
 body.witcher-ttrpg-death-march #token-hud .status-effects .effect-control {
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   filter: grayscale(0.35) brightness(0.95);
 }
 body.witcher-ttrpg-death-march #token-hud .status-effects .effect-control:hover {
@@ -218,7 +362,7 @@ body.witcher-ttrpg-death-march #token-hud .status-effects .effect-control.active
 body.witcher-ttrpg-death-march #token-hud .status-effects .effect-control.overlay {
   border-color: var(--wdm-amber-bright, #c8a878);
   filter: none;
-  box-shadow: 0 0 5px rgba(200, 168, 120, 0.55);
+  box-shadow: 0 0 0.3125rem rgba(200, 168, 120, 0.55);
 }
 
 /* Attribute (HP/STA) bar inputs + elevation caret. */
@@ -241,7 +385,7 @@ body.witcher-ttrpg-death-march #token-hud .attribute.bar1,
 body.witcher-ttrpg-death-march #token-hud .attribute.bar2 {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
 }
 body.witcher-ttrpg-death-march #token-hud .attribute.bar1 input,
 body.witcher-ttrpg-death-march #token-hud .attribute.bar2 input {
@@ -250,7 +394,7 @@ body.witcher-ttrpg-death-march #token-hud .attribute.bar2 input {
 }
 body.witcher-ttrpg-death-march #token-hud .attribute .wdm-bar-icon {
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1;
   text-shadow: 0 1px 2px #000;
   pointer-events: none;

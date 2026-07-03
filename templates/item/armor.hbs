@@ -38,37 +38,49 @@
       </div>
 
       <ul class="wdm-w3-stats">
-        {{!-- Per-location SP rows removed: the hero now shows the
-             stopping-power number and the coverage subline above
-             names the locations covered. --}}
+        {{!-- Per-location SP rows — surfaced when the piece covers MORE
+             than one body slot, so the table sees explicitly that the
+             value applies at each named location (a "Full" hauberk reads
+             as four rows of "10 / Head", "10 / Torso", etc., not just
+             the one hero number). Single-location pieces (Torso-only
+             Brigandine, Head-only Helm) suppress this list — the hero
+             + coverage subline already says it all. --}}
+        {{#if multiLocation}}
+          {{#each spLocations}}
+            <li class="wdm-w3-stat wdm-w3-stat-sp">
+              <span class="val">{{this.value}}{{#if this.max}}/{{this.max}}{{/if}}</span>
+              <span class="lbl">{{this.label}}</span>
+            </li>
+          {{/each}}
+        {{/if}}
         {{#if source.bludgeoning}}
           <li class="wdm-w3-stat is-positive">
             <span class="val"><i class="fa-solid fa-check"></i></span>
-            <span class="lbl">Resists Bludgeoning</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Armor.Text.ResistsBludgeoning'}}</span>
           </li>
         {{/if}}
         {{#if source.slashing}}
           <li class="wdm-w3-stat is-positive">
             <span class="val"><i class="fa-solid fa-check"></i></span>
-            <span class="lbl">Resists Slashing</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Armor.Text.ResistsSlashing'}}</span>
           </li>
         {{/if}}
         {{#if source.piercing}}
           <li class="wdm-w3-stat is-positive">
             <span class="val"><i class="fa-solid fa-check"></i></span>
-            <span class="lbl">Resists Piercing</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Armor.Text.ResistsPiercing'}}</span>
           </li>
         {{/if}}
         {{#unless (eq source.encumbranceValue 0)}}
           <li class="wdm-w3-stat is-negative">
             <span class="val">−{{source.encumbranceValue}}</span>
-            <span class="lbl">Encumbrance Penalty</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Armor.Text.EncumbrancePenalty'}}</span>
           </li>
         {{/unless}}
         {{#if bonusSP}}
           <li class="wdm-w3-stat is-positive">
             <span class="val">+{{bonusSP}}</span>
-            <span class="lbl">Stopping (enhanced) <i class="fa-solid fa-gem"></i></span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Armor.Text.StoppingEnhanced'}} <i class="fa-solid fa-gem"></i></span>
           </li>
         {{/if}}
         {{#each addedResistances}}
@@ -77,45 +89,81 @@
             <span class="lbl">Resists {{this}} (enhanced)</span>
           </li>
         {{/each}}
-        {{#if enhancementSlots.length}}
-          <li class="wdm-w3-stat wdm-w3-stat-slots">
-            <span class="val">{{enhancementSlots.length}}</span>
-            <span class="lbl">Enhancement Slots</span>
-            {{!-- Drag a Glyph / armor-mod enhancement onto an empty box to
-                 socket it; the × detaches (owners only). --}}
-            <span class="wdm-w3-slots" data-enh-slots>
-              {{#each enhancementSlots}}
-                {{#if this.filled}}
-                  <span class="wdm-w3-slot is-filled" data-enh-index="{{this.index}}"
-                        data-tooltip="{{this.name}}" data-tooltip-direction="UP">
-                    <img src="{{this.img}}" alt="" />
-                    {{#if ../canEdit}}
-                      <button type="button" class="wdm-slot-detach" data-action="detachEnhancement" title="Remove enhancement">
-                        <i class="fa-solid fa-xmark"></i>
-                      </button>
-                    {{/if}}
-                  </span>
-                {{else}}
-                  <span class="wdm-w3-slot" data-slot-index="{{this.index}}"
-                        data-tooltip="Empty slot — drag a Glyph or armor-mod enhancement to fill"
-                        data-tooltip-direction="UP"></span>
-                {{/if}}
-              {{/each}}
-            </span>
-          </li>
+        {{#if eoArmorModelOn}}
+          {{!-- EO split view: one strip per per-location AE pool + one
+               strip for the total glyph (En.) pool. Each strip carries
+               data-enh-pool / data-enh-location so the drop handler
+               can route directly without prompting. --}}
+          {{#each enhancementSlotGroups}}
+            <li class="wdm-w3-stat wdm-w3-stat-slots wdm-w3-stat-slots-eo">
+              <span class="val">{{this.used}}/{{this.cap}}</span>
+              <span class="lbl">{{this.label}}</span>
+              <span class="wdm-w3-slots" data-enh-slots
+                    data-enh-pool="{{this.kind}}" data-enh-location="{{this.location}}">
+                {{#each this.slots}}
+                  {{#if this.filled}}
+                    <span class="wdm-w3-slot is-filled" data-enh-index="{{this.index}}"
+                          data-tooltip="{{this.name}}" data-tooltip-direction="UP">
+                      <img src="{{this.img}}" alt="" />
+                      {{#if ../../canEdit}}
+                        <button type="button" class="wdm-slot-detach" data-action="detachEnhancement" title="{{localize 'WITCHER.Sheet.Armor.Tooltip.RemoveEnhancement'}}">
+                          <i class="fa-solid fa-xmark"></i>
+                        </button>
+                      {{/if}}
+                    </span>
+                  {{else}}
+                    <span class="wdm-w3-slot"
+                          data-tooltip="Empty {{#if (eq ../kind 'glyph')}}glyph{{else}}{{../location}} AE{{/if}} slot — drag an enhancement of the matching type"
+                          data-tooltip-direction="UP"></span>
+                  {{/if}}
+                {{/each}}
+              </span>
+            </li>
+          {{/each}}
+        {{else}}
+          {{#if enhancementSlots.length}}
+            <li class="wdm-w3-stat wdm-w3-stat-slots">
+              <span class="val">{{enhancementSlots.length}}</span>
+              <span class="lbl">{{localize 'WITCHER.Sheet.Armor.Text.EnhancementSlots'}}</span>
+              {{!-- Drag a Glyph / armor-mod enhancement onto an empty box to
+                   socket it; the × detaches (owners only). --}}
+              <span class="wdm-w3-slots" data-enh-slots>
+                {{#each enhancementSlots}}
+                  {{#if this.filled}}
+                    <span class="wdm-w3-slot is-filled" data-enh-index="{{this.index}}"
+                          data-tooltip="{{this.name}}" data-tooltip-direction="UP">
+                      <img src="{{this.img}}" alt="" />
+                      {{#if ../canEdit}}
+                        <button type="button" class="wdm-slot-detach" data-action="detachEnhancement" title="{{localize 'WITCHER.Sheet.Armor.Tooltip.RemoveEnhancement'}}">
+                          <i class="fa-solid fa-xmark"></i>
+                        </button>
+                      {{/if}}
+                    </span>
+                  {{else}}
+                    <span class="wdm-w3-slot" data-slot-index="{{this.index}}"
+                          data-tooltip="{{localize 'WITCHER.Sheet.Armor.Tooltip.EmptySlotDragAGlyphOrArmorModEnhancement'}}"
+                          data-tooltip-direction="UP"></span>
+                  {{/if}}
+                {{/each}}
+              </span>
+            </li>
+          {{/if}}
         {{/if}}
       </ul>
 
       {{#if armorQualityList.length}}
         <div class="wdm-w3-tags">
           {{#each armorQualityList}}
-            <span class="wdm-w3-tag" data-tooltip="{{this.description}}" data-tooltip-direction="UP">{{this.label}}</span>
+            <span class="wdm-w3-tag{{#if this.displayOnly}} is-display-only{{/if}}"
+                  data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+              {{this.label}}{{#if this.displayOnly}}<i class="fa-solid fa-circle-info wdm-w3-tag-info" title="{{localize 'WITCHER.Sheet.Armor.Tooltip.GmResolvedEngineHasNoAutomaticConsumer'}}"></i>{{/if}}
+            </span>
           {{/each}}
         </div>
       {{/if}}
 
       {{#if socketedQualityList.length}}
-        <div class="wdm-w3-section-label">From Enhancements</div>
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Armor.Text.FromEnhancements'}}</div>
         <div class="wdm-w3-tags">
           {{#each socketedQualityList}}
             <span class="wdm-w3-tag is-enhanced" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
@@ -137,13 +185,13 @@
            availability + price anchored right. Armor has no concealment
            field, so that cell is omitted. --}}
       <div class="wdm-w3-footer">
-        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Armor.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
         {{#unless (eq source.quantity 1)}}
-          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+          <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Armor.Tooltip.Quantity'}}"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
         {{/unless}}
         <span class="wdm-w3-foot-spacer"></span>
         <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
-        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Sheet.Armor.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
       </div>
 
     </div>
@@ -156,48 +204,93 @@
     <div class="wdm-cfg-form">
 
       <div class="wdm-cfg-head">
-        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
-        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Armor name" />
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Armor.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Armor.Hint.ArmorName'}}" />
       </div>
 
-      <div class="wdm-cfg-section">Combat</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Armor.Text.Combat'}}</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span>Type</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Armor.Text.Type'}}</span>
           <select name="system.armorType">
             {{#each WITCHER.armor.types}}
               <option value="{{@key}}" {{#if (eq @key ../source.armorType)}}selected{{/if}}>{{localize this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>Primary Location</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Armor.Text.PrimaryLocation'}}</span>
           <select name="system.location">
             {{#each WITCHER.armor.locations}}
               <option value="{{@key}}" {{#if (eq @key ../source.location)}}selected{{/if}}>{{localize this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>EV (Encumbrance)</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Armor.Text.EvEncumbrance'}}</span>
           <input type="number" min="0" name="system.encumbranceValue" value="{{source.encumbranceValue}}" />
         </label>
-        <label class="wdm-cfg-row"><span>Enhancement Slots</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Armor.Text.EnhancementSlots'}} <span class="wdm-cfg-sub">(RAW)</span></span>
           <input type="number" min="0" name="system.armorEnhancement" value="{{source.armorEnhancement}}" />
         </label>
         {{#if isShield}}
-          <label class="wdm-cfg-row wdm-cfg-row-pair"><span>Reliability</span>
+          <label class="wdm-cfg-row wdm-cfg-row-pair"><span>{{localize 'WITCHER.Sheet.Armor.Text.Reliability'}}</span>
             <span class="wdm-cfg-pair">
               <input type="number" min="0" name="system.reliability.value"
                      value="{{source.reliability.value}}"
-                     title="Blocks remaining" />
+                     title="{{localize 'WITCHER.Sheet.Armor.Tooltip.BlocksRemaining'}}" />
               <span class="wdm-cfg-slash">/</span>
               <input type="number" min="0" name="system.reliability.max"
                      value="{{source.reliability.max}}"
-                     title="Total blocks before breaking" />
+                     title="{{localize 'WITCHER.Sheet.Armor.Tooltip.TotalBlocksBeforeBreaking'}}" />
             </span>
           </label>
         {{/if}}
       </div>
 
-      <div class="wdm-cfg-section">Stopping Power <span class="wdm-cfg-sub">(per location — current/max)</span></div>
+      {{!-- Per-location SP grid: one current/max pair per covered
+            location, gated by the Primary Location enum above. Switching
+            location to "Torso" hides arm/leg inputs; switching to "Full"
+            reveals all six. Uncovered slots are forced to 0 at the
+            derivation layer so any stale value sitting in the document
+            from a past edit doesn't contribute to combat math. --}}
+      {{!-- Equipment Overhaul fields. Always present in the schema; the
+            section is rendered unconditionally so authors of Foundry
+            content packs can populate them regardless of whether the GM
+            has the eoArmorModel CE subsystem on. Gameplay reads are gated
+            at the consumer (CharacterData EV math, equip gate). --}}
+      {{#unless isShield}}
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Armor.Text.EquipmentOverhaul'}} <span class="wdm-cfg-sub">(consumed when Combat Extended → EO armor model is on)</span></div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Armor.Text.EnSlots'}} <span class="wdm-cfg-sub">(glyphs, EO total)</span></span>
+          <input type="number" min="0" name="system.enhancementSlots" value="{{source.enhancementSlots}}" />
+        </label>
+        {{!-- Arming Jack identity — one dropdown. Aketon-style paid
+              upgrades (EO p.4) are handled by setting this to "jack"
+              or "superiorSuit" on the upgraded piece, same as a
+              dedicated Arming Jack / Superior Arming Suit item. --}}
+        <label class="wdm-cfg-row"><span>Arming Jack</span>
+          <select name="system.armingJackKind">
+            <option value="none"          {{#if (eq source.armingJackKind "none")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Armor.Text.None'}}</option>
+            <option value="jack"          {{#if (eq source.armingJackKind "jack")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Armor.Text.ArmingJack'}}</option>
+            <option value="superiorSuit"  {{#if (eq source.armingJackKind "superiorSuit")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Armor.Text.SuperiorArmingSuit'}}</option>
+          </select>
+        </label>
+        <label class="wdm-cfg-row is-checkbox"><span>{{localize 'WITCHER.Sheet.Armor.Text.Difficult'}} <span class="wdm-cfg-sub">(requires worn arming jack)</span></span>
+          <input type="checkbox" name="system.difficult" {{#if source.difficult}}checked{{/if}} />
+        </label>
+      </div>
+      {{#if aeSlotInputs.length}}
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Armor.Text.AeSlotsPerLocation'}} <span class="wdm-cfg-sub">(physical enhancements — EO p.4)</span></div>
+      <div class="wdm-cfg-grid">
+        {{#each aeSlotInputs}}
+          <label class="wdm-cfg-row"><span>{{this.label}}</span>
+            <input type="number" min="0" name="{{this.name}}" value="{{this.value}}" />
+          </label>
+        {{/each}}
+      </div>
+      {{/if}}
+      {{/unless}}
+
+      {{#if spInputs.length}}
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Armor.Text.StoppingPower'}} <span class="wdm-cfg-sub">(per covered location — current / max)</span></div>
       <div class="wdm-cfg-grid">
         {{#each spInputs}}
           <label class="wdm-cfg-row wdm-cfg-row-pair"><span>{{this.label}}</span>
@@ -211,24 +304,25 @@
           </label>
         {{/each}}
       </div>
+      {{/if}}
 
-      <div class="wdm-cfg-section">Damage Resistance</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Armor.Text.DamageResistance'}}</div>
       <div class="wdm-cfg-checkgrid">
         <label class="wdm-cfg-check">
           <input type="checkbox" name="system.bludgeoning" {{#if source.bludgeoning}}checked{{/if}} />
-          <span>Bludgeoning</span>
+          <span>{{localize 'WITCHER.Sheet.Armor.Text.Bludgeoning'}}</span>
         </label>
         <label class="wdm-cfg-check">
           <input type="checkbox" name="system.slashing" {{#if source.slashing}}checked{{/if}} />
-          <span>Slashing</span>
+          <span>{{localize 'WITCHER.Sheet.Armor.Text.Slashing'}}</span>
         </label>
         <label class="wdm-cfg-check">
           <input type="checkbox" name="system.piercing" {{#if source.piercing}}checked{{/if}} />
-          <span>Piercing</span>
+          <span>{{localize 'WITCHER.Sheet.Armor.Text.Piercing'}}</span>
         </label>
       </div>
 
-      <div class="wdm-cfg-section">Qualities <span class="wdm-cfg-sub">(edit catalog in system settings)</span></div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Armor.Text.Qualities'}} <span class="wdm-cfg-sub">(edit catalog in system settings)</span></div>
       <div class="wdm-cfg-checkgrid">
         {{#each armorQualitiesCatalog}}
           {{#if this.param}}
@@ -257,34 +351,34 @@
         {{/each}}
       </div>
 
-      <div class="wdm-cfg-section">Procurement</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Armor.Text.Procurement'}}</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span>Availability</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Armor.Text.Availability'}}</span>
           <select name="system.availability">
             {{#each WITCHER.availability}}
               <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>Weight (kg)</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Armor.Text.WeightKg'}}</span>
           <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
         </label>
-        <label class="wdm-cfg-row"><span>Cost</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Armor.Text.Cost'}}</span>
           <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
         </label>
-        <label class="wdm-cfg-row"><span>Quantity</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Armor.Text.Quantity'}}</span>
           <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
         </label>
         <label class="wdm-cfg-row is-checkbox">
-          <span>Equipped</span>
+          <span>{{localize 'WITCHER.Sheet.Armor.Text.Equipped'}}</span>
           <input type="checkbox" name="system.equipped" {{#if source.equipped}}checked{{/if}} />
         </label>
       </div>
 
       {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
 
-      <div class="wdm-cfg-section">Description</div>
-      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="Armor lore, appearance, provenance…">{{source.description}}</textarea>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Armor.Text.Description'}}</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="{{localize 'WITCHER.Sheet.Armor.Hint.ArmorLoreAppearanceProvenance'}}">{{source.description}}</textarea>
 
     </div>
   </div>

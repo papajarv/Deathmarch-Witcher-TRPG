@@ -24,15 +24,15 @@
         <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
         <div class="wdm-w3-titles">
           <h1 class="wdm-w3-title">{{item.name}}</h1>
-          <div class="wdm-w3-subtitle">Note</div>
+          <div class="wdm-w3-subtitle">{{localize 'WITCHER.Sheet.Note.Text.Note'}}</div>
         </div>
       </header>
 
       {{#if source.description}}
-        <div class="wdm-w3-section-label">Content</div>
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Note.Text.Content'}}</div>
         <div class="wdm-w3-effects">{{{source.description}}}</div>
       {{else}}
-        <div class="wdm-w3-effects wdm-empty">No content yet.</div>
+        <div class="wdm-w3-effects wdm-empty">{{localize 'WITCHER.Sheet.Note.Text.NoContentYet'}}</div>
       {{/if}}
 
       <div class="wdm-w3-pin-hint">
@@ -49,22 +49,22 @@
     <div class="wdm-cfg-form">
 
       <div class="wdm-cfg-head">
-        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
-        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Note title" />
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Note.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Note.Hint.NoteTitle'}}" />
       </div>
 
-      <div class="wdm-cfg-section">Content</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Note.Text.Content'}}</div>
       <textarea class="wdm-cfg-textarea is-tall" name="system.description"
-                placeholder="The text on the page, the contents of the journal, the clue itself…">{{source.description}}</textarea>
+                placeholder="{{localize 'WITCHER.Sheet.Note.Hint.TheTextOnThePageTheContentsOfTheJournalT'}}">{{source.description}}</textarea>
 
       {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
 
-      <div class="wdm-cfg-section">Details</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Note.Text.Details'}}</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span title="Stack size">Quantity</span>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Note.Tooltip.StackSize'}}">Quantity</span>
           <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
         </label>
-        <label class="wdm-cfg-row"><span title="Weight per unit (notes are non-encumbering)">Weight (kg)</span>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Note.Tooltip.WeightPerUnitNotesAreNonEncumbering'}}">Weight (kg)</span>
           <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
         </label>
       </div>

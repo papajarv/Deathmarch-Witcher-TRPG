@@ -38,6 +38,7 @@ import {
 } from "../lib/bestiary.js";
 import { VIEWER_OVERRIDE_HOOK } from "../lib/actor.js";
 import { summarizeEffectModifiers } from "../../sheets/item/base.mjs";
+import { t, tFormat } from "../lib/i18n.js";
 import {
   renderViewAsPicker as renderSharedViewAsPicker,
   wireViewAsPicker
@@ -181,10 +182,10 @@ function positionBounds() {
   const left   = (leftOpen   && leftbar)? Math.max(0, leftbar.getBoundingClientRect().right) : 0;
   const right  = (rightOpen  && sidebar)? Math.max(0, W - sidebar.getBoundingClientRect().left) : 0;
 
-  panelEl.style.top    = `${top}px`;
-  panelEl.style.bottom = `${bottom}px`;
-  panelEl.style.left   = `${left}px`;
-  panelEl.style.right  = `${right}px`;
+  panelEl.style.top = `calc(${top}px / var(--wdm-scale, 1))`;
+  panelEl.style.bottom = `calc(${bottom}px / var(--wdm-scale, 1))`;
+  panelEl.style.left = `calc(${left}px / var(--wdm-scale, 1))`;
+  panelEl.style.right = `calc(${right}px / var(--wdm-scale, 1))`;
 
   const tab = document.querySelector('#wou-top-bar [data-tab="bestiary"]');
   if (tab) {
@@ -195,7 +196,12 @@ function positionBounds() {
 }
 
 function wireChromeObservers() {
-  const reposition = () => requestAnimationFrame(positionBounds);
+  /* Coalesced: one positionBounds per frame regardless of trigger count. */
+  let _pending = 0;
+  const reposition = () => {
+    if (_pending) return;
+    _pending = requestAnimationFrame(() => { _pending = 0; positionBounds(); });
+  };
   if ("ResizeObserver" in window) {
     _chromeResizeObs = new ResizeObserver(reposition);
     for (const sel of CHROME_SELECTORS) {
@@ -701,15 +707,16 @@ function renderKnownWeapons(monster, knownSet) {
   const attacks = rows
     .map((atk, idx) => {
       const know = {
-        name:    knownSet.has(`attack:${idx}:name`),
-        damage:  knownSet.has(`attack:${idx}:damage`),
-        effect:  knownSet.has(`attack:${idx}:effect`),
-        rof:     knownSet.has(`attack:${idx}:rof`),
+        name:      knownSet.has(`attack:${idx}:name`),
+        damage:    knownSet.has(`attack:${idx}:damage`),
+        flatBonus: knownSet.has(`attack:${idx}:flatBonus`),
+        effect:    knownSet.has(`attack:${idx}:effect`),
+        rof:       knownSet.has(`attack:${idx}:rof`),
         qualities: (Array.isArray(atk?.qualities) ? atk.qualities : [])
           .map((key, qidx) => ({ qidx, key, known: knownSet.has(`attack:${idx}:quality:${qidx}`) }))
           .filter(x => x.known)
       };
-      const anyKnown = know.name || know.damage || know.effect || know.rof || know.qualities.length > 0;
+      const anyKnown = know.name || know.damage || know.flatBonus || know.effect || know.rof || know.qualities.length > 0;
       if (!anyKnown) return null;
       return { atk, know };
     })
@@ -722,13 +729,18 @@ function renderKnownWeapons(monster, knownSet) {
     <ul class="wou-bst-dissect-list">
       ${attacks.map(({ atk, know }) => {
         const name   = know.name   ? escapeText(atk.name || "Attack") : `<em>unknown attack</em>`;
+        const base   = (() => {
+          if (!know.flatBonus) return "";
+          const v = Number(atk.flatBonus) || 0;
+          return `<span class="wou-bst-dissect-tag">BASE ${v >= 0 ? "+" : ""}${escapeText(String(v))}</span>`;
+        })();
         const dmg    = know.damage ? `<span class="wou-bst-dissect-tag">DMG ${escapeText(String(atk.damage ?? "?"))}</span>` : "";
         const effect = know.effect ? `<span class="wou-bst-dissect-tag">${escapeText(String(atk.effect ?? "?"))}</span>` : "";
         const rof    = know.rof    ? `<span class="wou-bst-dissect-tag">ROF ${escapeText(String(atk.rof ?? "?"))}</span>` : "";
         const quals  = know.qualities.map(x =>
           `<span class="wou-bst-dissect-tag is-quality">${escapeText(qualityLabelFor(x.key, atk.qualityValues))}</span>`
         ).join("");
-        return `<li><span class="wou-bst-dissect-name">${name}</span>${dmg}${effect}${rof}${quals}</li>`;
+        return `<li><span class="wou-bst-dissect-name">${name}</span>${base}${dmg}${effect}${rof}${quals}</li>`;
       }).join("")}
     </ul>
   </div>`;
@@ -1412,7 +1424,7 @@ async function onClick(ev) {
       const key = actionEl.dataset.key;
       const viewer = getViewerCharacter();
       if (!viewer) {
-        ui.notifications?.warn("No viewer character — pin requires an assigned character.");
+        ui.notifications?.warn(t("WITCHER.Notify.Bestiary.PinNeedsViewer", "No viewer character — pin requires an assigned character."));
         return;
       }
       const cur = getActorEntryState(viewer, key);
@@ -1442,12 +1454,12 @@ async function onClick(ev) {
       const key = actionEl.dataset.key;
       const viewer = getViewerCharacter();
       if (!viewer) {
-        ui.notifications?.warn("No viewer character — RP is per-character, you need one to spend.");
+        ui.notifications?.warn(t("WITCHER.Notify.Bestiary.SpendNeedsViewer", "No viewer character — RP is per-character, you need one to spend."));
         return;
       }
       const ok = await spendRpToAdvance(viewer, key);
       if (!ok) {
-        ui.notifications?.warn("Not enough research points, or already at the top tier.");
+        ui.notifications?.warn(t("WITCHER.Notify.Bestiary.SpendBlocked", "Not enough research points, or already at the top tier."));
       }
       return;
     }
@@ -1465,7 +1477,7 @@ async function onClick(ev) {
       ev.preventDefault();
       const viewer = getViewerCharacter();
       if (!viewer) {
-        ui.notifications?.warn("Need a viewer character to edit encounter notes.");
+        ui.notifications?.warn(t("WITCHER.Notify.Bestiary.NoteNeedsViewer", "Need a viewer character to edit encounter notes."));
         return;
       }
       const key = actionEl.dataset.key;
@@ -1476,7 +1488,7 @@ async function onClick(ev) {
       const newTitle = String(titleInput?.value ?? "").trim();
       const newNote  = String(noteInput?.value  ?? "");
       const ok = await updateEncounter(viewer, key, eventId, { title: newTitle, note: newNote });
-      if (!ok) ui.notifications?.warn("Couldn't save the encounter note.");
+      if (!ok) ui.notifications?.warn(t("WITCHER.Notify.Bestiary.NoteSaveFailed", "Couldn't save the encounter note."));
       _editingEventId = null;
       await render();
       return;
@@ -1491,14 +1503,14 @@ async function onClick(ev) {
       ev.preventDefault();
       const viewer = getViewerCharacter();
       if (!viewer) {
-        ui.notifications?.warn("Need a viewer character to attempt a knowledge roll.");
+        ui.notifications?.warn(t("WITCHER.Notify.Bestiary.KnowledgeNeedsViewer", "Need a viewer character to attempt a knowledge roll."));
         return;
       }
       const key = actionEl.dataset.key;
       const tierIndex = Number(actionEl.dataset.tier);
       if (!Number.isInteger(tierIndex) || tierIndex < 0) return;
       if (!canAttemptKnowledge(viewer, key, tierIndex)) {
-        ui.notifications?.warn("Already revealed, or waiting on the next research tier.");
+        ui.notifications?.warn(t("WITCHER.Notify.Bestiary.KnowledgeBlocked", "Already revealed, or waiting on the next research tier."));
         return;
       }
 
@@ -1512,7 +1524,7 @@ async function onClick(ev) {
       const tierLabel = String(tier.label ?? "").trim() || "this lore";
       const dc = knowledgeDcFor(tier);
       if (dc == null) {
-        ui.notifications?.warn(`${monsterDoc?.name ?? "This monster"} has no DC set for ${tierLabel}.`);
+        ui.notifications?.warn(tFormat("WITCHER.Notify.Bestiary.NoDcForTier", { monster: monsterDoc?.name ?? "This monster", tier: tierLabel }, "{monster} has no DC set for {tier}."));
         return;
       }
       /* Route through the system's own roll helpers so the chat card,
@@ -1524,22 +1536,22 @@ async function onClick(ev) {
       if (actionEl.dataset.roll === "witchertraining" && tier.skill === "monster") {
         const wt = witcherTrainingSlot(viewer);
         if (!wt) {
-          ui.notifications?.warn("You no longer have Witcher Training to roll.");
+          ui.notifications?.warn(t("WITCHER.Notify.Bestiary.NoWitcherTraining", "You no longer have Witcher Training to roll."));
           return;
         }
         if (typeof viewer.rollProfessionSkill !== "function") {
-          ui.notifications?.error("System's rollProfessionSkill helper missing.");
+          ui.notifications?.error(t("WITCHER.Notify.Bestiary.HelperMissingProf", "System's rollProfessionSkill helper missing."));
           return;
         }
         roll = await viewer.rollProfessionSkill(wt, { dc });
       } else {
         const resolved = resolveLoreRoll(tier);
         if (!resolved) {
-          ui.notifications?.error(`No way to roll for "${tierLabel}" — skill not found.`);
+          ui.notifications?.error(tFormat("WITCHER.Notify.Bestiary.NoSkillFor", { tier: tierLabel }, "No way to roll for \"{tier}\" — skill not found."));
           return;
         }
         if (typeof viewer.rollSkillCheck !== "function") {
-          ui.notifications?.error("System's rollSkillCheck helper missing.");
+          ui.notifications?.error(t("WITCHER.Notify.Bestiary.HelperMissingSkill", "System's rollSkillCheck helper missing."));
           return;
         }
         roll = await viewer.rollSkillCheck(resolved.mapKey, dc);
@@ -1622,7 +1634,7 @@ async function applyGMTierOverride(key, targetTier) {
   if (overrideId) {
     const actor = game.actors?.get?.(overrideId);
     if (!actor || actor.type !== "character") {
-      ui.notifications?.warn("View-as actor missing — clearing the override.");
+      ui.notifications?.warn(t("WITCHER.Notify.Bestiary.ViewAsMissing", "View-as actor missing — clearing the override."));
       setViewerOverride(null);
       await render();
       return;
@@ -1633,7 +1645,7 @@ async function applyGMTierOverride(key, targetTier) {
 
   const pcs = (game.actors?.contents ?? []).filter(a => a.type === "character");
   if (!pcs.length) {
-    ui.notifications?.warn("No player characters in the world — bestiary state is per-character, so there's nothing to update.");
+    ui.notifications?.warn(t("WITCHER.Notify.Bestiary.NoPCsToUpdate", "No player characters in the world — bestiary state is per-character, so there's nothing to update."));
     return;
   }
   for (const pc of pcs) {
@@ -1651,14 +1663,14 @@ async function resetEntryState(key) {
   const pcs = (game.actors?.contents ?? []).filter(a => a.type === "character");
   const hits = pcs.filter(pc => getActorBestiary_(pc)[encKey(key)]);
   if (!hits.length) {
-    ui.notifications?.info("No PC has state for this entry.");
+    ui.notifications?.info(t("WITCHER.Notify.Bestiary.NoStateForEntry", "No PC has state for this entry."));
     return;
   }
   const currentActor = getCurrentActor();
   const currentHasState = !!(currentActor && getActorBestiary_(currentActor)[encKey(key)]);
 
   const scope = await confirmWithCode({
-    title: "Reset entry",
+    title: t("WITCHER.Dialog.Bestiary.ResetEntry", "Reset entry"),
     icon:  "fa-solid fa-arrow-rotate-left",
     body:  `<p>Wipe research, encounter log, pin, and knowledge-roll history for this entry.</p>
             <p class="wou-bst-confirm-keep">Affects <b>${hits.length}</b> PC${hits.length === 1 ? "" : "s"} that currently track this entry.</p>`,
@@ -1704,7 +1716,7 @@ async function openPopulateDialog() {
    * the `bestiary.sourcePacks` setting. */
   const actorPacks = (game.packs?.contents ?? []).filter(p => p.metadata?.type === "Actor");
   if (!actorPacks.length) {
-    ui.notifications?.warn("No Actor compendium packs are available in this world.");
+    ui.notifications?.warn(t("WITCHER.Notify.Bestiary.NoActorPacks", "No Actor compendium packs are available in this world."));
     return;
   }
   const current = new Set(getSetting("bestiary.sourcePacks") ?? []);
@@ -1727,7 +1739,7 @@ async function openPopulateDialog() {
     </div>`;
 
   const result = await foundry.applications.api.DialogV2.wait({
-    window: { title: "Populate Bestiary", icon: "fa-solid fa-book-skull" },
+    window: { title: t("WITCHER.Dialog.Bestiary.Populate", "Populate Bestiary"), icon: "fa-solid fa-book-skull" },
     content,
     classes: ["wou-bst-pop-dialog"],
     buttons: [
@@ -1749,7 +1761,7 @@ async function openPopulateDialog() {
 
   if (!Array.isArray(result)) return;  /* cancelled */
   await game.settings.set(MODULE_ID, "bestiary.sourcePacks", result);
-  ui.notifications?.info(`Bestiary populated from ${result.length} pack${result.length === 1 ? "" : "s"}.`);
+  ui.notifications?.info(tFormat("WITCHER.Notify.Bestiary.Populated", { count: result.length, plural: result.length === 1 ? "" : "s" }, "Bestiary populated from {count} pack{plural}."));
 }
 
 /* =========================================================================
@@ -1764,12 +1776,12 @@ async function wipeAllResearch() {
   const pcs = (game.actors?.contents ?? []).filter(a => a.type === "character");
   const counts = pcs.map(pc => Object.keys(getActorBestiary_(pc)).length).reduce((a, b) => a + b, 0);
   if (!counts) {
-    ui.notifications?.info("No PC has any bestiary state to wipe.");
+    ui.notifications?.info(t("WITCHER.Notify.Bestiary.NoStateToWipe", "No PC has any bestiary state to wipe."));
     return;
   }
   const currentActor = getCurrentActor();
   const scope = await confirmWithCode({
-    title: "Wipe Research Progress",
+    title: t("WITCHER.Dialog.Bestiary.WipeResearch", "Wipe Research Progress"),
     icon:  "fa-solid fa-flask",
     body:  `<p>This will clear <strong>research tier</strong> and <strong>research points</strong> for every entry on the selected target.</p>
             <ul class="wou-bst-confirm-ul">
@@ -1813,12 +1825,12 @@ async function wipeAllEncounters() {
     }
   }
   if (!encounterTotal) {
-    ui.notifications?.info("No encounter logs to wipe.");
+    ui.notifications?.info(t("WITCHER.Notify.Bestiary.NoLogsToWipe", "No encounter logs to wipe."));
     return;
   }
   const currentActor = getCurrentActor();
   const scope = await confirmWithCode({
-    title: "Wipe Encounter Data",
+    title: t("WITCHER.Dialog.Bestiary.WipeEncounters", "Wipe Encounter Data"),
     icon:  "fa-solid fa-paw",
     body:  `<p>This will clear every <strong>encounter log entry</strong> on the selected target.</p>
             <ul class="wou-bst-confirm-ul">
@@ -1918,7 +1930,7 @@ async function confirmWithCode({ title, icon, body, currentActor = null, require
 
   if (!result || result === "cancel" || !result.scope) return null;
   if (requireCode && String(result.code) !== code) {
-    ui.notifications?.warn("Wrong code — action cancelled.");
+    ui.notifications?.warn(t("WITCHER.Notify.Bestiary.WrongCode", "Wrong code — action cancelled."));
     return null;
   }
   return result.scope;

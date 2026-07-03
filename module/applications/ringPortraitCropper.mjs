@@ -1,3 +1,4 @@
+import { t, tFormat } from "../chrome/lib/i18n.js";
 /**
  * RingPortraitCropper — stripped-down debug build. Notifies at every step
  * so we can see what's actually firing.
@@ -72,7 +73,7 @@ export class RingPortraitCropper extends HandlebarsApplicationMixin(ApplicationV
         classes: ["witcher-ttrpg-death-march", "wdm-rpc"],
         tag: "form",
         window: {
-            title: "Crop Portrait into Token Ring",
+            title: t("WITCHER.Dialog.Crop.Title", "Crop Portrait into Token Ring"),
             icon: "fa-solid fa-crop-simple",
             resizable: false
         },
@@ -188,19 +189,19 @@ export class RingPortraitCropper extends HandlebarsApplicationMixin(ApplicationV
         console.log(`${SYSTEM_ID} | RPC apply clicked`);
         event?.preventDefault?.();
         try {
-            ui.notifications.info("Crop: starting…");
+            ui.notifications.info(t("WITCHER.Notify.Crop.Starting", "Crop: starting…"));
             if (!this.actor) {
-                ui.notifications.error("Crop: no actor on cropper");
+                ui.notifications.error(t("WITCHER.Notify.Crop.NoActor", "Crop: no actor on cropper"));
                 return;
             }
             console.log(`${SYSTEM_ID} | RPC rasterizing…`);
             const dataUrl = await this._rasterizeToDataUrl();
             if (!dataUrl) {
-                ui.notifications.error("Crop: rasterize returned null");
+                ui.notifications.error(t("WITCHER.Notify.Crop.RasterizeNull", "Crop: rasterize returned null"));
                 return;
             }
             console.log(`${SYSTEM_ID} | RPC rasterized: ${dataUrl.length} chars; updating actor…`);
-            ui.notifications.info(`Crop: rasterized (${Math.round(dataUrl.length / 1024)} KB), updating actor…`);
+            ui.notifications.info(tFormat("WITCHER.Notify.Crop.Rasterized", { kb: Math.round(dataUrl.length / 1024) }, "Crop: rasterized ({kb} KB), updating actor…"));
             /* Persist the crop transform too. The variable-portrait sync
              * (chrome/integrations/portrait-toxicity.js) reads this flag
              * and re-rasterizes each tier/condition image with the same
@@ -212,11 +213,11 @@ export class RingPortraitCropper extends HandlebarsApplicationMixin(ApplicationV
                 [`flags.${SYSTEM_ID}.${PORTRAIT_CROP_FLAG}`]: { ...this._cropState }
             });
             console.log(`${SYSTEM_ID} | RPC actor.update done`);
-            ui.notifications.info(`Crop: applied to ${this.actor.name}.`);
+            ui.notifications.info(tFormat("WITCHER.Notify.Crop.Applied", { actor: this.actor.name }, "Crop: applied to {actor}."));
             await this.close();
         } catch (err) {
             console.error(`${SYSTEM_ID} | RPC apply failed`, err);
-            ui.notifications.error(`Crop failed: ${err?.message ?? err}`);
+            ui.notifications.error(tFormat("WITCHER.Notify.Crop.Failed", { err: err?.message ?? err }, "Crop failed: {err}"));
         }
     }
 

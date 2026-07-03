@@ -3,8 +3,8 @@
    it doesn't touch other sheets. Tokens come from styles/tokens.css. */
 
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-changes-hint {
-  margin: 0 0 8px;
-  font-size: 11px;
+  margin: 0 0 0.5rem;
+  font-size: 0.6875rem;
   color: var(--wdm-ink-dim, #b3a98f);
   font-style: italic;
 }
@@ -15,24 +15,24 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
   /* Cap the action list and scroll within it — without this, adding many
      rows grows the window unbounded. The right padding keeps the scrollbar
      clear of each row's delete button (which sits at the row's right). */
   max-height: 55vh;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 4px;
+  padding-right: 0.25rem;
 }
 /* Themed thin scrollbar so the well reads as part of the editor. */
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-changes::-webkit-scrollbar {
-  width: 10px;
+  width: 0.625rem;
 }
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-changes::-webkit-scrollbar-thumb {
   background: var(--wdm-amber-dim, #8a6d3b);
   border: 2px solid transparent;
   background-clip: padding-box;
-  border-radius: 6px;
+  border-radius: 0.375rem;
 }
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-changes::-webkit-scrollbar-track {
   background: rgba(10, 9, 8, 0.35);
@@ -42,8 +42,8 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 30px 8px 10px;
+  gap: 0.375rem;
+  padding: 0.5rem 1.875rem 0.5rem 0.625rem;
   background: rgba(10, 9, 8, 0.35);
   border: 1px solid rgba(140, 133, 121, 0.18);
   border-left: 2px solid var(--wdm-amber-dim, #8a6d3b);
@@ -52,12 +52,12 @@
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-change-field {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-change-field > label {
-  flex: 0 0 64px;
-  font-size: 10px;
+  flex: 0 0 4rem;
+  font-size: 0.625rem;
   letter-spacing: var(--wdm-track, 0.06em);
   text-transform: uppercase;
   color: var(--wdm-ink-dim, #b3a98f);
@@ -75,15 +75,15 @@
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-target-input,
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-change-condition > input {
   font-family: var(--wdm-font-mono, monospace);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-change-del {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 20px;
-  height: 20px;
+  top: 0.375rem;
+  right: 0.375rem;
+  width: 1.25rem;
+  height: 1.25rem;
   padding: 0;
   line-height: 1;
   background: none;
@@ -96,13 +96,13 @@
 }
 
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-add-change {
-  margin-top: 10px;
-  padding: 5px 12px;
+  margin-top: 0.625rem;
+  padding: 0.3125rem 0.75rem;
   background: rgba(184, 148, 100, 0.10);
   border: 1px solid var(--wdm-amber-dim, #8a6d3b);
   color: var(--wdm-amber-hi, #e8c98f);
   font-family: var(--wdm-font-display, inherit);
-  font-size: 10px;
+  font-size: 0.625rem;
   letter-spacing: var(--wdm-track, 0.06em);
   text-transform: uppercase;
   cursor: pointer;
@@ -115,22 +115,22 @@
 /* ── Logic tab — per-turn tick payload ──────────────────────────────── */
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-hint,
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-subhint {
-  margin: 0 0 8px;
-  font-size: 11px;
+  margin: 0 0 0.5rem;
+  font-size: 0.6875rem;
   color: var(--wdm-ink-dim, #b3a98f);
   font-style: italic;
 }
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-subhint {
-  margin: 2px 0 0;
-  font-size: 10px;
+  margin: 0.125rem 0 0;
+  font-size: 0.625rem;
 }
 
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   font-family: var(--wdm-font-display, inherit);
-  font-size: 11px;
+  font-size: 0.6875rem;
   letter-spacing: var(--wdm-track, 0.06em);
   text-transform: uppercase;
   color: var(--wdm-amber-hi, #e8c98f);
@@ -141,11 +141,11 @@
 }
 
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-fields {
-  margin-top: 10px;
-  padding: 10px;
+  margin-top: 0.625rem;
+  padding: 0.625rem;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
   background: rgba(10, 9, 8, 0.35);
   border: 1px solid rgba(140, 133, 121, 0.18);
   border-left: 2px solid var(--wdm-amber-dim, #8a6d3b);
@@ -154,11 +154,11 @@
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-field {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-field > label {
-  flex: 0 0 90px;
-  font-size: 10px;
+  flex: 0 0 5.625rem;
+  font-size: 0.625rem;
   letter-spacing: var(--wdm-track, 0.06em);
   text-transform: uppercase;
   color: var(--wdm-ink-dim, #b3a98f);
@@ -171,8 +171,8 @@
 }
 
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-through {
-  margin-top: 2px;
-  font-size: 10px;
+  margin-top: 0.125rem;
+  font-size: 0.625rem;
 }
 
 /* Hit-location picker — checkboxes styled as toggle buttons. */
@@ -180,27 +180,27 @@
   align-items: flex-start;
 }
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-loc-field > label {
-  margin-top: 4px;
+  margin-top: 0.25rem;
 }
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-loc-grid {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 0.25rem;
 }
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-loc-btn {
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
+  padding: 0.1875rem 0.5rem;
   font-family: var(--wdm-font-display, inherit);
-  font-size: 10px;
+  font-size: 0.625rem;
   letter-spacing: var(--wdm-track, 0.06em);
   text-transform: uppercase;
   color: var(--wdm-ink-dim, #b3a98f);
   background: rgba(10, 9, 8, 0.35);
   border: 1px solid rgba(140, 133, 121, 0.28);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   cursor: pointer;
   user-select: none;
 }
@@ -216,18 +216,18 @@
 /* The checkbox itself is hidden; the label IS the button. */
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-loc-btn > input {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  width: 0.0625rem;
+  height: 0.0625rem;
   opacity: 0;
   pointer-events: none;
 }
 
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-section {
-  margin: 16px 0 4px;
-  padding-top: 12px;
+  margin: 1rem 0 0.25rem;
+  padding-top: 0.75rem;
   border-top: 1px solid rgba(140, 133, 121, 0.18);
   font-family: var(--wdm-font-display, inherit);
-  font-size: 11px;
+  font-size: 0.6875rem;
   letter-spacing: var(--wdm-track, 0.06em);
   text-transform: uppercase;
   color: var(--wdm-amber-hi, #e8c98f);
@@ -235,26 +235,26 @@
 
 /* ── Unified Effects tab — per-row action selector ──────────────────── */
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-action-type {
-  padding-bottom: 6px;
-  margin-bottom: 2px;
+  padding-bottom: 0.375rem;
+  margin-bottom: 0.125rem;
   border-bottom: 1px solid rgba(140, 133, 121, 0.18);
 }
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-action-type > select {
   font-family: var(--wdm-font-display, inherit);
-  font-size: 11px;
+  font-size: 0.6875rem;
   letter-spacing: var(--wdm-track, 0.06em);
   text-transform: uppercase;
   color: var(--wdm-amber-hi, #e8c98f);
 }
 
 /* ── AE Target field: input + "browse all parameters" button ─────────────── */
-.application.active-effect-config.witcher-ttrpg-death-march .wdm-target-row { display: flex; gap: 4px; align-items: center; }
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-target-row { display: flex; gap: 0.25rem; align-items: center; }
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-target-row .wdm-target-input { flex: 1 1 auto; min-width: 0; }
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-target-browse {
-  flex: 0 0 auto; width: 26px; height: 26px;
+  flex: 0 0 auto; width: 1.625rem; height: 1.625rem;
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--wdm-bg-deep); color: var(--wdm-amber-dim);
-  border: 1px solid var(--wdm-amber-dim); border-radius: 3px; cursor: pointer;
+  border: 1px solid var(--wdm-amber-dim); border-radius: 0.1875rem; cursor: pointer;
 }
 .application.active-effect-config.witcher-ttrpg-death-march .wdm-target-browse:hover { color: var(--wdm-amber-bright); }
 
@@ -265,27 +265,27 @@
 .wdm-target-picker-dialog .window-content { display: flex; flex-direction: column; min-height: 0; }
 .wdm-target-picker-dialog form.dialog-form { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
 .wdm-target-picker-dialog .dialog-content { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
-.wdm-target-picker-dialog .wdm-target-picker { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 8px; }
-.wdm-target-picker-dialog .wdm-tp-bar { flex: 0 0 auto; display: flex; gap: 6px; }
+.wdm-target-picker-dialog .wdm-target-picker { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 0.5rem; }
+.wdm-target-picker-dialog .wdm-tp-bar { flex: 0 0 auto; display: flex; gap: 0.375rem; }
 .wdm-target-picker-dialog .wdm-tp-cat { flex: 0 0 auto; max-width: 45%; }
 .wdm-target-picker-dialog .wdm-tp-search { flex: 1 1 auto; min-width: 0; }
-.wdm-target-picker-dialog .wdm-tp-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 2px; }
-.wdm-target-picker-dialog .wdm-tp-group { margin-bottom: 10px; }
+.wdm-target-picker-dialog .wdm-tp-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 0.125rem; }
+.wdm-target-picker-dialog .wdm-tp-group { margin-bottom: 0.625rem; }
 .wdm-target-picker-dialog .wdm-tp-group-label {
   font-family: var(--wdm-font-display, inherit); text-transform: uppercase; letter-spacing: 0.1em;
-  font-size: 11px; font-weight: 700; color: var(--wdm-amber-bright, #d8b056);
+  font-size: 0.6875rem; font-weight: 700; color: var(--wdm-amber-bright, #d8b056);
   border-bottom: 1px solid var(--wdm-amber-dim, #9a7b3a);
-  padding: 3px 2px; margin-bottom: 4px;
+  padding: 0.1875rem 0.125rem; margin-bottom: 0.25rem;
   position: sticky; top: 0; background: var(--wdm-bg-deep, #14110d); z-index: 1;
 }
 /* Stack label over path so neither overflows the row (long combatMods keys). */
 .wdm-target-picker-dialog .wdm-tp-opt {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.0625rem; width: 100%;
   box-sizing: border-box;
-  padding: 4px 8px; margin: 1px 0; background: transparent; border: 1px solid transparent;
-  color: var(--wdm-ink, #d8cbb4); text-align: left; cursor: pointer; border-radius: 2px; font-size: 12px;
+  padding: 0.25rem 0.5rem; margin: 0.0625rem 0; background: transparent; border: 1px solid transparent;
+  color: var(--wdm-ink, #d8cbb4); text-align: left; cursor: pointer; border-radius: 2px; font-size: 0.75rem;
 }
 .wdm-target-picker-dialog .wdm-tp-opt:hover { background: rgba(168,132,80,0.14); border-color: var(--wdm-amber-dim, #9a7b3a); }
 .wdm-target-picker-dialog .wdm-tp-opt.is-current { border-color: var(--wdm-amber-bright, #d8b056); }
 .wdm-target-picker-dialog .wdm-tp-opt-label { width: 100%; overflow-wrap: anywhere; }
-.wdm-target-picker-dialog .wdm-tp-opt-key { width: 100%; color: var(--wdm-ink-dim, #8c8579); font-size: 10px; opacity: 0.75; word-break: break-all; }
+.wdm-target-picker-dialog .wdm-tp-opt-key { width: 100%; color: var(--wdm-ink-dim, #8c8579); font-size: 0.625rem; opacity: 0.75; word-break: break-all; }

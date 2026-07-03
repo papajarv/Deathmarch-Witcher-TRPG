@@ -34,9 +34,9 @@
 
       <div class="wdm-w3-hero">
         <div class="wdm-w3-hero-value">{{#if isEnhanced}}{{effective.damage}}{{else}}{{source.damage}}{{/if}}</div>
-        <div class="wdm-w3-hero-label">DAMAGE{{#if isEnhanced}} <i class="fa-solid fa-gem" title="Enhanced"></i>{{/if}}</div>
+        <div class="wdm-w3-hero-label">DAMAGE{{#if isEnhanced}} <i class="fa-solid fa-gem" title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.Enhanced'}}"></i>{{/if}}</div>
         {{#if source.requiresAmmo}}
-          <div class="wdm-w3-hero-sub">By Ammunition</div>
+          <div class="wdm-w3-hero-sub">{{localize 'WITCHER.Sheet.Weapon.Text.ByAmmunition'}}</div>
         {{else if effective.damageTypes.length}}
           <div class="wdm-w3-hero-sub">
             {{#each effective.damageTypes}}{{#unless @first}} · {{/unless}}{{localize (lookup ../WITCHER.damageTypes this)}}{{/each}}
@@ -48,35 +48,41 @@
         {{#unless (eq effective.accuracy 0)}}
           <li class="wdm-w3-stat {{#if (gte effective.accuracy 0)}}is-positive{{else}}is-negative{{/if}}">
             <span class="val">{{#if (gte effective.accuracy 0)}}+{{/if}}{{effective.accuracy}}</span>
-            <span class="lbl">Weapon Accuracy</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Weapon.Text.WeaponAccuracy'}}</span>
           </li>
         {{/unless}}
         {{#unless (eq effective.reliabilityMax 0)}}
           <li class="wdm-w3-stat">
             <span class="val">{{source.reliability.value}}/{{effective.reliabilityMax}}</span>
-            <span class="lbl">Reliability</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Weapon.Text.Reliability'}}</span>
           </li>
         {{/unless}}
-        {{#unless (eq source.weaponType "melee")}}
+        {{!-- Range display: always shown for ranged / thrown weapons.
+              For MELEE weapons, shown when Combat Extended is on AND the
+              weapon has a Range value — EO gives most melee weapons a
+              throwable range (BODY×2 etc.), so surface it here so the
+              player can see it without opening the config. Suppressed
+              when the value is empty. --}}
+        {{#if (or (not (eq source.weaponType "melee")) (and ceOn source.range))}}
           {{#if source.range}}
             <li class="wdm-w3-stat">
               <span class="val">{{source.range}}m</span>
-              <span class="lbl">Range</span>
+              <span class="lbl">{{localize 'WITCHER.Sheet.Weapon.Text.Range'}}</span>
             </li>
           {{/if}}
-        {{/unless}}
+        {{/if}}
         {{#if (eq source.weaponType "thrown")}}
           {{#unless (eq source.radius 0)}}
             <li class="wdm-w3-stat">
               <span class="val">{{source.radius}}m</span>
-              <span class="lbl">Radius</span>
+              <span class="lbl">{{localize 'WITCHER.Sheet.Weapon.Text.Radius'}}</span>
             </li>
           {{/unless}}
         {{/if}}
         {{#if enhancementSlots.length}}
           <li class="wdm-w3-stat wdm-w3-stat-slots">
             <span class="val">{{enhancementSlots.length}}</span>
-            <span class="lbl">Enhancement Slots</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Weapon.Text.EnhancementSlots'}}</span>
             {{!-- Drag a Rune / weapon-mod enhancement onto an empty box to
                  socket it; the × detaches (owners only). --}}
             <span class="wdm-w3-slots" data-enh-slots>
@@ -86,14 +92,14 @@
                         data-tooltip="{{this.name}}" data-tooltip-direction="UP">
                     <img src="{{this.img}}" alt="" />
                     {{#if ../canEdit}}
-                      <button type="button" class="wdm-slot-detach" data-action="detachEnhancement" title="Remove enhancement">
+                      <button type="button" class="wdm-slot-detach" data-action="detachEnhancement" title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.RemoveEnhancement'}}">
                         <i class="fa-solid fa-xmark"></i>
                       </button>
                     {{/if}}
                   </span>
                 {{else}}
                   <span class="wdm-w3-slot" data-slot-index="{{this.index}}"
-                        data-tooltip="Empty slot — drag a Rune or weapon-mod enhancement to fill"
+                        data-tooltip="{{localize 'WITCHER.Sheet.Weapon.Tooltip.EmptySlotDragARuneOrWeaponModEnhancement'}}"
                         data-tooltip-direction="UP"></span>
                 {{/if}}
               {{/each}}
@@ -110,7 +116,7 @@
           {{#unless (eq source.weaponType "ranged")}}
             <li class="wdm-w3-stat is-positive">
               <span class="val">+B</span>
-              <span class="lbl">Melee Bonus applies</span>
+              <span class="lbl">{{localize 'WITCHER.Sheet.Weapon.Text.MeleeBonusApplies'}}</span>
             </li>
           {{/unless}}
         {{/if}}
@@ -133,7 +139,7 @@
           </div>
           {{#if reload.hasAmmo}}
             <div class="wdm-w3-ammo-controls">
-              <select class="wdm-w3-ammo-select" data-ammo-select title="Ammunition from your equipped containers">
+              <select class="wdm-w3-ammo-select" data-ammo-select title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.AmmunitionFromYourEquippedContainers'}}">
                 {{#each reload.eligible}}
                   <option value="{{this.id}}" {{#if this.selected}}selected{{/if}}>{{this.name}} (×{{this.qty}}) — {{this.container}}</option>
                 {{/each}}
@@ -153,13 +159,24 @@
       {{#if weaponQualityList.length}}
         <div class="wdm-w3-tags">
           {{#each weaponQualityList}}
-            <span class="wdm-w3-tag" data-tooltip="{{this.description}}" data-tooltip-direction="UP">{{this.label}}</span>
+            {{!-- Display layer = read-only chips. Open-category qualities
+                 (Two-Hand / Close Quarters / Throwing / Strangling) get
+                 their sliders affordance in the CONFIG view only — the
+                 display chip stays a plain tag. --}}
+            <span class="wdm-w3-tag{{#if this.displayOnly}} is-display-only{{/if}}"
+                  data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+              {{this.label}}
+              {{#if this.displayOnly}}
+                <i class="fa-solid fa-circle-info wdm-w3-tag-info"
+                   title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.GmResolvedEngineHasNoAutomaticConsumerFo'}}"></i>
+              {{/if}}
+            </span>
           {{/each}}
         </div>
       {{/if}}
 
       {{#if socketedQualityList.length}}
-        <div class="wdm-w3-section-label">From Enhancements</div>
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Weapon.Text.FromEnhancements'}}</div>
         <div class="wdm-w3-tags">
           {{#each socketedQualityList}}
             <span class="wdm-w3-tag is-enhanced" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
@@ -178,9 +195,9 @@
       {{/if}}
 
       <div class="wdm-w3-footer">
-        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
         {{#unless (eq source.quantity 1)}}
-          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+          <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.Quantity'}}"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
         {{/unless}}
         {{#if source.conceal}}
           {{#unless (eq source.conceal "N/A")}}
@@ -189,7 +206,7 @@
         {{/if}}
         <span class="wdm-w3-foot-spacer"></span>
         <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
-        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
       </div>
 
     </div>
@@ -204,20 +221,31 @@
     <div class="wdm-cfg-form">
 
       <div class="wdm-cfg-head">
-        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
-        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Weapon name" />
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Weapon.Hint.WeaponName'}}" />
       </div>
 
-      <div class="wdm-cfg-section">Combat</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Weapon.Text.Combat'}}</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span>Type</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Weapon.Text.Type'}}</span>
+          {{!-- Under Combat Extended, "thrown" isn't a real weapon type
+                — any one-handed weapon with a Range value is throwable
+                (canThrow gate in attackDialog.mjs). So we hide the
+                thrown option from the picker in CE mode; melee is the
+                default for anything you can also throw, and the same
+                weapon rolls both in-hand and out-of-hand via the mode
+                toggle in the attack dialog. A weapon authored with
+                weaponType='thrown' in a pack still renders as its stored
+                value (players can view and re-save it as melee). --}}
           <select name="system.weaponType">
             {{#each WITCHER.weapon.types}}
-              <option value="{{@key}}" {{#if (eq @key ../source.weaponType)}}selected{{/if}}>{{localize this}}</option>
+              {{#unless (and ../ceOn (eq @key "thrown") (not (eq @key ../source.weaponType)))}}
+                <option value="{{@key}}" {{#if (eq @key ../source.weaponType)}}selected{{/if}}>{{localize this}}</option>
+              {{/unless}}
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>Hands</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Weapon.Text.Hands'}}</span>
           <select name="system.hands">
             {{#each WITCHER.weapon.hands}}
               <option value="{{@key}}" {{#if (eq @key ../source.hands)}}selected{{/if}}>{{localize this}}</option>
@@ -225,29 +253,29 @@
           </select>
         </label>
         {{#unless (eq source.hands "two")}}
-          <label class="wdm-cfg-row is-checkbox" title="A quick item (throwing knife, dagger…) may sit in the off-hand Quick slot. Otherwise one-handed weapons only fit Right or Left.">
-            <span>Quick Item</span>
+          <label class="wdm-cfg-row is-checkbox" title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.AQuickItemThrowingKnifeDaggerMaySitInThe'}}">
+            <span>{{localize 'WITCHER.Sheet.Weapon.Text.QuickItem'}}</span>
             <input type="checkbox" name="system.quick" {{#if source.quick}}checked{{/if}} />
           </label>
         {{/unless}}
-        <label class="wdm-cfg-row"><span>Damage</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Weapon.Text.Damage'}}</span>
           <input type="text" name="system.damage" value="{{source.damage}}" placeholder="2d6+2" />
         </label>
         <label class="wdm-cfg-row"><span>WA</span>
           <input type="number" name="system.accuracy" value="{{source.accuracy}}" />
         </label>
-        <label class="wdm-cfg-row wdm-cfg-row-pair"><span>Reliability</span>
+        <label class="wdm-cfg-row wdm-cfg-row-pair"><span>{{localize 'WITCHER.Sheet.Weapon.Text.Reliability'}}</span>
           <span class="wdm-cfg-pair">
             <input type="number" min="0" name="system.reliability.value"
                    value="{{source.reliability.value}}"
-                   title="Current — blocks remaining" />
+                   title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.CurrentBlocksRemaining'}}" />
             <span class="wdm-cfg-slash">/</span>
             <input type="number" min="0" name="system.reliability.max"
                    value="{{source.reliability.max}}"
-                   title="Maximum — total blocks before breaking" />
+                   title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.MaximumTotalBlocksBeforeBreaking'}}" />
           </span>
         </label>
-        <label class="wdm-cfg-row"><span>Attack Skill</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Weapon.Text.AttackSkill'}}</span>
           {{!-- Filtered to weapon skills only — Core p.72-77 attack rolls
                use one of Brawling / Small Blades / Swordsmanship /
                Staff·Spear / Melee / Archery / Crossbow / Athletics. --}}
@@ -258,51 +286,58 @@
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>Enhancement Slots</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Weapon.Text.EnhancementSlots'}}</span>
           <input type="number" min="0" name="system.weaponEnhancement" value="{{source.weaponEnhancement}}" />
         </label>
         {{#unless (eq source.weaponType "ranged")}}
-          <label class="wdm-cfg-row is-checkbox" title="Add actor's Bonus Melee Damage (Core p.48). Default on for melee + thrown.">
-            <span>Adds Melee Bonus</span>
+          <label class="wdm-cfg-row is-checkbox" title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.AddActorSBonusMeleeDamageCoreP48DefaultO'}}">
+            <span>{{localize 'WITCHER.Sheet.Weapon.Text.AddsMeleeBonus'}}</span>
             <input type="checkbox" name="system.appliesMeleeBonus" {{#if source.appliesMeleeBonus}}checked{{/if}} />
           </label>
         {{/unless}}
-        {{#unless (eq source.weaponType "melee")}}
-          <label class="wdm-cfg-row"><span>Range (m)</span>
+        {{!-- Range field visibility:
+              - Ranged / thrown weapons: always shown (they need it).
+              - Melee weapons: shown when Combat Extended is on. Under CE
+                any 1H weapon with a Range value is throwable, so authors
+                need a place to enter the range on melee weapons too. --}}
+        {{#if (or (not (eq source.weaponType "melee")) ceOn)}}
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Weapon.Text.RangeM'}}</span>
             <input type="text" name="system.range" value="{{source.range}}" placeholder="e.g. 10 or BODYx4" />
           </label>
+        {{/if}}
+        {{#unless (eq source.weaponType "melee")}}
           {{#if (eq source.weaponType "ranged")}}
-            <label class="wdm-cfg-row is-checkbox" title="Damage type comes from the loaded ammunition. Hides the weapon's own damage-type picker.">
-              <span>Requires Ammo</span>
+            <label class="wdm-cfg-row is-checkbox" title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.DamageTypeComesFromTheLoadedAmmunitionHi'}}">
+              <span>{{localize 'WITCHER.Sheet.Weapon.Text.RequiresAmmo'}}</span>
               <input type="checkbox" name="system.requiresAmmo" {{#if source.requiresAmmo}}checked{{/if}} />
             </label>
             {{#if source.requiresAmmo}}
-              <label class="wdm-cfg-row" title="Ammo class this weapon fires. Only matching ammo can be loaded — arrows in bows, bolts in crossbows.">
-                <span>Ammo Type</span>
+              <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.AmmoClassThisWeaponFiresOnlyMatchingAmmo'}}">
+                <span>{{localize 'WITCHER.Sheet.Weapon.Text.AmmoType'}}</span>
                 <select name="system.ammoType">
                   {{#each WITCHER.weapon.ammoTypes}}
                     <option value="{{@key}}" {{#if (eq @key ../source.ammoType)}}selected{{/if}}>{{localize this}}</option>
                   {{/each}}
                 </select>
               </label>
-              <label class="wdm-cfg-row" title="Actions to reload a chamber-load. 0 = bow (nock-and-loose, no reload step). 1 = Slow Reload (crossbows). Higher for heavier arms.">
-                <span>Reload Actions</span>
+              <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.ActionsToReloadAChamberLoad0BowNockAndLo'}}">
+                <span>{{localize 'WITCHER.Sheet.Weapon.Text.ReloadActions'}}</span>
                 <input type="number" min="0" step="1" name="system.reloadActions" value="{{source.reloadActions}}" />
               </label>
-              <label class="wdm-cfg-row" title="Rounds a full load holds (Rate of Fire). 1 for single-shot crossbows.">
-                <span>Chamber Capacity</span>
+              <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.RoundsAFullLoadHoldsRateOfFire1ForSingle'}}">
+                <span>{{localize 'WITCHER.Sheet.Weapon.Text.ChamberCapacity'}}</span>
                 <input type="number" min="0" step="1" name="system.loaded.capacity" value="{{source.loaded.capacity}}" />
               </label>
             {{/if}}
           {{/if}}
         {{/unless}}
         {{#if (eq source.weaponType "thrown")}}
-          <label class="wdm-cfg-row"><span>Radius (m)</span>
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Weapon.Text.RadiusM'}}</span>
             <input type="number" min="0" step="any" name="system.radius" value="{{source.radius}}"
-                   title="Area-of-effect radius for thrown weapons / bombs" />
+                   title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.AreaOfEffectRadiusForThrownWeaponsBombs'}}" />
           </label>
-          <label class="wdm-cfg-row" title="Skill rolled when this weapon is used in melee (in hand) instead of thrown. The attack card offers a melee/thrown toggle. Leave at — none — to allow throwing only.">
-            <span>Melee Skill</span>
+          <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Weapon.Tooltip.SkillRolledWhenThisWeaponIsUsedInMeleeIn'}}">
+            <span>{{localize 'WITCHER.Sheet.Weapon.Text.MeleeSkill'}}</span>
             <select name="system.meleeSkillKey">
               <option value="" {{#if (eq source.meleeSkillKey "")}}selected{{/if}}>— none —</option>
               {{#each WITCHER.weapon.meleeSkillKeys}}
@@ -314,7 +349,7 @@
       </div>
 
       {{#unless source.requiresAmmo}}
-        <div class="wdm-cfg-section">Damage Types</div>
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Weapon.Text.DamageTypes'}}</div>
         <div class="wdm-cfg-checkgrid">
           {{#each WITCHER.damageTypes}}
             <label class="wdm-cfg-check">
@@ -327,7 +362,7 @@
         </div>
       {{/unless}}
 
-      <div class="wdm-cfg-section">Qualities <span class="wdm-cfg-sub">(edit catalog in system settings)</span></div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Weapon.Text.Qualities'}} <span class="wdm-cfg-sub">(edit catalog in system settings)</span></div>
       <div class="wdm-cfg-checkgrid">
         {{#each weaponQualitiesCatalog}}
           {{!-- Parameterized qualities wrap in a div (not a label) so the
@@ -349,6 +384,19 @@
                      placeholder="{{this.param.placeholder}}"
                      title="Parameter for {{this.label}}" />
               {{#if this.param.suffix}}<span class="wdm-cfg-param-suffix">{{this.param.suffix}}</span>{{/if}}
+              {{!-- Open-category qualities (Two-Hand, Close Quarters,
+                    Throwing, Strangling) — open a structured config
+                    dialog where the GM picks WA bonus, damage dice,
+                    and granted qualities. The dialog writes back a
+                    canonical comma-separated string ("+1 WA, +1d6 Dmg,
+                    Improved Armor Piercing") that the existing parser
+                    decodes at attack time. --}}
+              {{#if (or (eq @key "twoHand") (eq @key "closeQuarters") (eq @key "throwing") (eq @key "strangling"))}}
+                <button type="button" class="wdm-cfg-param-config"
+                        data-action="config-open-category-quality"
+                        data-quality-key="{{@key}}"
+                        title="Configure {{this.label}} bonus structurally — WA, damage dice, granted qualities"><i class="fa-solid fa-sliders"></i></button>
+              {{/if}}
             </div>
           {{else}}
             <label class="wdm-cfg-check" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
@@ -361,33 +409,33 @@
         {{/each}}
       </div>
 
-      <div class="wdm-cfg-section">Procurement</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Weapon.Text.Procurement'}}</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span>Availability</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Weapon.Text.Availability'}}</span>
           <select name="system.availability">
             {{#each WITCHER.availability}}
               <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>Conceal</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Weapon.Text.Conceal'}}</span>
           <select name="system.conceal">
             {{#each WITCHER.concealment}}
               <option value="{{@key}}" {{#if (eq @key ../source.conceal)}}selected{{/if}}>{{localize this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>Weight (kg)</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Weapon.Text.WeightKg'}}</span>
           <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
         </label>
-        <label class="wdm-cfg-row"><span>Cost</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Weapon.Text.Cost'}}</span>
           <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
         </label>
-        <label class="wdm-cfg-row"><span>Quantity</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Weapon.Text.Quantity'}}</span>
           <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
         </label>
         <label class="wdm-cfg-row is-checkbox">
-          <span>Equipped</span>
+          <span>{{localize 'WITCHER.Sheet.Weapon.Text.Equipped'}}</span>
           <input type="checkbox" name="system.equipped" {{#if source.equipped}}checked{{/if}} />
         </label>
       </div>
@@ -399,8 +447,8 @@
 
       {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
 
-      <div class="wdm-cfg-section">Description</div>
-      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="Weapon lore, appearance, narrative notes…">{{source.description}}</textarea>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Weapon.Text.Description'}}</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="{{localize 'WITCHER.Sheet.Weapon.Hint.WeaponLoreAppearanceNarrativeNotes'}}">{{source.description}}</textarea>
 
     </div>
   </div>

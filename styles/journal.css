@@ -26,32 +26,33 @@ body.witcher-ttrpg-death-march.wou-journal-open #wou-top-glow {
    always computed and the panel actually paints when opened. */
 body.witcher-ttrpg-death-march #wou-journal {
   position: fixed;
-  top: 50px; left: 180px; right: 280px; bottom: 140px;
+  top: 3.125rem; left: 11.25rem; right: 17.5rem; bottom: 8.75rem;
   /* Above the witcher-parchments host (see inventory.css note). */
   z-index: 9060;
   /* Matches the character panel — a faint warm radial wash over a slightly
      transparent vertical gradient so the canvas reads through. */
   background:
-    radial-gradient(ellipse 1100px 700px at 50% 25%, rgba(184,148,100,0.05), transparent 70%),
+    radial-gradient(ellipse 68.75rem 43.75rem at 50% 25%, rgba(184,148,100,0.05), transparent 70%),
     linear-gradient(180deg, rgba(10,9,8,0.93), rgba(5,4,2,0.97));
-  backdrop-filter: blur(3px);
+  /* backdrop-filter cut: bg is 0.93-0.97 opaque so the blur is imperceptible
+     while forcing a full canvas re-sample every composite. See chrome.css:310. */
   border-top: 1px solid rgba(140,133,121,0.10);
   border-bottom: 1px solid rgba(140,133,121,0.10);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 23.75rem;
   /* Row 1 = top-level tab pivot (Personal / Relationships).
    * Row 2 = section body, which is either the personal split (left list
    * + right editor, spanning both columns) or the relationships grid
    * (spans both columns via grid-column: 1 / -1). */
   grid-template-rows: auto 1fr;
-  gap: 6px 18px;
-  padding: 14px 24px 14px;
+  gap: 0.375rem 1.125rem;
+  padding: 0.875rem 1.5rem 0.875rem;
   overflow: hidden;
   font-family: var(--wdm-font-body, 'Barlow Condensed', sans-serif);
   color: var(--wdm-ink);
 
   /* Drop-from-above animation, same as inventory */
-  transform: translateY(-12px);
+  transform: translateY(-0.75rem);
   opacity: 0;
   pointer-events: none;
   transition: transform .22s ease-out, opacity .18s ease-out;
@@ -65,16 +66,16 @@ body.witcher-ttrpg-death-march #wou-journal.is-open {
 /* Rune corners — purely decorative */
 body.witcher-ttrpg-death-march #wou-journal .rune-corner {
   position: absolute;
-  font-size: 14px;
+  font-size: 0.875rem;
   letter-spacing: 0.6em;
   color: var(--wdm-amber-dim);
   opacity: 0.7;
   pointer-events: none;
 }
-body.witcher-ttrpg-death-march #wou-journal .rc-tl { top: 10px; left: 18px; }
-body.witcher-ttrpg-death-march #wou-journal .rc-tr { top: 10px; right: 18px; }
-body.witcher-ttrpg-death-march #wou-journal .rc-bl { bottom: 10px; left: 18px; }
-body.witcher-ttrpg-death-march #wou-journal .rc-br { bottom: 10px; right: 18px; }
+body.witcher-ttrpg-death-march #wou-journal .rc-tl { top: 0.625rem; left: 1.125rem; }
+body.witcher-ttrpg-death-march #wou-journal .rc-tr { top: 0.625rem; right: 1.125rem; }
+body.witcher-ttrpg-death-march #wou-journal .rc-bl { bottom: 0.625rem; left: 1.125rem; }
+body.witcher-ttrpg-death-march #wou-journal .rc-br { bottom: 0.625rem; right: 1.125rem; }
 
 /* Close chevron — pinned to the center of the topbar Journal tab so it
  * always sits directly under the icon you clicked to open the panel.
@@ -83,15 +84,15 @@ body.witcher-ttrpg-death-march #wou-journal .rc-br { bottom: 10px; right: 18px; 
  * 50% if the variable hasn't been set yet (e.g. first paint). */
 body.witcher-ttrpg-death-march #wou-journal .jnl-close {
   position: absolute;
-  top: 4px;
+  top: 0.25rem;
   left: var(--jnl-close-x, 50%);
   transform: translateX(-50%);
   z-index: 50;             /* float above the chips+search row */
   background: none; border: none;
-  padding: 4px 8px;
+  padding: 0.25rem 0.5rem;
   color: var(--wdm-amber-hi);
   cursor: pointer;
-  font-size: 16px; line-height: 1;
+  font-size: 1rem; line-height: 1;
   transition: color .12s;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-close:hover { color: var(--wdm-amber-bright); }
@@ -101,8 +102,8 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-close:hover { color: var(--wdm-
  * same row visually but well clear of the close button. */
 body.witcher-ttrpg-death-march #wou-journal .jnl-viewas-host {
   position: absolute;
-  top: 6px;
-  right: 14px;
+  top: 0.375rem;
+  right: 0.875rem;
   z-index: 50;
 }
 
@@ -110,20 +111,20 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-viewas-host {
 body.witcher-ttrpg-death-march #wou-journal .jnl-header {
   grid-column: 1 / -1;
   display: flex; align-items: baseline; justify-content: space-between;
-  padding: 0 0 10px;
+  padding: 0 0 0.625rem;
   position: relative;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-header::after {
   content: '';
-  position: absolute; left: 40px; right: 40px; bottom: 0;
-  height: 1px;
+  position: absolute; left: 2.5rem; right: 2.5rem; bottom: 0;
+  height: 0.0625rem;
   background: linear-gradient(90deg, transparent 5%, var(--wdm-amber-dim) 15%, transparent 30%, var(--wdm-amber) 50%, transparent 70%, var(--wdm-amber-dim) 85%, transparent 95%);
   opacity: 0.4;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-title {
   font-family: var(--wdm-font-display);
   font-weight: 700;
-  font-size: 18px;
+  font-size: 1.125rem;
   letter-spacing: 0.38em;
   text-transform: uppercase;
   color: var(--wdm-amber-bright);
@@ -132,29 +133,29 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-title {
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-title::before,
 body.witcher-ttrpg-death-march #wou-journal .jnl-title::after {
-  content: '·'; color: var(--wdm-amber-dim); margin: 0 10px;
+  content: '·'; color: var(--wdm-amber-dim); margin: 0 0.625rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-meta {
-  display: flex; gap: 18px; align-items: baseline;
-  font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+  display: flex; gap: 1.125rem; align-items: baseline;
+  font-size: 0.625rem; letter-spacing: 0.22em; text-transform: uppercase;
   color: var(--wdm-ink-faint);
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-meta .key { color: var(--wdm-ink-hi); font-weight: 700; }
-body.witcher-ttrpg-death-march #wou-journal .jnl-meta .key::before { content: '['; color: var(--wdm-ink-faint); margin-right: 1px; }
-body.witcher-ttrpg-death-march #wou-journal .jnl-meta .key::after  { content: ']'; color: var(--wdm-ink-faint); margin-left: 1px; }
+body.witcher-ttrpg-death-march #wou-journal .jnl-meta .key::before { content: '['; color: var(--wdm-ink-faint); margin-right: 0.0625rem; }
+body.witcher-ttrpg-death-march #wou-journal .jnl-meta .key::after  { content: ']'; color: var(--wdm-ink-faint); margin-left: 0.0625rem; }
 
 /* ============ LEFT COLUMN ============ */
 body.witcher-ttrpg-death-march #wou-journal .jnl-left {
   display: grid;
   grid-template-rows: auto 1fr;   /* chips+search (inline), list */
-  gap: 8px;
+  gap: 0.5rem;
   min-height: 0;
   min-width: 0;
   /* Headroom so the chip+search row clears the close chevron (which sits
    * absolute-positioned at top:4px and is centered horizontally under the
    * topbar Journal tab — the search input on the right of this row was
    * pulling visually into the chevron's column). */
-  padding-top: 16px;
+  padding-top: 1rem;
 }
 
 /* Search row sits INSIDE .jnl-subnav alongside the filter chips so they
@@ -164,14 +165,14 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-search-row {
   position: relative;
   display: flex;
   align-items: center;
-  flex: 1 1 140px;        /* claim remaining row width; collapse to 140px before wrapping */
-  min-width: 140px;
+  flex: 1 1 8.75rem;        /* claim remaining row width; collapse to 140px before wrapping */
+  min-width: 8.75rem;
   margin-left: auto;      /* push to the right edge of the row when there's slack */
   background: rgba(255,255,255,0.02);
   border: 1px solid rgba(184,148,100,0.20);
   border-radius: 2px;
-  padding: 2px 8px 2px 26px;
-  height: 26px;
+  padding: 0.125rem 0.5rem 0.125rem 1.625rem;
+  height: 1.625rem;
   box-sizing: border-box;
   transition: border-color .12s, background .12s;
 }
@@ -181,11 +182,11 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-search-row:focus-within {
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-search-icon {
   position: absolute;
-  left: 8px;
+  left: 0.5rem;
   top: 50%;
   transform: translateY(-50%);
   color: var(--wdm-ink-faint);
-  font-size: 10px;
+  font-size: 0.625rem;
   pointer-events: none;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-search-row:focus-within .jnl-search-icon {
@@ -198,7 +199,7 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-search {
   border: none;
   outline: none;
   font-family: var(--wdm-font-body, 'Barlow Condensed', sans-serif);
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--wdm-ink-bright);
   letter-spacing: 0.02em;
   padding: 0;
@@ -209,39 +210,39 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-search::placeholder {
   font-style: normal;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-search::-webkit-search-cancel-button { display: none; }
 body.witcher-ttrpg-death-march #wou-journal .jnl-search-clear {
   background: none;
   border: none;
-  padding: 0 2px;
-  margin-left: 2px;
+  padding: 0 0.125rem;
+  margin-left: 0.125rem;
   color: var(--wdm-ink-dim);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 0.625rem;
   transition: color .12s;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-search-clear:hover { color: var(--wdm-amber-bright); }
 
 /* Sub-nav chips */
-body.witcher-ttrpg-death-march #wou-journal .jnl-subnav { display: flex; flex-wrap: wrap; gap: 6px; }
+body.witcher-ttrpg-death-march #wou-journal .jnl-subnav { display: flex; flex-wrap: wrap; gap: 0.375rem; }
 body.witcher-ttrpg-death-march #wou-journal .jnl-chip {
   appearance: none;
   background: rgba(255,255,255,0.02);
   border: 1px solid rgba(184,148,100,0.20);
   border-radius: 2px;
-  padding: 6px 12px;
-  display: inline-flex; align-items: center; gap: 7px;
+  padding: 0.375rem 0.75rem;
+  display: inline-flex; align-items: center; gap: 0.4375rem;
   font-family: var(--wdm-font-display);
-  font-size: 10px;
+  font-size: 0.625rem;
   letter-spacing: 0.20em;
   text-transform: uppercase;
   color: var(--wdm-ink-dim);
   cursor: pointer;
   transition: color .12s, background .12s, border-color .12s;
 }
-body.witcher-ttrpg-death-march #wou-journal .jnl-chip i { font-size: 11px; color: var(--wdm-ink-faint); transition: color .12s; }
+body.witcher-ttrpg-death-march #wou-journal .jnl-chip i { font-size: 0.6875rem; color: var(--wdm-ink-faint); transition: color .12s; }
 body.witcher-ttrpg-death-march #wou-journal .jnl-chip:hover {
   color: var(--wdm-ink-bright);
   background: rgba(184,148,100,0.05);
@@ -255,34 +256,34 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-chip.is-active {
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-chip.is-active i { color: var(--wdm-amber-bright); }
 body.witcher-ttrpg-death-march #wou-journal .jnl-chip .chip-count {
-  margin-left: 4px;
-  font-size: 9px;
+  margin-left: 0.25rem;
+  font-size: 0.5625rem;
   color: var(--wdm-amber-hi);
   background: rgba(8,7,6,0.5);
   border: 1px solid rgba(140,133,121,0.20);
-  padding: 0 5px;
+  padding: 0 0.3125rem;
   border-radius: 1px;
 }
 
 /* List */
 body.witcher-ttrpg-death-march #wou-journal .jnl-list {
   overflow-y: auto;
-  padding-right: 6px;
+  padding-right: 0.375rem;
   min-height: 0;
 }
-body.witcher-ttrpg-death-march #wou-journal .jnl-list::-webkit-scrollbar { width: 6px; }
+body.witcher-ttrpg-death-march #wou-journal .jnl-list::-webkit-scrollbar { width: 0.375rem; }
 body.witcher-ttrpg-death-march #wou-journal .jnl-list::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); }
 
 body.witcher-ttrpg-death-march #wou-journal .jnl-grp {
-  display: flex; align-items: center; gap: 10px;
-  font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+  display: flex; align-items: center; gap: 0.625rem;
+  font-size: 0.625rem; letter-spacing: 0.28em; text-transform: uppercase;
   color: var(--wdm-amber);
-  margin: 14px 2px 8px;
+  margin: 0.875rem 0.125rem 0.5rem;
 }
-body.witcher-ttrpg-death-march #wou-journal .jnl-grp:first-child { margin-top: 4px; }
+body.witcher-ttrpg-death-march #wou-journal .jnl-grp:first-child { margin-top: 0.25rem; }
 body.witcher-ttrpg-death-march #wou-journal .jnl-grp::before,
 body.witcher-ttrpg-death-march #wou-journal .jnl-grp::after {
-  content: ''; flex: 1; height: 1px;
+  content: ''; flex: 1; height: 0.0625rem;
   background: linear-gradient(90deg, transparent 5%, var(--wdm-amber-dim) 30%, var(--wdm-amber-dim) 70%, transparent 95%);
   opacity: 0.5;
 }
@@ -290,22 +291,22 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-grp::after {
 /* Card row */
 body.witcher-ttrpg-death-march #wou-journal .card-row {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto auto;
-  gap: 12px;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto auto;
+  gap: 0.75rem;
   align-items: center;
-  padding: 9px 12px;
+  padding: 0.5625rem 0.75rem;
   background: rgba(255,255,255,0.015);
   border: 1px solid rgba(184,148,100,0.08);
   border-left: 2px solid transparent;
   cursor: pointer;
   transition: background .12s, border-color .12s, transform .12s;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .card-row:hover {
   background: rgba(184,148,100,0.06);
   border-color: rgba(184,148,100,0.22);
   border-left-color: var(--wdm-amber);
-  transform: translateX(1px);
+  transform: translateX(0.0625rem);
 }
 body.witcher-ttrpg-death-march #wou-journal .card-row.is-active {
   background: rgba(184,148,100,0.10);
@@ -315,20 +316,20 @@ body.witcher-ttrpg-death-march #wou-journal .card-row.is-active {
 body.witcher-ttrpg-death-march #wou-journal .card-row.is-pinned { border-left-color: var(--wdm-amber-hi); }
 
 body.witcher-ttrpg-death-march #wou-journal .card-thumb {
-  width: 40px; height: 40px;
+  width: 2.5rem; height: 2.5rem;
   display: flex; align-items: center; justify-content: center;
   background:
     radial-gradient(circle at 30% 25%, rgba(255,235,180,0.08), transparent 60%),
     radial-gradient(circle, #1a1612, var(--wdm-bg));
   border: 1px solid var(--wdm-amber-dim);
   color: var(--wdm-amber-hi);
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .card-text { min-width: 0; }
 body.witcher-ttrpg-death-march #wou-journal .card-name {
   font-family: var(--wdm-font-display);
   font-weight: 600;
-  font-size: 12px;
+  font-size: 0.75rem;
   letter-spacing: 0.10em;
   text-transform: uppercase;
   color: var(--wdm-ink-bright);
@@ -336,9 +337,9 @@ body.witcher-ttrpg-death-march #wou-journal .card-name {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 body.witcher-ttrpg-death-march #wou-journal .card-meta {
-  margin-top: 3px;
+  margin-top: 0.1875rem;
   font-family: var(--wdm-font-body);
-  font-size: 10.5px;
+  font-size: 0.65625rem;
   font-style: italic;
   letter-spacing: 0.02em;
   color: var(--wdm-ink-dim);
@@ -350,7 +351,7 @@ body.witcher-ttrpg-death-march #wou-journal .card-meta {
 body.witcher-ttrpg-death-march #wou-journal .card-day {
   font-style: normal;
   font-family: var(--wdm-font-display);
-  font-size: 9px;
+  font-size: 0.5625rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--wdm-amber);
@@ -360,10 +361,10 @@ body.witcher-ttrpg-death-march #wou-journal .card-day {
 
 body.witcher-ttrpg-death-march #wou-journal .pin-btn {
   appearance: none; background: none; border: none;
-  padding: 4px 6px;
+  padding: 0.25rem 0.375rem;
   color: var(--wdm-ink-faint);
   cursor: pointer;
-  font-size: 12px; line-height: 1;
+  font-size: 0.75rem; line-height: 1;
   opacity: 0.45;
   transition: color .12s, opacity .12s, transform .12s;
 }
@@ -376,92 +377,92 @@ body.witcher-ttrpg-death-march #wou-journal .pin-btn.is-on {
 }
 
 body.witcher-ttrpg-death-march #wou-journal .card-badge {
-  width: 24px; height: 24px;
+  width: 1.5rem; height: 1.5rem;
   display: flex; align-items: center; justify-content: center;
   background: rgba(184,148,100,0.10);
   border: 1px solid var(--wdm-amber-dim);
   color: var(--wdm-amber-bright);
   font-family: var(--wdm-font-display);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
 }
 
 body.witcher-ttrpg-death-march #wou-journal .jnl-empty,
 body.witcher-ttrpg-death-march #wou-journal .jnl-noactor {
-  padding: 30px 12px;
+  padding: 1.875rem 0.75rem;
   text-align: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--wdm-ink-faint);
   letter-spacing: 0.06em;
   font-style: italic;
 }
-body.witcher-ttrpg-death-march #wou-journal .jnl-noactor { display: grid; gap: 14px; align-content: center; height: 100%; }
-body.witcher-ttrpg-death-march #wou-journal .empty-icon { font-size: 36px; color: var(--wdm-amber-dim); }
+body.witcher-ttrpg-death-march #wou-journal .jnl-noactor { display: grid; gap: 0.875rem; align-content: center; height: 100%; }
+body.witcher-ttrpg-death-march #wou-journal .empty-icon { font-size: 2.25rem; color: var(--wdm-amber-dim); }
 
 /* ============ RIGHT COLUMN — preview / editor ============ */
 body.witcher-ttrpg-death-march #wou-journal .jnl-right {
   display: grid;
   grid-template-rows: auto 1fr auto;
-  gap: 12px;
+  gap: 0.75rem;
   min-height: 0;
-  padding-top: 6px;
+  padding-top: 0.375rem;
   border-left: 1px solid rgba(140,133,121,0.10);
-  padding-left: 18px;
+  padding-left: 1.125rem;
 }
 
 body.witcher-ttrpg-death-march #wou-journal .preview-hero {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  gap: 0.75rem;
   align-items: center;
 }
 body.witcher-ttrpg-death-march #wou-journal .hero-thumb {
-  width: 56px; height: 56px;
+  width: 3.5rem; height: 3.5rem;
   display: flex; align-items: center; justify-content: center;
   background:
     radial-gradient(circle at 30% 25%, rgba(255,235,180,0.10), transparent 60%),
     radial-gradient(circle, #1a1612, var(--wdm-bg));
   border: 1px solid var(--wdm-amber-hi);
   color: var(--wdm-amber-bright);
-  font-size: 22px;
-  box-shadow: 0 0 0 1px var(--wdm-amber-dim), 0 0 14px rgba(184,148,100,0.18);
+  font-size: 1.375rem;
+  box-shadow: 0 0 0 1px var(--wdm-amber-dim), 0 0 0.875rem rgba(184,148,100,0.18);
 }
 body.witcher-ttrpg-death-march #wou-journal .hero-text { min-width: 0; }
 body.witcher-ttrpg-death-march #wou-journal .preview-name {
   font-family: var(--wdm-font-display);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 0.875rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--wdm-amber-bright);
   line-height: 1.15;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .preview-meta {
   font-family: var(--wdm-font-body);
-  font-size: 11px;
+  font-size: 0.6875rem;
   letter-spacing: 0.04em;
   font-style: italic;
   color: var(--wdm-ink-dim);
 }
 
-body.witcher-ttrpg-death-march #wou-journal .tag-picker { display: flex; gap: 4px; margin-top: 8px; }
+body.witcher-ttrpg-death-march #wou-journal .tag-picker { display: flex; gap: 0.25rem; margin-top: 0.5rem; }
 body.witcher-ttrpg-death-march #wou-journal .tag-pill {
   appearance: none;
   background: rgba(255,255,255,0.02);
   border: 1px solid rgba(184,148,100,0.15);
   border-radius: 2px;
-  padding: 3px 9px;
-  display: inline-flex; align-items: center; gap: 5px;
+  padding: 0.1875rem 0.5625rem;
+  display: inline-flex; align-items: center; gap: 0.3125rem;
   font-family: var(--wdm-font-display);
-  font-size: 9px;
+  font-size: 0.5625rem;
   letter-spacing: 0.20em;
   text-transform: uppercase;
   color: var(--wdm-ink-faint);
   cursor: pointer;
   transition: color .12s, background .12s, border-color .12s;
 }
-body.witcher-ttrpg-death-march #wou-journal .tag-pill i { font-size: 9px; color: var(--wdm-ink-faint); }
+body.witcher-ttrpg-death-march #wou-journal .tag-pill i { font-size: 0.5625rem; color: var(--wdm-ink-faint); }
 body.witcher-ttrpg-death-march #wou-journal .tag-pill:hover {
   color: var(--wdm-ink-bright);
   background: rgba(184,148,100,0.05);
@@ -477,9 +478,9 @@ body.witcher-ttrpg-death-march #wou-journal .tag-pill.is-active i { color: var(-
 
 /* Icon picker — row of ten thumb choices, click to set the page's icon */
 body.witcher-ttrpg-death-march #wou-journal .icon-picker {
-  display: flex; flex-wrap: wrap; gap: 4px;
-  margin-top: 8px;
-  padding-top: 8px;
+  display: flex; flex-wrap: wrap; gap: 0.25rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
   border-top: 1px dotted rgba(140,133,121,0.16);
 }
 body.witcher-ttrpg-death-march #wou-journal .icon-choice {
@@ -487,11 +488,11 @@ body.witcher-ttrpg-death-march #wou-journal .icon-choice {
   background: rgba(8,7,6,0.5);
   border: 1px solid rgba(140,133,121,0.18);
   border-radius: 2px;
-  width: 26px; height: 26px;
+  width: 1.625rem; height: 1.625rem;
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--wdm-ink-faint);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.75rem;
   transition: color .12s, border-color .12s, background .12s;
   padding: 0;
 }
@@ -514,36 +515,36 @@ body.witcher-ttrpg-death-march #wou-journal .preview-editor {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  padding: 14px 16px 12px;
+  padding: 0.875rem 1rem 0.75rem;
   background:
     repeating-linear-gradient(0deg,
-      transparent 0px, transparent 23px,
-      rgba(184,148,100,0.06) 23px, rgba(184,148,100,0.06) 24px),
-    radial-gradient(ellipse 300px 200px at 50% 20%, rgba(184,148,100,0.04), transparent 70%),
+      transparent 0px, transparent 1.4375rem,
+      rgba(184,148,100,0.06) 1.4375rem, rgba(184,148,100,0.06) 1.5rem),
+    radial-gradient(ellipse 18.75rem 12.5rem at 50% 20%, rgba(184,148,100,0.04), transparent 70%),
     rgba(20,16,12,0.55);
   border: 1px solid rgba(184,148,100,0.18);
   border-radius: 1px;
   font-family: var(--wdm-font-body);
-  font-size: 13.5px;
-  line-height: 24px;
+  font-size: 0.84375rem;
+  line-height: 1.5rem;
   color: var(--wdm-ink-hi);
 }
-body.witcher-ttrpg-death-march #wou-journal .preview-editor::-webkit-scrollbar { width: 6px; }
+body.witcher-ttrpg-death-march #wou-journal .preview-editor::-webkit-scrollbar { width: 0.375rem; }
 body.witcher-ttrpg-death-march #wou-journal .preview-editor::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); }
 body.witcher-ttrpg-death-march #wou-journal .preview-editor:focus-within {
   border-color: var(--wdm-amber-hi);
-  box-shadow: 0 0 0 1px var(--wdm-amber-dim), 0 0 14px rgba(184,148,100,0.10);
+  box-shadow: 0 0 0 1px var(--wdm-amber-dim), 0 0 0.875rem rgba(184,148,100,0.10);
 }
 
 body.witcher-ttrpg-death-march #wou-journal .editor-page-title {
   font-family: var(--wdm-font-display);
   font-weight: 700;
-  font-size: 16px;
+  font-size: 1rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--wdm-amber-bright);
-  margin-bottom: 14px;
-  padding-bottom: 6px;
+  margin-bottom: 0.875rem;
+  padding-bottom: 0.375rem;
   border-bottom: 1px dotted rgba(184,148,100,0.30);
   cursor: text;
   outline: none;
@@ -553,15 +554,15 @@ body.witcher-ttrpg-death-march #wou-journal .editor-page-title {
  * stays pinned at the bottom. */
 body.witcher-ttrpg-death-march #wou-journal .editor-body {
   flex: 1 1 auto;
-  min-height: 120px;
+  min-height: 7.5rem;
   overflow-y: auto;
   cursor: text;
   outline: none;
-  padding-right: 4px;
+  padding-right: 0.25rem;
 }
-body.witcher-ttrpg-death-march #wou-journal .editor-body::-webkit-scrollbar { width: 6px; }
+body.witcher-ttrpg-death-march #wou-journal .editor-body::-webkit-scrollbar { width: 0.375rem; }
 body.witcher-ttrpg-death-march #wou-journal .editor-body::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); }
-body.witcher-ttrpg-death-march #wou-journal .editor-body p { margin-bottom: 8px; }
+body.witcher-ttrpg-death-march #wou-journal .editor-body p { margin-bottom: 0.5rem; }
 body.witcher-ttrpg-death-march #wou-journal .editor-body em { color: var(--wdm-ink-bright); font-style: italic; }
 body.witcher-ttrpg-death-march #wou-journal .editor-body strong { color: var(--wdm-amber-bright); font-weight: 700; }
 body.witcher-ttrpg-death-march #wou-journal .editor-body h1,
@@ -571,18 +572,18 @@ body.witcher-ttrpg-death-march #wou-journal .editor-body h3 {
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--wdm-amber-hi);
-  margin: 12px 0 6px;
+  margin: 0.75rem 0 0.375rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .editor-body ul,
-body.witcher-ttrpg-death-march #wou-journal .editor-body ol { margin: 6px 0 8px 18px; }
+body.witcher-ttrpg-death-march #wou-journal .editor-body ol { margin: 0.375rem 0 0.5rem 1.125rem; }
 
 /* Pinned at the bottom of the editor — body's flex:1 pushes this here. */
 body.witcher-ttrpg-death-march #wou-journal .editor-status {
   flex: 0 0 auto;
-  margin-top: 8px;
-  padding-top: 6px;
+  margin-top: 0.5rem;
+  padding-top: 0.375rem;
   border-top: 1px dotted rgba(184,148,100,0.20);
-  font-size: 10px;
+  font-size: 0.625rem;
   letter-spacing: 0.20em;
   text-transform: uppercase;
   color: var(--wdm-ink-faint);
@@ -592,12 +593,12 @@ body.witcher-ttrpg-death-march #wou-journal .editor-status {
   align-items: center;
 }
 body.witcher-ttrpg-death-march #wou-journal .editor-status .saved { color: var(--wdm-poison); font-style: normal; }
-body.witcher-ttrpg-death-march #wou-journal .editor-status .saved i { margin-right: 4px; }
+body.witcher-ttrpg-death-march #wou-journal .editor-status .saved i { margin-right: 0.25rem; }
 
 /* Footer buttons */
 body.witcher-ttrpg-death-march #wou-journal .preview-foot {
-  display: flex; gap: 8px; justify-content: flex-end;
-  padding-top: 6px;
+  display: flex; gap: 0.5rem; justify-content: flex-end;
+  padding-top: 0.375rem;
   border-top: 1px solid rgba(140,133,121,0.10);
 }
 body.witcher-ttrpg-death-march #wou-journal .pf-btn {
@@ -606,10 +607,10 @@ body.witcher-ttrpg-death-march #wou-journal .pf-btn {
   border: 1px solid var(--wdm-amber-dim);
   color: var(--wdm-amber-hi);
   font-family: var(--wdm-font-display);
-  font-size: 10px;
+  font-size: 0.625rem;
   letter-spacing: 0.20em;
   text-transform: uppercase;
-  padding: 6px 12px;
+  padding: 0.375rem 0.75rem;
   cursor: pointer;
   transition: color .12s, background .12s, border-color .12s;
 }
@@ -618,7 +619,7 @@ body.witcher-ttrpg-death-march #wou-journal .pf-btn:hover {
   background: rgba(184,148,100,0.08);
   border-color: var(--wdm-amber);
 }
-body.witcher-ttrpg-death-march #wou-journal .pf-btn i { margin-right: 6px; }
+body.witcher-ttrpg-death-march #wou-journal .pf-btn i { margin-right: 0.375rem; }
 body.witcher-ttrpg-death-march #wou-journal .pf-btn.danger { border-color: rgba(140,60,60,0.40); color: var(--wdm-red-bright); }
 
 /* "Shows in timeline" toggle in the page footer.  Reads as a settings
@@ -628,11 +629,11 @@ body.witcher-ttrpg-death-march #wou-journal .pf-btn.danger { border-color: rgba(
 body.witcher-ttrpg-death-march #wou-journal .pf-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   margin-right: auto; /* push action buttons (especially Delete) further right */
-  padding: 0 8px;
+  padding: 0 0.5rem;
   font-family: var(--wdm-font-display);
-  font-size: 10px;
+  font-size: 0.625rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--wdm-ink-dim);
@@ -646,7 +647,7 @@ body.witcher-ttrpg-death-march #wou-journal .pf-toggle:hover {
 body.witcher-ttrpg-death-march #wou-journal .pf-toggle input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
-  width: 13px; height: 13px;
+  width: 0.8125rem; height: 0.8125rem;
   border: 1px solid var(--wdm-amber-dim);
   background: rgba(255,255,255,0.02);
   display: inline-flex; align-items: center; justify-content: center;
@@ -666,7 +667,7 @@ body.witcher-ttrpg-death-march #wou-journal .pf-toggle input[type="checkbox"]:ch
   content: '\f00c';   /* fa check */
   font-family: 'Font Awesome 7 Pro', 'Font Awesome 6 Pro', 'Font Awesome 6 Free';
   font-weight: 900;
-  font-size: 8px;
+  font-size: 0.5rem;
   color: var(--wdm-amber-bright);
   position: absolute;
   inset: 0;
@@ -685,22 +686,22 @@ body.witcher-ttrpg-death-march #wou-journal .pf-btn.danger:hover {
 body.witcher-ttrpg-death-march #wou-journal .preview-empty {
   display: grid;
   place-items: center;
-  gap: 10px;
+  gap: 0.625rem;
   text-align: center;
-  padding: 30px 12px;
+  padding: 1.875rem 0.75rem;
   color: var(--wdm-ink-faint);
 }
-body.witcher-ttrpg-death-march #wou-journal .preview-empty .empty-icon { font-size: 36px; color: var(--wdm-amber-dim); }
+body.witcher-ttrpg-death-march #wou-journal .preview-empty .empty-icon { font-size: 2.25rem; color: var(--wdm-amber-dim); }
 body.witcher-ttrpg-death-march #wou-journal .preview-empty .empty-title {
   font-family: var(--wdm-font-display);
-  font-size: 12px;
+  font-size: 0.75rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--wdm-amber-hi);
 }
 body.witcher-ttrpg-death-march #wou-journal .preview-empty .empty-hint {
   font-family: var(--wdm-font-body);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-style: italic;
   color: var(--wdm-ink-dim);
 }
@@ -711,9 +712,9 @@ body.witcher-ttrpg-death-march #wou-journal .preview-empty .empty-hint {
 body.witcher-ttrpg-death-march #wou-journal .jnl-tabs {
   grid-column: 1 / -1;
   display: flex;
-  gap: 4px;
+  gap: 0.25rem;
   padding: 0;
-  margin: 0 0 6px;
+  margin: 0 0 0.375rem;
   border-bottom: 1px solid rgba(184,148,100,0.20);
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tab {
@@ -723,14 +724,14 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tab {
   border-bottom: 2px solid transparent;
   color: var(--wdm-ink-dim);
   font-family: var(--wdm-font-display);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.24em;
   text-transform: uppercase;
-  padding: 8px 14px 7px;
+  padding: 0.5rem 0.875rem 0.4375rem;
   cursor: pointer;
-  display: inline-flex; align-items: center; gap: 8px;
-  margin-bottom: -1px; /* overlap the strip so the active border lines up */
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  margin-bottom: -0.0625rem; /* overlap the strip so the active border lines up */
   transition: color .12s, border-color .12s;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tab:hover {
@@ -742,11 +743,11 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tab.is-active {
   border-bottom-color: var(--wdm-amber);
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tab-count {
-  font-size: 9px;
+  font-size: 0.5625rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--wdm-ink-faint);
-  padding: 1px 6px;
+  padding: 0.0625rem 0.375rem;
   border: 1px solid rgba(140,133,121,0.22);
   font-variant-numeric: tabular-nums;
 }
@@ -764,8 +765,8 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tab.is-active .jnl-tab-count {
  * list on the left and a fancy decorative divider between them.
  * Personal stays at 1fr | 380px. */
 body.witcher-ttrpg-death-march #wou-journal[data-section="relationships"] {
-  grid-template-columns: 280px auto minmax(0, 1fr);
-  gap: 6px 16px;
+  grid-template-columns: 17.5rem auto minmax(0, 1fr);
+  gap: 0.375rem 1rem;
 }
 
 /* Fancy vertical divider between left selection list and right detail.
@@ -775,7 +776,7 @@ body.witcher-ttrpg-death-march #wou-journal[data-section="relationships"] {
  * pane's :focus-within so editing a relationship feels embedded in
  * the same chrome. */
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-divider {
-  width: 1px;
+  width: 0.0625rem;
   align-self: stretch;
   position: relative;
   background: linear-gradient(180deg,
@@ -794,7 +795,7 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-rel-divider::after {
   content: '';
   position: absolute;
   top: 12%; bottom: 12%;
-  width: 6px;
+  width: 0.375rem;
   pointer-events: none;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-divider::before {
@@ -812,31 +813,31 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-rel-divider-glyph {
   background:
     radial-gradient(circle, var(--wdm-bg, #0a0807) 50%, transparent 80%);
   color: var(--wdm-amber);
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1;
-  padding: 6px 4px;
-  text-shadow: 0 0 6px rgba(184,148,100,0.55);
+  padding: 0.375rem 0.25rem;
+  text-shadow: 0 0 0.375rem rgba(184,148,100,0.55);
 }
 
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-left {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
   min-height: 0;
   min-width: 0;
-  padding-top: 4px;
+  padding-top: 0.25rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-right {
   display: flex;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-  padding-top: 4px;
+  padding-top: 0.25rem;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--wdm-amber-dim) var(--wdm-void);
 }
-body.witcher-ttrpg-death-march #wou-journal .jnl-rel-right::-webkit-scrollbar { width: 5px; }
+body.witcher-ttrpg-death-march #wou-journal .jnl-rel-right::-webkit-scrollbar { width: 0.3125rem; }
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-right::-webkit-scrollbar-track { background: var(--wdm-void); }
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-right::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); }
 
@@ -846,29 +847,29 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-rel-list {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 4px 4px 4px 0;
+  gap: 0.25rem;
+  padding: 0.25rem 0.25rem 0.25rem 0;
   min-height: 0;
   scrollbar-width: thin;
   scrollbar-color: var(--wdm-amber-dim) var(--wdm-void);
 }
-body.witcher-ttrpg-death-march #wou-journal .jnl-rel-list::-webkit-scrollbar { width: 5px; }
+body.witcher-ttrpg-death-march #wou-journal .jnl-rel-list::-webkit-scrollbar { width: 0.3125rem; }
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-list::-webkit-scrollbar-track { background: var(--wdm-void); }
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-list::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); }
 
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-empty-left {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-style: italic;
   color: var(--wdm-ink-faint);
-  padding: 12px 6px;
+  padding: 0.75rem 0.375rem;
 }
 
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  padding: 7px 8px 7px 10px;
+  gap: 0.5rem;
+  padding: 0.4375rem 0.5rem 0.4375rem 0.625rem;
   border: 1px solid rgba(140,133,121,0.16);
   border-left: 2px solid var(--wdm-amber-dim);
   background: linear-gradient(180deg, rgba(14,11,9,0.85), rgba(8,7,6,0.95));
@@ -890,7 +891,7 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row.is-locked {
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row-main {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
   min-width: 0;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row-name {
@@ -898,9 +899,9 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row-name {
   background: transparent;
   border: none;
   border-bottom: 1px dotted transparent;
-  padding: 1px 2px;
+  padding: 0.0625rem 0.125rem;
   font-family: var(--wdm-font-display);
-  font-size: 12px; font-weight: 700;
+  font-size: 0.75rem; font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--wdm-amber-bright);
@@ -926,9 +927,9 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row-type {
   border: none;
   color: var(--wdm-ink-dim);
   font-family: var(--wdm-font-body);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-style: italic;
-  padding: 0 2px;
+  padding: 0 0.125rem;
   outline: none;
   cursor: pointer;
 }
@@ -939,7 +940,7 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row-type option {
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row-actions {
   display: flex;
-  gap: 2px;
+  gap: 0.125rem;
   align-items: center;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row-edit,
@@ -949,8 +950,8 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row-delete {
   border: none;
   color: var(--wdm-ink-faint);
   cursor: pointer;
-  font-size: 11px;
-  padding: 4px 6px;
+  font-size: 0.6875rem;
+  padding: 0.25rem 0.375rem;
   transition: color .12s;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row-edit:hover { color: var(--wdm-amber-bright); }
@@ -969,22 +970,22 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row.is-editing .jnl-rel-row
  * stable across mode toggles. */
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row-name-view {
   font-family: var(--wdm-font-display);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--wdm-amber-bright);
-  padding: 1px 2px;
+  padding: 0.0625rem 0.125rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-row-type-view {
   font-family: var(--wdm-font-body);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-style: italic;
   color: var(--wdm-ink-dim);
-  padding: 0 2px;
+  padding: 0 0.125rem;
 }
 
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-add {
@@ -993,13 +994,13 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-rel-add {
   border: 1px dashed rgba(184,148,100,0.30);
   color: var(--wdm-amber-dim);
   font-family: var(--wdm-font-display);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  padding: 7px 12px;
+  padding: 0.4375rem 0.75rem;
   cursor: pointer;
-  display: inline-flex; align-items: center; gap: 8px; justify-content: center;
+  display: inline-flex; align-items: center; gap: 0.5rem; justify-content: center;
   transition: color .12s, border-color .12s, background-color .12s;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-add:hover {
@@ -1014,21 +1015,21 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-rel-empty-right {
   text-align: center;
   color: var(--wdm-ink-faint);
   font-style: italic;
-  font-size: 13px;
-  padding: 30px 20px;
-  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  font-size: 0.8125rem;
+  padding: 1.875rem 1.25rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.75rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-empty-right i {
-  font-size: 32px;
+  font-size: 2rem;
   color: var(--wdm-amber-dim);
   opacity: 0.7;
 }
 
 body.witcher-ttrpg-death-march #wou-journal .jnl-rel-detail {
   display: grid;
-  grid-template-columns: 160px minmax(0, 1fr);
-  gap: 18px 22px;
-  padding: 8px 14px 18px 8px;
+  grid-template-columns: 10rem minmax(0, 1fr);
+  gap: 1.125rem 1.375rem;
+  padding: 0.5rem 0.875rem 1.125rem 0.5rem;
 }
 
 /* View mode (no `.is-editing` class): readonly inputs/selects/textareas
@@ -1057,16 +1058,16 @@ body.witcher-ttrpg-death-march #wou-journal .rel-portrait-wrap {
 }
 body.witcher-ttrpg-death-march #wou-journal .rel-portrait {
   appearance: none;
-  width: 160px;
-  height: 160px;
+  width: 10rem;
+  height: 10rem;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 6px;
+  gap: 0.375rem;
   border: 1px solid var(--wdm-amber-dim);
   background:
     radial-gradient(circle at 30% 25%, rgba(184,148,100,0.10), transparent 70%),
     linear-gradient(180deg, #161512, #050402);
   color: var(--wdm-ink-faint);
-  font-size: 36px;
+  font-size: 2.25rem;
   cursor: pointer;
   padding: 0;
   overflow: hidden;
@@ -1081,7 +1082,7 @@ body.witcher-ttrpg-death-march #wou-journal .rel-portrait img {
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
 body.witcher-ttrpg-death-march #wou-journal .rel-portrait-hint {
-  font-size: 9px;
+  font-size: 0.5625rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   font-family: var(--wdm-font-display);
@@ -1092,17 +1093,17 @@ body.witcher-ttrpg-death-march #wou-journal .rel-info-grid {
   grid-column: 2;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 20px;
+  gap: 0.5rem 1.25rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .rel-field {
   display: grid;
-  grid-template-columns: 100px minmax(0, 1fr);
+  grid-template-columns: 6.25rem minmax(0, 1fr);
   align-items: baseline;
-  gap: 10px;
+  gap: 0.625rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .rel-field-label {
   font-family: var(--wdm-font-display);
-  font-size: 10px;
+  font-size: 0.625rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--wdm-ink-dim);
@@ -1112,10 +1113,10 @@ body.witcher-ttrpg-death-march #wou-journal .rel-field-input {
   background: transparent;
   border: none;
   border-bottom: 1px dotted transparent;
-  padding: 1px 2px 2px;
+  padding: 0.0625rem 0.125rem 0.125rem;
   color: var(--wdm-ink-hi);
   font-family: var(--wdm-font-body);
-  font-size: 13px;
+  font-size: 0.8125rem;
   outline: none;
   width: 100%;
   min-width: 0;
@@ -1127,11 +1128,11 @@ body.witcher-ttrpg-death-march #wou-journal .rel-field-input[readonly] { cursor:
 body.witcher-ttrpg-death-march #wou-journal .rel-field-input[disabled] { cursor: default; }
 body.witcher-ttrpg-death-march #wou-journal .rel-field-select {
   -webkit-appearance: none;
-  padding-right: 14px;
+  padding-right: 0.875rem;
   background-image: linear-gradient(45deg, transparent 50%, var(--wdm-amber-dim) 50%),
                     linear-gradient(135deg, var(--wdm-amber-dim) 50%, transparent 50%);
-  background-position: calc(100% - 6px) 7px, calc(100% - 2px) 7px;
-  background-size: 4px 4px;
+  background-position: calc(100% - 0.375rem) 0.4375rem, calc(100% - 0.125rem) 0.4375rem;
+  background-size: 0.25rem 0.25rem;
   background-repeat: no-repeat;
   cursor: pointer;
 }
@@ -1145,27 +1146,27 @@ body.witcher-ttrpg-death-march #wou-journal .rel-section {
   grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .rel-section-label {
   font-family: var(--wdm-font-display);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.32em;
   text-transform: uppercase;
   color: var(--wdm-amber);
-  padding-bottom: 4px;
+  padding-bottom: 0.25rem;
   border-bottom: 1px solid rgba(184,148,100,0.22);
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 0.625rem;
 }
 /* Small dim subtitle prefixed before the section heading — e.g.
  * "Your history with them" before Events.  Italic, body font, lower
  * letter-spacing so it doesn't compete with the title. */
 body.witcher-ttrpg-death-march #wou-journal .rel-section-sub {
   font-family: var(--wdm-font-body);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 400;
   font-style: italic;
   letter-spacing: 0.04em;
@@ -1177,18 +1178,18 @@ body.witcher-ttrpg-death-march #wou-journal .rel-section-sub {
 body.witcher-ttrpg-death-march #wou-journal .rel-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 0.375rem;
   align-items: center;
 }
 body.witcher-ttrpg-death-march #wou-journal .rel-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
   background: rgba(184,148,100,0.08);
   border: 1px solid rgba(184,148,100,0.35);
-  padding: 3px 4px 3px 10px;
+  padding: 0.1875rem 0.25rem 0.1875rem 0.625rem;
   font-family: var(--wdm-font-display);
-  font-size: 10px;
+  font-size: 0.625rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--wdm-amber-hi);
@@ -1201,8 +1202,8 @@ body.witcher-ttrpg-death-march #wou-journal .rel-tag-x {
   background: none;
   border: none;
   color: var(--wdm-ink-faint);
-  font-size: 9px;
-  padding: 1px 4px 2px;
+  font-size: 0.5625rem;
+  padding: 0.0625rem 0.25rem 0.125rem;
   cursor: pointer;
   transition: color .12s;
 }
@@ -1211,12 +1212,12 @@ body.witcher-ttrpg-death-march #wou-journal .rel-tag-input {
   appearance: none;
   background: transparent;
   border: 1px dashed rgba(184,148,100,0.28);
-  padding: 3px 8px;
+  padding: 0.1875rem 0.5rem;
   font-family: var(--wdm-font-body);
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--wdm-ink);
   outline: none;
-  min-width: 140px;
+  min-width: 8.75rem;
   transition: border-color .12s;
 }
 body.witcher-ttrpg-death-march #wou-journal .rel-tag-input:focus {
@@ -1233,14 +1234,14 @@ body.witcher-ttrpg-death-march #wou-journal .rel-bio {
   appearance: none;
   background: rgba(10,8,6,0.6);
   border: 1px solid rgba(140,133,121,0.20);
-  padding: 8px 10px;
+  padding: 0.5rem 0.625rem;
   color: var(--wdm-ink);
   font-family: var(--wdm-font-body);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   line-height: 1.5;
   outline: none;
   resize: vertical;
-  min-height: 60px;
+  min-height: 3.75rem;
   transition: border-color .12s;
 }
 body.witcher-ttrpg-death-march #wou-journal .rel-bio:focus { border-color: var(--wdm-amber); }
@@ -1254,20 +1255,20 @@ body.witcher-ttrpg-death-march #wou-journal .rel-bio::placeholder {
 body.witcher-ttrpg-death-march #wou-journal .rel-events {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .rel-events-empty {
   font-style: italic;
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   color: var(--wdm-ink-faint);
-  padding: 4px 2px;
+  padding: 0.25rem 0.125rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .rel-event {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 30px 10px 10px;
+  gap: 0.25rem;
+  padding: 0.5rem 1.875rem 0.625rem 0.625rem;
   border: 1px solid rgba(140,133,121,0.16);
   border-left: 2px solid var(--wdm-amber-dim);
   background: linear-gradient(180deg, rgba(14,11,9,0.85), rgba(8,7,6,0.95));
@@ -1275,7 +1276,7 @@ body.witcher-ttrpg-death-march #wou-journal .rel-event {
 /* Date + location share a horizontal meta row beneath the title. */
 body.witcher-ttrpg-death-march #wou-journal .rel-event-meta-row {
   display: flex;
-  gap: 14px;
+  gap: 0.875rem;
   align-items: baseline;
 }
 body.witcher-ttrpg-death-march #wou-journal .rel-event-date {
@@ -1283,15 +1284,15 @@ body.witcher-ttrpg-death-march #wou-journal .rel-event-date {
   background: transparent;
   border: none;
   border-bottom: 1px dotted transparent;
-  padding: 2px 2px;
+  padding: 0.125rem 0.125rem;
   color: var(--wdm-ink-dim);
   font-family: var(--wdm-font-body);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-style: italic;
   outline: none;
   color-scheme: dark;
   width: auto;
-  min-width: 130px;
+  min-width: 8.125rem;
   flex: 0 0 auto;
   transition: border-color .12s;
 }
@@ -1337,13 +1338,13 @@ body.witcher-ttrpg-death-march #wou-journal .rel-event-location {
   background: transparent;
   border: none;
   border-bottom: 1px dotted transparent;
-  padding: 2px 2px;
+  padding: 0.125rem 0.125rem;
   color: var(--wdm-ink-dim);
   font-family: var(--wdm-font-body);
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   font-style: italic;
   outline: none;
-  flex: 0 1 220px;
+  flex: 0 1 13.75rem;
   min-width: 0;
   transition: border-color .12s, color .12s;
 }
@@ -1360,9 +1361,9 @@ body.witcher-ttrpg-death-march #wou-journal .rel-event-title {
   background: transparent;
   border: none;
   border-bottom: 1px dotted transparent;
-  padding: 2px 2px;
+  padding: 0.125rem 0.125rem;
   font-family: var(--wdm-font-display);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1379,14 +1380,14 @@ body.witcher-ttrpg-death-march #wou-journal .rel-event-body {
   background: transparent;
   border: none;
   border-bottom: 1px dotted transparent;
-  padding: 2px 2px 3px;
+  padding: 0.125rem 0.125rem 0.1875rem;
   font-family: var(--wdm-font-body);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   line-height: 1.45;
   color: var(--wdm-ink);
   outline: none;
   resize: vertical;
-  min-height: 32px;
+  min-height: 2rem;
   transition: border-color .12s;
 }
 body.witcher-ttrpg-death-march #wou-journal .rel-event-body:hover { border-bottom-color: var(--wdm-amber-dim); }
@@ -1403,14 +1404,14 @@ body.witcher-ttrpg-death-march #wou-journal .rel-event-body::placeholder {
 }
 body.witcher-ttrpg-death-march #wou-journal .rel-event-delete {
   position: absolute;
-  top: 4px; right: 4px;
+  top: 0.25rem; right: 0.25rem;
   appearance: none;
   background: none;
   border: none;
   color: var(--wdm-ink-faint);
   cursor: pointer;
-  font-size: 10px;
-  padding: 4px 6px;
+  font-size: 0.625rem;
+  padding: 0.25rem 0.375rem;
   opacity: 0;
   transition: opacity .12s, color .12s;
 }
@@ -1429,13 +1430,13 @@ body.witcher-ttrpg-death-march #wou-journal .rel-event-add {
   border: 1px dashed rgba(184,148,100,0.28);
   color: var(--wdm-amber-dim);
   font-family: var(--wdm-font-display);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  padding: 6px 12px;
+  padding: 0.375rem 0.75rem;
   cursor: pointer;
-  display: inline-flex; align-items: center; gap: 8px;
+  display: inline-flex; align-items: center; gap: 0.5rem;
   align-self: flex-start;
   transition: color .12s, border-color .12s, background-color .12s;
 }
@@ -1463,8 +1464,8 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-timeline {
   justify-content: center; /* vertical centering — the header + bar
                             * cluster sits in the middle of the available
                             * panel space rather than pinned to the top */
-  gap: 18px;
-  padding: 6px 4px 12px;
+  gap: 1.125rem;
+  padding: 0.375rem 0.25rem 0.75rem;
   min-height: 0;
   height: 100%;
   /* overflow MUST stay visible so popups can lift above the track without
@@ -1478,13 +1479,13 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 1rem;
   flex-wrap: wrap;
-  padding: 0 6px;
+  padding: 0 0.375rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-summary {
   font-family: var(--wdm-font-display);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -1494,20 +1495,20 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-summary-key {
   color: var(--wdm-ink-faint);
   font-weight: 400;
   letter-spacing: 0.22em;
-  margin-right: 4px;
+  margin-right: 0.25rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-summary-sep {
   color: var(--wdm-amber-dim);
-  margin: 0 8px;
+  margin: 0 0.5rem;
 }
 
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-empty,
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-empty-events {
   font-family: var(--wdm-font-body);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-style: italic;
   color: var(--wdm-ink-dim);
-  padding: 28px 12px;
+  padding: 1.75rem 0.75rem;
   text-align: center;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-empty em,
@@ -1522,7 +1523,7 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-empty-events em {
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 0.375rem;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-filter {
   appearance: none;
@@ -1530,15 +1531,15 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-filter {
   border: 1px solid rgba(140,133,121,0.22);
   color: var(--wdm-ink-dim);
   font-family: var(--wdm-font-display);
-  font-size: 9px;
+  font-size: 0.5625rem;
   font-weight: 700;
   letter-spacing: 0.20em;
   text-transform: uppercase;
-  padding: 5px 10px;
+  padding: 0.3125rem 0.625rem;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   opacity: 0.55;
   transition: color .12s, border-color .12s, background-color .12s, opacity .12s;
 }
@@ -1550,10 +1551,10 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-filter.is-active {
   opacity: 1;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-filter-count {
-  font-size: 9px;
+  font-size: 0.5625rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  padding: 1px 5px;
+  padding: 0.0625rem 0.3125rem;
   border: 1px solid rgba(140,133,121,0.30);
 }
 /* Source-specific accents on filter chips (active state). */
@@ -1578,16 +1579,16 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-filter.is-bestiary.is-active
  * stays put → the bar stays put.  Asymmetric opening will still shift
  * the bar (no fix for that without making the bar viewport-fixed). */
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-track-wrap {
-  max-width: 900px;
+  max-width: 56.25rem;
   width: 100%;
   align-self: center;     /* center within the flex column parent */
   margin: 0 auto;
-  padding: 6px 24px 36px;
+  padding: 0.375rem 1.5rem 2.25rem;
 }
 /* Header (filter chips + summary) also caps + centers so the alignment
  * tracks the bar's edges, not the panel's. */
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-head {
-  max-width: 900px;
+  max-width: 56.25rem;
   width: 100%;
   align-self: center;
 }
@@ -1596,37 +1597,37 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-track {
   /* Lane 0 needs ~52px above the line for box + stem; each additional
    * lane adds 28px (the --tl-branch-step below).  --tl-max-lane is set
    * inline from the renderer based on how many lanes were actually used. */
-  padding-top: calc(52px + var(--tl-max-lane, 0) * 28px + 8px);
-  padding-bottom: 4px;
+  padding-top: calc(3.25rem + var(--tl-max-lane, 0) * 1.75rem + 0.5rem);
+  padding-bottom: 0.25rem;
   overflow: visible;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-line {
   position: relative;
-  height: 2px;
+  height: 0.125rem;
   background: linear-gradient(90deg,
     transparent 0,
     var(--wdm-amber-dim) 4%,
     var(--wdm-amber) 50%,
     var(--wdm-amber-dim) 96%,
     transparent 100%);
-  box-shadow: 0 0 8px rgba(184,148,100,0.30);
+  box-shadow: 0 0 0.5rem rgba(184,148,100,0.30);
 }
 
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-tick {
   position: absolute;
-  bottom: 4px;          /* align with the line, which sits at track-bottom + 4px */
-  width: 1px;
-  height: 14px;
+  bottom: 0.25rem;          /* align with the line, which sits at track-bottom + 4px */
+  width: 0.0625rem;
+  height: 0.875rem;
   background: rgba(184,148,100,0.55);
   transform: translate(-50%, 50%);
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-tick-label {
   position: absolute;
-  top: 12px;
+  top: 0.75rem;
   left: 50%;
   transform: translateX(-50%);
   font-family: var(--wdm-font-display);
-  font-size: 9px;
+  font-size: 0.5625rem;
   letter-spacing: 0.18em;
   color: var(--wdm-ink-dim);
   font-variant-numeric: tabular-nums;
@@ -1638,12 +1639,12 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-tick-label {
  * --tl-branch-step (28px) drive the geometry; per-source colour comes
  * via currentColor inherited from .is-{source}. */
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch {
-  --tl-branch-step: 28px;
-  --tl-branch-base: 28px;
+  --tl-branch-step: 1.75rem;
+  --tl-branch-base: 1.75rem;
   --tl-stem-height: calc(var(--tl-branch-base) + var(--tl-lane, 0) * var(--tl-branch-step));
   position: absolute;
-  bottom: 4px;             /* sits on the line */
-  width: 1px;
+  bottom: 0.25rem;             /* sits on the line */
+  width: 0.0625rem;
   height: var(--tl-stem-height);
   cursor: pointer;
   outline: none;
@@ -1651,23 +1652,23 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch {
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch-anchor {
   position: absolute;
-  bottom: -3px;
+  bottom: -0.1875rem;
   left: 50%;
   transform: translateX(-50%);
-  width: 6px; height: 6px;
+  width: 0.375rem; height: 0.375rem;
   background: currentColor;
   border-radius: 50%;
-  box-shadow: 0 0 0 2px var(--wdm-bg, #0a0807), 0 0 6px currentColor;
+  box-shadow: 0 0 0 2px var(--wdm-bg, #0a0807), 0 0 0.375rem currentColor;
   transition: transform .12s, box-shadow .15s;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch-stem {
   position: absolute;
-  bottom: 3px;
+  bottom: 0.1875rem;
   left: 50%;
   transform: translateX(-50%);
-  width: 1px;
+  width: 0.0625rem;
   /* Stem occupies space between anchor and box (24px box height + 4px gap). */
-  height: calc(var(--tl-stem-height) - 26px);
+  height: calc(var(--tl-stem-height) - 1.625rem);
   background: linear-gradient(to top, currentColor, color-mix(in srgb, currentColor 40%, transparent));
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch-box {
@@ -1675,24 +1676,24 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch-box {
   top: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 22px; height: 22px;
+  width: 1.375rem; height: 1.375rem;
   display: flex; align-items: center; justify-content: center;
   background: var(--wdm-bg, #0a0807);
   border: 1px solid currentColor;
   color: currentColor;
-  font-size: 10px;
-  box-shadow: 0 0 8px color-mix(in srgb, currentColor 35%, transparent);
+  font-size: 0.625rem;
+  box-shadow: 0 0 0.5rem color-mix(in srgb, currentColor 35%, transparent);
   transition: transform .12s, box-shadow .15s, background-color .15s;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch:hover .jnl-tl-branch-box,
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch:focus-visible .jnl-tl-branch-box {
   transform: translateX(-50%) scale(1.18);
-  box-shadow: 0 0 14px color-mix(in srgb, currentColor 65%, transparent);
+  box-shadow: 0 0 0.875rem color-mix(in srgb, currentColor 65%, transparent);
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch:hover .jnl-tl-branch-anchor,
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch:focus-visible .jnl-tl-branch-anchor {
   transform: translateX(-50%) scale(1.4);
-  box-shadow: 0 0 0 2px var(--wdm-bg, #0a0807), 0 0 12px currentColor;
+  box-shadow: 0 0 0 2px var(--wdm-bg, #0a0807), 0 0 0.75rem currentColor;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch.is-life          { color: var(--wdm-amber-bright); }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch.is-journal       { color: #b9d8e3; }
@@ -1701,17 +1702,17 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch.is-bestiary      { co
 
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-branch-count {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 4px;
+  top: -0.5rem;
+  right: -0.5rem;
+  min-width: 0.875rem;
+  height: 0.875rem;
+  padding: 0 0.25rem;
   border: 1px solid currentColor;
   background: var(--wdm-bg, #0a0807);
   font-family: var(--wdm-font-display);
-  font-size: 8px;
+  font-size: 0.5rem;
   font-weight: 700;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   display: flex; align-items: center; justify-content: center;
   font-variant-numeric: tabular-nums;
 }
@@ -1724,17 +1725,17 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup {
   position: absolute;
   /* top:0 of the branch is the box's top edge; this lifts the popup
    * just above it with a small visual gap. */
-  top: -10px;
+  top: -0.625rem;
   left: 50%;
   transform: translate(-50%, -100%);
-  min-width: 240px;
-  max-width: 320px;
+  min-width: 15rem;
+  max-width: 20rem;
   background:
-    radial-gradient(ellipse 280px 120px at 50% 0%, rgba(184,148,100,0.08), transparent 65%),
+    radial-gradient(ellipse 17.5rem 7.5rem at 50% 0%, rgba(184,148,100,0.08), transparent 65%),
     linear-gradient(180deg, rgba(18,14,11,0.97), rgba(10,8,7,0.99));
   border: 1px solid var(--wdm-amber);
-  box-shadow: 0 6px 28px rgba(0,0,0,0.7), 0 0 16px rgba(184,148,100,0.25);
-  padding: 10px 12px 12px;
+  box-shadow: 0 0.375rem 1.75rem rgba(0,0,0,0.7), 0 0 1rem rgba(184,148,100,0.25);
+  padding: 0.625rem 0.75rem 0.75rem;
   opacity: 0;
   pointer-events: none;
   transition: opacity .14s ease-out;
@@ -1750,10 +1751,10 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup:hover {
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup::after {
   content: '';
   position: absolute;
-  bottom: -5px;
+  bottom: -0.3125rem;
   left: 50%;
   transform: translateX(-50%) rotate(45deg);
-  width: 8px; height: 8px;
+  width: 0.5rem; height: 0.5rem;
   background: rgba(10,8,7,0.99);
   border-right: 1px solid var(--wdm-amber);
   border-bottom: 1px solid var(--wdm-amber);
@@ -1761,19 +1762,19 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup::after {
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-stack {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-height: 280px;
+  gap: 0.625rem;
+  max-height: 17.5rem;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--wdm-amber-dim) transparent;
 }
-body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-stack::-webkit-scrollbar { width: 4px; }
+body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-stack::-webkit-scrollbar { width: 0.25rem; }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-stack::-webkit-scrollbar-thumb { background: var(--wdm-amber-dim); }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-bottom: 6px;
+  gap: 0.25rem;
+  padding-bottom: 0.375rem;
   border-bottom: 1px dotted rgba(140,133,121,0.18);
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-card:last-child {
@@ -1782,7 +1783,7 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-card:last-child {
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-title {
   font-family: var(--wdm-font-display);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1795,9 +1796,9 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-card.is-bestiary     .
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 0.625rem;
   font-family: var(--wdm-font-body);
-  font-size: 10.5px;
+  font-size: 0.65625rem;
   font-style: italic;
   color: var(--wdm-ink-dim);
 }
@@ -1805,14 +1806,14 @@ body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-date {
   color: var(--wdm-amber);
   font-variant-numeric: tabular-nums;
 }
-body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-loc i { margin-right: 4px; color: var(--wdm-amber-dim); }
+body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-loc i { margin-right: 0.25rem; color: var(--wdm-amber-dim); }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-rel {
   color: var(--wdm-ink-hi);
   font-style: normal;
 }
 body.witcher-ttrpg-death-march #wou-journal .jnl-tl-popup-body {
   font-family: var(--wdm-font-body);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.45;
   color: var(--wdm-ink);
   white-space: pre-line;

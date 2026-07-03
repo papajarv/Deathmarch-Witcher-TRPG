@@ -32,6 +32,7 @@ import {
 import { drainHp } from "../../setup/config.mjs";
 import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 
+import { t, tFormat } from "../lib/i18n.js";
 const MODULE_ID = "witcher-ttrpg-death-march";
 const PANEL_ID  = "wou-character";
 
@@ -185,10 +186,10 @@ function positionBounds() {
   const left   = (leftOpen   && leftbar)? Math.max(0, leftbar.getBoundingClientRect().right) : 0;
   const right  = (rightOpen  && sidebar)? Math.max(0, W - sidebar.getBoundingClientRect().left) : 0;
 
-  panelEl.style.top    = `${top}px`;
-  panelEl.style.bottom = `${bottom}px`;
-  panelEl.style.left   = `${left}px`;
-  panelEl.style.right  = `${right}px`;
+  panelEl.style.top = `calc(${top}px / var(--wdm-scale, 1))`;
+  panelEl.style.bottom = `calc(${bottom}px / var(--wdm-scale, 1))`;
+  panelEl.style.left = `calc(${left}px / var(--wdm-scale, 1))`;
+  panelEl.style.right = `calc(${right}px / var(--wdm-scale, 1))`;
 
   const tab = document.querySelector('#wou-top-bar [data-tab="character"]');
   if (tab) {
@@ -199,7 +200,12 @@ function positionBounds() {
 }
 
 function wireChromeObservers() {
-  const reposition = () => requestAnimationFrame(positionBounds);
+  /* Coalesced: one positionBounds per frame regardless of trigger count. */
+  let _pending = 0;
+  const reposition = () => {
+    if (_pending) return;
+    _pending = requestAnimationFrame(() => { _pending = 0; positionBounds(); });
+  };
 
   if ("ResizeObserver" in window) {
     _chromeResizeObs = new ResizeObserver(reposition);
@@ -824,12 +830,23 @@ function renderArmorColumn(actor) {
 }
 
 /* Total encumbrance from equipped armor + equipped weapon-shields, minus
- * any lifepath EV reduction. Mirrors witcher-armor-rules' calcEV (which
- * owns the AE penalties); we compute here so the chip is correct even if
- * that module isn't loaded. */
+ * any lifepath EV reduction. Prefer the actor's already-computed
+ * `system.armorEV` (character.mjs prepareDerivedData folds in worn armor,
+ * EO reductions, evTolerance, and the lifepathModifiers.ignoredArmorEncumbrance
+ * partial-ignore). Falls back to a re-sum when armorEV isn't populated
+ * (unlinked actor prototypes, non-character types).
+ *
+ * `ignoredArmorEncumbrance` is a NUMBER post-Witchers-Reborn (0 = none,
+ * 6 = Bear Juggernaut, 99 = full ignore); the pre-WR legacy boolean is
+ * coerced by the data model's migrateData. Reading it as a raw truthy
+ * value the way this used to would treat +6 as "ignore everything." */
 function calcTotalEV(actor) {
   if (!actor) return 0;
-  if (actor.system?.lifepathModifiers?.ignoredArmorEncumbrance) return 0;
+  const derived = Number(actor.system?.armorEV);
+  if (Number.isFinite(derived)) return Math.max(0, derived);
+  /* Fallback path for actors without the character data model. */
+  const ignoreEV = Number(actor.system?.lifepathModifiers?.ignoredArmorEncumbrance) || 0;
+  if (ignoreEV >= 99) return 0;
   const items = actor.items?.contents ?? actor.items ?? [];
   let raw = 0;
   for (const i of items) {
@@ -840,7 +857,7 @@ function calcTotalEV(actor) {
       raw += Number(i.flags["witcher-ttrpg-death-march"].ev) || 0;
     }
   }
-  return Math.max(0, raw);
+  return Math.max(0, raw - ignoreEV);
 }
 
 function renderArmorEVFooter(actor) {
@@ -851,14 +868,39 @@ function renderArmorEVFooter(actor) {
       <span class="wou-chr-armor-ev-val">0</span>
     </div>`;
   }
-  const tip  = `Total encumbrance from equipped armor and shields. `
-             + `−${ev} to REF and DEX (each floored at 1). `
-             + `Per the EV & Magic rule it is also −${ev} to Spell Casting, `
-             + `Hex Weaving, and Ritual Crafting rolls.`;
+  /* The EO armor model rewrites EV's mechanical effect: instead of
+   * subtracting from REF/DEX (and the magic-only EV penalty), it
+   * reduces max STA + RUN and applies half-EV to a wider skill set.
+   * Pick the tooltip + the pen-label text accordingly so the chip
+   * never lies. The toggle read is best-effort — outside Foundry
+   * the helper isn't available; we fall back to RAW text. */
+  let eoOn = false;
+  try {
+    const sub = game.settings?.get?.("witcher-ttrpg-death-march", "combatExtendedSubsystems") ?? {};
+    const masterRaw = game.settings?.get?.("witcher-ttrpg-death-march", "homebrew.extendedCombat");
+    const master = masterRaw === true || masterRaw === "true" || masterRaw === 1;
+    const sysOn  = sub.eoArmorModel === undefined ? true : !!sub.eoArmorModel;
+    eoOn = master && sysOn;
+  } catch (_) { /* fall back to RAW text */ }
+  const halfEv = Math.floor(ev / 2);
+  const tip = eoOn
+    ? `Total encumbrance from equipped armor and shields. EO model: −${ev} max Stamina · −${ev} RUN (floor 2×SPD)`
+      + (halfEv > 0
+          ? ` · −${halfEv} on Dodge/Athletics/Stealth/Sleight/Endurance/Hexweave/Ritcraft/Spellcast.`
+          : `.`)
+    : `Total encumbrance from equipped armor and shields. `
+      + `−${ev} to REF and DEX (each floored at 1). `
+      + `Per the EV & Magic rule it is also −${ev} to Spell Casting, `
+      + `Hex Weaving, and Ritual Crafting rolls.`;
+  const pen = eoOn
+    ? (halfEv > 0
+        ? `−${ev} STA max · −${ev} RUN · −${halfEv} skills`
+        : `−${ev} STA max · −${ev} RUN`)
+    : `−${ev} REF · −${ev} DEX · −${ev} magic`;
   return `<div class="wou-chr-armor-ev" title="${escapeAttr(tip)}">
     <span class="wou-chr-armor-ev-lbl">EV</span>
     <span class="wou-chr-armor-ev-val">${ev}</span>
-    <span class="wou-chr-armor-ev-pen">−${ev} REF · −${ev} DEX · −${ev} magic</span>
+    <span class="wou-chr-armor-ev-pen">${pen}</span>
   </div>`;
 }
 
@@ -1720,8 +1762,8 @@ function showSpellPopup(card, actor) {
   if (top + ph > vh - pad)   top = vh - ph - pad;
   if (top < pad)             top = pad;
 
-  pop.style.left = `${left}px`;
-  pop.style.top  = `${top}px`;
+  pop.style.left = `calc(${left}px / var(--wdm-scale, 1))`;
+  pop.style.top = `calc(${top}px / var(--wdm-scale, 1))`;
 }
 
 function bindSpellHover(panel) {
@@ -2881,11 +2923,11 @@ async function rollProfessionSkill(actor, key) {
    * 1d10 + stat + level check to make. */
   const statKey = String(slot?.stat ?? "").toLowerCase();
   if (!statKey || statKey === "none") {
-    ui.notifications?.warn?.(`${slot?.skillName ?? "This skill"} has no associated stat and can't be rolled.`);
+    ui.notifications?.warn?.(tFormat("WITCHER.Notify.Character.SkillNoStat", { skill: slot?.skillName ?? "This skill" }, "{skill} has no associated stat and can't be rolled."));
     return;
   }
   if (typeof actor.rollProfessionSkill !== "function") {
-    ui.notifications?.error("System's rollProfessionSkill helper missing.");
+    ui.notifications?.error(t("WITCHER.Notify.Character.HelperMissingProf", "System's rollProfessionSkill helper missing."));
     return;
   }
   await actor.rollProfessionSkill(slot);
@@ -2964,14 +3006,14 @@ async function onLevelUpProfessionSkill(actor, key) {
     const remaining = cost - fromMagic;
     if (remaining > 0) {
       if (ip < remaining) {
-        ui.notifications?.warn?.(`Need ${cost} IP to level — have ${ip + magicIp}.`);
+        ui.notifications?.warn?.(tFormat("WITCHER.Notify.Character.NotEnoughIpMagic", { cost: cost, have: ip + magicIp }, "Need {cost} IP to level — have {have}."));
         return;
       }
       actorUpdate["system.improvementPoints"] = ip - remaining;
     }
   } else {
     if (ip < cost) {
-      ui.notifications?.warn?.(`Need ${cost} IP to level — have ${ip}.`);
+      ui.notifications?.warn?.(tFormat("WITCHER.Notify.Character.NotEnoughIp", { cost: cost, have: ip }, "Need {cost} IP to level — have {have}."));
       return;
     }
     actorUpdate["system.improvementPoints"] = ip - cost;
@@ -2991,7 +3033,7 @@ async function enableEffect(actor, effectId) {
     await eff.update({ disabled: false });
   } catch (err) {
     console.warn(`${MODULE_ID} | failed to enable effect ${effectId}`, err);
-    ui.notifications?.error?.("Couldn't enable effect — see console.");
+    ui.notifications?.error?.(t("WITCHER.Notify.Character.EnableEffectFailed", "Couldn't enable effect — see console."));
   }
 }
 
@@ -3025,7 +3067,7 @@ async function advanceWoundTreatment(actor, woundId) {
     else if (state === "stabilized") await item.system.treat();
   } catch (err) {
     console.warn(`${MODULE_ID} | failed to advance wound state for ${woundId}`, err);
-    ui.notifications?.error?.("Couldn't advance wound state — see console.");
+    ui.notifications?.error?.(t("WITCHER.Notify.Character.WoundAdvanceFailed", "Couldn't advance wound state — see console."));
   }
 }
 
@@ -3036,13 +3078,13 @@ async function removeCritWound(actor, woundId) {
   try {
     const item = actor?.items?.get?.(woundId);
     if (!item || item.type !== "criticalWound") {
-      ui.notifications?.warn?.("Critical wound not found on this actor.");
+      ui.notifications?.warn?.(t("WITCHER.Notify.Character.WoundNotFound", "Critical wound not found on this actor."));
       return;
     }
     await item.delete();
   } catch (err) {
     console.warn(`${MODULE_ID} | failed to remove crit wound ${woundId}`, err);
-    ui.notifications?.error?.("Couldn't remove critical wound — see console.");
+    ui.notifications?.error?.(t("WITCHER.Notify.Character.WoundRemoveFailed", "Couldn't remove critical wound — see console."));
   }
 }
 
@@ -3054,13 +3096,13 @@ async function removeEffect(effectId, parentUuid) {
   try {
     const parent = await fromUuid(parentUuid);
     if (!parent) {
-      ui.notifications?.warn?.("Effect parent missing — already removed?");
+      ui.notifications?.warn?.(t("WITCHER.Notify.Character.EffectParentMissing", "Effect parent missing — already removed?"));
       return;
     }
     await parent.deleteEmbeddedDocuments("ActiveEffect", [effectId]);
   } catch (err) {
     console.warn(`${MODULE_ID} | failed to remove effect ${effectId}`, err);
-    ui.notifications?.error?.("Couldn't remove effect — see console.");
+    ui.notifications?.error?.(t("WITCHER.Notify.Character.EffectRemoveFailed", "Couldn't remove effect — see console."));
   }
 }
 
@@ -3097,7 +3139,7 @@ async function addLifeEventSlot(actor) {
    * empty entry must be persisted (not just held in editingLifeEvents) or it
    * won't appear in system.general.lifeEvents on the next render. */
   if (Object.keys(events).length >= 40) {
-    ui.notifications?.info?.("That's a lot of defining moments — clear one before adding more.");
+    ui.notifications?.info?.(t("WITCHER.Notify.Character.TooManyDefiningMoments", "That's a lot of defining moments — clear one before adding more."));
     return;
   }
   const key = `evt-${foundry.utils.randomID(8)}`;
@@ -3289,14 +3331,14 @@ async function onLevelUpSkill(actor, btnEl) {
       const remaining = cost - fromMagic;
       if (remaining > 0) {
         if (ip < remaining) {
-          ui.notifications?.warn?.(`Need ${cost} IP to level — have ${ip + magicIp}.`);
+          ui.notifications?.warn?.(tFormat("WITCHER.Notify.Character.NotEnoughIpMagic", { cost: cost, have: ip + magicIp }, "Need {cost} IP to level — have {have}."));
           return;
         }
         actorUpdate["system.improvementPoints"] = ip - remaining;
       }
     } else {
       if (ip < cost) {
-        ui.notifications?.warn?.(`Need ${cost} IP to level — have ${ip}.`);
+        ui.notifications?.warn?.(tFormat("WITCHER.Notify.Character.NotEnoughIp", { cost: cost, have: ip }, "Need {cost} IP to level — have {have}."));
         return;
       }
       actorUpdate["system.improvementPoints"] = ip - cost;
@@ -3352,7 +3394,7 @@ async function onLevelUpStat(actor, btnEl) {
     if (base >= STAT_MAX) return;
     const cost = statLevelUpCost(base);
     if (ip < cost) {
-      ui.notifications?.warn?.(`Need ${cost} IP to raise ${statKey.toUpperCase()} ${base} → ${base + 1} — have ${ip}.`);
+      ui.notifications?.warn?.(tFormat("WITCHER.Notify.Character.NotEnoughIpStat", { cost: cost, stat: statKey.toUpperCase(), base: base, next: base + 1, have: ip }, "Need {cost} IP to raise {stat} {base} → {next} — have {have}."));
       return;
     }
     const label = `${statKey.toUpperCase()} ${base} → ${base + 1}`;

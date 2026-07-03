@@ -1,3 +1,4 @@
+import { t, tFormat } from "./i18n.js";
 /**
  * reload.js — UI helper for chambering a weapon. The reloadMixin's
  * reload(ammoId) does the mechanical work (move rounds from ammo → chamber);
@@ -27,13 +28,13 @@ async function promptAmmoChoice(item, eligible) {
           <img src="${esc(e.item.img)}" alt="" />
           <span class="wdm-ammo-pick-text">
             <span class="wdm-ammo-pick-name">${esc(e.item.name)}</span>
-            <span class="wdm-ammo-pick-meta">×${e.qty} · ${esc(e.container.name)}</span>
+            <span class="wdm-ammo-pick-meta">×${e.qty} · ${esc(e.container?.name ?? "Loose")}</span>
           </span>
         </button>`).join("");
 
     let chosen = null;
     await DialogV2.wait({
-        window: { title: `Reload — ${item.name}`, icon: "fa-solid fa-arrows-rotate" },
+        window: { title: tFormat("WITCHER.Dialog.Reload", { item: item.name }, "Reload — {item}"), icon: "fa-solid fa-arrows-rotate" },
         content: `<div class="wdm-ammo-pick-grid">${rows}</div>`,
         buttons: [{ action: "cancel", label: "Cancel", default: true }],
         rejectClose: false,

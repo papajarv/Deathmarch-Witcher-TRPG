@@ -20,6 +20,7 @@ import { STATUS_CLAUSES } from "../setup/statusClauses.mjs";
 import { STATUS_EFFECTS } from "../setup/statusEffects.mjs";
 import { SYSTEM_ID, STATUS_OVERRIDE_SETTING, readStatusOverride } from "../mechanics/statusOverrides.mjs";
 
+import { t, tFormat } from "../chrome/lib/i18n.js";
 /* Build the "everything we know how to edit" map at editor-open time.
  * STATUS_EFFECTS is the PURE-RAW seed — it deliberately omits the homebrew-
  * gated entries (drunk-1..8, hunger ladder, hangover) so they don't appear in
@@ -184,7 +185,7 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
         classes: ["witcher-ttrpg-death-march", "wdm-status-editor"],
         tag: "form",
         window: {
-            title: "Status Effects",
+            title: t("WITCHER.Dialog.StatusEditor.Title", "Status Effects"),
             icon: "fa-solid fa-heart-crack",
             resizable: true
         },
@@ -512,7 +513,7 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
 
     static async #onResetAll() {
         const ok = await foundry.applications.api.DialogV2.confirm({
-            window: { title: "Restore RAW defaults?" },
+            window: { title: t("WITCHER.Dialog.RestoreRawDefaults", "Restore RAW defaults?") },
             content: "<p>Discard all status customizations and restore the strict Core Rulebook defaults? This takes effect when you Save.</p>",
             modal: true,
             rejectClose: false
@@ -579,11 +580,11 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
         for (const row of rows) {
             const id = String(row.id || "").trim();
             if (!id || !/^[a-z0-9][a-z0-9-]*$/i.test(id)) {
-                ui.notifications.error(`Invalid status id "${row.id}". Use letters, numbers, and hyphens.`);
+                ui.notifications.error(tFormat("WITCHER.Notify.StatusEditor.InvalidId", { id: row.id }, "Invalid status id \"{id}\". Use letters, numbers, and hyphens."));
                 throw new Error("invalid status id");
             }
             if (seen.has(id)) {
-                ui.notifications.error(`Duplicate status id "${id}".`);
+                ui.notifications.error(tFormat("WITCHER.Notify.StatusEditor.DuplicateId", { id: id }, "Duplicate status id \"{id}\"."));
                 throw new Error("duplicate status id");
             }
             seen.add(id);
@@ -605,7 +606,7 @@ export class StatusEffectsEditor extends HandlebarsApplicationMixin(ApplicationV
         }
 
         await game.settings.set(SYSTEM_ID, STATUS_OVERRIDE_SETTING, override);
-        ui.notifications.info("Status effects saved.");
+        ui.notifications.info(t("WITCHER.Notify.StatusEditor.Saved", "Status effects saved."));
         // The setting is requiresReload:true, but Foundry's auto-reload prompt
         // only fires from the native Configure Settings panel. Our custom
         // editor has to invoke it itself — otherwise the GM saves, the panel

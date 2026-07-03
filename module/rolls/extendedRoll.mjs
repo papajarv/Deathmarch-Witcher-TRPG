@@ -223,6 +223,26 @@ export async function extendedRoll(formula, messageData = {}, config = {}) {
         ? null
         : await ChatMessage.create(msgPayload, createOpts);
 
+    /* Auto-fumble dispatch: the caller passed `config.fumbleCategory`
+     * ("meleeAttack" | "armedDefense" | "rangedAttack" | "unarmedAttack"
+     * | "unarmedDefense" | "magic") — the autoFumble listener resolves
+     * the RAW fumble table and (for Witchers Reborn stance-perk owners)
+     * offers a 5-STA skip dialog. Fires only when a fumble happened and
+     * we actually posted a card the listener can append to. */
+    if (fumble && config?.fumbleCategory && created) {
+        try {
+            const spk = msgPayload.speaker;
+            const actor = spk?.actor
+                ? game.actors?.get?.(spk.actor)
+                : (spk?.token && spk?.scene
+                    ? game.scenes?.get?.(spk.scene)?.tokens?.get?.(spk.token)?.actor
+                    : null);
+            Hooks.callAll("witcherFumble", { actor, category: config.fumbleCategory, message: created });
+        } catch (err) {
+            console.warn("witcher-ttrpg-death-march | witcherFumble dispatch failed", err);
+        }
+    }
+
     /* No standalone ui.notifications warning on fumble — the fumble is
      * already prominently rendered in the attack card (red FUMBLE
      * banner above the verdict) and mirrored into the chat preview.

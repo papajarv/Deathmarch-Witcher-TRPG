@@ -61,6 +61,29 @@ export class FoodData extends foundry.abstract.TypeDataModel {
             // reverts). The dropdown UI already restricts input to the three
             // valid values; runtime code clamps via the static helper below.
             kind: new fields.StringField({ initial: "meal", blank: false }),
+            // Quality tier — drives the bland-diet / stress mechanic and the
+            // axis bonuses authored on the item's effects[] array.
+            //   poor    if blandFood:true (the common case), increments the
+            //           actor's poorDietStacks flag by 1 per consumed
+            //           portion; at the WILL threshold a stress is granted
+            //           and the stack resets. POOR forage / sweet items
+            //           (berries, apple, hand-cakes) should have
+            //           blandFood:false to skip the increment.
+            //   medium  decrements stacks by 1 per portion. No bonus.
+            //   good    decrements stacks by 2 per portion + the item's
+            //           authored AE applies (24h, +1 to one axis).
+            //   lavish  decrements stacks by 3 per portion + the AE applies
+            //           (24h, +2 to one axis) + −1 stress immediate at consume.
+            // No `choices:` per the kind-field comment above — runtime code
+            // clamps via getTier() helper.
+            tier: new fields.StringField({ initial: "medium", blank: false }),
+            // Whether eating a portion of this item counts toward the
+            // actor's bland-diet stack. Only consulted when tier === "poor".
+            // Default true — most POOR food is bland eating. GM unticks for
+            // POOR items that narratively aren't "a bad meal" (foraged
+            // strawberries, hand-cakes, apples, ritual offerings, etc.).
+            // Exposed as a checkbox on the item config view.
+            blandFood: new fields.BooleanField({ initial: true }),
             // Player-facing flavor printed in chat the instant a charge is
             // consumed. Description stays sheet-only (the visual layer).
             taste: new fields.StringField({ initial: "" }),
@@ -71,6 +94,21 @@ export class FoodData extends foundry.abstract.TypeDataModel {
                 max:     new fields.NumberField({ initial: 0, integer: true, min: 0 })
             }),
             satietyRestore: new fields.NumberField({ initial: 0, min: 0 }),
+            /* Portion-pour metadata. When the GM right-clicks a charged
+             * source (Bottle of Wine, Plate of Roast) and picks "Pour a
+             * Glass" / "Serve a Portion", the dock spawns a fresh non-
+             * charged item named `${pourLabel} of ${strippedSourceName}`
+             * on the same actor and decrements the source by one charge.
+             *   pourLabel        empty → category default ("Glass" / "Portion")
+             *   pourIconCustom   when true, the spawned portion uses
+             *                    `pourIcon` instead of the source's img
+             *                    (handy for "Bottle of Wine" → "Glass of
+             *                    Wine" where the icon should swap from
+             *                    bottle to glass).
+             *   pourIcon         icon path used when pourIconCustom is true. */
+            pourLabel:       new fields.StringField({ initial: "" }),
+            pourIconCustom:  new fields.BooleanField({ initial: false }),
+            pourIcon:        new fields.StringField({ initial: "" }),
             // Alcohol metadata. isAlcohol:false on every other food disables
             // the endurance roll path cleanly. Sheet hides the editor unless
             // kind === "drink", but the schema accepts the values regardless
@@ -113,7 +151,19 @@ export class FoodData extends foundry.abstract.TypeDataModel {
                 shelfLifeDays: new fields.NumberField({ initial: 0, min: 0 }),
                 anchorTime:    new fields.NumberField({ initial: null, nullable: true, required: false })
             }),
-            availability: new fields.StringField({ initial: "common" })
+            availability: new fields.StringField({ initial: "common" }),
+            // ── Alchemy Reborn: brew base configuration ────────────────
+            // Same shape as AlchemicalData.alchemyBase. A drink-kind food
+            // (Cheap Vodka, Spirits) typically configures itself as a
+            // potion base; an ingredient-kind food (Saltpepper, Coal)
+            // typically configures itself as a bomb base. The kind /
+            // baseType pairing isn't enforced at the schema level — the
+            // GM is trusted to set sensible combinations.
+            alchemyBase: new fields.SchemaField({
+                enabled:  new fields.BooleanField({ initial: false }),
+                baseType: new fields.StringField({ initial: "" }),
+                baseMod:  new fields.NumberField({ initial: 0, integer: true })
+            })
         };
     }
 
@@ -147,6 +197,22 @@ export class FoodData extends foundry.abstract.TypeDataModel {
         if (looksLikeFullSource && data?.kind === undefined) {
             data.kind = data?.drunk?.isAlcohol ? "drink" : "meal";
         }
+        /* Back-fill `tier` for foods authored before the field existed.
+         * Same full-source guard as the kind back-fill: only run on legit
+         * legacy source, never on a partial diff. Derives the tier from
+         * cost using the canonical Core-Rulebook anchor bands
+         * (5 / 10 / 30 / 100 crown anchors → ≤5 poor, ≤15 medium,
+         * ≤45 good, else lavish). */
+        if (looksLikeFullSource && data?.tier === undefined) {
+            const c = Number(data?.cost) || 0;
+            data.tier = c <= 5 ? "poor" : c <= 15 ? "medium" : c <= 45 ? "good" : "lavish";
+        }
+        /* Potion and Decoction bases collapse to a single "Potion /
+         * Decoction" option in the Alchemy Reborn dropdown — they're
+         * mechanically identical. Fold any stored "decoction" baseType
+         * into "potion" so existing food items pick up the merged label
+         * and the brew wheel keeps recognising them. */
+        if (data?.alchemyBase?.baseType === "decoction") data.alchemyBase.baseType = "potion";
         return super.migrateData(data);
     }
 

@@ -21,10 +21,11 @@
  *   SOUTH (looking at the viewer)    -90
  *   WEST  (sideways, facing left)   +180
  *
- * The system setting `tokenFacingOffsetDeg` lets the table pick what
- * matches their token art. Default -90 (asset faces south at rotation 0
- * = looking at viewer — the convention the Witcher portrait packs and
- * most VTT-marketplace tokens use).
+ * The offset is baked in at -90° (asset faces south at rotation 0 =
+ * looking at viewer — the convention the Witcher portrait packs and
+ * most VTT-marketplace tokens use). There used to be a GM-facing setting
+ * for this, but the table converged on -90 universally so the knob was
+ * retired in favor of a constant.
  *
  * PIXI's atan2(dy, dx) returns angle from east (positive y is south).
  *   foundryDeg = (atan2Deg + offset + 360) % 360
@@ -36,10 +37,10 @@
 
 const SYSTEM_ID = "witcher-ttrpg-death-march";
 
-function facingOffsetDeg() {
-    try { return Number(game.settings?.get?.(SYSTEM_ID, "tokenFacingOffsetDeg")) || 0; }
-    catch (_) { return 0; }
-}
+/* Hardwired to -90 — Witcher portrait packs and most VTT-marketplace
+ * tokens draw the character looking AT the viewer (= SOUTH at rotation 0). */
+const FACING_OFFSET_DEG = -90;
+function facingOffsetDeg() { return FACING_OFFSET_DEG; }
 
 /** Compute the Foundry rotation needed for `from` to face `to`.
  *
@@ -320,31 +321,4 @@ export function registerCanvasAutoFace() {
     Hooks.on("controlToken",    onControlToken);
     Hooks.on("preUpdateToken",  onPreUpdateToken);
     Hooks.on("updateToken",     onUpdateToken);
-
-    /* One-shot migration: prior versions of this system shipped with
-     * default facing offsets of 0 then +90 before settling on -90 (the
-     * convention the Witcher portrait packs use). Worlds that upgraded
-     * still have the stale cached value. On first `ready` after this
-     * version installs, bump to -90 ONCE — then set a flag so the
-     * migration never re-runs, preserving any later GM choice. */
-    Hooks.once("ready", async () => {
-        if (!game.user?.isGM) return;
-        try {
-            const migrated = game.settings.get(SYSTEM_ID, "tokenFacingOffsetMigratedV1");
-            if (migrated) return;
-            const cur = Number(game.settings.get(SYSTEM_ID, "tokenFacingOffsetDeg"));
-            if (cur !== -90) {
-                await game.settings.set(SYSTEM_ID, "tokenFacingOffsetDeg", -90);
-                ui.notifications?.info?.(
-                    `Witcher (Death March): token facing offset migrated to -90° ` +
-                    `(asset faces SOUTH at rotation 0 — the Witcher portrait pack convention). ` +
-                    `Change in Game Settings → System Settings if your token art differs.`,
-                    { permanent: false }
-                );
-            }
-            await game.settings.set(SYSTEM_ID, "tokenFacingOffsetMigratedV1", true);
-        } catch (err) {
-            console.warn(`${SYSTEM_ID} | facing-offset migration failed`, err);
-        }
-    });
 }

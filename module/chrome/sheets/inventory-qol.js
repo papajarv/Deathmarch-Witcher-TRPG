@@ -26,10 +26,15 @@ const MODULE_ID = "witcher-ttrpg-death-march";
 //    Set to "" (empty string) to search only world journals instead.
 //
 const QUALITIES_JOURNAL_NAME    = "Weapon and Armor Qualities";
-const QUALITIES_COMPENDIUM_PACK = "world.new-armor-and-weapons-rules"; // ← fill in your pack id here
+/* Empty by default — quality descriptions are now rendered inline by the
+ * open-category quality config dialog, so this optional journal lookup is
+ * a legacy fallback. A GM who wants the popup-on-hover behavior can set
+ * this to the world pack id (e.g. "world.new-armor-and-weapons-rules"). */
+const QUALITIES_COMPENDIUM_PACK = "";
 
 import { fitsInContainer, overflowWarning } from "../lib/container.js";
 
+import { t, tFormat } from "../lib/i18n.js";
 // ── STYLES ────────────────────────────────────────────────────────────────
 
 function injectStyles() {
@@ -52,12 +57,12 @@ function injectStyles() {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: 1rem;
+    height: 1rem;
     cursor: pointer;
     color: var(--color-text-dark-primary, #ccc);
     font-size: 0.7em;
-    border-radius: 3px 0 0 0;
+    border-radius: 0.1875rem 0 0 0;
     background: rgba(0, 0, 0, 0.55);
     transition: color 0.15s, background 0.15s;
     user-select: none;
@@ -100,7 +105,7 @@ function injectStyles() {
     outline: 2px solid var(--color-border-highlight, #c4a30e);
     outline-offset: -2px;
     background: rgba(196, 163, 14, 0.07);
-    border-radius: 3px;
+    border-radius: 0.1875rem;
 }
 
 /* ── Container contents panel ────────────────────────────── */
@@ -110,22 +115,22 @@ function injectStyles() {
     max-height: 0;
     opacity: 0;
     transition: max-height 0.22s ease, opacity 0.18s ease, padding 0.18s ease;
-    padding: 0 6px;
+    padding: 0 0.375rem;
     border-left: 2px solid rgba(196, 163, 14, 0.3);
-    margin: 0 4px;
+    margin: 0 0.25rem;
 }
 .qol-container-panel.qol-open {
-    max-height: 600px;
+    max-height: 37.5rem;
     opacity: 1;
-    padding: 6px 6px 8px;
+    padding: 0.375rem 0.375rem 0.5rem;
 }
 
 .qol-weight-bar-wrap {
-    margin-bottom: 6px;
+    margin-bottom: 0.375rem;
 }
 .qol-weight-bar-wrap progress {
     width: 100%;
-    height: 4px;
+    height: 0.25rem;
     border-radius: 2px;
     display: block;
 }
@@ -134,13 +139,13 @@ function injectStyles() {
     justify-content: space-between;
     font-size: 0.72em;
     color: var(--color-text-dark-secondary, #888);
-    margin-top: 2px;
+    margin-top: 0.125rem;
 }
 
 .qol-stored-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0.125rem;
 }
 
 .qol-empty-msg {
@@ -148,15 +153,15 @@ function injectStyles() {
     font-size: 0.8em;
     color: var(--color-text-dark-secondary, #888);
     text-align: center;
-    padding: 4px 0 2px;
+    padding: 0.25rem 0 0.125rem;
 }
 
 .qol-stored-item {
     display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 4px 6px;
-    border-radius: 3px;
+    gap: 0.4375rem;
+    padding: 0.25rem 0.375rem;
+    border-radius: 0.1875rem;
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.06);
     font-size: 0.83em;
@@ -166,8 +171,8 @@ function injectStyles() {
 }
 
 .qol-stored-img {
-    width: 24px;
-    height: 24px;
+    width: 1.5rem;
+    height: 1.5rem;
     object-fit: cover;
     border-radius: 2px;
     flex-shrink: 0;
@@ -194,9 +199,9 @@ function injectStyles() {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 0.1875rem;
     color: #a04040;
     opacity: 0.55;
     transition: opacity 0.15s, background 0.15s;
@@ -212,16 +217,16 @@ function injectStyles() {
 .qol-quality-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    padding: 4px 6px 2px;
+    gap: 0.25rem;
+    padding: 0.25rem 0.375rem 0.125rem;
 }
 
 .qol-quality-tag {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 2px 8px 2px 6px;
-    border-radius: 4px;
+    gap: 0.3125rem;
+    padding: 0.125rem 0.5rem 0.125rem 0.375rem;
+    border-radius: 0.25rem;
     background: rgba(30, 25, 15, 0.85);
     border: 1px solid rgba(196, 163, 14, 0.35);
     font-size: 0.78em;
@@ -252,16 +257,16 @@ function injectStyles() {
 .qol-quality-popup {
     position: fixed;
     z-index: 9999;
-    min-width: 220px;
-    max-width: 320px;
+    min-width: 13.75rem;
+    max-width: 20rem;
     background: #1a1611;
     border: 1px solid rgba(196, 163, 14, 0.55);
-    border-radius: 5px;
-    box-shadow: 0 4px 18px rgba(0,0,0,0.7);
-    padding: 8px 10px 10px;
+    border-radius: 0.3125rem;
+    box-shadow: 0 0.25rem 1.125rem rgba(0,0,0,0.7);
+    padding: 0.5rem 0.625rem 0.625rem;
     pointer-events: none;
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(0.25rem);
     transition: opacity 0.12s ease, transform 0.12s ease;
 }
 .qol-quality-popup.qol-visible {
@@ -273,9 +278,9 @@ function injectStyles() {
     font-size: 0.88em;
     font-weight: bold;
     color: var(--color-text-hyperlink, #c4a30e);
-    margin-bottom: 5px;
+    margin-bottom: 0.3125rem;
     border-bottom: 1px solid rgba(196, 163, 14, 0.25);
-    padding-bottom: 4px;
+    padding-bottom: 0.25rem;
 }
 .qol-quality-popup-body {
     font-size: 0.8em;
@@ -283,7 +288,7 @@ function injectStyles() {
     line-height: 1.45;
 }
 .qol-quality-popup-body p {
-    margin: 0 0 4px 0;
+    margin: 0 0 0.25rem 0;
 }
 .qol-quality-popup-body p:last-child {
     margin-bottom: 0;
@@ -317,7 +322,10 @@ async function _loadQualityCache() {
     }
 
     if (!journal) {
-        console.warn(`[${MODULE_ID}] Journal "${QUALITIES_JOURNAL_NAME}" not found. Quality tags will appear greyed out.`);
+        /* No-op: the inline quality config dialog supplies descriptions
+         * for every shipped quality, so a missing world journal is the
+         * normal case. Only the optional hover-popup affordance gives up
+         * silently; quality CHIPS still render their inline text. */
         return;
     }
 
@@ -729,11 +737,11 @@ function setupContainerDrop($html, actor) {
             if (!dragged) return;
 
             if (dragged.parent?.uuid !== actor.uuid) {
-                ui.notifications.warn("Only items from this character can be stored here.");
+                ui.notifications.warn(t("WITCHER.Notify.Inv.OtherActor", "Only items from this character can be stored here."));
                 return;
             }
             if (dragged.type === "container") {
-                ui.notifications.warn("Containers cannot be stored inside other containers.");
+                ui.notifications.warn(t("WITCHER.Notify.Inv.NoContainerNesting", "Containers cannot be stored inside other containers."));
                 return;
             }
             if (dragged.id === itemId) return;

@@ -102,6 +102,70 @@ const settings = [
     onChange: () => location.reload()
   },
 
+  /* ---- UI scale (per-client) ---------------------------------------------
+   * Drives `--wdm-scale` on <html>, which the chrome CSS reads to scale
+   * `font-size` on the chrome scope. All rem-based sizes in our styles flow
+   * from that single value. See chrome/setup/ui-scale.js for the picker.
+   *
+   * `ui.scaleMode` — "manual" (use ui.scale verbatim) or "auto" (pick from
+   * viewport + DPR; ui.scale acts as a baseline multiplier on top).
+   * `ui.scale`    — 0.6–1.6. The range UI lets the user nudge in 0.05 steps.
+   *
+   * Client-scoped: every player picks their own. No reload needed —
+   * applyUIScale() flips the CSS var live. */
+  /* The three UI scaling settings are config:false — they're edited via the
+   * "Configure UI Scaling" menu button registered below, not Foundry's
+   * setting list. Apply in that dialog writes them all at once with live
+   * preview. */
+  {
+    key: "ui.scaleMode",
+    type: String,
+    default: "auto",
+    scope: "client",
+    config: false,
+    onChange: () => import("./ui-scale.js").then(m => m.applyUIScale())
+  },
+  {
+    key: "ui.scale",
+    type: Number,
+    default: 1.0,
+    scope: "client",
+    config: false,
+    onChange: () => import("./ui-scale.js").then(m => m.applyUIScale())
+  },
+  {
+    key: "ui.chromeBarsScale",
+    type: Number,
+    default: 1.0,
+    scope: "client",
+    config: false,
+    onChange: () => import("./ui-scale.js").then(m => m.applyUIScale())
+  },
+  /* Detailed scale mode — per-element scale overrides. When
+   * `ui.scaleMode === "detailed"`, each of these drives its own CSS
+   * variable (--wdm-<name>-scale) and the aggregate --wdm-chrome-bars-
+   * scale / --wdm-scale + font-size chain is bypassed. In auto/manual
+   * these values are ignored; the aggregate sliders drive everything.
+   *
+   * Persisted as a single object rather than seven individual keys so
+   * a partial write (e.g. only three sliders touched) is atomic and
+   * missing keys fall back to 1.0 cleanly. */
+  {
+    key: "ui.detailedScales",
+    type: Object,
+    default: {
+      ui: 1.0,         // main UI scale (text via html font-size + popup fallback)
+      topbar: 1.0,     // #wou-top-bar
+      dock: 1.0,       // #wou-dock
+      sidebar: 1.0,    // #sidebar (right)
+      scenecontrols: 1.0, // #scene-controls (left)
+      popups: 1.0      // .window-app / .application[data-appid] / .dialog / #compendium
+    },
+    scope: "client",
+    config: false,
+    onChange: () => import("./ui-scale.js").then(m => m.applyUIScale())
+  },
+
   /* ---- Policy: world-scoped settings the GM controls for all players ---- */
   {
     key: "policy.maxJournalEntriesPerPlayer",
@@ -120,9 +184,13 @@ const settings = [
    * Both are world-scoped + config:false — managed via the bestiary panel
    * and module API, not Foundry's settings UI. */
   {
+    /* Default seeded with the system's own bestiary pack so a fresh world's
+     * monster-lore books, encounter search, and research UI find monsters
+     * without the GM first having to open the Populate Bestiary dialog.
+     * The GM can still add or remove packs from that dialog at any time. */
     key: "bestiary.sourcePacks",
     type: Array,
-    default: [],
+    default: ["witcher-ttrpg-death-march.bestiary"],
     scope: "world",
     config: false
   },
@@ -170,9 +238,23 @@ export function registerSettings() {
       type: s.type,
       default: s.default,
       range: s.range,
+      choices: s.choices,
       onChange: s.onChange
     });
   }
+
+  /* "Configure UI Scaling" button — opens the UIScaleConfig dialog where
+   * the user can preview drag-by-drag and press Apply to persist. */
+  import("./ui-scale-config.js").then(({ UIScaleConfig }) => {
+    game.settings.registerMenu(MODULE_ID, "uiScaleConfig", {
+      name: "WOU.Settings.UIScaleConfig.MenuName",
+      label: "WOU.Settings.UIScaleConfig.MenuLabel",
+      hint: "WOU.Settings.UIScaleConfig.MenuHint",
+      icon: "fa-solid fa-up-right-and-down-left-from-center",
+      type: UIScaleConfig,
+      restricted: false
+    });
+  });
 }
 
 export function getSetting(key) {

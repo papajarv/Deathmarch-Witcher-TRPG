@@ -22,9 +22,9 @@
          values; otherwise they fall back to the base source values. --}}
     <div class="wdm-w3-hero">
       <div class="wdm-w3-hero-value">{{#if effective.modified}}{{effective.damage}}{{else}}{{item.system.damage}}{{/if}}</div>
-      <div class="wdm-w3-hero-label">DAMAGE{{#if effective.modified}} <i class="fa-solid fa-gem" title="Enhanced"></i>{{/if}}</div>
+      <div class="wdm-w3-hero-label">DAMAGE{{#if effective.modified}} <i class="fa-solid fa-gem" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.Enhanced'}}"></i>{{/if}}</div>
       {{#if item.system.requiresAmmo}}
-        <div class="wdm-w3-hero-sub">By Ammunition</div>
+        <div class="wdm-w3-hero-sub">{{localize 'WITCHER.Inspect.ItemCard.Text.ByAmmunition'}}</div>
       {{else if effective.damageTypes.length}}
         <div class="wdm-w3-hero-sub">
           {{#each effective.damageTypes}}{{#unless @first}} · {{/unless}}{{this}}{{/each}}
@@ -40,33 +40,33 @@
       {{#unless (eq effective.accuracy 0)}}
         <li class="wdm-w3-stat {{#if (gte effective.accuracy 0)}}is-positive{{/if}}">
           <span class="val">{{#if (gte effective.accuracy 0)}}+{{/if}}{{effective.accuracy}}</span>
-          <span class="lbl">Weapon Accuracy</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.WeaponAccuracy'}}</span>
         </li>
       {{/unless}}
       {{#unless (eq effective.reliabilityMax 0)}}
         <li class="wdm-w3-stat">
           <span class="val">{{item.system.reliability.value}}/{{effective.reliabilityMax}}</span>
-          <span class="lbl">Reliability</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.Reliability'}}</span>
         </li>
       {{/unless}}
       {{#if item.system.range}}
         <li class="wdm-w3-stat">
           <span class="val">{{item.system.range}}m</span>
-          <span class="lbl">Range</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.Range'}}</span>
         </li>
       {{/if}}
       {{#if (eq item.system.weaponType "thrown")}}
         {{#unless (eq item.system.radius 0)}}
           <li class="wdm-w3-stat">
             <span class="val">{{item.system.radius}}m</span>
-            <span class="lbl">Radius</span>
+            <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.Radius'}}</span>
           </li>
         {{/unless}}
       {{/if}}
       {{#if enhancementSlots.length}}
         <li class="wdm-w3-stat wdm-w3-stat-slots">
           <span class="val">{{enhancementSlots.length}}</span>
-          <span class="lbl">Enhancement Slots</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.EnhancementSlots'}}</span>
           <span class="wdm-w3-slots">
             {{#each enhancementSlots}}
               {{#if this.filled}}
@@ -91,7 +91,7 @@
     {{/if}}
 
     {{#if socketedQualityList.length}}
-      <div class="wdm-w3-section-label">From Enhancements</div>
+      <div class="wdm-w3-section-label">{{localize 'WITCHER.Inspect.ItemCard.Text.FromEnhancements'}}</div>
       <div class="wdm-w3-tags">
         {{#each socketedQualityList}}
           <span class="wdm-w3-tag is-enhanced" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
@@ -115,28 +115,39 @@
     </div>
 
     <ul class="wdm-w3-stats">
+      {{!-- Per-location SP rows for multi-location armor (Full, Arms,
+           Legs) — same value at each named slot. Single-location pieces
+           skip this list; the hero + coverage subline already covers it. --}}
+      {{#if armorMeta.multiLocation}}
+        {{#each armorMeta.spLocations}}
+          <li class="wdm-w3-stat wdm-w3-stat-sp">
+            <span class="val">{{this.value}}{{#if this.max}}/{{this.max}}{{/if}}</span>
+            <span class="lbl">{{this.label}}</span>
+          </li>
+        {{/each}}
+      {{/if}}
       {{#unless (eq effective.bonusSP 0)}}
         <li class="wdm-w3-stat is-positive">
           <span class="val">+{{effective.bonusSP}}</span>
-          <span class="lbl">Bonus Stopping <i class="fa-solid fa-gem"></i></span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.BonusStopping'}} <i class="fa-solid fa-gem"></i></span>
         </li>
       {{/unless}}
       {{#if item.system.bludgeoning}}
         <li class="wdm-w3-stat is-positive">
           <span class="val"><i class="fa-solid fa-check"></i></span>
-          <span class="lbl">Resists Bludgeoning</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.ResistsBludgeoning'}}</span>
         </li>
       {{/if}}
       {{#if item.system.slashing}}
         <li class="wdm-w3-stat is-positive">
           <span class="val"><i class="fa-solid fa-check"></i></span>
-          <span class="lbl">Resists Slashing</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.ResistsSlashing'}}</span>
         </li>
       {{/if}}
       {{#if item.system.piercing}}
         <li class="wdm-w3-stat is-positive">
           <span class="val"><i class="fa-solid fa-check"></i></span>
-          <span class="lbl">Resists Piercing</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.ResistsPiercing'}}</span>
         </li>
       {{/if}}
       {{#each effective.addedResistances}}
@@ -148,13 +159,13 @@
       {{#unless (eq item.system.encumbranceValue 0)}}
         <li class="wdm-w3-stat is-negative">
           <span class="val">−{{item.system.encumbranceValue}}</span>
-          <span class="lbl">Encumbrance Penalty</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.EncumbrancePenalty'}}</span>
         </li>
       {{/unless}}
       {{#if enhancementSlots.length}}
         <li class="wdm-w3-stat wdm-w3-stat-slots">
           <span class="val">{{enhancementSlots.length}}</span>
-          <span class="lbl">Enhancement Slots</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.EnhancementSlots'}}</span>
           <span class="wdm-w3-slots">
             {{#each enhancementSlots}}
               {{#if this.filled}}
@@ -179,7 +190,71 @@
     {{/if}}
 
     {{#if socketedQualityList.length}}
-      <div class="wdm-w3-section-label">From Enhancements</div>
+      <div class="wdm-w3-section-label">{{localize 'WITCHER.Inspect.ItemCard.Text.FromEnhancements'}}</div>
+      <div class="wdm-w3-tags">
+        {{#each socketedQualityList}}
+          <span class="wdm-w3-tag is-enhanced" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+            <i class="fa-solid fa-gem"></i> {{this.label}}
+          </span>
+        {{/each}}
+      </div>
+    {{/if}}
+  {{/if}}
+
+  {{#if (eq type "shield")}}
+    {{!-- Shield: Reliability (blocks) hero + CV/category subline +
+         EV + enhancement slots + quality tags. Mirrors the shield
+         sheet's display layer and shares layout with the armor card. --}}
+    <div class="wdm-w3-hero">
+      <div class="wdm-w3-hero-value">{{shieldMeta.primarySP}}{{#if shieldMeta.primarySPMax}}/{{shieldMeta.primarySPMax}}{{/if}}</div>
+      <div class="wdm-w3-hero-label">{{shieldMeta.primaryStatLabel}}</div>
+      {{#if shieldMeta.coverageLabel}}
+        <div class="wdm-w3-hero-sub">{{shieldMeta.coverageLabel}}</div>
+      {{/if}}
+    </div>
+
+    <ul class="wdm-w3-stats">
+      {{#unless (eq shieldMeta.coverValue 0)}}
+        <li class="wdm-w3-stat is-positive">
+          <span class="val">{{shieldMeta.coverValue}}</span>
+          <span class="lbl">Cover Value{{#if shieldMeta.isFullCover}} <i class="fa-solid fa-shield-halved" data-tooltip="Full cover (all locations)"></i>{{/if}}</span>
+        </li>
+      {{/unless}}
+      {{#unless (eq item.system.encumbranceValue 0)}}
+        <li class="wdm-w3-stat is-negative">
+          <span class="val">−{{item.system.encumbranceValue}}</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.EncumbrancePenalty'}}</span>
+        </li>
+      {{/unless}}
+      {{#if enhancementSlots.length}}
+        <li class="wdm-w3-stat wdm-w3-stat-slots">
+          <span class="val">{{enhancementSlots.length}}</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.EnhancementSlots'}}</span>
+          <span class="wdm-w3-slots">
+            {{#each enhancementSlots}}
+              {{#if this.filled}}
+                <span class="wdm-w3-slot is-filled" data-tooltip="{{this.name}}" data-tooltip-direction="UP">
+                  <img src="{{this.img}}" alt="" />
+                </span>
+              {{else}}
+                <span class="wdm-w3-slot"></span>
+              {{/if}}
+            {{/each}}
+          </span>
+        </li>
+      {{/if}}
+    </ul>
+
+    {{#if shieldQualityList.length}}
+      <div class="wdm-w3-tags">
+        {{#each shieldQualityList}}
+          <span class="wdm-w3-tag" data-tooltip="{{this.description}}" data-tooltip-direction="UP">{{this.label}}</span>
+        {{/each}}
+      </div>
+    {{/if}}
+
+    {{#if socketedQualityList.length}}
+      <div class="wdm-w3-section-label">{{localize 'WITCHER.Inspect.ItemCard.Text.FromEnhancements'}}</div>
       <div class="wdm-w3-tags">
         {{#each socketedQualityList}}
           <span class="wdm-w3-tag is-enhanced" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
@@ -205,28 +280,42 @@
         {{#if item.system.range}}
           <li class="wdm-w3-stat">
             <span class="val">{{item.system.range}}</span>
-            <span class="lbl">Throwing Range</span>
+            <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.ThrowingRange'}}</span>
           </li>
         {{/if}}
         {{#unless (eq item.system.area 0)}}
           <li class="wdm-w3-stat">
             <span class="val">{{item.system.area}}m</span>
-            <span class="lbl">Area of Effect</span>
+            <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.AreaOfEffect'}}</span>
           </li>
         {{/unless}}
+      {{/if}}
+      {{!-- Alchemy Reborn brew-base summary — same shape as the item-sheet
+            display, so the inspect line reads identically. Hidden when
+            baseSummary is null (toggle off or item not a configured base). --}}
+      {{#if alchemyMeta.baseSummary}}
+        <li class="wdm-w3-stat" data-base-type="{{alchemyMeta.baseSummary.key}}">
+          <span class="val">{{alchemyMeta.baseSummary.modSigned}} DC</span>
+          <span class="lbl">{{alchemyMeta.baseSummary.typeLabel}}</span>
+        </li>
       {{/if}}
     </ul>
   {{/if}}
 
   {{#if (eq type "component")}}
     {{!-- Component: substance hero only when it yields one of the nine
-         substances (rarity lives in the footer, not the body). --}}
+         substances (rarity lives in the footer, not the body). Alchemy
+         Reborn adds a Potency line below the hero so the player sees the
+         ingredient's brew weight at a glance. --}}
     {{#if componentMeta.hasHero}}
       <div class="wdm-w3-hero">
         <div class="wdm-w3-hero-value is-substance" style="--sub-color: var(--wdm-sub-{{componentMeta.substanceKey}})">
           <img class="wdm-sub-icon" src="{{componentMeta.substanceArt}}" alt="" />{{componentMeta.substanceName}}
         </div>
         <div class="wdm-w3-hero-label">SUBSTANCE</div>
+        {{#if componentMeta.showPotency}}
+          <div class="wdm-w3-hero-sub">Potency {{componentMeta.potency}}</div>
+        {{/if}}
       </div>
     {{/if}}
 
@@ -234,19 +323,19 @@
       {{#if item.system.forageLocation}}
         <li class="wdm-w3-stat">
           <span class="val">{{item.system.forageLocation}}</span>
-          <span class="lbl">Found In</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.FoundIn'}}</span>
         </li>
       {{/if}}
       {{#unless (eq item.system.forageDC 0)}}
         <li class="wdm-w3-stat">
           <span class="val">{{item.system.forageDC}}</span>
-          <span class="lbl">Forage DC</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.ForageDc'}}</span>
         </li>
       {{/unless}}
       {{#if item.system.forageQuantity}}
         <li class="wdm-w3-stat">
           <span class="val">{{item.system.forageQuantity}}</span>
-          <span class="lbl">Yield</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.Yield'}}</span>
         </li>
       {{/if}}
     </ul>
@@ -254,15 +343,27 @@
 
   {{#if (eq type "mutagen")}}
     {{!-- Mutagen: Mutation DC hero + the Active-Effect modifiers ("+3 Melee"),
-         mirroring the mutagen sheet's display layer. --}}
+         mirroring the mutagen sheet's display layer. Under Alchemy Reborn
+         a Substance hero precedes the DC and a Potency line follows. --}}
+    {{#if mutagenMeta.hasSubstance}}
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value is-substance" style="--sub-color: var(--wdm-sub-{{mutagenMeta.substanceKey}})">
+          <img class="wdm-sub-icon" src="{{mutagenMeta.substanceArt}}" alt="" />{{mutagenMeta.substanceName}}
+        </div>
+        <div class="wdm-w3-hero-label">SUBSTANCE</div>
+        {{#if mutagenMeta.showPotency}}
+          <div class="wdm-w3-hero-sub">Potency {{mutagenMeta.potency}}</div>
+        {{/if}}
+      </div>
+    {{/if}}
     {{#if item.system.mutationDC}}
       <div class="wdm-w3-hero">
         <div class="wdm-w3-hero-value">{{item.system.mutationDC}}</div>
-        <div class="wdm-w3-hero-label">MUTATION DC</div>
+        <div class="wdm-w3-hero-label">{{localize 'WITCHER.Inspect.ItemCard.Text.MutationDc'}}</div>
       </div>
     {{/if}}
     {{#if mutagenMeta.modifiers.length}}
-      <div class="wdm-w3-section-label">Effect</div>
+      <div class="wdm-w3-section-label">{{localize 'WITCHER.Inspect.ItemCard.Text.Effect'}}</div>
       <ul class="wdm-w3-stats">
         {{#each mutagenMeta.modifiers}}
           <li class="wdm-w3-stat">
@@ -273,11 +374,11 @@
       </ul>
     {{/if}}
     {{#if item.system.minorEffect}}
-      <div class="wdm-w3-section-label">Minor Effect</div>
+      <div class="wdm-w3-section-label">{{localize 'WITCHER.Inspect.ItemCard.Text.MinorEffect'}}</div>
       <div class="wdm-w3-effects">{{item.system.minorEffect}}</div>
     {{/if}}
     {{#if item.system.transmutation}}
-      <div class="wdm-w3-section-label">Transmutation</div>
+      <div class="wdm-w3-section-label">{{localize 'WITCHER.Inspect.ItemCard.Text.Transmutation'}}</div>
       <div class="wdm-w3-effects">{{item.system.transmutation}}</div>
     {{/if}}
   {{/if}}
@@ -301,7 +402,7 @@
     <ul class="wdm-w3-stats">
       <li class="wdm-w3-stat">
         <span class="val">{{containerMeta.contentCount}}</span>
-        <span class="lbl">Items Stored</span>
+        <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.ItemsStored'}}</span>
       </li>
     </ul>
   {{/if}}
@@ -319,19 +420,19 @@
       {{#if diagramMeta.craftingTime}}
         <li class="wdm-w3-stat">
           <span class="val">{{diagramMeta.craftingTime}}</span>
-          <span class="lbl">Crafting Time</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.CraftingTime'}}</span>
         </li>
       {{/if}}
       {{#unless (eq diagramMeta.investment 0)}}
         <li class="wdm-w3-stat">
           <span class="val">{{diagramMeta.investment}}</span>
-          <span class="lbl">Investment (crowns)</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.InvestmentCrowns'}}</span>
         </li>
       {{/unless}}
       {{#if diagramMeta.learned}}
         <li class="wdm-w3-stat is-positive">
           <span class="val"><i class="fa-solid fa-check"></i></span>
-          <span class="lbl">Memorized</span>
+          <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.Memorized'}}</span>
         </li>
       {{/if}}
     </ul>
@@ -340,14 +441,14 @@
       <div class="wdm-w3-output">
         <img src="{{diagramMeta.output.img}}" alt="" />
         <div class="wdm-w3-output-meta">
-          <span class="wdm-w3-output-kicker">Produces</span>
+          <span class="wdm-w3-output-kicker">{{localize 'WITCHER.Inspect.ItemCard.Text.Produces'}}</span>
           <span class="wdm-w3-output-name">{{diagramMeta.output.name}}</span>
         </div>
       </div>
     {{/if}}
 
     {{#if diagramMeta.hasIngredients}}
-      <div class="wdm-w3-section-label">Ingredients</div>
+      <div class="wdm-w3-section-label">{{localize 'WITCHER.Inspect.ItemCard.Text.Ingredients'}}</div>
       <ul class="wdm-w3-ingredients">
         {{#each diagramMeta.ingredients}}
           <li class="wdm-w3-ingredient">
@@ -360,7 +461,7 @@
     {{/if}}
 
     {{#if diagramMeta.hasSubstances}}
-      <div class="wdm-w3-section-label">Substances</div>
+      <div class="wdm-w3-section-label">{{localize 'WITCHER.Inspect.ItemCard.Text.Substances'}}</div>
       <div class="wdm-w3-subs">
         {{#each diagramMeta.substancesRequired}}
           <span class="wdm-w3-sub" style="--sub-color: var(--wdm-sub-{{this.key}})">
@@ -377,7 +478,7 @@
        weight | qty | conceal | availability (rarity) | price. The conceal
        cell self-hides when the item has no concealment (e.g. armor). --}}
   {{#if bookMeta}}
-    <div class="wdm-w3-section-label">Reading Progress</div>
+    <div class="wdm-w3-section-label">{{localize 'WITCHER.Inspect.ItemCard.Text.ReadingProgress'}}</div>
     <div class="wdm-book-progress{{#if bookMeta.completed}} is-complete{{/if}}">
       <div class="wdm-book-progress-bar"><span style="width:{{bookMeta.percent}}%"></span></div>
       <div class="wdm-book-progress-pct">{{bookMeta.percent}}%{{#if bookMeta.completed}} · Complete{{/if}}</div>
@@ -388,24 +489,34 @@
     {{!-- Food / drink: portion ticker + satiety restore + alcohol DC.
          The drunk DC only shows when the kind is drink AND the item is
          flagged alcoholic — meals can't carry alcohol metadata. --}}
-    {{#if (or foodMeta.hasCharges foodMeta.satietyRestore foodMeta.isAlcohol)}}
+    {{#if (or foodMeta.hasCharges foodMeta.satietyRestore foodMeta.isAlcohol foodMeta.baseSummary)}}
       <ul class="wdm-w3-stats">
         {{#if foodMeta.hasCharges}}
           <li class="wdm-w3-stat">
             <span class="val">{{foodMeta.chargesCurrent}}/{{foodMeta.chargesMax}}</span>
-            <span class="lbl">Portions</span>
+            <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.Portions'}}</span>
           </li>
         {{/if}}
         {{#if foodMeta.satietyRestore}}
           <li class="wdm-w3-stat">
             <span class="val">+{{foodMeta.satietyRestore}}</span>
-            <span class="lbl">Satiety / portion</span>
+            <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.SatietyPortion'}}</span>
           </li>
         {{/if}}
         {{#if foodMeta.isAlcohol}}
           <li class="wdm-w3-stat">
             <span class="val">DC {{foodMeta.drunkDC}}</span>
-            <span class="lbl">Endurance vs drunk</span>
+            <span class="lbl">{{localize 'WITCHER.Inspect.ItemCard.Text.EnduranceVsDrunk'}}</span>
+          </li>
+        {{/if}}
+        {{!-- Alchemy Reborn brew-base summary — drinks acting as potion
+              bases, ingredients acting as bomb bases, etc. Shares the same
+              data shape as alchemyMeta.baseSummary so the row reads the
+              same on both item types. --}}
+        {{#if foodMeta.baseSummary}}
+          <li class="wdm-w3-stat" data-base-type="{{foodMeta.baseSummary.key}}">
+            <span class="val">{{foodMeta.baseSummary.modSigned}} DC</span>
+            <span class="lbl">{{foodMeta.baseSummary.typeLabel}}</span>
           </li>
         {{/if}}
       </ul>
@@ -426,7 +537,7 @@
 
   {{#if (eq type "remains")}}
     {{!-- Remains: track what's been done to the carcass — no description/value/availability. --}}
-    <div class="wdm-w3-section-label">Carcass</div>
+    <div class="wdm-w3-section-label">{{localize 'WITCHER.Inspect.ItemCard.Text.Carcass'}}</div>
     <div class="wdm-remains-state">
       <span class="wdm-remains-tag{{#if remainsState.harvested}} is-done{{/if}}">
         <i class="fa-solid {{#if remainsState.harvested}}fa-check{{else}}fa-xmark{{/if}}"></i> Harvested
@@ -434,7 +545,7 @@
       <span class="wdm-remains-tag{{#if remainsState.extracted}} is-done{{/if}}">
         <i class="fa-solid {{#if remainsState.extracted}}fa-check{{else}}fa-xmark{{/if}}"></i> Mutagen Extracted
       </span>
-      <span class="wdm-remains-tag wdm-remains-charges" title="Each harvest/extract costs 1 charge, dissect costs 2">
+      <span class="wdm-remains-tag wdm-remains-charges" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.EachHarvestExtractCosts1ChargeDissectCos'}}">
         <i class="fa-solid fa-droplet"></i> {{remainsState.charges}}/{{remainsState.chargesMax}} charges
       </span>
     </div>
@@ -444,11 +555,11 @@
     {{/if}}
   {{/if}}
 
-  {{#if (or (eq type "weapon") (eq type "armor") (eq type "alchemical"))}}
+  {{#if (or (eq type "weapon") (eq type "armor") (eq type "shield") (eq type "alchemical"))}}
     <div class="wdm-w3-footer">
-      <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
+      <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
       {{#unless (eq item.system.quantity 1)}}
-        <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.Quantity'}}"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
       {{/unless}}
       {{#if item.system.conceal}}
         {{#unless (eq item.system.conceal "N/A")}}
@@ -457,61 +568,61 @@
       {{/if}}
       <span class="wdm-w3-foot-spacer"></span>
       <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup config.availability item.system.availability)}}</span>
-      <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
+      <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
     </div>
   {{/if}}
 
   {{#if (eq type "component")}}
     <div class="wdm-w3-footer">
-      <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
+      <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
       {{#unless (eq item.system.quantity 1)}}
-        <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.Quantity'}}"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
       {{/unless}}
       <span class="wdm-w3-foot-spacer"></span>
       <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup config.availability item.system.availability)}}</span>
-      <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
+      <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
     </div>
   {{/if}}
 
   {{#if (eq type "container")}}
     <div class="wdm-w3-footer">
-      <span class="wdm-w3-foot-cell" title="Empty weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
+      <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.EmptyWeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
       {{#if item.system.equipped}}
-        <span class="wdm-w3-foot-cell" title="Equipped"><i class="fa-solid fa-person-walking-luggage"></i>Worn</span>
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.Equipped'}}"><i class="fa-solid fa-person-walking-luggage"></i>Worn</span>
       {{/if}}
       <span class="wdm-w3-foot-spacer"></span>
-      <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
+      <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
     </div>
   {{/if}}
 
   {{#if (eq type "diagrams")}}
     <div class="wdm-w3-footer">
-      <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
+      <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
       {{#unless (eq item.system.quantity 1)}}
-        <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.Quantity'}}"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
       {{/unless}}
       <span class="wdm-w3-foot-spacer"></span>
       <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup config.availability item.system.availability)}}</span>
-      <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
+      <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
     </div>
   {{/if}}
 
   {{#if (eq type "remains")}}
     {{!-- Remains: weight-only footer; no quantity (always 1), no availability, no price. --}}
     <div class="wdm-w3-footer">
-      <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
+      <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
     </div>
   {{/if}}
 
   {{#if (or (eq type "valuable") (eq type "map"))}}
     <div class="wdm-w3-footer">
-      <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
+      <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{item.system.weight}}</span>
       {{#unless (eq item.system.quantity 1)}}
-        <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.Quantity'}}"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
       {{/unless}}
       <span class="wdm-w3-foot-spacer"></span>
       <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup config.availability item.system.availability)}}</span>
-      <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
+      <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{item.system.cost}}</span>
     </div>
   {{/if}}
 
@@ -521,13 +632,13 @@
          numbers stay editable on the sheet — this view is what the carry
          tally actually counts. --}}
     <div class="wdm-w3-footer">
-      <span class="wdm-w3-foot-cell" title="Effective weight (kg) — portion-scaled"><i class="fa-solid fa-weight-hanging"></i>{{foodMeta.effectiveWeight}}</span>
+      <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.EffectiveWeightKgPortionScaled'}}"><i class="fa-solid fa-weight-hanging"></i>{{foodMeta.effectiveWeight}}</span>
       {{#unless (eq item.system.quantity 1)}}
-        <span class="wdm-w3-foot-cell" title="Quantity (full units in the stack)"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.QuantityFullUnitsInTheStack'}}"><i class="fa-solid fa-layer-group"></i>×{{item.system.quantity}}</span>
       {{/unless}}
       <span class="wdm-w3-foot-spacer"></span>
       <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup config.availability item.system.availability)}}</span>
-      <span class="wdm-w3-foot-cell wdm-w3-price" title="Effective value (crowns) — portion-scaled"><i class="fa-solid fa-coins"></i>{{foodMeta.effectiveCost}}</span>
+      <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Inspect.ItemCard.Tooltip.EffectiveValueCrownsPortionScaled'}}"><i class="fa-solid fa-coins"></i>{{foodMeta.effectiveCost}}</span>
     </div>
   {{/if}}
 

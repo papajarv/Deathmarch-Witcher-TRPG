@@ -13,6 +13,16 @@
  *                            crafting wheel reads THIS field (lower-cased) to
  *                            match a diagram's `alchemyComponents` map.
  *   substance      : string  legacy / mutagen-fallback alias (kept for compat).
+ *   potency        : number  Alchemy Reborn potency (1-10). Sum of all
+ *                            ingredient potencies fed into a brew → tier
+ *                            (Normal/Enhanced/Superior) of the output.
+ *                            Schema always present (ADR 0003); the
+ *                            alchemyPotency homebrew toggle gates whether
+ *                            it's surfaced in the sheet UI and read by
+ *                            craftAlchemy. Defaults to 0 on legacy items;
+ *                            a 0-potency component still satisfies a
+ *                            substance count requirement, it just doesn't
+ *                            advance the output's quality tier.
  *   availability   : string  rarity key (everywhere / common / poor / rare …).
  *   forageLocation : string  where it occurs ("Fields", "Mountains …").
  *   forageDC       : number  Wilderness Survival DC to find it (0 = N/A).
@@ -30,6 +40,7 @@ export class ComponentData extends foundry.abstract.TypeDataModel {
             isSubstance:    new fields.BooleanField({ initial: false }),
             substanceType:  new fields.StringField({ initial: "" }),
             substance:      new fields.StringField({ initial: "" }),
+            potency:        new fields.NumberField({ initial: 0, integer: true, min: 0, max: 10 }),
             availability:   new fields.StringField({ initial: "common" }),
             forageLocation: new fields.StringField({ initial: "" }),
             forageDC:       new fields.NumberField({ initial: 0, integer: true, min: 0 }),

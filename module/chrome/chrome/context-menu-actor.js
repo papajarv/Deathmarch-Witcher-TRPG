@@ -12,6 +12,7 @@
 import { MODULE_ID } from "../setup/settings.js";
 import { clauseFor } from "../../mechanics/statusEngine.mjs";
 
+import { t, tFormat } from "../lib/i18n.js";
 const ICON = "fa-solid fa-sparkles";
 
 /* DoT statuses (bleed, burning, acid, poison …) stack per instance — each
@@ -56,8 +57,51 @@ export function registerActorContextMenu() {
  *   2. No active token → fall back to a per-user actor-target flag that
  *      the attack flow reads via `getActorTarget` when game.user.targets
  *      is empty. This is the theater-of-mind path.
+ *
+ * Multi-target: the tokenless path holds a LIST of UUIDs so a user can
+ * stack several actors the same way `game.user.targets` stacks tokens
+ * on the canvas. Legacy single-value flag (`actorTargetUuid`) is
+ * still read as a fallback for saves authored before the list existed;
+ * writes always go to the new `actorTargetUuids` list.
  */
-const ACTOR_TARGET_FLAG = "actorTargetUuid";
+const ACTOR_TARGET_FLAG      = "actorTargetUuid";    // legacy, string
+const ACTOR_TARGET_LIST_FLAG = "actorTargetUuids";   // current, string[]
+
+/** Read the CURRENT tokenless target list, merging the legacy single
+ *  flag when present. Result is a deduped array — safe to iterate. */
+export function readActorTargetUuids() {
+  const list = game.user?.getFlag?.(MODULE_ID, ACTOR_TARGET_LIST_FLAG);
+  const arr  = Array.isArray(list) ? list.filter(Boolean).map(String) : [];
+  const legacy = game.user?.getFlag?.(MODULE_ID, ACTOR_TARGET_FLAG);
+  if (legacy && !arr.includes(String(legacy))) arr.push(String(legacy));
+  return arr;
+}
+
+/** Write the tokenless target list. Empty array unsets the flag rather
+ *  than storing []. Also clears the legacy single-value flag so the two
+ *  can't drift apart. */
+async function writeActorTargetUuids(uuids) {
+  const clean = Array.from(new Set((uuids ?? []).filter(Boolean).map(String)));
+  if (clean.length) {
+    await game.user.setFlag(MODULE_ID, ACTOR_TARGET_LIST_FLAG, clean);
+  } else if (game.user?.getFlag?.(MODULE_ID, ACTOR_TARGET_LIST_FLAG)) {
+    await game.user.unsetFlag(MODULE_ID, ACTOR_TARGET_LIST_FLAG);
+  }
+  if (game.user?.getFlag?.(MODULE_ID, ACTOR_TARGET_FLAG)) {
+    await game.user.unsetFlag(MODULE_ID, ACTOR_TARGET_FLAG);
+  }
+}
+
+/** Toggle a single actor's UUID in the tokenless target list. Returns
+ *  the new state (true = now targeted, false = removed). */
+export async function toggleActorTargetUuid(actorUuid) {
+  const list = readActorTargetUuids();
+  const idx  = list.indexOf(String(actorUuid));
+  if (idx >= 0) list.splice(idx, 1);
+  else          list.push(String(actorUuid));
+  await writeActorTargetUuids(list);
+  return idx < 0;
+}
 function addTargetActor(entries, opts = {}) {
   if (entries.some(e => e?.name === "Target / Untarget")) return;
   const resolveActor = opts.resolveActor ?? defaultResolveActor;
@@ -78,42 +122,52 @@ function addTargetActor(entries, opts = {}) {
       if (token) {
         const wasTargeted = !!game.user?.targets?.has?.(token);
         try {
-          token.setTarget(!wasTargeted, { user: game.user, releaseOthers: !wasTargeted, groupSelection: false });
-          // Also clear any tokenless actor-target flag so the two systems
-          // don't get out of sync.
-          if (game.user?.getFlag?.(MODULE_ID, ACTOR_TARGET_FLAG)) {
-            await game.user.unsetFlag(MODULE_ID, ACTOR_TARGET_FLAG);
-          }
-          ui.notifications?.info(`${wasTargeted ? "Released" : "Targeting"} ${actor.name}.`);
+          /* releaseOthers:false so right-click also stacks (matches
+           * middle-click + canvas Ctrl-click). The user can right-click
+           * a second row to add it to the target set without dropping
+           * the first. */
+          token.setTarget(!wasTargeted, { user: game.user, releaseOthers: false, groupSelection: false });
         } catch (err) {
           console.warn("witcher-ttrpg-death-march | target via combat-tracker failed", err);
         }
         return;
       }
 
-      /* No token on canvas — toggle the per-user actor-target flag.
-       * The attack flow's getActorTarget() will resolve to this actor
-       * when game.user.targets is empty. */
-      const cur = game.user?.getFlag?.(MODULE_ID, ACTOR_TARGET_FLAG);
-      if (cur === actor.uuid) {
-        await game.user.unsetFlag(MODULE_ID, ACTOR_TARGET_FLAG);
-        ui.notifications?.info(`No longer targeting ${actor.name}.`);
-      } else {
-        await game.user.setFlag(MODULE_ID, ACTOR_TARGET_FLAG, actor.uuid);
-        ui.notifications?.info(`Targeting ${actor.name} (tokenless — no canvas token found).`);
-      }
+      /* No token on canvas — toggle the actor's UUID in the tokenless
+       * target LIST. The attack flow's getActorTarget()/getActorTargets()
+       * resolve entries from this list when game.user.targets is empty. */
+      await toggleActorTargetUuid(actor.uuid);
     }
   });
 }
 
 /** Public resolver: the attack flow uses this to find the user's "actor
- *  target" when no token target is active. Returns the targeted Actor or
- *  null. Cheap — no document load required when no flag is set. */
+ *  target" when no token target is active. Returns the FIRST targeted
+ *  Actor from the list (backwards-compat for single-target call sites),
+ *  or null when the list is empty. Cheap — no document load when no
+ *  flag is set. */
 export async function getActorTarget() {
-  const uuid = game.user?.getFlag?.(MODULE_ID, ACTOR_TARGET_FLAG);
-  if (!uuid) return null;
-  try { return await fromUuid(uuid); }
+  const uuids = readActorTargetUuids();
+  if (!uuids.length) return null;
+  try { return await fromUuid(uuids[0]); }
   catch (_) { return null; }
+}
+
+/** Multi-target variant: returns EVERY actor in the tokenless target
+ *  list. Empty array when nothing is targeted. Call sites that support
+ *  striking multiple opponents (AoE spells, sweeping brawl actions,
+ *  future multi-target riders) should use this instead of getActorTarget. */
+export async function getActorTargets() {
+  const uuids = readActorTargetUuids();
+  if (!uuids.length) return [];
+  const out = [];
+  for (const uuid of uuids) {
+    try {
+      const a = await fromUuid(uuid);
+      if (a) out.push(a);
+    } catch (_) { /* stale uuid — skip */ }
+  }
+  return out;
 }
 
 function addApplyStatus(entries, opts = {}) {
@@ -156,7 +210,7 @@ async function openStatusPicker(actor) {
     .filter(se => se?.id && se?.img)
     .slice();
   if (!statuses.length) {
-    ui.notifications?.warn(`${MODULE_ID} | no status effects configured.`);
+    ui.notifications?.warn(tFormat("WITCHER.Notify.Status.NoneConfigured", { mod: MODULE_ID }, "{mod} | no status effects configured."));
     return;
   }
 
@@ -185,12 +239,12 @@ async function openStatusPicker(actor) {
 
   const DialogV2 = foundry?.applications?.api?.DialogV2;
   if (!DialogV2) {
-    ui.notifications?.error(`${MODULE_ID} | DialogV2 unavailable on this Foundry build.`);
+    ui.notifications?.error(tFormat("WITCHER.Notify.DialogV2.Unavailable", { mod: MODULE_ID }, "{mod} | DialogV2 unavailable on this Foundry build."));
     return;
   }
 
   const dialog = await DialogV2.wait({
-    window: { title: `Apply Status — ${actor.name}`, icon: ICON },
+    window: { title: tFormat("WITCHER.Dialog.Status.Apply", { actor: actor.name }, "Apply Status — {actor}"), icon: ICON },
     content,
     buttons: [{ action: "close", label: "Done", default: true }],
     rejectClose: false,
@@ -226,7 +280,7 @@ async function openStatusPicker(actor) {
             }
           } catch (err) {
             console.warn(`${MODULE_ID} | apply status ${id} failed`, err);
-            ui.notifications?.error(`Failed to apply status: ${id}`);
+            ui.notifications?.error(tFormat("WITCHER.Notify.Status.ApplyFailed", { id: id }, "Failed to apply status: {id}"));
             return;
           }
           refresh(btn, id, stack);
@@ -241,7 +295,7 @@ async function openStatusPicker(actor) {
             try { await actor.deleteEmbeddedDocuments("ActiveEffect", [nonWound[nonWound.length - 1].id]); }
             catch (err) { console.warn(`${MODULE_ID} | remove status ${id} failed`, err); }
           } else {
-            ui.notifications?.info(`No removable ${id} — wound-sourced instances clear when the wound is treated.`);
+            ui.notifications?.info(tFormat("WITCHER.Notify.Status.NoRemovable", { id: id }, "No removable {id} — wound-sourced instances clear when the wound is treated."));
           }
           refresh(btn, id, stack);
         });

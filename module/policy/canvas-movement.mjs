@@ -28,6 +28,7 @@
  */
 
 import { rotationMetersChargedThisTurn } from "./canvas-rotation.mjs";
+import { cannotMove } from "../mechanics/statusEngine.mjs";
 
 const SYSTEM_ID = "witcher-ttrpg-death-march";
 
@@ -91,6 +92,12 @@ function onPreUpdateToken(tokenDoc, changes, options, userId) {
      * someone else's turn (defenseMixin.showRepositionOverlay sets
      * this flag when committing the click-to-destination move). */
     if (options?.wdmFreeReposition) return;
+    /* Forced movement (Push Kick knockback, future Aard shockwave,
+     * charge slam, etc.) — the target didn't choose to move, an
+     * external force did. Skip the not-your-turn / stunned / budget-
+     * used gates so the push actually lands. mechanics/pushToken.mjs
+     * sets this flag when it issues the tokenDocument update. */
+    if (options?.wdmForcedMove) return;
     if (!isMoveChange(changes)) return;
     const actor = tokenActor(tokenDoc);
     if (!actor) return;
@@ -114,6 +121,33 @@ function onPreUpdateToken(tokenDoc, changes, options, userId) {
         ui.notifications?.warn("Turn is committed to a full-round action.");
         return false;
     }
+    /* Movement already spent this turn (clinch consumed full move, or
+     * a prior full-SPD walk in RAW mode). Refuse further token drags —
+     * otherwise the post-write below would overwrite movementMeters
+     * with the path-only measurement of THIS drag and downgrade
+     * movementUsed to false, giving the player a free "1 tile refresh"
+     * of their budget. */
+    if (actor._round?.movementUsed) {
+        ui.notifications?.warn("You've used all your movement this turn.");
+        return false;
+    }
+    /* RAW Core "Brawling & Wrestling" — Grapple: "a target cannot move
+     * away from you". Pinned: "immobilized … cannot move or act". Both
+     * clauses set `restrict: {move: true}`; we honor them here at the
+     * canvas layer so a physical drag is refused BEFORE the token slides.
+     * Escape is a dedicated action (Dodge/Escape vs the holder's Brawling)
+     * — the player has to run that action to clear the status before the
+     * canvas will let them go anywhere. */
+    if (cannotMove(actor)) {
+        const label = actor.statuses?.has?.("pinned") ? "pinned" : "grappled";
+        ui.notifications?.warn(`Can't move while ${label} — try the Escape action.`);
+        return false;
+    }
+    /* Clinched actors can still walk — the first meter of movement
+     * breaks the clinch (movement-hook cascade), and the remainder
+     * costs the rest of their SPD normally. Break clinch as an
+     * explicit dialog option is the low-cost "step out and stop"
+     * shortcut (1 metre). */
 
     /* Pre-check the budget cap to cancel over-cap drags BEFORE the visual
      * lands. Predict the new history total: current history + the proposed
@@ -158,7 +192,15 @@ function onPreUpdateToken(tokenDoc, changes, options, userId) {
         const currentTotal = movementHistoryTotal(tokenDoc);
         const segment = projectedScene - currentTotal;
         const spd = Number(actor.system?.stats?.spd?.value) || 0;
-        const cap = spd * (actor._round?.runUsed ? 3 : 1);
+        /* Witchers Reborn — Viper · Lightning Fast bonus: the actor rolled
+         * Nd6 (N adrenaline dice) when they invoked the heroic action; the
+         * total was stamped on flags.wr.lightningFastBonus by
+         * wrHeroic.lightningFast. Cleared on turn end by
+         * combatRoundMixin.resetCombatRound. Added AFTER the run multiplier
+         * so it stacks additively (the rolled meters, not tripled on a
+         * Run). */
+        const wrBonus = Number(actor.getFlag?.("witcher-ttrpg-death-march", "wr.lightningFastBonus")) || 0;
+        const cap = spd * (actor._round?.runUsed ? 3 : 1) + wrBonus;
         if (cap && projectedMeters > cap) {
             const runCap = spd * 3;
             const segMeters = Math.round(segment / unitsPerSpd);
@@ -197,7 +239,7 @@ async function promptRunUpgrade(actor, tokenDoc, destination, projectedMeters, r
             content: `<div style="padding:8px 2px;">
                 <p>That move would put you at <strong>${projectedMeters}m</strong>, past your normal cap.</p>
                 <p>Spend your full turn on a <strong>Run</strong> (SPD × 3 = <strong>${runCap}m</strong>) to keep moving?</p>
-                <p style="opacity:0.7;font-size:11px;margin-bottom:0;">Run locks your normal and extra action this turn.</p>
+                <p style="opacity:0.7;font-size:0.6875rem;margin-bottom:0;">Run locks your normal and extra action this turn.</p>
             </div>`,
             yes: { label: "Run", icon: "fa-solid fa-person-running" },
             no:  { label: "Cancel" },
@@ -235,6 +277,11 @@ async function onUpdateToken(tokenDoc, changes, options, userId) {
     /* Reposition reaction — already gated by preUpdate; don't charge
      * movement budget on the way out either. */
     if (options?.wdmFreeReposition) { rememberPos(tokenDoc); return; }
+    /* Forced movement (push, knockback) — an external force moved the
+     * target, so it doesn't come out of their SPD budget. Update the
+     * baseline cache so the target's NEXT voluntary move measures from
+     * where they actually stand now. */
+    if (options?.wdmForcedMove) { rememberPos(tokenDoc); return; }
     if (!isMoveChange(changes)) return;
     const actor = tokenActor(tokenDoc);
 
@@ -275,8 +322,14 @@ async function onUpdateToken(tokenDoc, changes, options, userId) {
     const rotationMeters = rotationMetersChargedThisTurn(actor.id);
     const newTotalMeters = pathMeters + rotationMeters;
     const spd = Number(actor.system?.stats?.spd?.value) || 0;
-    const cap = spd * (actor._round?.runUsed ? 3 : 1);
-    console.log(`${SYSTEM_ID} | canvas-move ${actor.name}: path ${pathMeters}m + rotation ${rotationMeters}m = ${newTotalMeters}m (cap ${cap}m)`);
+    /* Viper heroic — Lightning Fast: rolled Nd6 bonus meters ride on top
+     * of the SPD/Run cap. Must be folded in on the post-write cap too;
+     * otherwise a drag the pre-update accepted (with the bonus) is
+     * refused here as "over cap" and gets rolled back — the display
+     * inflates but the actual budget doesn't. */
+    const wrBonus = Number(actor.getFlag?.(SYSTEM_ID, "wr.lightningFastBonus")) || 0;
+    const cap = spd * (actor._round?.runUsed ? 3 : 1) + wrBonus;
+    console.log(`${SYSTEM_ID} | canvas-move ${actor.name}: path ${pathMeters}m + rotation ${rotationMeters}m = ${newTotalMeters}m (cap ${cap}m${wrBonus ? `; +${wrBonus} LF` : ""})`);
 
     /* Over cap — snap back. This is the safety net for cases the preUpdate
      * pre-check missed (e.g. Foundry's history measurement disagreeing
@@ -287,9 +340,19 @@ async function onUpdateToken(tokenDoc, changes, options, userId) {
         ui.notifications?.warn(`Movement would total ${newTotalMeters}m — exceeds cap of ${cap}m.`);
     } else {
         try {
+            /* Belt-and-suspenders vs. the "1 tile drag resets budget"
+             * bug: never DOWNGRADE `movementUsed` here. Clinch and
+             * break-clinch commit the whole movement action via
+             * recordMovement — a small path-only drag afterwards
+             * should not flip movementUsed back to false or shrink
+             * the recorded meters. Max the meters, OR the used flag. */
+            const priorMeters = Number(actor._round?.movementMeters) || 0;
+            const priorUsed   = !!actor._round?.movementUsed;
+            const nextMeters  = Math.max(newTotalMeters, priorMeters);
+            const nextUsed    = priorUsed || (cap > 0 && nextMeters >= cap);
             await actor.update({
-                "system.combatRound.movementMeters": newTotalMeters,
-                "system.combatRound.movementUsed": cap > 0 && newTotalMeters >= cap
+                "system.combatRound.movementMeters": nextMeters,
+                "system.combatRound.movementUsed":   nextUsed
             });
         } catch (err) {
             console.warn(`${SYSTEM_ID} | canvas-move: write failed`, err);

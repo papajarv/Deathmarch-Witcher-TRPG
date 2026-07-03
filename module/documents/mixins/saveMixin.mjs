@@ -71,7 +71,7 @@ export const saveMixin = (Base) => class extends Base {
                       <span style="min-width:60px;">Modifier</span>
                       <input type="number" name="modifier" value="0" step="1" ${type ? "autofocus" : ""} style="flex:1;" />
                     </label>
-                    <p style="margin:0;font-size:11px;opacity:0.7;">＋ makes the save easier, − harder (roll-under).</p>
+                    <p style="margin:0;font-size:0.6875rem;opacity:0.7;">＋ makes the save easier, − harder (roll-under).</p>
                   </div>`,
                 ok: { callback: (event, button) => ({
                     type:     button.form.elements.type.value,
@@ -94,6 +94,26 @@ export const saveMixin = (Base) => class extends Base {
      * Returns `{ pass, ... }`.
      */
     async rollStunSave({ modifier = 0 } = {}) {
+        /* 0-STA stun (STA depletion, Core p.47) has no save — the only
+         * way out is Recovery to regain Stamina. Per house rule (user
+         * spec 2026-07-01): don't prompt at all, just notify. This keeps
+         * the save flow reserved for status-driven stuns (weapon Stun
+         * quality riders, etc.) where a save is meaningful. Actors with
+         * >0 STA who carry the `stunned` status can still save normally. */
+        const staNow = Number(this.system?.derivedStats?.sta?.value) || 0;
+        const staMax = Number(this.system?.derivedStats?.sta?.max) || 0;
+        if (staMax > 0 && staNow === 0) {
+            ui?.notifications?.info?.(
+                `${this.name}: 0 STA — no save. Use the Recovery action to regain Stamina.`
+            );
+            try {
+                await ChatMessage.create({
+                    speaker: ChatMessage.getSpeaker({ actor: this }),
+                    content: `<em>${esc(this.name)} is Stunned from Stamina depletion — no save, use Recovery (Core p.47).</em>`
+                });
+            } catch (_) { /* best-effort */ }
+            return { pass: false, stun: 0, modifier: 0, threshold: 0, sta: 0, clears: false, staDepleted: true };
+        }
         const stun      = Number(this.system.derivedStats?.stun) || 0;
         const mod       = Number(modifier) || 0;
         const threshold = stun + mod;
@@ -145,13 +165,30 @@ export const saveMixin = (Base) => class extends Base {
      * accumulated success penalty is the only thing that erodes it.
      */
     async rollDeathSave({ modifier = 0 } = {}) {
+        const SYS = "witcher-ttrpg-death-march";
+        /* Witchers Reborn — Bear · Unrelenting (heroic): auto-pass a
+         * single death save if the flag was banked this round. Same
+         * "success + cumulative −1" tail as the Unbreakable auto-pass
+         * so the actor isn't immortal — this just moves them past THIS
+         * round's roll. Flag is one-shot; consumed here. */
+        if (this.getFlag?.(SYS, "wr.unrelentingDeathAutoPass")) {
+            await this.unsetFlag(SYS, "wr.unrelentingDeathAutoPass");
+            const successes = Number(this.system.deathSaves) || 0;
+            const advanced  = successes + 1;
+            await this.update({ "system.deathSaves": advanced });
+            await ChatMessage.create({
+                speaker: ChatMessage.getSpeaker({ actor: this }),
+                content: `<em>${esc(this.name)} — death save auto-passed (Unrelenting).</em>`,
+                flags: { [SYS]: { category: "combat" } }
+            });
+            return { pass: true, deathSaves: advanced, dead: false, autoPassed: true };
+        }
         // Unbreakable death-save bank: an AE with `flags.<sys>.deathSaveAutoPasses`
         // (the Unbreakable boon stamps 3 of these on apply during combat)
         // auto-passes the save without rolling. The bank decrements on each
         // consume; AE deletes when the buffer hits 0. The success still
         // counts toward the cumulative −1 penalty so the actor isn't IMMORTAL
         // — once the bank's gone, the deepening penalty stays.
-        const SYS = "witcher-ttrpg-death-march";
         const bankAE = this.effects?.find?.(e =>
             !e.disabled && Number(e.getFlag?.(SYS, "deathSaveAutoPasses")) > 0
         );

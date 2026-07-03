@@ -35,6 +35,7 @@ const DEFAULT_STATUS_ICON = "icons/svg/aura.svg";
  * shipping icon files. Mechanics (stat debuffs, DoT, locks) come from the
  * matching clause — these entries carry only id / name / icon. */
 const BASELINE = [
+    { id: "charging",     name: "WITCHER.Status.Charging",     img: "icons/svg/lightning.svg"   },
     { id: "prone",        name: "WITCHER.Status.Prone",        img: "icons/svg/falling.svg"     },
     { id: "stunned",      name: "WITCHER.Status.Stunned",      img: "icons/svg/daze.svg"        },
     { id: "staggered",    name: "WITCHER.Status.Staggered",    img: "icons/svg/sword.svg"       },
@@ -60,7 +61,59 @@ const BASELINE = [
     { id: "suffocation",  name: "WITCHER.Status.Suffocation",  img: "icons/svg/waterfall.svg"   },
     { id: "nausea",       name: "WITCHER.Status.Nausea",       img: "icons/svg/degen.svg"       },
     // Fast Draw (Core p.165): a pure marker read by the attack/cast flow.
-    { id: "fastDraw",     name: "WITCHER.Status.FastDraw",     img: "icons/svg/upgrade.svg"     }
+    { id: "fastDraw",     name: "WITCHER.Status.FastDraw",     img: "icons/svg/upgrade.svg"     },
+    /* Combat Extended + Equipment Overhaul (visor down OR Raise Shield's
+     * head coverage from rules1.png): -2 to Block / Parry / Dodge. The
+     * Equipment Overhaul also strips Scent + in-combat STA recovery for
+     * the visor-down case; those are deferred to a quality-aware pass
+     * since they're not RAW from rules1. The clause for the defense
+     * penalty lives in statusClauses.mjs. Applied to the actor:
+     *   - by the armor quality "restrictedVision" while the visor is down
+     *   - by Raise Shield (L4) when head coverage is included; cleared on
+     *     the actor's next-turn start */
+    { id: "restrictedVision", name: "WITCHER.Status.RestrictedVision", img: "icons/svg/blind.svg" },
+    /* CE-only grappling chain (mirrors `grappled` / `pinned` but for the
+     * Clinch and Chokehold actions). Applied to the TARGET by the strike
+     * itself; cleared by the attacker (or target) using the Escape
+     * action or by the attacker moving away. Read by openCategoryBonuses
+     * to fire Close Quarters on follow-up strikes against a held target,
+     * the same way `grappled`/`pinned` already do. */
+    { id: "clinched",     name: "WITCHER.Status.Clinched",     img: "icons/svg/net.svg" },
+    { id: "chokeheld",    name: "WITCHER.Status.Chokeheld",    img: "icons/svg/net.svg" },
+    /* CE Combat Extended (2026-07-03) — HOLDER-SIDE visible indicators.
+     * The −2 grappler / −3 pinner penalty applies via runtime carve-out
+     * in mechanics/holdModifiers.contextualPhysicalMod (skips the mod
+     * when the roll target is the actor's hold partner). These icons
+     * are the players'/GM's visual for "who is currently holding whom."
+     * Cleared automatically by holdLink when the last matching pair is
+     * removed for that actor. */
+    { id: "isGrappling",  name: "WITCHER.Status.IsGrappling",  img: "icons/svg/net.svg" },
+    { id: "isPinning",    name: "WITCHER.Status.IsPinning",    img: "icons/svg/net.svg" },
+    { id: "isChoking",    name: "WITCHER.Status.IsChoking",    img: "icons/svg/net.svg" },
+    /* Ride — a new hold-family kind. `isMounted` is stamped on the
+     * rider (visible + cannotMove; a movement hook slaves rider
+     * position to the mount's). `mounted` is stamped on the mount
+     * (visible). Cleared when the mount successfully throws the rider
+     * (mount's Brawling beats rider's Ride) or the rider dismounts. */
+    /* net.svg matches the rest of the hold family (grappled, pinned,
+     * clinched, chokeheld all use net.svg). No dedicated "mounted"
+     * icon ships in Foundry's core assets — a purpose-built glyph is
+     * queued as a follow-up polish. */
+    { id: "isMounted",    name: "WITCHER.Status.IsMounted",    img: "icons/svg/net.svg" },
+    { id: "mounted",      name: "WITCHER.Status.Mounted",      img: "icons/svg/net.svg" },
+    /* Unaware — a pure narrative marker for sentries, sleepers, or
+     * anyone caught off-guard. Applied by the GM; read by openers like
+     * Witchers Reborn · Viper · Sting to detect assassin-shot targets.
+     * No mechanical clause attached — it's a discovery gate for other
+     * mechanics. */
+    { id: "unaware",      name: "WITCHER.Status.Unaware",      img: "icons/svg/eye.svg" },
+    /* Yrden — the persistent-zone sign (Witcher TRPG Core p.115,
+     * errata p.14). Not applied by a static clause value: the zone
+     * engine writes the AE with a REF/DEX penalty scaled by STA
+     * spent per the errata formula (-1 base, -1 per every 2 extra
+     * STA, cap -4). Registration here surfaces the status icon on
+     * affected tokens and lets the token HUD show/toggle it. */
+    { id: "yrden",        name: "WITCHER.Status.Yrden",        img: "icons/magic/symbols/runes-star-pentagon-purple.webp" }
     /* No `bloodied` status — the wounded indicator is a PIXI visual
      * treatment (red inner-glow + blood streaks on the token mesh) that
      * does NOT obscure the portrait. See policy/health-state-visuals.mjs.
@@ -152,6 +205,23 @@ const STRESS_BOONS = [
 ];
 const STRESS = [...STRESS_BREAKS, ...STRESS_BOONS];
 
+/* Alchemy Reborn toxicity tiers (per alch2.png "Witcher Potion Toxicity"
+ * table). Slight / Strong tick HP damage on combat round end (1 / 2 HP
+ * respectively). Deadly's "N/A immediate" entry doesn't tick — the bearer
+ * is at the cap and the GM is expected to escalate narratively. Each tier
+ * carries the family tag "alchemy-reborn-toxicity" so the auto-tier engine
+ * can wipe all three before stamping the active one. */
+const ALCHEMY_REBORN_TOXICITY = [
+    // Reborn-specific icons aren't shipped yet — fall back to Foundry's
+    // built-in poison/skull svgs so the status panel doesn't render a
+    // broken-image placeholder. Swap to system-art paths once the asset
+    // pack ships custom toxicity tier glyphs.
+    { id: "toxicity-mild",   name: "WITCHER.AlchemyReborn.Status.ToxicityMild",   img: "icons/svg/poison.svg", family: "alchemy-reborn-toxicity" },
+    { id: "toxicity-strong", name: "WITCHER.AlchemyReborn.Status.ToxicityStrong", img: "icons/svg/poison.svg", family: "alchemy-reborn-toxicity" },
+    { id: "toxicity-severe", name: "WITCHER.AlchemyReborn.Status.ToxicitySevere", img: "icons/svg/poison.svg", family: "alchemy-reborn-toxicity" },
+    { id: "toxicity-deadly", name: "WITCHER.AlchemyReborn.Status.ToxicityDeadly", img: "icons/svg/skull.svg",  family: "alchemy-reborn-toxicity" }
+];
+
 /* The default presentation layer (id / name / icon) before any GM override.
  * Food & Drink statuses are appended only when the homebrew toggle is on —
  * checked at buildStatusEffects() time, since registerSettings has already
@@ -159,14 +229,15 @@ const STRESS = [...STRESS_BREAKS, ...STRESS_BOONS];
 const PURE_RAW_PRESENTATION = [...BASELINE, ...AIM];
 function defaultPresentation() {
     const list = [...PURE_RAW_PRESENTATION];
-    if (isHomebrewEnabled?.("foodAndDrink")) list.push(...FOOD_DRINK);
-    if (isHomebrewEnabled?.("stress"))       list.push(...STRESS);
+    if (isHomebrewEnabled?.("foodAndDrink"))   list.push(...FOOD_DRINK);
+    if (isHomebrewEnabled?.("stress"))         list.push(...STRESS);
+    if (isHomebrewEnabled?.("alchemyPotency")) list.push(...ALCHEMY_REBORN_TOXICITY);
     return list;
 }
 /* Used by override-merge as "is this a default id" — we want the union of
  * RAW + every homebrew family, because turning off a toggle shouldn't make a
  * GM's custom override re-appear as a brand-new status. */
-const ALL_DEFAULT_IDS = new Set([...PURE_RAW_PRESENTATION, ...FOOD_DRINK, ...STRESS].map(s => s.id));
+const ALL_DEFAULT_IDS = new Set([...PURE_RAW_PRESENTATION, ...FOOD_DRINK, ...STRESS, ...ALCHEMY_REBORN_TOXICITY].map(s => s.id));
 
 /* Attach a status entry's mechanics: stat-debuff `changes` (from the active
  * clause) and the RAW/overridden `description`, both read THROUGH the engine

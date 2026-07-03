@@ -11,14 +11,14 @@ body.witcher-ttrpg-death-march #wou-top-bar .brand-text {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 2px;
+    gap: 0.125rem;
     min-width: 0;
 }
 
 body.witcher-ttrpg-death-march #wou-weather {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.375rem;
     margin: 0;
 }
 body.witcher-ttrpg-death-march #wou-weather.is-empty {
@@ -27,8 +27,8 @@ body.witcher-ttrpg-death-march #wou-weather.is-empty {
 
 /* Tiny circle: amber-bezeled medallion frame around the W3 weather image. */
 body.witcher-ttrpg-death-march #wou-weather .wou-weather-circle {
-    width: 18px;
-    height: 18px;
+    width: 1.125rem;
+    height: 1.125rem;
     border-radius: 50%;
     background-size: cover;
     background-position: center;
@@ -47,7 +47,7 @@ body.witcher-ttrpg-death-march #wou-weather .wou-weather-circle {
 /* Date — uppercase, condensed, amber-ink palette. */
 body.witcher-ttrpg-death-march #wou-weather .wou-weather-date {
     font-weight: 600;
-    font-size: 9px;
+    font-size: 0.5625rem;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--wdm-ink-hi);
@@ -56,9 +56,9 @@ body.witcher-ttrpg-death-march #wou-weather .wou-weather-date {
 
 /* Temperature — slightly larger, bright amber. */
 body.witcher-ttrpg-death-march #wou-weather .wou-weather-temp {
-    margin-left: 2px;
+    margin-left: 0.125rem;
     font-weight: 700;
-    font-size: 10px;
+    font-size: 0.625rem;
     color: var(--wdm-amber-bright);
     letter-spacing: 0.04em;
     white-space: nowrap;
@@ -70,8 +70,8 @@ body.witcher-ttrpg-death-march #wou-weather .wou-weather-temp:empty {
 /* Small FA icon for the weather glyph. */
 body.witcher-ttrpg-death-march #wou-weather .wou-weather-fa {
     color: var(--wdm-amber-hi);
-    font-size: 11px;
-    margin-left: 1px;
+    font-size: 0.6875rem;
+    margin-left: 0.0625rem;
 }
 
 /* Time-of-day tint on the circle border so the bezel breathes with the day. */
@@ -94,79 +94,79 @@ body.witcher-ttrpg-death-march .wou-weather-fa.is-clickable {
 body.witcher-ttrpg-death-march .wou-weather-fa.is-clickable:hover {
     color: var(--wdm-amber-bright);
     text-shadow:
-      0 0 8px rgba(214,160,80,0.85),
-      0 0 14px rgba(214,160,80,0.45);
+      0 0 0.5rem rgba(214,160,80,0.85),
+      0 0 0.875rem rgba(214,160,80,0.45);
     transform: scale(1.10);
 }
 
 body.witcher-ttrpg-death-march #wou-weather-menu {
-    min-width: 280px;
+    min-width: 17.5rem;
     /* Cap the width: this popup is shrink-to-fit (position: fixed), so without a
        max the flex-wrap grab row lays every condition button on one line and the
        whole panel stretches. A max lets the rows wrap and the hint text reflow. */
-    max-width: 340px;
+    max-width: 21.25rem;
     box-sizing: border-box;
-    padding: 12px 14px;
+    padding: 0.75rem 0.875rem;
     background:
-        radial-gradient(ellipse 400px 240px at 50% 0%, rgba(184,148,100,0.06), transparent 70%),
+        radial-gradient(ellipse 25rem 15rem at 50% 0%, rgba(184,148,100,0.06), transparent 70%),
         linear-gradient(180deg, rgba(10,9,8,0.97), rgba(5,4,2,0.99));
     border: 1px solid var(--wdm-amber-dim);
-    box-shadow: 0 8px 28px rgba(0,0,0,0.75), 0 0 0 1px rgba(0,0,0,0.6);
-    backdrop-filter: blur(3px);
+    box-shadow: 0 0.5rem 1.75rem rgba(0,0,0,0.75), 0 0 0 1px rgba(0,0,0,0.6);
+    /* backdrop-filter cut: bg is 0.97-0.99 opaque; blur invisible under it. */
     color: var(--wdm-ink-hi);
     font-family: var(--wdm-font-body);
 }
 
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-section + .wou-wm-section {
-    margin-top: 12px;
-    padding-top: 10px;
+    margin-top: 0.75rem;
+    padding-top: 0.625rem;
     border-top: 1px dotted rgba(184,148,100,0.20);
 }
 
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-head {
     font-family: var(--wdm-font-display);
-    font-size: 9px;
+    font-size: 0.5625rem;
     font-weight: 700;
     letter-spacing: 0.26em;
     text-transform: uppercase;
     color: var(--wdm-amber);
-    margin-bottom: 6px;
+    margin-bottom: 0.375rem;
 }
 
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-clock {
     display: flex; align-items: baseline; justify-content: space-between;
-    gap: 12px;
+    gap: 0.75rem;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-date {
     font-family: var(--wdm-font-display);
-    font-size: 13px;
+    font-size: 0.8125rem;
     letter-spacing: 0.08em;
     color: var(--wdm-ink-hi);
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-time {
     font-family: var(--wdm-font-display);
     font-weight: 700;
-    font-size: 16px;
+    font-size: 1rem;
     letter-spacing: 0.10em;
     font-variant-numeric: tabular-nums;
     color: var(--wdm-amber-bright);
-    text-shadow: 0 0 6px rgba(214,160,80,0.35);
+    text-shadow: 0 0 0.375rem rgba(214,160,80,0.35);
 }
 
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-row {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
-    gap: 4px;
+    gap: 0.25rem;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-row button {
     appearance: none;
-    padding: 6px 0;
+    padding: 0.375rem 0;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     color: var(--wdm-ink-bright, var(--wdm-ink-hi));
     font-family: var(--wdm-font-display);
     font-weight: 700;
-    font-size: 11px;
+    font-size: 0.6875rem;
     letter-spacing: 0.08em;
     cursor: pointer;
     transition: color .12s, border-color .12s, background .12s;
@@ -180,19 +180,19 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-row button:hover {
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-toggle {
     appearance: none;
     width: 100%;
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 8px 12px;
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     color: var(--wdm-ink-dim);
     font-family: var(--wdm-font-body);
-    font-size: 12px;
+    font-size: 0.75rem;
     text-align: left;
     cursor: pointer;
     transition: color .12s, border-color .12s, background .12s;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-toggle i {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--wdm-amber-hi);
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-toggle:hover {
@@ -207,18 +207,18 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-toggle.is-on {
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-toggle.is-on i {
     color: var(--wdm-amber-bright);
-    text-shadow: 0 0 8px rgba(214,160,80,0.45);
+    text-shadow: 0 0 0.5rem rgba(214,160,80,0.45);
 }
 
 /* Climate selector */
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-climate {
     width: 100%;
-    padding: 6px 8px;
+    padding: 0.375rem 0.5rem;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     color: var(--wdm-ink-bright, var(--wdm-ink-hi));
     font-family: var(--wdm-font-body);
-    font-size: 12px;
+    font-size: 0.75rem;
     cursor: pointer;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-climate:hover {
@@ -227,11 +227,11 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-climate:hover {
 
 /* Manual weather controls */
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mtoggle {
-    display: flex; align-items: center; gap: 8px;
-    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-bottom: 0.5rem;
     color: var(--wdm-ink-hi);
     font-family: var(--wdm-font-body);
-    font-size: 12px;
+    font-size: 0.75rem;
     cursor: pointer;
     user-select: none;
 }
@@ -242,7 +242,7 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mtoggle input {
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mlayers {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0.5rem;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mlayers.is-disabled {
     opacity: 0.4;
@@ -250,31 +250,31 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mlayers.is-disabled {
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mlabel {
     font-family: var(--wdm-font-display);
-    font-size: 10px;
+    font-size: 0.625rem;
     letter-spacing: 0.10em;
     text-transform: uppercase;
     color: var(--wdm-amber);
-    margin-bottom: 3px;
+    margin-bottom: 0.1875rem;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mstates {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 0.25rem;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mstate {
     appearance: none;
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 4px 8px;
+    display: inline-flex; align-items: center; gap: 0.3125rem;
+    padding: 0.25rem 0.5rem;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     color: var(--wdm-ink-dim);
     font-family: var(--wdm-font-body);
-    font-size: 11px;
+    font-size: 0.6875rem;
     cursor: pointer;
     transition: color .12s, border-color .12s, background .12s;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mstate i {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--wdm-amber-hi);
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mstate:hover {
@@ -288,21 +288,21 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mstate.is-active {
     background: rgba(184,148,100,0.14);
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mstate.is-active i {
-    text-shadow: 0 0 8px rgba(214,160,80,0.45);
+    text-shadow: 0 0 0.5rem rgba(214,160,80,0.45);
 }
 
 /* Forecast list */
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-forecast {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 0.1875rem;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fc-row {
     display: grid;
-    grid-template-columns: 1fr 16px 32px 1.4fr;
+    grid-template-columns: 1fr 1rem 2rem 1.4fr;
     align-items: center;
-    gap: 6px;
-    padding: 3px 4px;
+    gap: 0.375rem;
+    padding: 0.1875rem 0.25rem;
     border: 1px solid transparent;
     border-radius: 2px;
 }
@@ -312,26 +312,26 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fc-row:first-child {
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fc-day {
     font-family: var(--wdm-font-display);
-    font-size: 11px;
+    font-size: 0.6875rem;
     letter-spacing: 0.04em;
     color: var(--wdm-ink-dim);
     white-space: nowrap;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fc-icon {
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--wdm-amber-hi);
     text-align: center;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fc-temp {
     font-weight: 700;
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
     color: var(--wdm-amber-bright);
     text-align: right;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fc-cond {
     font-family: var(--wdm-font-body);
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--wdm-ink-dim);
     white-space: nowrap;
     overflow: hidden;
@@ -343,11 +343,11 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fc-cond {
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 0.3125rem;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-empty {
     font-family: var(--wdm-font-body);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-style: italic;
     color: var(--wdm-ink-dim);
 }
@@ -355,10 +355,10 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-row {
     display: grid;
     grid-template-columns: 1fr auto;
     align-items: baseline;
-    gap: 4px 8px;
-    padding: 4px 6px;
+    gap: 0.25rem 0.5rem;
+    padding: 0.25rem 0.375rem;
     border: 1px solid var(--wdm-amber-dim);
-    border-left-width: 3px;
+    border-left-width: 0.1875rem;
     border-radius: 2px;
     background: rgba(10,9,8,0.45);
 }
@@ -370,14 +370,14 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-row.is-boon {
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-target {
     font-family: var(--wdm-font-display);
-    font-size: 12px;
+    font-size: 0.75rem;
     letter-spacing: 0.06em;
     color: var(--wdm-ink-hi);
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-total {
     font-family: var(--wdm-font-display);
     font-weight: 700;
-    font-size: 14px;
+    font-size: 0.875rem;
     font-variant-numeric: tabular-nums;
     text-align: right;
     color: var(--wdm-ink-hi);
@@ -392,11 +392,11 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-parts {
     grid-column: 1 / -1;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 0.0625rem;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-part {
     font-family: var(--wdm-font-body);
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--wdm-ink-dim);
 }
 
@@ -404,20 +404,20 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-part {
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-edit-fx {
     appearance: none;
     width: 100%;
-    margin-top: 8px;
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    padding: 6px 10px;
+    margin-top: 0.5rem;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     color: var(--wdm-ink-dim);
     font-family: var(--wdm-font-display);
-    font-size: 11px;
+    font-size: 0.6875rem;
     letter-spacing: 0.08em;
     cursor: pointer;
     transition: color .12s, border-color .12s, background .12s;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-edit-fx i {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--wdm-amber-hi);
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-edit-fx:hover {
@@ -430,10 +430,10 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-edit-fx:hover {
    stacked numeric readout. */
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-note {
     font-family: var(--wdm-font-body);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-style: italic;
     color: var(--wdm-amber-hi);
-    padding: 3px 6px;
+    padding: 0.1875rem 0.375rem;
     border-left: 2px solid var(--wdm-amber-dim);
 }
 
@@ -442,19 +442,19 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-note {
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 0.375rem;
 }
 body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab {
     appearance: none;
     flex: 1 1 auto;
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    padding: 6px 10px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     border-radius: 2px;
     color: var(--wdm-ink-dim);
     font-family: var(--wdm-font-display);
-    font-size: 11px;
+    font-size: 0.6875rem;
     letter-spacing: 0.06em;
     cursor: pointer;
     transition: color .12s, border-color .12s, background .12s;
@@ -491,8 +491,8 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-control .wdm-wc-tab.active {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 12px 14px;
+    gap: 0.75rem;
+    padding: 0.75rem 0.875rem;
     color: var(--wdm-ink-hi);
     font-family: var(--wdm-font-body);
 }
@@ -501,16 +501,16 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-control .wdm-wc-group {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 0.375rem;
 }
 .wdm-weather-control .wdm-wc-head {
     font-family: var(--wdm-font-display);
-    font-size: 11px;
+    font-size: 0.6875rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--wdm-amber);
     border-bottom: 1px solid var(--wdm-amber-dim);
-    padding-bottom: 3px;
+    padding-bottom: 0.1875rem;
 }
 
 /* Clock readout. */
@@ -518,19 +518,19 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 10px;
-    padding: 4px 2px 8px;
+    gap: 0.625rem;
+    padding: 0.25rem 0.125rem 0.5rem;
 }
 .wdm-weather-control .wdm-wc-date {
     font-family: var(--wdm-font-display);
-    font-size: 15px;
+    font-size: 0.9375rem;
     letter-spacing: 0.02em;
     color: var(--wdm-ink-hi);
 }
 .wdm-weather-control .wdm-wc-time {
     font-family: var(--wdm-font-display);
     font-weight: 700;
-    font-size: 22px;
+    font-size: 1.375rem;
     font-variant-numeric: tabular-nums;
     color: var(--wdm-amber-bright);
 }
@@ -538,19 +538,19 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 /* Time button rows (advance/rewind = 6, jump = 4). */
 .wdm-weather-control .wdm-wc-btns {
     display: grid;
-    gap: 5px;
+    gap: 0.3125rem;
 }
 .wdm-weather-control .wdm-wc-btns.six  { grid-template-columns: repeat(6, 1fr); }
 .wdm-weather-control .wdm-wc-btns.four { grid-template-columns: repeat(4, 1fr); }
 .wdm-weather-control .wdm-wc-btns button {
     appearance: none;
-    padding: 6px 4px;
+    padding: 0.375rem 0.25rem;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     border-radius: var(--wdm-radius-xs, 2px);
     color: var(--wdm-ink-bright, var(--wdm-ink-hi));
     font-family: var(--wdm-font-display);
-    font-size: 12px;
+    font-size: 0.75rem;
     letter-spacing: 0.04em;
     cursor: pointer;
     transition: color .12s, border-color .12s, background .12s;
@@ -564,21 +564,21 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 /* Climate <select>. */
 .wdm-weather-control .wdm-wc-climate {
     width: 100%;
-    padding: 5px 8px;
+    padding: 0.3125rem 0.5rem;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     border-radius: var(--wdm-radius-xs, 2px);
     color: var(--wdm-ink-bright, var(--wdm-ink-hi));
     font-family: var(--wdm-font-body);
-    font-size: 12px;
+    font-size: 0.75rem;
 }
 
 /* Active weather location — the painted cell/marker the forecast is read for. */
 .wdm-weather-control .wdm-wc-place {
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    padding: 7px 9px;
+    gap: 0.3125rem;
+    padding: 0.4375rem 0.5625rem;
     border: 1px solid var(--wdm-amber-dim);
     border-radius: var(--wdm-radius-xs, 2px);
     background: rgba(184,148,100,0.07);
@@ -590,8 +590,8 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-control .wdm-wc-place-status {
     display: flex;
     align-items: center;
-    gap: 7px;
-    font-size: 13px;
+    gap: 0.4375rem;
+    font-size: 0.8125rem;
     color: var(--wdm-ink-hi);
 }
 .wdm-weather-control .wdm-wc-place-status i { color: var(--wdm-amber-bright); }
@@ -600,11 +600,11 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 5px 10px;
-    font-size: 11.5px;
+    gap: 0.3125rem 0.625rem;
+    font-size: 0.71875rem;
     color: var(--wdm-ink-mid, #c4bcae);
 }
-.wdm-weather-control .wdm-wc-place-terrain { display: inline-flex; align-items: center; gap: 5px; }
+.wdm-weather-control .wdm-wc-place-terrain { display: inline-flex; align-items: center; gap: 0.3125rem; }
 .wdm-weather-control .wdm-wc-place-cell { font-variant-numeric: tabular-nums; }
 .wdm-weather-control .wdm-wc-place-scene { font-style: italic; opacity: 0.85; }
 
@@ -612,14 +612,14 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-control .wdm-wc-forecast {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 0.1875rem;
 }
 .wdm-weather-control .wdm-wc-fc-row {
     display: grid;
-    grid-template-columns: 1fr 16px 36px 1.6fr;
+    grid-template-columns: 1fr 1rem 2.25rem 1.6fr;
     align-items: center;
-    gap: 8px;
-    padding: 3px 4px;
+    gap: 0.5rem;
+    padding: 0.1875rem 0.25rem;
     border: 1px solid transparent;
     border-radius: 2px;
 }
@@ -629,26 +629,26 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 }
 .wdm-weather-control .wdm-wc-fc-day {
     font-family: var(--wdm-font-display);
-    font-size: 11px;
+    font-size: 0.6875rem;
     letter-spacing: 0.04em;
     color: var(--wdm-ink-dim);
     white-space: nowrap;
 }
 .wdm-weather-control .wdm-wc-fc-icon {
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: var(--wdm-amber-hi);
     text-align: center;
 }
 .wdm-weather-control .wdm-wc-fc-temp {
     font-weight: 700;
-    font-size: 12px;
+    font-size: 0.75rem;
     font-variant-numeric: tabular-nums;
     color: var(--wdm-amber-bright);
     text-align: right;
 }
 .wdm-weather-control .wdm-wc-fc-cond {
     font-family: var(--wdm-font-body);
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--wdm-ink-dim);
     white-space: nowrap;
     overflow: hidden;
@@ -659,7 +659,7 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
  * line up; muted accent so it reads as instrumentation, not weather copy. */
 .wdm-weather-control .wdm-wc-badge {
     font-family: var(--font-mono, monospace);
-    font-size: 10px;
+    font-size: 0.625rem;
     color: var(--wdm-accent, #b9975b);
     opacity: 0.85;
     white-space: nowrap;
@@ -669,8 +669,8 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-control .wdm-wc-mtoggle {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
+    gap: 0.5rem;
+    padding: 0.375rem 0.5rem;
     border: 1px solid var(--wdm-amber-dim);
     border-radius: var(--wdm-radius-xs, 2px);
     background: rgba(10,9,8,0.45);
@@ -678,7 +678,7 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 }
 .wdm-weather-control .wdm-wc-mtoggle span {
     font-family: var(--wdm-font-display);
-    font-size: 12px;
+    font-size: 0.75rem;
     letter-spacing: 0.04em;
     color: var(--wdm-ink-hi);
 }
@@ -687,16 +687,16 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-control .wdm-wc-layers {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 0.625rem;
 }
 .wdm-weather-control .wdm-wc-layer {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 0.25rem;
 }
 .wdm-weather-control .wdm-wc-mlabel {
     font-family: var(--wdm-font-display);
-    font-size: 10px;
+    font-size: 0.625rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--wdm-ink-dim);
@@ -704,24 +704,24 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-control .wdm-wc-mstates {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 0.25rem;
 }
 .wdm-weather-control .wdm-wc-mstate {
     appearance: none;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 4px 8px;
+    gap: 0.3125rem;
+    padding: 0.25rem 0.5rem;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     border-radius: var(--wdm-radius-pill, 999px);
     color: var(--wdm-ink-dim);
     font-family: var(--wdm-font-body);
-    font-size: 11px;
+    font-size: 0.6875rem;
     cursor: pointer;
     transition: color .12s, border-color .12s, background .12s;
 }
-.wdm-weather-control .wdm-wc-mstate i { font-size: 11px; color: var(--wdm-amber-hi); }
+.wdm-weather-control .wdm-wc-mstate i { font-size: 0.6875rem; color: var(--wdm-amber-hi); }
 .wdm-weather-control .wdm-wc-mstate:hover {
     color: var(--wdm-ink-hi);
     border-color: var(--wdm-amber);
@@ -733,18 +733,18 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 }
 .wdm-weather-control .wdm-wc-mstate.is-active i {
     color: var(--wdm-amber-bright);
-    text-shadow: 0 0 8px rgba(214,160,80,0.45);
+    text-shadow: 0 0 0.5rem rgba(214,160,80,0.45);
 }
 
 /* Live stacked-modifier readout (mirrors the player popup's effects block). */
 .wdm-weather-control .wdm-wc-fx {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 0.3125rem;
 }
 .wdm-weather-control .wdm-wc-fx-empty {
     font-family: var(--wdm-font-body);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-style: italic;
     color: var(--wdm-ink-dim);
 }
@@ -752,10 +752,10 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     display: grid;
     grid-template-columns: 1fr auto;
     align-items: baseline;
-    gap: 4px 8px;
-    padding: 4px 6px;
+    gap: 0.25rem 0.5rem;
+    padding: 0.25rem 0.375rem;
     border: 1px solid var(--wdm-amber-dim);
-    border-left-width: 3px;
+    border-left-width: 0.1875rem;
     border-radius: 2px;
     background: rgba(10,9,8,0.45);
 }
@@ -763,14 +763,14 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-control .wdm-wc-fx-row.is-boon { border-left-color: var(--wdm-elem-vitriol); }
 .wdm-weather-control .wdm-wc-fx-target {
     font-family: var(--wdm-font-display);
-    font-size: 12px;
+    font-size: 0.75rem;
     letter-spacing: 0.06em;
     color: var(--wdm-ink-hi);
 }
 .wdm-weather-control .wdm-wc-fx-total {
     font-family: var(--wdm-font-display);
     font-weight: 700;
-    font-size: 14px;
+    font-size: 0.875rem;
     font-variant-numeric: tabular-nums;
     text-align: right;
     color: var(--wdm-ink-hi);
@@ -781,11 +781,11 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     grid-column: 1 / -1;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 0.0625rem;
 }
 .wdm-weather-control .wdm-wc-fx-part {
     font-family: var(--wdm-font-body);
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--wdm-ink-dim);
 }
 
@@ -793,19 +793,19 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-control .wdm-wc-edit-fx {
     appearance: none;
     width: 100%;
-    margin-top: 4px;
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    padding: 6px 10px;
+    margin-top: 0.25rem;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     color: var(--wdm-ink-dim);
     font-family: var(--wdm-font-display);
-    font-size: 11px;
+    font-size: 0.6875rem;
     letter-spacing: 0.08em;
     cursor: pointer;
     transition: color .12s, border-color .12s, background .12s;
 }
-.wdm-weather-control .wdm-wc-edit-fx i { font-size: 11px; color: var(--wdm-amber-hi); }
+.wdm-weather-control .wdm-wc-edit-fx i { font-size: 0.6875rem; color: var(--wdm-amber-hi); }
 .wdm-weather-control .wdm-wc-edit-fx:hover {
     color: var(--wdm-amber-bright);
     border-color: var(--wdm-amber);
@@ -815,10 +815,10 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 /* Plain-language environmental notes under the numeric readout. */
 .wdm-weather-control .wdm-wc-fx-note {
     font-family: var(--wdm-font-body);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-style: italic;
     color: var(--wdm-amber-hi);
-    padding: 3px 6px;
+    padding: 0.1875rem 0.375rem;
     border-left: 2px solid var(--wdm-amber-dim);
 }
 
@@ -826,19 +826,19 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-control .wdm-wc-grab-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 0.375rem;
 }
 .wdm-weather-control .wdm-wc-grab {
     appearance: none;
     flex: 1 1 auto;
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    padding: 6px 10px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     border-radius: 2px;
     color: var(--wdm-ink-dim);
     font-family: var(--wdm-font-display);
-    font-size: 11px;
+    font-size: 0.6875rem;
     letter-spacing: 0.06em;
     cursor: pointer;
     transition: color .12s, border-color .12s, background .12s;
@@ -856,9 +856,9 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 }
 .wdm-weather-control .wdm-wc-grab.is-active i { color: var(--wdm-amber-bright); }
 .wdm-weather-control .wdm-wc-grab-hint {
-    margin-top: 4px;
+    margin-top: 0.25rem;
     font-family: var(--wdm-font-body);
-    font-size: 10px;
+    font-size: 0.625rem;
     font-style: italic;
     color: var(--wdm-ink-dim);
 }
@@ -867,7 +867,7 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
    Calendar tab — month grid with per-day weather + moon (calendar template)
    ========================================================================= */
 .wdm-weather-control .wdm-wc-cal-empty {
-    padding: 16px;
+    padding: 1rem;
     text-align: center;
     color: var(--wdm-ink-dim);
     font-style: italic;
@@ -879,16 +879,16 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    gap: 6px;
-    margin-bottom: 10px;
+    gap: 0.375rem;
+    margin-bottom: 0.625rem;
 }
 .wdm-weather-control .wdm-wc-cal-navc {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 0.75rem;
 }
-.wdm-weather-control .wdm-wc-cal-navside { display: flex; gap: 4px; align-items: center; }
+.wdm-weather-control .wdm-wc-cal-navside { display: flex; gap: 0.25rem; align-items: center; }
 .wdm-weather-control .wdm-wc-cal-navside--end { justify-content: flex-end; }
 /* Reroll / reset — compact icon buttons (month: nav side; day: detail footer). */
 .wdm-weather-control .wdm-wc-cal-regen,
@@ -897,14 +897,14 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
+    width: 1.625rem;
+    height: 1.625rem;
     padding: 0;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     border-radius: var(--wdm-radius-xs, 2px);
     color: var(--wdm-ink-bright, var(--wdm-ink-hi));
-    font-size: 12px;
+    font-size: 0.75rem;
     cursor: pointer;
     transition: color .12s, border-color .12s, background .12s;
 }
@@ -920,33 +920,33 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     flex-direction: column;
     align-items: center;
     line-height: 1.1;
-    min-width: 130px;
+    min-width: 8.125rem;
 }
 .wdm-weather-control .wdm-wc-cal-month {
     display: inline-flex;
     align-items: baseline;
-    gap: 6px;
+    gap: 0.375rem;
     font-family: var(--wdm-font-display);
-    font-size: 15px;
+    font-size: 0.9375rem;
     letter-spacing: 0.04em;
     color: var(--wdm-amber-bright);
 }
 /* Real-world analogue (e.g. "Jan") — subdued, sits beside the in-world name. */
 .wdm-weather-control .wdm-wc-cal-analogue {
-    font-size: 11px;
+    font-size: 0.6875rem;
     letter-spacing: 0.02em;
     color: var(--wdm-ink-dim);
 }
 /* Editable year — looks like part of the title until focused. */
 .wdm-weather-control .wdm-wc-cal-year {
     width: 4.5ch;
-    padding: 0 2px;
+    padding: 0 0.125rem;
     background: transparent;
     border: 1px solid transparent;
     border-radius: var(--wdm-radius-xs, 2px);
     color: var(--wdm-amber-bright);
     font-family: var(--wdm-font-display);
-    font-size: 15px;
+    font-size: 0.9375rem;
     font-variant-numeric: tabular-nums;
     text-align: center;
     cursor: text;
@@ -968,7 +968,7 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     background: rgba(10,9,8,0.6);
 }
 .wdm-weather-control .wdm-wc-cal-biome {
-    font-size: 10px;
+    font-size: 0.625rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--wdm-ink-dim);
@@ -976,13 +976,13 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-control .wdm-wc-cal-step,
 .wdm-weather-control .wdm-wc-cal-today {
     appearance: none;
-    padding: 5px 8px;
+    padding: 0.3125rem 0.5rem;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     border-radius: var(--wdm-radius-xs, 2px);
     color: var(--wdm-ink-bright, var(--wdm-ink-hi));
     font-family: var(--wdm-font-display);
-    font-size: 11px;
+    font-size: 0.6875rem;
     letter-spacing: 0.06em;
     cursor: pointer;
     transition: color .12s, border-color .12s, background .12s;
@@ -998,13 +998,13 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-control .wdm-wc-cal-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
+    gap: 0.25rem;
 }
 .wdm-weather-control .wdm-wc-cal-wd {
     text-align: center;
-    padding: 0 0 2px;
+    padding: 0 0 0.125rem;
     font-family: var(--wdm-font-display);
-    font-size: 10px;
+    font-size: 0.625rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--wdm-amber);
@@ -1018,8 +1018,8 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     display: grid;
     grid-template-rows: auto 1fr auto;
     align-items: center;
-    min-height: 62px;
-    padding: 3px 4px 4px;
+    min-height: 3.875rem;
+    padding: 0.1875rem 0.25rem 0.25rem;
     background: rgba(10,9,8,0.45);
     border: 1px solid var(--wdm-amber-dim);
     border-radius: var(--wdm-radius-xs, 2px);
@@ -1056,13 +1056,13 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 }
 .wdm-weather-control .wdm-wc-cal-num {
     font-family: var(--wdm-font-display);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
     color: var(--wdm-ink-dim);
 }
 .wdm-weather-control .wdm-wc-cal-cell.is-today .wdm-wc-cal-num { color: var(--wdm-amber-bright); }
 .wdm-weather-control .wdm-wc-cal-moon {
-    font-size: 9px;
+    font-size: 0.5625rem;
     color: var(--wdm-ink-faint, var(--wdm-ink-dim));
     opacity: 0.8;
 }
@@ -1070,7 +1070,7 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 /* Middle row: the weather glyph, the visual anchor of the cell. */
 .wdm-weather-control .wdm-wc-cal-wx {
     justify-self: center;
-    font-size: 18px;
+    font-size: 1.125rem;
     color: var(--wdm-amber-hi);
 }
 
@@ -1078,7 +1078,7 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-control .wdm-wc-cal-temp {
     justify-self: center;
     font-family: var(--wdm-font-display);
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
     color: var(--wdm-ink-hi);
@@ -1086,14 +1086,14 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 
 /* Selected-day detail panel. */
 .wdm-weather-control .wdm-wc-cal-detail {
-    margin-top: 10px;
-    padding: 8px 10px;
+    margin-top: 0.625rem;
+    padding: 0.5rem 0.625rem;
     background: rgba(10,9,8,0.45);
     border: 1px solid var(--wdm-amber-dim);
     border-radius: var(--wdm-radius-xs, 2px);
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 0.375rem;
 }
 .wdm-weather-control .wdm-wc-cal-dhead {
     display: flex;
@@ -1102,16 +1102,16 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 }
 .wdm-weather-control .wdm-wc-cal-dtitle {
     font-family: var(--wdm-font-display);
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: var(--wdm-amber-bright);
 }
 .wdm-weather-control .wdm-wc-cal-dsub {
-    font-size: 10px;
+    font-size: 0.625rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--wdm-ink-dim);
 }
-.wdm-weather-control .wdm-wc-cal-dsub i { color: var(--wdm-ink-dim); margin-left: 4px; }
+.wdm-weather-control .wdm-wc-cal-dsub i { color: var(--wdm-ink-dim); margin-left: 0.25rem; }
 .wdm-weather-control .wdm-wc-cal-dmoon { color: var(--wdm-ink-dim); }
 
 /* Dawn→Night breakdown: a tidy row per daypart [name · glyph · condition · temp]. */
@@ -1121,71 +1121,71 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 0.0625rem;
 }
 .wdm-weather-control .wdm-wc-cal-part {
     display: grid;
-    grid-template-columns: 5.5em 18px 1fr auto;
+    grid-template-columns: 5.5em 1.125rem 1fr auto;
     align-items: center;
-    gap: 8px;
-    padding: 3px 4px;
+    gap: 0.5rem;
+    padding: 0.1875rem 0.25rem;
     border-radius: 2px;
 }
 .wdm-weather-control .wdm-wc-cal-part:nth-child(odd) { background: rgba(10,9,8,0.30); }
 .wdm-weather-control .wdm-wc-cal-pname {
     font-family: var(--wdm-font-display);
-    font-size: 10px;
+    font-size: 0.625rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--wdm-amber);
 }
-.wdm-weather-control .wdm-wc-cal-picon { justify-self: center; font-size: 13px; color: var(--wdm-amber-hi); }
-.wdm-weather-control .wdm-wc-cal-pcond { font-size: 11px; color: var(--wdm-ink-hi); }
+.wdm-weather-control .wdm-wc-cal-picon { justify-self: center; font-size: 0.8125rem; color: var(--wdm-amber-hi); }
+.wdm-weather-control .wdm-wc-cal-pcond { font-size: 0.6875rem; color: var(--wdm-ink-hi); }
 .wdm-weather-control .wdm-wc-cal-ptemp {
     font-variant-numeric: tabular-nums;
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--wdm-ink-hi);
 }
 .wdm-weather-control .wdm-wc-cal-dsun {
     display: flex;
-    gap: 14px;
-    padding-top: 2px;
-    font-size: 11px;
+    gap: 0.875rem;
+    padding-top: 0.125rem;
+    font-size: 0.6875rem;
     font-variant-numeric: tabular-nums;
     color: var(--wdm-ink-dim);
 }
-.wdm-weather-control .wdm-wc-cal-dsun i { color: var(--wdm-amber-hi); margin-right: 3px; }
+.wdm-weather-control .wdm-wc-cal-dsun i { color: var(--wdm-amber-hi); margin-right: 0.1875rem; }
 .wdm-weather-control .wdm-wc-cal-dtags {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 0.25rem;
 }
 .wdm-weather-control .wdm-wc-cal-dtag {
-    padding: 1px 6px;
+    padding: 0.0625rem 0.375rem;
     border: 1px solid var(--wdm-amber-dim);
-    border-radius: 8px;
-    font-size: 10px;
+    border-radius: 0.5rem;
+    font-size: 0.625rem;
     letter-spacing: 0.04em;
     color: var(--wdm-ink-dim);
 }
 .wdm-weather-control .wdm-wc-cal-dactions {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.375rem;
 }
 .wdm-weather-control .wdm-wc-cal-goto {
     appearance: none;
     margin-right: auto;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
+    gap: 0.375rem;
+    padding: 0.3125rem 0.625rem;
     background: rgba(10,9,8,0.55);
     border: 1px solid var(--wdm-amber-dim);
     border-radius: var(--wdm-radius-xs, 2px);
     color: var(--wdm-ink-bright, var(--wdm-ink-hi));
     font-family: var(--wdm-font-display);
-    font-size: 11px;
+    font-size: 0.6875rem;
     letter-spacing: 0.06em;
     cursor: pointer;
     transition: color .12s, border-color .12s, background .12s;
@@ -1210,7 +1210,12 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     pointer-events: none;
     opacity: 0;
     mix-blend-mode: screen;
-    will-change: opacity;
+    /* `will-change: opacity` removed: the browser promoted this to its own
+       compositor layer PERMANENTLY, but opacity is 0 (idle) 99% of the
+       time — only briefly non-zero during a JS-driven strike animation.
+       Leaving the hint on wastes GPU memory continuously. The animation
+       itself is short enough that the browser's automatic layer promotion
+       during the transition handles it fine. */
     background: radial-gradient(ellipse at 50% 28%,
         rgba(223,233,255,0.95) 0%,
         rgba(180,200,255,0.50) 45%,
@@ -1235,13 +1240,13 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 /* Tab strip pinned at the top. */
 .wdm-weather-config nav.tabs {
     flex: 0 0 auto;
-    padding: 6px 10px 0;
+    padding: 0.375rem 0.625rem 0;
 }
 /* Footer (Save) pinned at the bottom. */
 .wdm-weather-config .form-footer {
     flex: 0 0 auto;
     margin: 0;
-    padding: 8px 12px;
+    padding: 0.5rem 0.75rem;
     border-top: 1px solid var(--wdm-amber-dim, rgba(184,148,100,0.3));
     background: rgba(0,0,0,0.25);
 }
@@ -1251,27 +1256,27 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-config .wdm-cfg-tab.active {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 0.75rem;
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    padding: 12px 14px;
+    padding: 0.75rem 0.875rem;
 }
 
 /* Help banner — the plain-language explanation at the top of each tab. */
 .wdm-weather-config .wdm-cfg-help {
     display: flex;
-    gap: 8px;
+    gap: 0.5rem;
     align-items: flex-start;
-    padding: 8px 10px;
-    border-radius: 4px;
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.25rem;
     background: rgba(184,148,100,0.08);
-    border-left: 3px solid var(--wdm-amber, #b89464);
+    border-left: 0.1875rem solid var(--wdm-amber, #b89464);
 }
-.wdm-weather-config .wdm-cfg-help i { color: var(--wdm-amber, #b89464); margin-top: 2px; }
+.wdm-weather-config .wdm-cfg-help i { color: var(--wdm-amber, #b89464); margin-top: 0.125rem; }
 .wdm-weather-config .wdm-cfg-help p {
     margin: 0;
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.45;
     color: var(--wdm-ink-mid, #c4bcae);
 }
@@ -1280,16 +1285,16 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    margin-top: 2px;
+    gap: 0.625rem;
+    margin-top: 0.125rem;
 }
 .wdm-weather-config .wdm-cfg-section-head h3 {
     margin: 0;
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 0.4375rem;
     font-family: var(--wdm-font-display);
-    font-size: 14px;
+    font-size: 0.875rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--wdm-amber);
@@ -1298,77 +1303,77 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 /* A biome / season / landsite / condition card. */
 .wdm-weather-config .wdm-cfg-card {
     border: 1px solid var(--wdm-amber-dim, rgba(184,148,100,0.3));
-    border-radius: 5px;
-    padding: 10px 12px;
+    border-radius: 0.3125rem;
+    padding: 0.625rem 0.75rem;
     background: rgba(184,148,100,0.05);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 0.625rem;
 }
 .wdm-weather-config .wdm-cfg-card-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 0.5rem;
 }
 .wdm-weather-config .wdm-cfg-card-title {
     font-family: var(--wdm-font-display);
-    font-size: 15px;
+    font-size: 0.9375rem;
     color: var(--wdm-ink-hi);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.5rem;
 }
 
 /* Labelled group inside a card (Temperature / Weather tendencies / Map). */
-.wdm-weather-config .wdm-cfg-group { display: flex; flex-direction: column; gap: 6px; }
+.wdm-weather-config .wdm-cfg-group { display: flex; flex-direction: column; gap: 0.375rem; }
 .wdm-weather-config .wdm-cfg-group-label {
-    font-size: 10px;
+    font-size: 0.625rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--wdm-amber-bright, #d8b483);
     border-bottom: 1px dotted var(--wdm-amber-dim, rgba(184,148,100,0.25));
-    padding-bottom: 2px;
+    padding-bottom: 0.125rem;
 }
 
 /* Field grid — responsive, wraps to as many columns as fit. */
 .wdm-weather-config .wdm-cfg-fields {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 10px 16px;
+    grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
+    gap: 0.625rem 1rem;
 }
 .wdm-weather-config .wdm-cfg-meta { grid-template-columns: auto 1fr; align-items: end; }
 .wdm-weather-config .wdm-cfg-field {
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    font-size: 12px;
+    gap: 0.1875rem;
+    font-size: 0.75rem;
 }
 .wdm-weather-config .wdm-cfg-field-wide { grid-column: span 2; }
 .wdm-weather-config .wdm-cfg-flabel { color: var(--wdm-ink-hi); font-weight: 600; }
 .wdm-weather-config .wdm-cfg-fhint {
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     line-height: 1.3;
     color: var(--wdm-ink-mid, #968d80);
     font-style: italic;
 }
 
 /* Number field with a trailing unit. */
-.wdm-weather-config .wdm-cfg-num { display: flex; align-items: center; gap: 5px; }
+.wdm-weather-config .wdm-cfg-num { display: flex; align-items: center; gap: 0.3125rem; }
 .wdm-weather-config .wdm-cfg-num input { flex: 1 1 auto; min-width: 0; }
 .wdm-weather-config .wdm-cfg-unit {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--wdm-ink-mid, #968d80);
     font-variant-numeric: tabular-nums;
 }
 
 /* Word-scale slider: range + a bold plain-word readout. */
-.wdm-weather-config .wdm-cfg-slider { display: flex; align-items: center; gap: 8px; }
+.wdm-weather-config .wdm-cfg-slider { display: flex; align-items: center; gap: 0.5rem; }
 .wdm-weather-config .wdm-cfg-slider input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--wdm-amber, #b89464); }
 .wdm-weather-config .wdm-cfg-word {
-    flex: 0 0 84px;
+    flex: 0 0 5.25rem;
     text-align: right;
-    font-size: 11.5px;
+    font-size: 0.71875rem;
     font-weight: 700;
     color: var(--wdm-amber-bright, #e8c690);
 }
@@ -1380,17 +1385,17 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     background: rgba(0,0,0,0.32);
     border: 1px solid var(--wdm-amber-dim, rgba(184,148,100,0.3));
     color: var(--wdm-ink-hi);
-    border-radius: 3px;
-    padding: 3px 5px;
-    font-size: 12px;
+    border-radius: 0.1875rem;
+    padding: 0.1875rem 0.3125rem;
+    font-size: 0.75rem;
 }
-.wdm-weather-config input[type="color"] { padding: 1px; height: 28px; width: 44px; }
+.wdm-weather-config input[type="color"] { padding: 0.0625rem; height: 1.75rem; width: 2.75rem; }
 
 .wdm-weather-config .wdm-cfg-check {
     display: flex;
     align-items: center;
-    gap: 5px;
-    font-size: 12px;
+    gap: 0.3125rem;
+    font-size: 0.75rem;
     color: var(--wdm-ink-mid, #c4bcae);
 }
 
@@ -1399,20 +1404,20 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-config .wdm-cfg-mod-row {
     display: grid;
     grid-template-columns: 1.4fr 0.7fr 1.3fr 0.5fr 2fr auto;
-    gap: 8px;
+    gap: 0.5rem;
     align-items: center;
 }
 .wdm-weather-config .wdm-cfg-sun-head,
 .wdm-weather-config .wdm-cfg-sun-row { grid-template-columns: 1.5fr 1fr 1fr; }
 .wdm-weather-config .wdm-cfg-mod-head {
-    font-size: 10px;
+    font-size: 0.625rem;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--wdm-ink-mid, #968d80);
 }
 .wdm-weather-config .wdm-cfg-mod-row input,
 .wdm-weather-config .wdm-cfg-mod-row select { width: 100%; }
-.wdm-weather-config .wdm-cfg-sun-name { font-size: 13px; }
+.wdm-weather-config .wdm-cfg-sun-name { font-size: 0.8125rem; }
 
 .wdm-weather-config .wdm-cfg-add,
 .wdm-weather-config .wdm-cfg-reset,
@@ -1420,14 +1425,14 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     background: rgba(184,148,100,0.14);
     border: 1px solid var(--wdm-amber-dim, rgba(184,148,100,0.35));
     color: var(--wdm-ink-hi);
-    border-radius: 3px;
-    font-size: 12px;
-    padding: 4px 10px;
+    border-radius: 0.1875rem;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.625rem;
     cursor: pointer;
     width: auto;
     white-space: nowrap;
 }
-.wdm-weather-config .wdm-cfg-del { color: #d98a8a; padding: 4px 7px; }
+.wdm-weather-config .wdm-cfg-del { color: #d98a8a; padding: 0.25rem 0.4375rem; }
 .wdm-weather-config .wdm-cfg-add:hover,
 .wdm-weather-config .wdm-cfg-reset:hover,
 .wdm-weather-config .wdm-cfg-del:hover { background: rgba(184,148,100,0.28); }
@@ -1435,7 +1440,7 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-config .wdm-cfg-empty,
 .wdm-weather-config .wdm-cfg-note {
     margin: 0;
-    font-size: 11.5px;
+    font-size: 0.71875rem;
     font-style: italic;
     color: var(--wdm-ink-mid, #968d80);
 }
@@ -1444,14 +1449,14 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 10px;
+    gap: 0.625rem;
     margin-top: auto;
-    padding-top: 10px;
+    padding-top: 0.625rem;
     border-top: 1px solid var(--wdm-amber-dim, rgba(184,148,100,0.2));
 }
 .wdm-weather-config .wdm-cfg-custom-flag {
     margin-right: auto;
-    font-size: 10.5px;
+    font-size: 0.65625rem;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--wdm-amber-bright, #e8c690);
@@ -1466,12 +1471,12 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 .wdm-weather-mode .form-fields {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 0.375rem;
 }
 .wdm-wc-scenemode-btns {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 0.375rem;
 }
 .wdm-weather-mode-btn {
     appearance: none;
@@ -1479,19 +1484,19 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 6px 10px;
+    gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
     background: rgba(10, 9, 8, 0.55);
     border: 1px solid var(--wdm-amber-dim, rgba(184, 148, 100, 0.3));
     border-radius: var(--wdm-radius-xs, 2px);
     color: var(--wdm-ink-dim, #968d80);
     font-family: var(--wdm-font-display, inherit);
-    font-size: 12px;
+    font-size: 0.75rem;
     letter-spacing: 0.04em;
     cursor: pointer;
     transition: color .12s, border-color .12s, background .12s;
 }
-.wdm-weather-mode-btn i { font-size: 11px; color: var(--wdm-amber-hi, #c8a063); }
+.wdm-weather-mode-btn i { font-size: 0.6875rem; color: var(--wdm-amber-hi, #c8a063); }
 .wdm-weather-mode-btn:hover {
     color: var(--wdm-amber-bright, #e8c690);
     border-color: var(--wdm-amber, #b89464);
@@ -1504,7 +1509,7 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 }
 .wdm-weather-mode-btn.active i {
     color: var(--wdm-amber-bright, #e8c690);
-    text-shadow: 0 0 8px rgba(214, 160, 80, 0.45);
+    text-shadow: 0 0 0.5rem rgba(214, 160, 80, 0.45);
 }
 
 /* The "Disable Time Darkness" button is an INDEPENDENT toggle, not part of the
@@ -1518,5 +1523,5 @@ body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { colo
 }
 .wdm-weather-dark-btn.active i {
     color: #ffd27a;
-    text-shadow: 0 0 10px rgba(255, 200, 90, 0.7);
+    text-shadow: 0 0 0.625rem rgba(255, 200, 90, 0.7);
 }

@@ -8,15 +8,15 @@
   </p>
 
   <div class="wdm-heal-options">
-    <label><input type="checkbox" id="resting"     /> Full rest (×REC instead of REC/2)</label>
-    <label><input type="checkbox" id="sterilized"  /> Sterilized wounds (+2 HP, +2 days each new wound)</label>
-    <label><input type="checkbox" id="healing-hand"/> Healing Hand (+3 HP)</label>
-    <label><input type="checkbox" id="healing-tent"/> Healing Tent (+2 HP)</label>
+    <label><input type="checkbox" id="resting"     /> {{localize 'WITCHER.Dialog.HealRest.Text.FullRestRecInsteadOfRec2'}}</label>
+    <label><input type="checkbox" id="sterilized"  /> {{localize 'WITCHER.Dialog.HealRest.Text.SterilizedWounds2Hp2DaysEachNewWound'}}</label>
+    <label><input type="checkbox" id="healing-hand"/> {{localize 'WITCHER.Dialog.HealRest.Text.HealingHand3Hp'}}</label>
+    <label><input type="checkbox" id="healing-tent"/> {{localize 'WITCHER.Dialog.HealRest.Text.HealingTent2Hp'}}</label>
   </div>
 
   {{#if stressPenalty}}
     <p class="wdm-heal-warning">
-      <strong>Stress penalty:</strong> −{{stressPenalty}} HP (stress {{stress}} over WILL {{will}}).
+      <strong>{{localize 'WITCHER.Dialog.HealRest.Text.StressPenalty'}}</strong> −{{stressPenalty}} HP (stress {{stress}} over WILL {{will}}).
     </p>
   {{/if}}
 

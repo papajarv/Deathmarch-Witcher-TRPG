@@ -24,14 +24,26 @@ import { registerWitcherTokenStyle } from "../policy/witcher-token-style.mjs";
 import { registerCanvasMovement } from "../policy/canvas-movement.mjs";
 import { registerCanvasRotation } from "../policy/canvas-rotation.mjs";
 import { registerCanvasAutoFace } from "../policy/canvas-auto-face.mjs";
+import { registerEoCompendiumFolder } from "./eoCompendiumFolder.mjs";
 import { registerHideTargetPips } from "../policy/canvas-hide-target-pips.mjs";
 import { registerCanvasAutoSelectTurn } from "../policy/canvas-auto-select-turn.mjs";
 import { registerBrokenWeaponIndicator } from "../policy/broken-weapon-indicator.mjs";
 import { registerCombatTrackerTakeControl } from "../policy/combat-tracker-take-control.mjs";
 import { registerHealthStateVisuals } from "../policy/health-state-visuals.mjs";
 import { registerCombatTrackerTargets } from "../policy/combat-tracker-targets.mjs";
+import { registerCanvasTokenMiddleClick } from "../policy/canvas-token-middle-click.mjs";
+import { registerCombatTrackerGuards } from "../policy/combat-tracker-guards.mjs";
 import { installAttackChatHandlers } from "../documents/mixins/weaponAttackMixin.mjs";
+import { installCastRiderHandler }   from "../mechanics/castRiders.mjs";
+import { installCastDamageHandler }  from "../mechanics/castDamage.mjs";
+import { installZoneHooks }          from "../mechanics/zoneEffects.mjs";
 import { installDefenseChatHandlers } from "../documents/mixins/defenseMixin.mjs";
+import { registerHoldLinkHooks } from "../mechanics/holdLink.mjs";
+import { installAutoFumble } from "../mechanics/autoFumble.mjs";
+import { installWRTurnStartPrompt } from "../mechanics/wrTurnStartPrompt.mjs";
+import { ARMOR_LOCATION_COVERAGE, ARMOR_SLOTS } from "./config.mjs";
+
+const SYSTEM_ID = "witcher-ttrpg-death-march";
 
 // NOTE: tickEffects + critWoundAutoheal are now wired by chrome's policy
 // installers (module/chrome/policy/{tick-effects,crit-wound-autoheal}.js)
@@ -40,12 +52,116 @@ import { installDefenseChatHandlers } from "../documents/mixins/defenseMixin.mjs
 // functional implementations take over. Revisit when those policies are
 // rewritten into our idiom.
 
+/* Clear uncovered per-location SP fields whenever an armor's `location`
+ * enum changes. Without this, switching a Brigandine from "Full" to
+ * "Torso" leaves the previously-authored leg numbers sitting in the
+ * document — invisible to combat (deriveArmorEffective gates by enum)
+ * but resurrected if the GM later flips back to "Full". Mutating the
+ * change object here folds the zero-writes into the same update so the
+ * authoring round-trip is one atomic write. Coverage map is the shared
+ * `ARMOR_LOCATION_COVERAGE` from config.mjs — single source of truth. */
+function clearUncoveredArmorSP(item, change, _options, userId) {
+    if (userId !== game.user?.id) return;
+    if (item?.type !== "armor") return;
+    const nextLoc = change?.system?.location;
+    if (typeof nextLoc !== "string") return;     // location not in this update
+    const covered = new Set(ARMOR_LOCATION_COVERAGE[nextLoc] ?? []);
+    change.system ??= {};
+    for (const loc of ARMOR_SLOTS) {
+        if (covered.has(loc)) continue;
+        const spField  = `${loc}Stopping`;
+        const maxField = `${loc}MaxStopping`;
+        /* Don't clobber a field the caller explicitly set in the SAME
+         * update — only zero out fields that aren't already being
+         * written. Catches the macro / API case of changing location
+         * AND a per-location SP in one call. */
+        if (!(spField  in change.system)) change.system[spField]  = 0;
+        if (!(maxField in change.system)) change.system[maxField] = 0;
+    }
+}
+
 export function registerHooks() {
     // Stress mechanic — see mechanics/stress.mjs. Captures prior value
     // on preUpdate (so on update we can detect increase) and runs the
     // WILL save when stress is raised over WILL on a character.
     Hooks.on("preUpdateActor", onPreUpdateActor);
     Hooks.on("updateActor",    onStressUpdateActor);
+
+    // Armor: zero out per-location SP fields the new `location` enum
+    // doesn't cover, so stale arm/leg values can't be resurrected by
+    // flipping back to "Full" later.
+    Hooks.on("preUpdateItem", clearUncoveredArmorSP);
+
+    /* "Immediate" AE: fire-and-forget effects that don't linger as a
+     * stat modifier. For each `change` in the AE's changes array, MUTATE
+     * the actor's field as a one-time write (instead of leaving the
+     * change in place as a derived modifier that would revert when the
+     * AE is deleted). Then run on-apply actions and delete the AE.
+     *   Gate: only the actor's owner (or GM) processes — multi-client
+     *   sessions don't double-fire. */
+    Hooks.on("createActiveEffect", (effect) => {
+        if (!effect?.getFlag?.(SYSTEM_ID, "immediate")) return;
+        const actor = effect.parent;
+        if (!actor || actor.documentName !== "Actor") return;
+        if (!actor.isOwner && !game.user?.isGM) return;
+
+        /* Microtask defer — let Foundry finish its create chain (so the
+         * AE is fully in the embedded collection and any synchronous
+         * onApply / status-engine handlers have run) before we mutate
+         * and delete. */
+        setTimeout(async () => {
+            try {
+                /* Apply each `change` as a one-time write. For ADD (mode 2,
+                 * the common case), read the current value and write
+                 * current + delta. For OVERRIDE (mode 5), write the
+                 * literal value. MULTIPLY/UPGRADE/DOWNGRADE behave the
+                 * same way as Foundry's apply pipeline would, but the
+                 * result is persisted directly on the actor instead of
+                 * folded into derived data. */
+                const updates = {};
+                for (const change of (effect.changes ?? [])) {
+                    if (!change?.key) continue;
+                    const key  = String(change.key);
+                    const raw  = change.value;
+                    const num  = Number(raw);
+                    const mode = Number(change.mode ?? change.type ?? 2);
+                    const cur  = Number(foundry.utils.getProperty(actor, key)) || 0;
+                    let next = cur;
+                    /* Foundry CONST.ACTIVE_EFFECT_MODES:
+                     *   0 CUSTOM       — skipped (system-specific)
+                     *   1 MULTIPLY     — cur * num
+                     *   2 ADD          — cur + num
+                     *   3 DOWNGRADE    — min(cur, num)
+                     *   4 UPGRADE      — max(cur, num)
+                     *   5 OVERRIDE     — num
+                     * Strings (e.g. "system.derivedStats.stress.value")
+                     * that aren't numeric coerce to NaN; we skip those
+                     * because instantaneous writes only make sense for
+                     * numeric pools. */
+                    if (!Number.isFinite(num)) continue;
+                    if      (mode === 1) next = cur * num;
+                    else if (mode === 2) next = cur + num;
+                    else if (mode === 3) next = Math.min(cur, num);
+                    else if (mode === 4) next = Math.max(cur, num);
+                    else if (mode === 5) next = num;
+                    else continue;       // CUSTOM / unknown — skip
+                    updates[key] = next;
+                }
+                if (Object.keys(updates).length) {
+                    try { await actor.update(updates); }
+                    catch (err) { console.warn("witcher-ttrpg-death-march | immediate AE actor.update failed", err); }
+                }
+                /* Delete the AE itself. The mutation above is now persisted
+                 * on the actor; the AE's changes won't be re-applied via
+                 * prepareDerivedData because the AE is gone. */
+                if (actor.effects?.get?.(effect.id)) {
+                    await effect.delete();
+                }
+            } catch (err) {
+                console.warn("witcher-ttrpg-death-march | immediate AE handler failed", err);
+            }
+        }, 0);
+    });
     // Combat lifecycle for break sub-effects: fire banked combat-scoped
     // breaks on combatStart, tear them down on deleteCombat. The persistent
     // "experienced" markers are untouched by combat lifecycle.
@@ -111,9 +227,40 @@ export function registerHooks() {
     // documents/mixins/weaponAttackMixin.mjs#installAttackChatHandlers.
     installAttackChatHandlers();
 
+    // Cast chat cards — inject registered rider buttons on cast messages
+    // stamped with a castContext envelope. Combat Meditation, elemental
+    // amplifiers, etc. all register through mechanics/castRiders.mjs and
+    // this hook fans them out per-viewer via predicate matching.
+    installCastRiderHandler();
+    // Cast damage — Roll Damage button that reads the envelope's
+    // damage.formula (with {sta} / {margin} interpolation), rolls, and
+    // applies damage + status riders per stamped target. Owner-gated.
+    installCastDamageHandler();
+
+    // Persistent-area zone effects (Yrden, Static Storm, Consecrate,
+    // Blaze of Korath, Dormyn's Fog, etc.). Installs updateToken /
+    // combatRound / deleteMeasuredTemplate hooks that apply / strip
+    // ActiveEffects as tokens cross zone boundaries and delete zones
+    // when their duration runs out. GM-only mutation; all clients
+    // see the AE writes as broadcasts.
+    installZoneHooks();
+
     // Defense chat cards — wire the Block "spend SP" button on defense cards.
     // (Parry's stagger is auto-applied; no button.)
     installDefenseChatHandlers();
+
+    // Auto-fumble table roll + Witchers Reborn stance-perk skip dialog.
+    // Callers of extendedRoll pass `config.fumbleCategory`; the listener
+    // resolves the RAW fumble table and, for perk owners, offers a 5 STA
+    // skip prompt first. See mechanics/autoFumble.mjs.
+    installAutoFumble();
+
+    // Witchers Reborn — Bear · Unrelenting + Manticore · Bulwark: both
+    // fire at the start of the actor's turn if they're wounded/dying and
+    // have the AE + STA to spend. Shared prompt lives in
+    // mechanics/wrTurnStartPrompt.mjs; the wound-flag and death-auto-pass
+    // machinery is the same one the Unrelenting macro used.
+    installWRTurnStartPrompt();
 
     // Chat sidebar Combat chip is wired by sidebar-chat.js (sb-subnav).
     // Combat-flagged messages get `data-wou-type="combat"`; the chip sets
@@ -142,14 +289,27 @@ export function registerHooks() {
     // hard-cancelled when the actor is stunned / full-round-locked. Out
     // of combat the drag is free. See policy/canvas-movement.mjs.
     registerCanvasMovement();
-    /* Token rotation costs movement budget while in combat — 90° = 1m,
-     * accumulating. Stationary-facing changes only; drags are handled
-     * by canvas-movement.mjs from the x/y delta. */
+    /* Hold-link bookkeeping: movement break + incapacitation clear for
+     * Clinch / Grapple / Pin / Chokehold. The CE attack actions stamp
+     * a `clinched` / `grappled` / `pinned` / `chokeheld` status + a
+     * mutual `holdLink` flag on apply (see weaponAttackMixin); the
+     * hooks registered here drop both sides when geometry or status
+     * say the hold can't be maintained. */
+    registerHoldLinkHooks();
+    /* Token rotation costs movement budget while in combat. The conversion
+     * rate is GM-configurable via the `rotationMovementPer90` setting
+     * (default 1m per 90°, set to 0 to make rotation free). Stationary
+     * facing changes only — drags are handled by canvas-movement.mjs from
+     * the x/y delta. */
     registerCanvasRotation();
     /* Targeting another token auto-rotates the user's controlled token
      * to face it (free — no movement charge). Lets the table see facing
      * without manual rotation gymnastics. See policy/canvas-auto-face.mjs. */
     registerCanvasAutoFace();
+    /* Group the 5 Equipment Overhaul packs under a "Combat Extended"
+     * compendium-sidebar folder when the CE master toggle is on; remove
+     * the folder when CE is off. Reacts to live toggle changes. */
+    registerEoCompendiumFolder();
     /* Suppress Foundry's cross-user target pips (the small colored dots
      * above tokens showing OTHER users that are targeting / controlling
      * them). The GM running a solo / small-table session wanted these
@@ -185,4 +345,16 @@ export function registerHooks() {
      * every combatant the current user is targeting (token target or
      * tokenless actor-target flag). See policy/combat-tracker-targets.mjs. */
     registerCombatTrackerTargets();
+    /* Canvas token middle-click → target. Mirrors the tracker-side
+     * middle-click. See policy/canvas-token-middle-click.mjs.
+     * (T-key additive-target keybinding is registered from main.mjs's
+     * init hook — Foundry doesn't accept keybinding registrations
+     * after init closes.) */
+    registerCanvasTokenMiddleClick();
+    /* Combat tracker guard-stance indicator — small chip under each
+     * combatant's name showing their active guard (Balanced / Warding /
+     * Closed / Fool's) plus warded locations per equipped weapon when
+     * Warding. Only paints when CE's `guards` subsystem is enabled. See
+     * policy/combat-tracker-guards.mjs. */
+    registerCombatTrackerGuards();
 }

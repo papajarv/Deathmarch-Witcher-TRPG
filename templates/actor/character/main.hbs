@@ -15,8 +15,8 @@
 
   {{!-- ── TOP-LEVEL VIEW TABS (Sheet / Notes) — per-user, persisted ── --}}
   <nav class="wcs-viewtabs">
-    <button type="button" class="wcs-viewtab{{#if (eq sheetView "sheet")}} is-active{{/if}}" data-action="changeSheetView" data-view="sheet"><i class="fa-solid fa-id-card"></i><span>Sheet</span></button>
-    <button type="button" class="wcs-viewtab{{#if (eq sheetView "notes")}} is-active{{/if}}" data-action="changeSheetView" data-view="notes"><i class="fa-solid fa-feather"></i><span>Notes</span></button>
+    <button type="button" class="wcs-viewtab{{#if (eq sheetView "sheet")}} is-active{{/if}}" data-action="changeSheetView" data-view="sheet"><i class="fa-solid fa-id-card"></i><span>{{localize 'WITCHER.Sheet.Character.Text.Sheet'}}</span></button>
+    <button type="button" class="wcs-viewtab{{#if (eq sheetView "notes")}} is-active{{/if}}" data-action="changeSheetView" data-view="notes"><i class="fa-solid fa-feather"></i><span>{{localize 'WITCHER.Sheet.Character.Text.Notes'}}</span></button>
   </nav>
 
   {{!-- ── SHEET VIEW — display:contents, transparent to the flex layout — --}}
@@ -24,7 +24,7 @@
 
   {{!-- ── TITLE STRIP ─────────────────────────────────────────────── --}}
   <header class="wcs-title">
-    <span class="wcs-title-word">Character</span>
+    <span class="wcs-title-word">{{localize 'WITCHER.Sheet.Character.Text.Character'}}</span>
   </header>
 
   {{!-- ── HUD ─────────────────────────────────────────────────────── --}}
@@ -32,20 +32,20 @@
     <div class="wcs-portrait">
       <img src="{{actor.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.EditImage'}}" />
       {{#if system.healthState.dying}}
-        <span class="wcs-wound-state is-dying" title="Death state — Core p.162"><i class="fa-solid fa-skull"></i></span>
+        <span class="wcs-wound-state is-dying" title="{{localize 'WITCHER.Sheet.Character.Tooltip.DeathStateCoreP162'}}"><i class="fa-solid fa-skull"></i></span>
       {{else if system.healthState.wounded}}
-        <span class="wcs-wound-state is-wounded" title="Wounded — Core p.156"><i class="fa-solid fa-heart-crack"></i></span>
+        <span class="wcs-wound-state is-wounded" title="{{localize 'WITCHER.Sheet.Character.Tooltip.WoundedCoreP156'}}"><i class="fa-solid fa-heart-crack"></i></span>
       {{else}}
-        <span class="wcs-wound-state" title="Healthy"><i class="fa-solid fa-heart"></i></span>
+        <span class="wcs-wound-state" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Healthy'}}"><i class="fa-solid fa-heart"></i></span>
       {{/if}}
     </div>
 
     <div class="wcs-hud-right">
       <div class="wcs-name-row">
-        <input class="wcs-name" type="text" name="name" value="{{actor.name}}" placeholder="Character name" />
-        <div class="wcs-death" title="Successful death saves — each adds −1 to the next (Core p.162)">
+        <input class="wcs-name" type="text" name="name" value="{{actor.name}}" placeholder="{{localize 'WITCHER.Sheet.Character.Hint.CharacterName'}}" />
+        <div class="wcs-death" title="{{localize 'WITCHER.Sheet.Character.Tooltip.SuccessfulDeathSavesEachAdds1ToTheNextCo'}}">
           <a data-action="adjustValue" data-target="system.deathSaves" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
-          <i class="fa-solid fa-skull"></i><span>Death</span>
+          <i class="fa-solid fa-skull"></i><span>{{localize 'WITCHER.Sheet.Character.Text.Death'}}</span>
           <span class="wcs-death-count">{{system.deathSaves}}</span><span class="wcs-death-cap">&minus;</span>
           <a data-action="adjustValue" data-target="system.deathSaves" data-delta="1" data-min="0" title="+1"><i class="fa-solid fa-plus"></i></a>
         </div>
@@ -63,18 +63,18 @@
       </div>
 
       <div class="wcs-tag-row">
-        <span class="wcs-tag wcs-tag-ip" title="Improvement Points — edit on the Skills tab"><i class="fa-solid fa-clipboard-list"></i>IP<span class="num">{{system.improvementPoints}}</span></span>
-        <span class="wcs-tag wcs-tag-mip" title="Magic IP — edit on the Skills tab"><i class="fa-solid fa-wand-sparkles"></i>Magic<span class="num">{{system.magic.magicImprovementPoints}}</span></span>
+        <span class="wcs-tag wcs-tag-ip" title="{{localize 'WITCHER.Sheet.Character.Tooltip.ImprovementPointsEditOnTheSkillsTab'}}"><i class="fa-solid fa-clipboard-list"></i>IP<span class="num">{{system.improvementPoints}}</span></span>
+        <span class="wcs-tag wcs-tag-mip" title="Magic IP — edit on the Skills tab"><i class="fa-solid fa-wand-sparkles"></i>{{localize 'WITCHER.Sheet.Character.Text.Magic'}}<span class="num">{{system.magic.magicImprovementPoints}}</span></span>
 
         <span class="wcs-actions">
-          <a class="wcs-btn" data-action="rollInitiative" title="Initiative — 1d10 + REF (Core p.151)"><i class="fa-solid fa-user-ninja"></i></a>
-          <a class="wcs-btn" data-action="takeBreath" title="Take a Breath — STA += REC (Core p.152)"><i class="fa-solid fa-bolt"></i></a>
-          <a class="wcs-btn wcs-btn-heal" data-action="heal" title="Rest / Heal"><i class="fa-solid fa-briefcase-medical"></i></a>
-          <a class="wcs-btn wcs-btn-stun" data-action="rollStunSave" title="Stun save — 1d10 ≤ Stun (Core p.152)"><i class="fa-solid fa-face-dizzy"></i></a>
-          <a class="wcs-btn wcs-btn-death" data-action="rollDeathSave" title="Death save — 1d10 ≤ unmodified Stun (−1 per prior success); a fail is death (Core p.162)"><i class="fa-solid fa-skull"></i></a>
-          <a class="wcs-btn wcs-btn-brawl" data-action="rollBrawl" title="Brawl — unarmed / grapple attack"><i class="fa-solid fa-hand-fist"></i></a>
-          <a class="wcs-btn wcs-btn-crit" data-action="rollCrit" title="Critical — roll a critical wound and apply it"><i class="fa-solid fa-heart-crack"></i></a>
-          <a class="wcs-btn wcs-btn-fumble" data-action="rollFumble" title="Fumble — roll on the fumble table"><i class="fa-solid fa-dice-one"></i></a>
+          <a class="wcs-btn" data-action="rollInitiative" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Initiative1d10RefCoreP151'}}"><i class="fa-solid fa-user-ninja"></i></a>
+          <a class="wcs-btn" data-action="takeBreath" title="{{localize 'WITCHER.Sheet.Character.Tooltip.TakeABreathStaRecCoreP152'}}"><i class="fa-solid fa-bolt"></i></a>
+          <a class="wcs-btn wcs-btn-heal" data-action="heal" title="{{localize 'WITCHER.Sheet.Character.Tooltip.RestHeal'}}"><i class="fa-solid fa-briefcase-medical"></i></a>
+          <a class="wcs-btn wcs-btn-stun" data-action="rollStunSave" title="{{localize 'WITCHER.Sheet.Character.Tooltip.StunSave1d10StunCoreP152'}}"><i class="fa-solid fa-face-dizzy"></i></a>
+          <a class="wcs-btn wcs-btn-death" data-action="rollDeathSave" title="{{localize 'WITCHER.Sheet.Character.Tooltip.DeathSave1d10UnmodifiedStun1PerPriorSucc'}}"><i class="fa-solid fa-skull"></i></a>
+          <a class="wcs-btn wcs-btn-brawl" data-action="rollBrawl" title="{{localize 'WITCHER.Sheet.Character.Tooltip.BrawlUnarmedGrappleAttack'}}"><i class="fa-solid fa-hand-fist"></i></a>
+          <a class="wcs-btn wcs-btn-crit" data-action="rollCrit" title="{{localize 'WITCHER.Sheet.Character.Tooltip.CriticalRollACriticalWoundAndApplyIt'}}"><i class="fa-solid fa-heart-crack"></i></a>
+          <a class="wcs-btn wcs-btn-fumble" data-action="rollFumble" title="{{localize 'WITCHER.Sheet.Character.Tooltip.FumbleRollOnTheFumbleTable'}}"><i class="fa-solid fa-dice-one"></i></a>
         </span>
       </div>
 
@@ -85,7 +85,7 @@
       <div class="wcs-vitals-col">
       <div class="wcs-vitals">
         <div class="wcs-vital" data-kind="hp" style="--pct: {{hpBar.fillPct}}%">
-          <span class="wcs-vital-lbl"><i class="fa-solid fa-heart"></i>Vitality</span>
+          <span class="wcs-vital-lbl"><i class="fa-solid fa-heart"></i>{{localize 'WITCHER.Sheet.Character.Text.Vitality'}}</span>
           {{#if hpBar.hasTemp}}
             <input class="wcs-vital-cur" type="number" data-hp-total value="{{hpBar.curDisplay}}"
                    title="Includes {{hpBar.temp}} temp HP — lower to deal damage (drains temp first), raise to heal real HP" />
@@ -94,17 +94,17 @@
           {{/if}}
           <span class="wcs-vital-bar"><span class="fill"></span></span>
           <span class="wcs-vital-max">/ {{hpBar.maxDisplay}}</span>
-          {{#if hpBar.hasTemp}}<span class="wcs-vital-bonus" title="Temp HP">+{{hpBar.temp}}</span>{{else}}<span></span>{{/if}}
+          {{#if hpBar.hasTemp}}<span class="wcs-vital-bonus" title="{{localize 'WITCHER.Sheet.Character.Tooltip.TempHp'}}">+{{hpBar.temp}}</span>{{else}}<span></span>{{/if}}
         </div>
         <div class="wcs-vital" data-kind="sta" style="--pct: {{vitals.sta.pct}}%">
-          <span class="wcs-vital-lbl"><i class="fa-solid fa-wind"></i>Stamina</span>
+          <span class="wcs-vital-lbl"><i class="fa-solid fa-wind"></i>{{localize 'WITCHER.Sheet.Character.Text.Stamina'}}</span>
           <input class="wcs-vital-cur" type="number" name="system.derivedStats.sta.value" value="{{vitals.sta.value}}" />
           <span class="wcs-vital-bar"><span class="fill"></span></span>
           <span class="wcs-vital-max">/ {{vitals.sta.max}}</span>
           <span></span>
         </div>
         <div class="wcs-vital" data-kind="tox" style="--pct: {{vitals.tox.pct}}%">
-          <span class="wcs-vital-lbl"><i class="fa-solid fa-flask"></i>Toxicity</span>
+          <span class="wcs-vital-lbl"><i class="fa-solid fa-flask"></i>{{localize 'WITCHER.Sheet.Character.Text.Toxicity'}}</span>
           <input class="wcs-vital-cur" type="number" name="system.stats.toxicity.value" value="{{vitals.tox.value}}" min="0" />
           <span class="wcs-vital-bar"><span class="fill"></span></span>
           <span class="wcs-vital-max">/ {{vitals.tox.max}}</span>
@@ -138,32 +138,47 @@
         <span class="wcs-track" style="white-space:nowrap;">
           <i class="fa-solid fa-burst"></i>Adrenaline
           <a data-action="adjustValue" data-target="system.adrenaline.value" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
-          <input type="number" name="system.adrenaline.value" value="{{source.adrenaline.value}}" min="0" title="Max BODY per RAW p.153" />
+          <input type="number" name="system.adrenaline.value" value="{{source.adrenaline.value}}" min="0" title="{{localize 'WITCHER.Sheet.Character.Tooltip.MaxBodyPerRawP153'}}" />
           <a data-action="adjustValue" data-target="system.adrenaline.value" data-delta="1" data-min="0" data-max="{{bodyValue}}" title="+1"><i class="fa-solid fa-plus"></i></a>
         </span>
         {{/if}}
         <span class="wcs-track" style="white-space:nowrap;">
           <i class="fa-solid fa-clover"></i>Luck
-          <input type="number" name="system.stats.luck.value" value="{{source.stats.luck.value}}" min="0" title="Spendable LUCK pool" />
+          <input type="number" name="system.stats.luck.value" value="{{source.stats.luck.value}}" min="0" title="{{localize 'WITCHER.Sheet.Character.Tooltip.SpendableLuckPool'}}" />
           <span class="wcs-track-cap">/ {{system.stats.luck.max}}</span>
-          <a data-action="refillLuck" title="Refill pool to LUCK (session start)"><i class="fa-solid fa-rotate-left"></i></a>
+          <a data-action="refillLuck" title="{{localize 'WITCHER.Sheet.Character.Tooltip.RefillPoolToLuckSessionStart'}}"><i class="fa-solid fa-rotate-left"></i></a>
         </span>
+        {{!-- Vigor stepper: the input shows the SOURCE value (= points
+              actually invested), so a player with 0 invested and a +5
+              AE perk reads "0 → 5" rather than seeing 5 and thinking
+              they invested it. The minus button is visually disabled
+              when source is at floor (can't subtract from 0 because
+              the AE bonus isn't yours to spend). Tooltip on the prepared
+              cap explains where the bump comes from. --}}
         <span class="wcs-track" style="white-space:nowrap;">
           <i class="fa-solid fa-circle-notch"></i>Vigor
-          <a data-action="adjustValue" data-target="system.derivedStats.vigor" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
-          <input type="number" name="system.derivedStats.vigor" value="{{system.derivedStats.vigor}}" min="0" title="Static ceiling — profession / skill tree (Core p.38)" />
+          <a data-action="adjustValue" data-target="system.derivedStats.vigor" data-delta="-1" data-min="0"
+             class="{{#if (lte source.derivedStats.vigor 0)}}is-disabled{{/if}}" title="−1"><i class="fa-solid fa-minus"></i></a>
+          <input type="number" name="system.derivedStats.vigor" value="{{source.derivedStats.vigor}}" min="0" title="{{localize 'WITCHER.Sheet.Character.Tooltip.InvestedPointsCoreP38AeBonusesAreAddedOn'}}" />
+          {{#unless (eq source.derivedStats.vigor system.derivedStats.vigor)}}
+            <span class="wcs-track-cap" title="{{localize 'WITCHER.Sheet.Character.Tooltip.AfterActiveEffectsPerkBonuses'}}">→ {{system.derivedStats.vigor}}</span>
+          {{/unless}}
           <a data-action="adjustValue" data-target="system.derivedStats.vigor" data-delta="1" data-min="0" title="+1"><i class="fa-solid fa-plus"></i></a>
         </span>
         <span class="wcs-track" style="white-space:nowrap;">
           <i class="fa-solid fa-shield"></i>Shield
-          <a data-action="adjustValue" data-target="system.derivedStats.shield" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
-          <input type="number" name="system.derivedStats.shield" value="{{system.derivedStats.shield}}" min="0" title="Static counter — Quen, armor, etc." />
+          <a data-action="adjustValue" data-target="system.derivedStats.shield" data-delta="-1" data-min="0"
+             class="{{#if (lte source.derivedStats.shield 0)}}is-disabled{{/if}}" title="−1"><i class="fa-solid fa-minus"></i></a>
+          <input type="number" name="system.derivedStats.shield" value="{{source.derivedStats.shield}}" min="0" title="{{localize 'WITCHER.Sheet.Character.Tooltip.StoredShieldAeBonusesQuenArmorEtcAreAdde'}}" />
+          {{#unless (eq source.derivedStats.shield system.derivedStats.shield)}}
+            <span class="wcs-track-cap" title="{{localize 'WITCHER.Sheet.Character.Tooltip.AfterActiveEffectsQuenArmorEtc'}}">→ {{system.derivedStats.shield}}</span>
+          {{/unless}}
           <a data-action="adjustValue" data-target="system.derivedStats.shield" data-delta="1" data-min="0" title="+1"><i class="fa-solid fa-plus"></i></a>
         </span>
         <span class="wcs-track" style="white-space:nowrap;">
           <i class="fa-solid fa-magnifying-glass"></i>Focus
           <a data-action="adjustValue" data-target="system.derivedStats.focus.value" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
-          <input type="number" name="system.derivedStats.focus.value" value="{{source.derivedStats.focus.value}}" min="0" max="{{system.derivedStats.focus.max}}" title="Investigation pool — A Witcher's Journal p.145" />
+          <input type="number" name="system.derivedStats.focus.value" value="{{source.derivedStats.focus.value}}" min="0" max="{{system.derivedStats.focus.max}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.InvestigationPoolAWitcherSJournalP145'}}" />
           <span class="wcs-track-cap">/ {{system.derivedStats.focus.max}}</span>
           <a data-action="adjustValue" data-target="system.derivedStats.focus.value" data-delta="1" data-min="0" data-max="{{system.derivedStats.focus.max}}" title="+1"><i class="fa-solid fa-plus"></i></a>
         </span>
@@ -175,6 +190,12 @@
                    {{#if satiety.isGM}}name="system.satiety"{{else}}readonly{{/if}}
                    value="{{satiety.value}}" min="-100" max="125" />
             <span class="wcs-track-cap">· {{satiety.tierLabel}}</span>
+            {{#if satiety.isGM}}
+              <label class="wcs-hunger-toggle" title="If off, the hourly hunger sweep skips this actor. Off by default; on when a player owns the actor.">
+                <input type="checkbox" data-action="toggleHunger" {{#if satiety.hungerActive}}checked{{/if}} />
+                Hunger
+              </label>
+            {{/if}}
           </span>
         {{/if}}
         {{#if (homebrew "stress")}}
@@ -189,7 +210,7 @@
 
   {{!-- Total Stats — right-anchored tally sitting atop the statblock. --}}
   <div class="wcs-total-row">
-    <span class="wcs-track wcs-track-total" title="Sum of the nine statistics including LUCK (RAW total stats)">
+    <span class="wcs-track wcs-track-total" title="{{localize 'WITCHER.Sheet.Character.Tooltip.SumOfTheNineStatisticsIncludingLuckRawTo'}}">
       <i class="fa-solid fa-dice-d20"></i>Total Stats
       <span class="wcs-track-val">{{totalStats}}</span>
     </span>
@@ -220,13 +241,13 @@
        Persists via actor flag (changeTab action) so submitOnChange
        re-renders keep the active tab. --}}
   <nav class="wcs-tabs">
-    <button type="button" class="wcs-tab{{#if (eq activeTab "combat")    }} is-active{{/if}}" data-action="changeTab" data-tab="combat"><i class="fa-solid fa-shield-halved"></i>Combat</button>
-    <button type="button" class="wcs-tab{{#if (eq activeTab "skills")    }} is-active{{/if}}" data-action="changeTab" data-tab="skills"><i class="fa-solid fa-chart-simple"></i>Skills</button>
-    <button type="button" class="wcs-tab{{#if (eq activeTab "magic")     }} is-active{{/if}}" data-action="changeTab" data-tab="magic"><i class="fa-solid fa-wand-sparkles"></i>Magic</button>
-    <button type="button" class="wcs-tab{{#if (eq activeTab "inventory") }} is-active{{/if}}" data-action="changeTab" data-tab="inventory"><i class="fa-solid fa-sack-dollar"></i>Inventory</button>
-    <button type="button" class="wcs-tab{{#if (eq activeTab "profession")}} is-active{{/if}}" data-action="changeTab" data-tab="profession"><i class="fa-solid fa-shield"></i>Profession</button>
-    <button type="button" class="wcs-tab{{#if (eq activeTab "background")}} is-active{{/if}}" data-action="changeTab" data-tab="background"><i class="fa-solid fa-book-bookmark"></i>Background</button>
-    <button type="button" class="wcs-tab{{#if (eq activeTab "effects")   }} is-active{{/if}}" data-action="changeTab" data-tab="effects"><i class="fa-solid fa-sparkles"></i>Effects</button>
+    <button type="button" class="wcs-tab{{#if (eq activeTab "combat")    }} is-active{{/if}}" data-action="changeTab" data-tab="combat"><i class="fa-solid fa-shield-halved"></i>{{localize 'WITCHER.Sheet.Character.Text.Combat'}}</button>
+    <button type="button" class="wcs-tab{{#if (eq activeTab "skills")    }} is-active{{/if}}" data-action="changeTab" data-tab="skills"><i class="fa-solid fa-chart-simple"></i>{{localize 'WITCHER.Sheet.Character.Text.Skills'}}</button>
+    <button type="button" class="wcs-tab{{#if (eq activeTab "magic")     }} is-active{{/if}}" data-action="changeTab" data-tab="magic"><i class="fa-solid fa-wand-sparkles"></i>{{localize 'WITCHER.Sheet.Character.Text.Magic'}}</button>
+    <button type="button" class="wcs-tab{{#if (eq activeTab "inventory") }} is-active{{/if}}" data-action="changeTab" data-tab="inventory"><i class="fa-solid fa-sack-dollar"></i>{{localize 'WITCHER.Sheet.Character.Text.Inventory'}}</button>
+    <button type="button" class="wcs-tab{{#if (eq activeTab "profession")}} is-active{{/if}}" data-action="changeTab" data-tab="profession"><i class="fa-solid fa-shield"></i>{{localize 'WITCHER.Sheet.Character.Text.Profession'}}</button>
+    <button type="button" class="wcs-tab{{#if (eq activeTab "background")}} is-active{{/if}}" data-action="changeTab" data-tab="background"><i class="fa-solid fa-book-bookmark"></i>{{localize 'WITCHER.Sheet.Character.Text.Background'}}</button>
+    <button type="button" class="wcs-tab{{#if (eq activeTab "effects")   }} is-active{{/if}}" data-action="changeTab" data-tab="effects"><i class="fa-solid fa-sparkles"></i>{{localize 'WITCHER.Sheet.Character.Text.Effects'}}</button>
   </nav>
 
   {{!-- ── PANELS ──────────────────────────────────────────────────── --}}
@@ -236,21 +257,21 @@
     <div class="wcs-panel" data-tab="combat">
 
       {{#if system.healthState.dying}}
-        <div class="wcs-banner is-dying">Death State — all stats ×⅓ until stabilized (Core p.162)</div>
+        <div class="wcs-banner is-dying">{{localize 'WITCHER.Sheet.Character.Text.DeathStateAllStatsUntilStabilizedCoreP16'}}</div>
       {{else if system.healthState.wounded}}
         <div class="wcs-banner is-wounded">Wounded — REF / DEX / INT / WILL halved (HP below {{system.healthState.woundThreshold}}; Core p.156)</div>
       {{/if}}
 
       {{#if hasEquipableItems}}
-        <div class="wcs-section-label">Weapons &amp; Equipped</div>
+        <div class="wcs-section-label">{{localize 'WITCHER.Sheet.Character.Text.WeaponsEquipped'}}</div>
         <div class="wcs-list">
           {{#each equipableItems}}
             <div class="wcs-item-row {{#if this.equipped}}is-equipped{{/if}}" data-item-id="{{this.id}}">
               <img class="wcs-item-img" src="{{this.img}}" alt="" />
               <button type="button" class="wcs-item-name" data-action="rollWeapon" data-item-id="{{this.id}}"
-                      title="Attack — 1d10 + stat + skill + WA">{{this.name}}</button>
+                      title="{{localize 'WITCHER.Sheet.Character.Tooltip.Attack1d10StatSkillWa'}}">{{this.name}}</button>
               {{#if this.oil}}<span class="wcs-oil" title="{{this.oilTip}}"><i class="fa-solid fa-droplet"></i>{{this.oilLabel}}</span>{{/if}}
-              {{#if this.isQuick}}<span class="wcs-quick-chip" title="Quick item — can occupy the off-hand / quick slot"><i class="fa-solid fa-bolt"></i>Quick</span>{{/if}}
+              {{#if this.isQuick}}<span class="wcs-quick-chip" title="Quick item — can occupy the off-hand / quick slot"><i class="fa-solid fa-bolt"></i>{{localize 'WITCHER.Sheet.Character.Text.Quick'}}</span>{{/if}}
               <span class="wcs-item-stats">
                 {{#if this.damage}}<span class="wcs-stat-chip"><span class="lbl">DMG</span>{{this.damage}}</span>{{/if}}
                 {{#if this.range}}<span class="wcs-stat-chip"><span class="lbl">RNG</span>{{this.range}}m</span>{{/if}}
@@ -261,9 +282,9 @@
                 {{#if this.canSelectHand}}
                   <select class="wcs-hand-select" data-hand-select data-item-id="{{this.id}}"
                           title="Choose which hand holds {{this.name}}">
-                    <option value="right" {{#if (eq this.slot "right")}}selected{{/if}}>Right</option>
-                    <option value="left"  {{#if (eq this.slot "left")}}selected{{/if}}>Left</option>
-                    {{#if this.quickEligible}}<option value="quick" {{#if (eq this.slot "quick")}}selected{{/if}}>Quick</option>{{/if}}
+                    <option value="right" {{#if (eq this.slot "right")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Character.Text.Right'}}</option>
+                    <option value="left"  {{#if (eq this.slot "left")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Character.Text.Left'}}</option>
+                    {{#if this.quickEligible}}<option value="quick" {{#if (eq this.slot "quick")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Character.Text.Quick'}}</option>{{/if}}
                   </select>
                 {{else}}
                   <span class="wcs-hand-indicator" title="Held in {{this.slotLabel}}"><i class="fa-solid fa-hand-fist"></i><span>{{this.slotShort}}</span></span>
@@ -271,16 +292,16 @@
                 <span class="wcs-weapon-actions">
                   {{#if this.canSheathe}}
                     <button type="button" class="wcs-wpn-btn" data-action="sheatheWeapon" data-item-id="{{this.id}}"
-                            title="Sheathe into a container (costs an action in combat)"><i class="fa-solid fa-arrow-down-to-bracket"></i></button>
+                            title="{{localize 'WITCHER.Sheet.Character.Tooltip.SheatheIntoAContainerCostsAnActionInComb'}}"><i class="fa-solid fa-arrow-down-to-bracket"></i></button>
                   {{/if}}
                   <button type="button" class="wcs-wpn-btn" data-action="unequipWeapon" data-item-id="{{this.id}}"
-                          title="Unequip — leave loose in inventory (costs an action in combat)"><i class="fa-solid fa-hand"></i></button>
+                          title="{{localize 'WITCHER.Sheet.Character.Tooltip.UnequipLeaveLooseInInventoryCostsAnActio'}}"><i class="fa-solid fa-hand"></i></button>
                   <button type="button" class="wcs-wpn-btn" data-action="dropWeapon" data-item-id="{{this.id}}"
-                          title="Drop to the world — any player can pick it up (free)"><i class="fa-solid fa-hand-holding"></i></button>
+                          title="{{localize 'WITCHER.Sheet.Character.Tooltip.DropToTheWorldAnyPlayerCanPickItUpFree'}}"><i class="fa-solid fa-hand-holding"></i></button>
                 </span>
               {{else}}
                 <button type="button" class="wcs-equip-toggle" data-action="toggleEquip" data-item-id="{{this.id}}"
-                        title="Equip — picks the hand automatically"><i class="fa-solid fa-hand"></i><span>Equip</span></button>
+                        title="Equip — picks the hand automatically"><i class="fa-solid fa-hand"></i><span>{{localize 'WITCHER.Sheet.Character.Text.Equip'}}</span></button>
               {{/if}}
             </div>
           {{/each}}
@@ -293,21 +314,21 @@
           {{#each armorList}}
             <div class="wcs-item-row{{#if this.equipped}} is-equipped{{/if}}" data-item-id="{{this.id}}">
               <img class="wcs-item-img" src="{{this.img}}" alt="" />
-              <button type="button" class="wcs-item-name" data-action="editItem" title="Open armor sheet">{{this.name}}</button>
+              <button type="button" class="wcs-item-name" data-action="editItem" title="{{localize 'WITCHER.Sheet.Character.Tooltip.OpenArmorSheet'}}">{{this.name}}</button>
               <span class="wcs-armor-type">{{this.typeLabel}}{{#if this.ev}} · EV −{{this.ev}}{{/if}}</span>
               <span class="wcs-item-stats">
                 {{#each this.coverage}}<span class="wcs-stat-chip"><span class="lbl">{{this.label}}</span>{{this.sp}}</span>{{/each}}
                 {{#each this.resists}}<span class="wcs-resist-chip" title="Resists {{this}} damage">{{this}}</span>{{/each}}
               </span>
               <button type="button" class="wcs-equip-toggle{{#if this.equipped}} is-on{{/if}}" data-action="toggleEquip" data-item-id="{{this.id}}"
-                      title="{{#if this.equipped}}Worn — click to remove{{else}}Click to wear{{/if}}">{{#if this.equipped}}<i class="fa-solid fa-shield-halved"></i><span>Worn</span>{{else}}<i class="fa-solid fa-shield"></i><span>Wear</span>{{/if}}</button>
+                      title="{{#if this.equipped}}Worn — click to remove{{else}}Click to wear{{/if}}">{{#if this.equipped}}<i class="fa-solid fa-shield-halved"></i><span>{{localize 'WITCHER.Sheet.Character.Text.Worn'}}</span>{{else}}<i class="fa-solid fa-shield"></i><span>{{localize 'WITCHER.Sheet.Character.Text.Wear'}}</span>{{/if}}</button>
             </div>
           {{/each}}
         </div>
       {{/if}}
 
       {{#if hasArmor}}
-        <div class="wcs-section-label">Stopping Power by Location</div>
+        <div class="wcs-section-label">{{localize 'WITCHER.Sheet.Character.Text.StoppingPowerByLocation'}}</div>
         <div class="wcs-armor-grid">
           {{#each armorByLocation}}
             <div class="wcs-armor-cell">
@@ -320,22 +341,22 @@
         </div>
       {{/if}}
 
-      <div class="wcs-section-label">Critical Wounds</div>
+      <div class="wcs-section-label">{{localize 'WITCHER.Sheet.Character.Text.CriticalWounds'}}</div>
       {{#if hasCriticalWounds}}
         <div class="wcs-crit-list">
           {{#each criticalWounds}}
             <div class="wcs-crit-row wcs-crit-{{this.system.criticalLevel}}" data-item-id="{{this.id}}">
               <div class="wcs-crit-head">
-                <a class="wcs-crit-name" data-action="editItem" data-item-id="{{this.id}}" title="View">{{this.name}}</a>
+                <a class="wcs-crit-name" data-action="editItem" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.View'}}">{{this.name}}</a>
                 <span class="wcs-crit-level">{{this.system.criticalLevel}}</span>
                 <span class="wcs-crit-loc">{{this.system.location}}</span>
                 <span class="wcs-crit-state">{{this.system.state}}</span>
-                {{#if (eq this.system.state 'treated')}}<span class="wcs-crit-progress" title="Days healed / total">{{this.system.healDaysElapsed}}/{{this.system.healingTime}}</span>{{/if}}
+                {{#if (eq this.system.state 'treated')}}<span class="wcs-crit-progress" title="{{localize 'WITCHER.Sheet.Character.Tooltip.DaysHealedTotal'}}">{{this.system.healDaysElapsed}}/{{this.system.healingTime}}</span>{{/if}}
                 <span class="wcs-crit-actions">
-                  <button type="button" data-action="stabilizeWound" data-item-id="{{this.id}}" class="wcs-crit-btn {{#if (eq this.system.state 'unstabilized')}}is-primary{{/if}}" {{#unless (eq this.system.state 'unstabilized')}}disabled{{/unless}} title="Stabilize — First Aid roll (DC by severity)">Stab.</button>
-                  <button type="button" data-action="treatWound" data-item-id="{{this.id}}" class="wcs-crit-btn {{#if (eq this.system.state 'stabilized')}}is-primary{{/if}}" {{#if (eq this.system.state 'treated')}}disabled{{/if}} title="Treat — doctor's Healing Hands; starts the healing clock">Treat</button>
-                  <button type="button" data-action="resolveWound" data-item-id="{{this.id}}" class="wcs-crit-btn" title="Resolve — spawns follow-up + removes wound">Resolve</button>
-                  <a data-action="deleteItem" data-item-id="{{this.id}}" title="Remove"><i class="fa-solid fa-trash"></i></a>
+                  <button type="button" data-action="stabilizeWound" data-item-id="{{this.id}}" class="wcs-crit-btn {{#if (eq this.system.state 'unstabilized')}}is-primary{{/if}}" {{#unless (eq this.system.state 'unstabilized')}}disabled{{/unless}} title="Stabilize — First Aid roll (DC by severity)">{{localize 'WITCHER.Sheet.Character.Text.Stab'}}</button>
+                  <button type="button" data-action="treatWound" data-item-id="{{this.id}}" class="wcs-crit-btn {{#if (eq this.system.state 'stabilized')}}is-primary{{/if}}" {{#if (eq this.system.state 'treated')}}disabled{{/if}} title="Treat — doctor's Healing Hands; starts the healing clock">{{localize 'WITCHER.Sheet.Character.Text.Treat'}}</button>
+                  <button type="button" data-action="resolveWound" data-item-id="{{this.id}}" class="wcs-crit-btn" title="Resolve — spawns follow-up + removes wound">{{localize 'WITCHER.Sheet.Character.Text.Resolve'}}</button>
+                  <a data-action="deleteItem" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Remove'}}"><i class="fa-solid fa-trash"></i></a>
                 </span>
               </div>
               {{#if this.system.activeEffect}}<div class="wcs-crit-desc">{{{this.system.activeEffect}}}</div>{{/if}}
@@ -343,7 +364,7 @@
           {{/each}}
         </div>
       {{else}}
-        <p class="wcs-empty">No active critical wounds. Drop a wound from the <em>Critical Wounds</em> compendium to track healing.</p>
+        <p class="wcs-empty">{{localize 'WITCHER.Sheet.Character.Text.NoActiveCriticalWoundsDropAWoundFromThe'}} <em>{{localize 'WITCHER.Sheet.Character.Text.CriticalWounds'}}</em> compendium to track healing.</p>
       {{/if}}
     </div>
 
@@ -358,16 +379,33 @@
                 <button type="button" class="wcs-skill-cat wcs-skill-cat-{{#if this.category}}{{this.category}}{{else}}none{{/if}}"
                         data-action="cycleSkillCategory" data-stat="{{@../key}}" data-skill="{{@key}}"
                         title="{{#if (eq this.category 'profession')}}Profession skill — granted by your profession (locked){{else if (eq this.category 'pickup')}}Pickup skill — click to clear{{else}}Click to mark as a Pickup skill{{/if}}">{{#if (eq this.category 'profession')}}P{{else if (eq this.category 'pickup')}}Pu{{/if}}</button>
+                {{!--
+                  Skill rank input — shows EFFECTIVE rank (source + AE
+                  contribution to system.skills.@stat.@skill.value). Bound
+                  via data-* attributes; a change handler in
+                  module/sheets/actor/character.mjs writes back the
+                  source value (effective - aeAddend).
+
+                  No `name=` binding — Foundry would write EFFECTIVE
+                  straight to source on form submit, then the AE would
+                  re-add on top for a runaway loop. min / max enforce
+                  the RAW cap: floor at aeAddend (can't reduce below
+                  what the AE grants), ceiling at 10.
+                --}}
                 <input class="wcs-skill-rank" type="number"
-                       name="system.skills.{{@../key}}.{{@key}}.value"
-                       value="{{lookup (lookup (lookup ../../source.skills @../key) @key) 'value'}}"
-                       min="0" max="10" title="Ranks (0-10)" />
+                       data-skill-input="1"
+                       data-stat="{{@../key}}" data-skill="{{@key}}"
+                       data-ae-addend="{{this.aeAddend}}"
+                       value="{{this.value}}"
+                       min="{{this.aeAddend}}" max="10"
+                       title="{{localize 'WITCHER.Sheet.Character.Tooltip.Ranks010'}}" />
                 <button type="button" class="wcs-skill-name" data-action="rollSkill" data-skill="{{@key}}"
-                        {{#if this.isDifficult}}title="Difficult skill — ×2 IP per rank (Core p.49)"{{/if}}>
+                        {{#if this.isDifficult}}title="{{localize 'WITCHER.Sheet.Character.Tooltip.DifficultSkill2IpPerRankCoreP49'}}"{{/if}}>
                   {{localize (concat "WITCHER.skills." @key ".label")}}
                 </button>
-                <output class="wcs-skill-mod" title="Modifier from effects + items">{{this.modifier}}</output>
-                <output class="wcs-skill-total" title="Total: stat + rank + modifier">{{this.total}}</output>
+                <output class="wcs-skill-mod" title="{{localize 'WITCHER.Sheet.Character.Tooltip.ModifierFromEffectsItems'}}">{{this.modifier}}</output>
+                {{#if this.evPenalty}}<output class="wcs-skill-ev" title="{{localize 'WITCHER.Sheet.Character.Tooltip.ArmorEvPenaltyEquipmentOverhaulHalfEvOnD'}}">−{{this.evPenalty}} EV</output>{{/if}}
+                <output class="wcs-skill-total" title="{{localize 'WITCHER.Sheet.Character.Tooltip.TotalStatRankModifierEvPenalty'}}">{{this.total}}</output>
               </div>
             {{/each}}
           </div>
@@ -376,21 +414,21 @@
 
       <div class="wcs-ip-panel">
         <div class="wcs-ip-head">
-          <span class="title">Improvement Points</span>
+          <span class="title">{{localize 'WITCHER.Sheet.Character.Text.ImprovementPoints'}}</span>
           {{#if ipLogEntries.length}}
             <button type="button" class="wcs-ip-clear" data-action="clearIpLog"
-                    title="Clear the IP spending log">
+                    title="{{localize 'WITCHER.Sheet.Character.Tooltip.ClearTheIpSpendingLog'}}">
               <i class="fa-solid fa-trash-can"></i> Clear Log
             </button>
           {{/if}}
         </div>
         <div class="wcs-ip-row">
-          <label>General IP</label>
-          <input type="number" name="system.improvementPoints" value="{{system.improvementPoints}}" min="0" title="General advancement (Core p.59)" />
+          <label>{{localize 'WITCHER.Sheet.Character.Text.GeneralIp'}}</label>
+          <input type="number" name="system.improvementPoints" value="{{system.improvementPoints}}" min="0" title="{{localize 'WITCHER.Sheet.Character.Tooltip.GeneralAdvancementCoreP59'}}" />
         </div>
         <div class="wcs-ip-row">
-          <label>Magic IP</label>
-          <input type="number" name="system.magic.magicImprovementPoints" value="{{system.magic.magicImprovementPoints}}" min="0" title="Magic-school advancement (Core p.59)" />
+          <label>{{localize 'WITCHER.Sheet.Character.Text.MagicIp'}}</label>
+          <input type="number" name="system.magic.magicImprovementPoints" value="{{system.magic.magicImprovementPoints}}" min="0" title="{{localize 'WITCHER.Sheet.Character.Tooltip.MagicSchoolAdvancementCoreP59'}}" />
         </div>
         {{#if ipLogEntries.length}}
           <ul class="wcs-ip-log">
@@ -404,12 +442,12 @@
 
     {{!-- ============ MAGIC ============ --}}
     <div class="wcs-panel" data-tab="magic">
-      <div class="wcs-section-label">Magical Foci</div>
+      <div class="wcs-section-label">{{localize 'WITCHER.Sheet.Character.Text.MagicalFoci'}}</div>
       <div class="wcs-foci-grid">
-        <label class="wcs-focus"><span>Focus 1</span><input type="text" name="system.focus1" value="{{system.focus1}}" /></label>
-        <label class="wcs-focus"><span>Focus 2</span><input type="text" name="system.focus2" value="{{system.focus2}}" /></label>
-        <label class="wcs-focus"><span>Focus 3</span><input type="text" name="system.focus3" value="{{system.focus3}}" /></label>
-        <label class="wcs-focus"><span>Focus 4</span><input type="text" name="system.focus4" value="{{system.focus4}}" /></label>
+        <label class="wcs-focus"><span>{{localize 'WITCHER.Sheet.Character.Text.Focus1'}}</span><input type="text" name="system.focus1" value="{{system.focus1}}" /></label>
+        <label class="wcs-focus"><span>{{localize 'WITCHER.Sheet.Character.Text.Focus2'}}</span><input type="text" name="system.focus2" value="{{system.focus2}}" /></label>
+        <label class="wcs-focus"><span>{{localize 'WITCHER.Sheet.Character.Text.Focus3'}}</span><input type="text" name="system.focus3" value="{{system.focus3}}" /></label>
+        <label class="wcs-focus"><span>{{localize 'WITCHER.Sheet.Character.Text.Focus4'}}</span><input type="text" name="system.focus4" value="{{system.focus4}}" /></label>
       </div>
 
       {{#if hasMagic}}
@@ -423,8 +461,8 @@
                     <img class="wcs-spell-icon" src="{{this.img}}" alt="" />
                     <button type="button" class="wcs-spell-name" data-action="castItem" data-item-id="{{this.id}}">{{this.name}}</button>
                     <span class="wcs-spell-meta">{{this.meta}}</span>
-                    <a data-action="editItem" data-item-id="{{this.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
-                    <a data-action="deleteItem" data-item-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                    <a data-action="editItem" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.View'}}"><i class="fa-solid fa-eye"></i></a>
+                    <a data-action="deleteItem" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
                   </div>
                 {{/each}}
               </div>
@@ -432,20 +470,20 @@
           {{/if}}
         {{/each}}
       {{else}}
-        <p class="wcs-empty">No spells, signs, invocations, hexes, or rituals yet. Drag from a compendium.</p>
+        <p class="wcs-empty">{{localize 'WITCHER.Sheet.Character.Text.NoSpellsSignsInvocationsHexesOrRitualsYe'}}</p>
       {{/if}}
     </div>
 
     {{!-- ============ INVENTORY ============ --}}
     <div class="wcs-panel" data-tab="inventory">
-      <div class="wcs-section-label">Currency</div>
+      <div class="wcs-section-label">{{localize 'WITCHER.Sheet.Character.Text.Currency'}}</div>
       <div class="wcs-currency">
-        <div class="wcs-coin"><span class="name">Bizant</span><input type="number" name="system.currency.bizant" value="{{system.currency.bizant}}" min="0" /></div>
-        <div class="wcs-coin"><span class="name">Ducat</span><input type="number" name="system.currency.ducat" value="{{system.currency.ducat}}" min="0" /></div>
-        <div class="wcs-coin"><span class="name">Lintar</span><input type="number" name="system.currency.lintar" value="{{system.currency.lintar}}" min="0" /></div>
-        <div class="wcs-coin"><span class="name">Floren</span><input type="number" name="system.currency.floren" value="{{system.currency.floren}}" min="0" /></div>
-        <div class="wcs-coin"><span class="name">Crown</span><input type="number" name="system.currency.crown" value="{{system.currency.crown}}" min="0" /></div>
-        <div class="wcs-coin"><span class="name">Oren</span><input type="number" name="system.currency.oren" value="{{system.currency.oren}}" min="0" /></div>
+        <div class="wcs-coin"><span class="name">{{localize 'WITCHER.Sheet.Character.Text.Bizant'}}</span><input type="number" name="system.currency.bizant" value="{{system.currency.bizant}}" min="0" /></div>
+        <div class="wcs-coin"><span class="name">{{localize 'WITCHER.Sheet.Character.Text.Ducat'}}</span><input type="number" name="system.currency.ducat" value="{{system.currency.ducat}}" min="0" /></div>
+        <div class="wcs-coin"><span class="name">{{localize 'WITCHER.Sheet.Character.Text.Lintar'}}</span><input type="number" name="system.currency.lintar" value="{{system.currency.lintar}}" min="0" /></div>
+        <div class="wcs-coin"><span class="name">{{localize 'WITCHER.Sheet.Character.Text.Floren'}}</span><input type="number" name="system.currency.floren" value="{{system.currency.floren}}" min="0" /></div>
+        <div class="wcs-coin"><span class="name">{{localize 'WITCHER.Sheet.Character.Text.Crown'}}</span><input type="number" name="system.currency.crown" value="{{system.currency.crown}}" min="0" /></div>
+        <div class="wcs-coin"><span class="name">{{localize 'WITCHER.Sheet.Character.Text.Oren'}}</span><input type="number" name="system.currency.oren" value="{{system.currency.oren}}" min="0" /></div>
       </div>
 
       {{#each gearGroups}}
@@ -456,11 +494,11 @@
               <div class="wcs-item-row" data-item-id="{{this.id}}">
                 <img class="wcs-item-img" src="{{this.img}}" alt="" />
                 <span class="wcs-item-name">{{this.name}}</span>
-                {{#if this.isQuick}}<span class="wcs-quick-chip" title="Quick item — can occupy the off-hand / quick slot"><i class="fa-solid fa-bolt"></i>Quick</span>{{/if}}
+                {{#if this.isQuick}}<span class="wcs-quick-chip" title="Quick item — can occupy the off-hand / quick slot"><i class="fa-solid fa-bolt"></i>{{localize 'WITCHER.Sheet.Character.Text.Quick'}}</span>{{/if}}
                 <span class="wcs-item-meta">{{this.meta}}</span>
                 {{#if this.canEquip}}<a data-action="toggleEquip" data-item-id="{{this.id}}" title="{{this.equipLabel}} — picks the hand automatically"><i class="fa-solid {{this.equipIcon}}"></i></a>{{/if}}
-                <a data-action="editItem" data-item-id="{{this.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
-                <a data-action="deleteItem" data-item-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                <a data-action="editItem" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.View'}}"><i class="fa-solid fa-eye"></i></a>
+                <a data-action="deleteItem" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
               </div>
             {{/each}}
           </div>
@@ -469,16 +507,16 @@
 
       {{#if hasContainers}}
         <div class="wcs-inv-section wcs-containers">
-          <h3>Containers <span class="count">({{containers.length}})</span></h3>
+          <h3>{{localize 'WITCHER.Sheet.Character.Text.Containers'}} <span class="count">({{containers.length}})</span></h3>
           {{#each containers}}
             <div class="wcs-container{{#if this.collapsed}} is-collapsed{{/if}}">
               <div class="wcs-container-head wcs-item-row" data-item-id="{{this.id}}">
-                <a class="wcs-container-toggle" data-action="toggleContainer" data-container-id="{{this.id}}" title="Expand / collapse"><i class="fa-solid fa-chevron-down wcs-container-caret"></i></a>
+                <a class="wcs-container-toggle" data-action="toggleContainer" data-container-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.ExpandCollapse'}}"><i class="fa-solid fa-chevron-down wcs-container-caret"></i></a>
                 <img class="wcs-item-img" src="{{this.img}}" alt="" />
                 <span class="wcs-item-name">{{this.name}}</span>
-                {{#if this.capLabel}}<span class="wcs-cap{{#if this.over}} is-over{{/if}}" title="Stored / capacity"><i class="fa-solid fa-weight-hanging"></i>{{this.capLabel}}</span>{{/if}}
-                <a data-action="editItem" data-item-id="{{this.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
-                <a data-action="deleteItem" data-item-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                {{#if this.capLabel}}<span class="wcs-cap{{#if this.over}} is-over{{/if}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.StoredCapacity'}}"><i class="fa-solid fa-weight-hanging"></i>{{this.capLabel}}</span>{{/if}}
+                <a data-action="editItem" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.View'}}"><i class="fa-solid fa-eye"></i></a>
+                <a data-action="deleteItem" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
               </div>
               {{#if this.items.length}}
                 <div class="wcs-container-body">
@@ -486,16 +524,16 @@
                     <div class="wcs-item-row wcs-nested {{#if this.equipped}}is-equipped{{/if}}" data-item-id="{{this.id}}">
                       <img class="wcs-item-img" src="{{this.img}}" alt="" />
                       <span class="wcs-item-name">{{this.name}}</span>
-                      {{#if this.isQuick}}<span class="wcs-quick-chip" title="Quick item — can occupy the off-hand / quick slot"><i class="fa-solid fa-bolt"></i>Quick</span>{{/if}}
+                      {{#if this.isQuick}}<span class="wcs-quick-chip" title="Quick item — can occupy the off-hand / quick slot"><i class="fa-solid fa-bolt"></i>{{localize 'WITCHER.Sheet.Character.Text.Quick'}}</span>{{/if}}
                       <span class="wcs-item-meta">{{this.meta}}</span>
                       {{#if this.canEquip}}<a data-action="toggleEquip" data-item-id="{{this.id}}" title="{{this.equipLabel}} — picks the hand automatically"><i class="fa-solid {{this.equipIcon}}"></i></a>{{/if}}
-                      <a data-action="editItem" data-item-id="{{this.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
-                      <a data-action="deleteItem" data-item-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                      <a data-action="editItem" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.View'}}"><i class="fa-solid fa-eye"></i></a>
+                      <a data-action="deleteItem" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
                     </div>
                   {{/each}}
                 </div>
               {{else}}
-                <p class="wcs-empty wcs-container-empty">Empty — right-click an item and choose “Put in Container…”.</p>
+                <p class="wcs-empty wcs-container-empty">{{localize 'WITCHER.Sheet.Character.Text.EmptyRightClickAnItemAndChoosePutInConta'}}</p>
               {{/if}}
             </div>
           {{/each}}
@@ -505,17 +543,17 @@
 
     {{!-- ============ PROFESSION ============ --}}
     <div class="wcs-panel" data-tab="profession">
-      <div class="wcs-section-label">Profession</div>
+      <div class="wcs-section-label">{{localize 'WITCHER.Sheet.Character.Text.Profession'}}</div>
       {{#if professionItem}}
         <div class="wcs-feature-card">
           <img class="wcs-feature-img" src="{{professionItem.img}}" alt="" />
           <div class="wcs-feature-body">
             <h3 class="wcs-feature-name">{{professionItem.name}}</h3>
-            {{#if professionItem.system.definingSkill.skillName}}<div class="wcs-feature-meta"><strong>Defining Skill:</strong> {{professionItem.system.definingSkill.skillName}}</div>{{/if}}
+            {{#if professionItem.system.definingSkill.skillName}}<div class="wcs-feature-meta"><strong>{{localize 'WITCHER.Sheet.Character.Text.DefiningSkill'}}</strong> {{professionItem.system.definingSkill.skillName}}</div>{{/if}}
             {{#if professionItem.system.description}}<div class="wcs-feature-desc">{{{professionItem.system.description}}}</div>{{/if}}
           </div>
-          <a class="wcs-feature-edit" data-action="editItem" data-item-id="{{professionItem.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
-          <a class="wcs-feature-remove" data-action="deleteItem" data-item-id="{{professionItem.id}}" title="Remove"><i class="fa-solid fa-trash"></i></a>
+          <a class="wcs-feature-edit" data-action="editItem" data-item-id="{{professionItem.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.View'}}"><i class="fa-solid fa-eye"></i></a>
+          <a class="wcs-feature-remove" data-action="deleteItem" data-item-id="{{professionItem.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Remove'}}"><i class="fa-solid fa-trash"></i></a>
         </div>
 
         {{#if professionTree}}
@@ -523,18 +561,18 @@
             {{#with professionTree.defining}}
               <div class="wcs-prof-item is-defining{{#if this.expanded}} is-expanded{{/if}}">
                 <div class="wcs-prof-row">
-                  <span class="wcs-prof-tag">Defining</span>
-                  <button type="button" class="wcs-prof-head" data-action="toggleProfSkill" data-prof-key="{{this.path}}" title="Show description">
+                  <span class="wcs-prof-tag">{{localize 'WITCHER.Sheet.Character.Text.Defining'}}</span>
+                  <button type="button" class="wcs-prof-head" data-action="toggleProfSkill" data-prof-key="{{this.path}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.ShowDescription'}}">
                     <i class="fa-solid fa-chevron-{{#if this.expanded}}down{{else}}right{{/if}} wcs-prof-caret"></i>
                     <span class="wcs-prof-skill">{{this.skillName}}</span>
                   </button>
                   {{#if this.stat}}<span class="wcs-prof-stat">{{this.stat}}</span>{{/if}}
                   <input class="wcs-prof-rank" type="number" value="{{this.level}}" min="0" max="10"
-                         data-prof-path="{{this.path}}" title="Rank (0-10)" />
+                         data-prof-path="{{this.path}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Rank010'}}" />
                   <button type="button" class="wcs-prof-roll" data-action="rollProfSkill" data-prof-slot="{{this.slotPath}}"
                           title="Roll {{this.skillName}}"><i class="fa-solid fa-dice-d10"></i></button>
                 </div>
-                {{#if this.expanded}}<div class="wcs-prof-def">{{#if this.definition}}{{{this.definition}}}{{else}}<em>No description.</em>{{/if}}</div>{{/if}}
+                {{#if this.expanded}}<div class="wcs-prof-def">{{#if this.definition}}{{{this.definition}}}{{else}}<em>{{localize 'WITCHER.Sheet.Character.Text.NoDescription'}}</em>{{/if}}</div>{{/if}}
               </div>
             {{/with}}
             <div class="wcs-prof-paths">
@@ -544,17 +582,17 @@
                   {{#each this.skills}}
                     <div class="wcs-prof-item{{#if this.expanded}} is-expanded{{/if}}">
                       <div class="wcs-prof-row">
-                        <button type="button" class="wcs-prof-head" data-action="toggleProfSkill" data-prof-key="{{this.path}}" title="Show description">
+                        <button type="button" class="wcs-prof-head" data-action="toggleProfSkill" data-prof-key="{{this.path}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.ShowDescription'}}">
                           <i class="fa-solid fa-chevron-{{#if this.expanded}}down{{else}}right{{/if}} wcs-prof-caret"></i>
                           <span class="wcs-prof-skill">{{this.skillName}}</span>
                         </button>
                         {{#if this.stat}}<span class="wcs-prof-stat">{{this.stat}}</span>{{/if}}
                         <input class="wcs-prof-rank" type="number" value="{{this.level}}" min="0" max="10"
-                               data-prof-path="{{this.path}}" title="Rank (0-10)" />
+                               data-prof-path="{{this.path}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Rank010'}}" />
                         <button type="button" class="wcs-prof-roll" data-action="rollProfSkill" data-prof-slot="{{this.slotPath}}"
                                 title="Roll {{this.skillName}}"><i class="fa-solid fa-dice-d10"></i></button>
                       </div>
-                      {{#if this.expanded}}<div class="wcs-prof-def">{{#if this.definition}}{{{this.definition}}}{{else}}<em>No description.</em>{{/if}}</div>{{/if}}
+                      {{#if this.expanded}}<div class="wcs-prof-def">{{#if this.definition}}{{{this.definition}}}{{else}}<em>{{localize 'WITCHER.Sheet.Character.Text.NoDescription'}}</em>{{/if}}</div>{{/if}}
                     </div>
                   {{/each}}
                 </div>
@@ -563,10 +601,10 @@
           </div>
         {{/if}}
       {{else}}
-        <p class="wcs-empty">No profession assigned. Drag a Profession item onto the sheet.</p>
+        <p class="wcs-empty">{{localize 'WITCHER.Sheet.Character.Text.NoProfessionAssignedDragAProfessionItemO'}}</p>
       {{/if}}
 
-      <div class="wcs-section-label">Race &amp; Homeland</div>
+      <div class="wcs-section-label">{{localize 'WITCHER.Sheet.Character.Text.RaceHomeland'}}</div>
       {{#if raceItem}}
         <div class="wcs-feature-card">
           <img class="wcs-feature-img" src="{{raceItem.img}}" alt="" />
@@ -574,61 +612,61 @@
             <h3 class="wcs-feature-name">{{raceItem.name}}</h3>
             {{#if raceItem.system.description}}<div class="wcs-feature-desc">{{{raceItem.system.description}}}</div>{{/if}}
           </div>
-          <a class="wcs-feature-edit" data-action="editItem" data-item-id="{{raceItem.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
-          <a class="wcs-feature-remove" data-action="deleteItem" data-item-id="{{raceItem.id}}" title="Remove"><i class="fa-solid fa-trash"></i></a>
+          <a class="wcs-feature-edit" data-action="editItem" data-item-id="{{raceItem.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.View'}}"><i class="fa-solid fa-eye"></i></a>
+          <a class="wcs-feature-remove" data-action="deleteItem" data-item-id="{{raceItem.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Remove'}}"><i class="fa-solid fa-trash"></i></a>
         </div>
       {{else}}
-        <p class="wcs-empty">No race assigned. Drag a Race item onto the sheet.</p>
+        <p class="wcs-empty">{{localize 'WITCHER.Sheet.Character.Text.NoRaceAssignedDragARaceItemOntoTheSheet'}}</p>
       {{/if}}
       {{#if homelandItem}}
         <div class="wcs-feature-card">
           <img class="wcs-feature-img" src="{{homelandItem.img}}" alt="" />
           <div class="wcs-feature-body">
-            <h3 class="wcs-feature-name">{{homelandItem.name}} <span class="wcs-feature-tag">Homeland</span></h3>
+            <h3 class="wcs-feature-name">{{homelandItem.name}} <span class="wcs-feature-tag">{{localize 'WITCHER.Sheet.Character.Text.Homeland'}}</span></h3>
             {{#if homelandItem.system.description}}<div class="wcs-feature-desc">{{{homelandItem.system.description}}}</div>{{/if}}
           </div>
-          <a class="wcs-feature-edit" data-action="editItem" data-item-id="{{homelandItem.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
-          <a class="wcs-feature-remove" data-action="deleteItem" data-item-id="{{homelandItem.id}}" title="Remove"><i class="fa-solid fa-trash"></i></a>
+          <a class="wcs-feature-edit" data-action="editItem" data-item-id="{{homelandItem.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.View'}}"><i class="fa-solid fa-eye"></i></a>
+          <a class="wcs-feature-remove" data-action="deleteItem" data-item-id="{{homelandItem.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Remove'}}"><i class="fa-solid fa-trash"></i></a>
         </div>
       {{/if}}
 
       <div class="wcs-section-label">Perks
-        <a class="wcs-section-add" data-action="createPerk" title="Add a perk"><i class="fa-solid fa-plus"></i></a>
+        <a class="wcs-section-add" data-action="createPerk" title="{{localize 'WITCHER.Sheet.Character.Tooltip.AddAPerk'}}"><i class="fa-solid fa-plus"></i></a>
       </div>
       {{#each perkItems}}
         <div class="wcs-feature-card">
           <img class="wcs-feature-img" src="{{this.img}}" alt="" />
           <div class="wcs-feature-body">
-            <h3 class="wcs-feature-name">{{this.name}} <span class="wcs-feature-tag">Perk</span></h3>
+            <h3 class="wcs-feature-name">{{this.name}} <span class="wcs-feature-tag">{{localize 'WITCHER.Sheet.Character.Text.Perk'}}</span></h3>
             {{#if this.system.description}}<div class="wcs-feature-desc">{{{this.system.description}}}</div>{{/if}}
           </div>
-          <a class="wcs-feature-edit" data-action="editItem" data-item-id="{{this.id}}" title="View"><i class="fa-solid fa-eye"></i></a>
-          <a class="wcs-feature-remove" data-action="deleteItem" data-item-id="{{this.id}}" title="Remove"><i class="fa-solid fa-trash"></i></a>
+          <a class="wcs-feature-edit" data-action="editItem" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.View'}}"><i class="fa-solid fa-eye"></i></a>
+          <a class="wcs-feature-remove" data-action="deleteItem" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Remove'}}"><i class="fa-solid fa-trash"></i></a>
         </div>
       {{else}}
-        <p class="wcs-empty">No perks. Add one, or drag a Perk item onto the sheet.</p>
+        <p class="wcs-empty">{{localize 'WITCHER.Sheet.Character.Text.NoPerksAddOneOrDragAPerkItemOntoTheSheet'}}</p>
       {{/each}}
     </div>
 
     {{!-- ============ BACKGROUND ============ --}}
     <div class="wcs-panel" data-tab="background">
-      <div class="wcs-section-label">Identity</div>
+      <div class="wcs-section-label">{{localize 'WITCHER.Sheet.Character.Text.Identity'}}</div>
       <div class="wcs-bg-grid">
-        <label class="wcs-bg-field"><span>Gender</span><input type="text" name="system.gender" value="{{system.gender}}" /></label>
-        <label class="wcs-bg-field"><span>Age</span><input type="number" name="system.general.age" value="{{system.general.age}}" min="0" /></label>
-        <label class="wcs-bg-field"><span>Social Standing</span><input type="text" name="system.general.socialStanding" value="{{system.general.socialStanding}}" /></label>
+        <label class="wcs-bg-field"><span>{{localize 'WITCHER.Sheet.Character.Text.Gender'}}</span><input type="text" name="system.gender" value="{{system.gender}}" /></label>
+        <label class="wcs-bg-field"><span>{{localize 'WITCHER.Sheet.Character.Text.Age'}}</span><input type="number" name="system.general.age" value="{{system.general.age}}" min="0" /></label>
+        <label class="wcs-bg-field"><span>{{localize 'WITCHER.Sheet.Character.Text.SocialStanding'}}</span><input type="text" name="system.general.socialStanding" value="{{system.general.socialStanding}}" /></label>
         {{#if homelandItem}}
-        <div class="wcs-bg-field"><span>Homeland</span><a class="wcs-bg-link" data-action="editItem" data-item-id="{{homelandItem.id}}" title="Linked to homeland item — open to edit"><i class="fa-solid fa-link"></i>{{homelandItem.name}}</a></div>
+        <div class="wcs-bg-field"><span>{{localize 'WITCHER.Sheet.Character.Text.Homeland'}}</span><a class="wcs-bg-link" data-action="editItem" data-item-id="{{homelandItem.id}}" title="Linked to homeland item — open to edit"><i class="fa-solid fa-link"></i>{{homelandItem.name}}</a></div>
         {{else}}
-        <label class="wcs-bg-field"><span>Homeland</span><input type="text" name="system.general.homeland" value="{{system.general.homeland}}" /></label>
+        <label class="wcs-bg-field"><span>{{localize 'WITCHER.Sheet.Character.Text.Homeland'}}</span><input type="text" name="system.general.homeland" value="{{system.general.homeland}}" /></label>
         {{/if}}
-        <label class="wcs-bg-field"><span>Personality</span><input type="text" name="system.general.personality" value="{{system.general.personality}}" placeholder="Temperament, outlook" /></label>
-        <label class="wcs-bg-field"><span>Feelings on People</span><input type="text" name="system.general.feelingsOnPeople" value="{{system.general.feelingsOnPeople}}" placeholder="How they regard others" /></label>
+        <label class="wcs-bg-field"><span>Personality</span><input type="text" name="system.general.personality" value="{{system.general.personality}}" placeholder="{{localize 'WITCHER.Sheet.Character.Hint.TemperamentOutlook'}}" /></label>
+        <label class="wcs-bg-field"><span>Feelings on People</span><input type="text" name="system.general.feelingsOnPeople" value="{{system.general.feelingsOnPeople}}" placeholder="{{localize 'WITCHER.Sheet.Character.Hint.HowTheyRegardOthers'}}" /></label>
       </div>
 
-      <div class="wcs-section-label">Reputation</div>
+      <div class="wcs-section-label">{{localize 'WITCHER.Sheet.Character.Text.Reputation'}}</div>
       <div class="wcs-bg-grid">
-        <label class="wcs-bg-field"><span>Reputation</span><output title="Edit in the statblock above — 1d10 vs Rep (Core pp.60-61)">{{system.general.reputation.value}}</output></label>
+        <label class="wcs-bg-field"><span>{{localize 'WITCHER.Sheet.Character.Text.Reputation'}}</span><output title="Edit in the statblock above — 1d10 vs Rep (Core pp.60-61)">{{system.general.reputation.value}}</output></label>
       </div>
       {{#if system.general.reputation.modifiers.length}}
         <ul class="wcs-bg-modlist">
@@ -638,12 +676,12 @@
         </ul>
       {{/if}}
 
-      <div class="wcs-section-label">Details</div>
+      <div class="wcs-section-label">{{localize 'WITCHER.Sheet.Character.Text.Details'}}</div>
       <div class="wcs-bg-prose">
-        <label class="wcs-bg-field is-wide is-tall"><span>Details</span><textarea name="system.general.details" placeholder="Appearance, mannerisms, beliefs, ties to other PCs">{{system.general.details}}</textarea></label>
+        <label class="wcs-bg-field is-wide is-tall"><span>{{localize 'WITCHER.Sheet.Character.Text.Details'}}</span><textarea name="system.general.details" placeholder="{{localize 'WITCHER.Sheet.Character.Hint.AppearanceMannerismsBeliefsTiesToOtherPc'}}">{{system.general.details}}</textarea></label>
       </div>
 
-      <div class="wcs-section-label">Life Events        <a class="wcs-section-add" data-action="addLifeEvent" title="Add life event"><i class="fa-solid fa-plus"></i></a>
+      <div class="wcs-section-label">Life Events        <a class="wcs-section-add" data-action="addLifeEvent" title="{{localize 'WITCHER.Sheet.Character.Tooltip.AddLifeEvent'}}"><i class="fa-solid fa-plus"></i></a>
       </div>
       {{#if lifeEventEntries.length}}
         <div class="wcs-life-list">
@@ -654,8 +692,8 @@
                 {{#if this.date}}<span class="wcs-life-year">{{this.date}}</span>{{/if}}
                 {{#if this.location}}<span class="wcs-life-loc">{{this.location}}</span>{{/if}}
                 <span class="wcs-life-actions">
-                  <a data-action="editLifeEvent" data-event-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
-                  <a data-action="deleteLifeEvent" data-event-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                  <a data-action="editLifeEvent" data-event-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteLifeEvent" data-event-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
                 </span>
               </div>
               {{#if this.detail}}<p class="wcs-life-body">{{this.detail}}</p>{{/if}}
@@ -663,13 +701,13 @@
           {{/each}}
         </div>
       {{else}}
-        <p class="wcs-empty">No life events recorded yet. Roll the chargen lifepath tables or write your own (Core p.39).</p>
+        <p class="wcs-empty">{{localize 'WITCHER.Sheet.Character.Text.NoLifeEventsRecordedYetRollTheChargenLif'}}</p>
       {{/if}}
     </div>
 
     {{!-- ============ EFFECTS ============ --}}
     <div class="wcs-panel" data-tab="effects">
-      <div class="wcs-section-label">Active Effects        <a class="wcs-section-add" data-action="createEffect" title="Add effect"><i class="fa-solid fa-plus"></i></a>
+      <div class="wcs-section-label">Active Effects        <a class="wcs-section-add" data-action="createEffect" title="{{localize 'WITCHER.Sheet.Character.Tooltip.AddEffect'}}"><i class="fa-solid fa-plus"></i></a>
       </div>
       {{#if effects.length}}
         <div class="wcs-effects-list">
@@ -683,17 +721,17 @@
               {{#if this.duration.label}}<span class="wcs-effect-duration">{{this.duration.label}}</span>{{/if}}
               <span class="wcs-effect-source">{{this.sourceName}}</span>
               <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}"><i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i></a>
-              <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
-              <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+              <a data-action="editEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+              <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Character.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
             </div>
           {{/each}}
         </div>
       {{else}}
-        <p class="wcs-empty">No active effects. Race / Profession items and statuses appear here.</p>
+        <p class="wcs-empty">{{localize 'WITCHER.Sheet.Character.Text.NoActiveEffectsRaceProfessionItemsAndSta'}}</p>
       {{/if}}
 
       {{#if hasActiveStatuses}}
-        <div class="wcs-section-label">Active Statuses</div>
+        <div class="wcs-section-label">{{localize 'WITCHER.Sheet.Character.Text.ActiveStatuses'}}</div>
         <div class="wcs-status-list">
           {{#each activeStatuses}}
             <div class="wcs-status-row" data-status-id="{{this.id}}">

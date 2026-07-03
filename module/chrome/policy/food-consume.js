@@ -14,6 +14,7 @@
 import { registerItemAction } from "../chrome/context-menu-item.js";
 import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 
+import { t, tFormat } from "../lib/i18n.js";
 /* The action label depends on the food's `kind`: drinks "Drink", everything
  * else "Eat". Falls back to "Consume" if the kind is somehow missing. */
 function actionLabelFor(item) {
@@ -50,7 +51,7 @@ export function installFoodConsumeFeature() {
         },
         callback: async (item, actor) => {
             if (!actor) {
-                ui.notifications?.warn(`Assign a character (in your User Configuration) to consume ${item.name}.`);
+                ui.notifications?.warn(tFormat("WITCHER.Notify.Food.AssignCharacter", { item: item.name }, "Assign a character (in your User Configuration) to consume {item}."));
                 return;
             }
             // Belt-and-braces: the mixin's `consume()` is async and routes
@@ -61,7 +62,7 @@ export function installFoodConsumeFeature() {
                 await item.consume?.();
             } catch (err) {
                 console.error(`witcher-ttrpg-death-march | food consume failed`, err);
-                ui.notifications?.error(`${actionLabelFor(item)} failed — see console.`);
+                ui.notifications?.error(tFormat("WITCHER.Notify.Food.Failed", { label: actionLabelFor(item) }, "{label} failed — see console."));
             }
         }
     });

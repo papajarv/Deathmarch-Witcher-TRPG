@@ -23,7 +23,81 @@
  */
 
 import { extendedRoll } from "../../rolls/extendedRoll.mjs";
+import { getActiveWeaponQualities, getActiveArmorQualities, WEAPON_QUALITIES, ARMOR_QUALITIES } from "../../setup/config.mjs";
+import { guardOf, guardDefenseMod } from "../../data/combatExtended/guards.mjs";
+import { hasWRPerk } from "../../api/witcherReborn.mjs";
+
+/* Sum the parryPenaltyDelta from every quality the given weapon/shield
+ * carries (Parrying = 2, GM-authored qualities can stack). Reads the
+ * active catalog so an Edit Qualities tweak takes effect without a
+ * code change.
+ *
+ * Shields fold in too: the `parryingShield` armor-quality entry
+ * declares `parryPenaltyDelta: 3` (reduces the −3 parry penalty to 0).
+ * Pulls from the armor catalog when the item is a shield, weapon
+ * catalog when it's a weapon. Returns 0 for non-handed items. */
+function weaponParryPenaltyDelta(item) {
+    if (!item) return 0;
+    if (item.type !== "weapon" && item.type !== "shield") return 0;
+    const cat = item.type === "shield"
+        ? (getActiveArmorQualities?.() ?? ARMOR_QUALITIES)
+        : (getActiveWeaponQualities?.() ?? WEAPON_QUALITIES);
+    const qs = item.system?.effective?.qualities ?? item.system?.qualities ?? [];
+    let delta = 0;
+    for (const q of qs) {
+        delta += Number(cat[q]?.parryPenaltyDelta) || 0;
+    }
+    return delta;
+}
+
+/* ── EO weapon-quality readers ────────────────────────────────────────
+ * Sum / OR the relevant EO fields across a weapon or shield's active
+ * qualities. Each reader is defensive: missing weapon, missing qualities
+ * array, unknown quality keys → 0 / false. */
+function itemQualities(item) {
+    if (!item) return { cat: {}, keys: [] };
+    const cat = getActiveWeaponQualities?.() ?? WEAPON_QUALITIES;
+    const keys = item.system?.effective?.qualities ?? item.system?.qualities ?? [];
+    return { cat, keys };
+}
+/* +1 for Guard, +2 for Superior Guard, summed across the wielded item's
+ * qualities. Applied to Block / Parry rolls only (EO p.7). */
+function weaponGuardBonus(item) {
+    const { cat, keys } = itemQualities(item);
+    let sum = 0;
+    for (const q of keys) sum += Number(cat[q]?.defenseBonus) || 0;
+    return sum;
+}
+/* -N from Indirect when DEFENDING with the weapon. The attacker-side
+ * application happens on the attack pipeline (defendingAgainstIndirect). */
+function weaponIndirectSelfPenalty(item) {
+    const { cat, keys } = itemQualities(item);
+    let pen = 0;
+    for (const q of keys) {
+        if (cat[q]?.defensePenaltyBothSides) pen -= Number(cat[q].defensePenaltyBothSides) || 0;
+    }
+    return pen;
+}
+/* True if the wielded item carries Feeble → parry restricted to other
+ * Feeble weapons (EO p.7). */
+function weaponIsFeeble(item) {
+    const { cat, keys } = itemQualities(item);
+    return keys.some(q => cat[q]?.feebleParryRestrictedToFeeble);
+}
+/* True if the item carries Sturdy / Very Sturdy → can parry/block
+ * Hefty without restriction. Shield-side qualities (sturdyShield /
+ * verySturdy) live in ARMOR_QUALITIES; this reader unions both catalogs
+ * by checking the weaponQualities + armorQualities entries (the union
+ * map is what active items end up with via the qualities editor's
+ * normalisation). */
+function itemCanCounterHefty(item) {
+    if (!item) return false;
+    const allCat = { ...(getActiveWeaponQualities?.() ?? WEAPON_QUALITIES), ...ARMOR_QUALITIES };
+    const keys = item.system?.effective?.qualities ?? item.system?.qualities ?? [];
+    return keys.some(q => allCat[q]?.counterHefty);
+}
 import { defenseMod as statusDefenseMod, cannotDefend } from "../../mechanics/statusEngine.mjs";
+import { contextualPhysicalMod, contextualPhysicalChip } from "../../mechanics/holdModifiers.mjs";
 import { emitApplyStatus } from "../../setup/socketHook.mjs";
 
 const SYSTEM_ID = "witcher-ttrpg-death-march";
@@ -148,7 +222,7 @@ async function pickReliabilityItem(items, preselect) {
                   <span style="min-width:60px;">Item</span>
                   <select name="uuid" autofocus style="flex:1;">${opts}</select>
                 </label>
-                <p style="margin:0;font-size:11px;opacity:0.7;">Spends 1 point of the chosen weapon / shield's Reliability.</p>
+                <p style="margin:0;font-size:0.6875rem;opacity:0.7;">Spends 1 point of the chosen weapon / shield's Reliability.</p>
               </div>`,
             ok: { callback: (event, button) => button.form.elements.uuid.value },
             rejectClose: true
@@ -234,11 +308,27 @@ export async function showRepositionOverlay(token, halfSpd) {
         _repositionActive = null;
     }
 
+    /* Per-round reposition cap: total meters repositioned across all
+     * defenses this round is capped at the actor's full SPD. Half-SPD
+     * is the per-DEFENSE ceiling; SPD is the per-ROUND ceiling. When
+     * the round-budget remaining is smaller than the per-defense
+     * allowance, use the smaller value so the overlay only offers
+     * cells the actor can actually reach. */
+    const actor = token?.actor ?? token?.document?.actor ?? null;
+    const spdCap = Number(actor?.system?.stats?.spd?.value) || 0;
+    const priorMeters = Number(actor?._round?.repositionMeters) || 0;
+    const roundRemaining = spdCap > 0 ? Math.max(0, spdCap - priorMeters) : Infinity;
+    if (roundRemaining <= 0) {
+        ui.notifications?.info(`Reposition cap reached — ${priorMeters}m of ${spdCap}m used this round.`);
+        return;
+    }
+    const effectiveBudget = Math.min(halfSpd, roundRemaining);
+
     const gridSize    = Number(canvas.scene.grid?.size)     || 100;
     const gridMeters  = Number(canvas.scene.grid?.distance) || 1.5;
-    const cellsRadius = Math.floor(halfSpd / gridMeters);
+    const cellsRadius = Math.floor(effectiveBudget / gridMeters);
     if (cellsRadius <= 0) {
-        ui.notifications?.info(`Half-SPD (${halfSpd}m) is less than one grid cell (${gridMeters}m) — no reposition distance.`);
+        ui.notifications?.info(`Reposition budget (${effectiveBudget}m) is less than one grid cell (${gridMeters}m) — no reposition distance.`);
         return;
     }
 
@@ -272,7 +362,23 @@ export async function showRepositionOverlay(token, halfSpd) {
                 { wdmFreeReposition: true }
             );
             const movedCells = Math.max(Math.abs(cx - baseCx), Math.abs(cy - baseCy));
-            ui.notifications?.info(`Repositioned ${movedCells * gridMeters}m.`);
+            const movedMeters = movedCells * gridMeters;
+            /* Bank the meters against the per-round SPD cap so the next
+             * reposition this round sees the shrunk budget. The reset
+             * happens in combatRoundMixin.resetCombatRound at the start
+             * of each turn. */
+            if (actor && typeof actor.update === "function") {
+                try {
+                    const newTotal = (Number(actor._round?.repositionMeters) || 0) + Math.round(movedMeters);
+                    await actor.update({ "system.combatRound.repositionMeters": newTotal });
+                } catch (err) {
+                    console.warn("witcher-ttrpg-death-march | reposition meters bank failed", err);
+                }
+            }
+            const capNote = spdCap > 0
+                ? ` (${Math.round((priorMeters + movedMeters))}/${spdCap}m this round)`
+                : "";
+            ui.notifications?.info(`Repositioned ${movedMeters}m${capNote}.`);
         } catch (err) {
             console.warn("witcher-ttrpg-death-march | reposition move failed", err);
             ui.notifications?.error("Reposition: token update failed — see console.");
@@ -349,7 +455,7 @@ export const defenseMixin = (Base) => class extends Base {
      * action button. Records the defense reaction (first free, each extra
      * costs 1 STA). Returns the roll result, or null if invalid / stunned.
      */
-    async defendWith(item, mode = "parry", { engagementId = "" } = {}) {
+    async defendWith(item, mode = "parry", { engagementId = "", extraMod = 0, attackerDamageFlags = null, attackHitLocation = null } = {}) {
         if (!item || (item.type !== "weapon" && item.type !== "shield")) return null;
         if (this._stunned || cannotDefend(this)) {
             ui.notifications?.warn(`${this.name} can't defend right now.`);
@@ -365,30 +471,127 @@ export const defenseMixin = (Base) => class extends Base {
         // Shields get an extra, shield-only reduction (Manticore school) so a
         // shield can parry without the −3 while weapons still take it.
         const shieldRed = item.type === "shield" ? (Number(cm.shieldParryPenaltyReduction) || 0) : 0;
-        const penalty = block ? 0 : Math.min(0, -3 + (Number(cm.parryPenaltyReduction) || 0) + shieldRed);
+        // Per-weapon parry-penalty delta sourced from the wielded item's
+        // qualities (Parrying = 2). Only applies on parry, not block.
+        const qualityRed = block ? 0 : weaponParryPenaltyDelta(item);
+        /* Blade Expertise (Wolf, Witchers Reborn) doesn't need a code
+         * branch — the perk's AE writes +3 to combatMods.parryPenaltyReduction,
+         * which folds through the existing `cm.parryPenaltyReduction`
+         * read below and clamps the −3 penalty to 0 via the Math.min. */
+        const penalty = block ? 0 : Math.min(0, -3 + (Number(cm.parryPenaltyReduction) || 0) + shieldRed + qualityRed);
         // Status penalties to defense (Staggered −2, Blinded −3, Prone −2, …),
         // summed live from the actor's active conditions.
         const statusDef = statusDefenseMod(this);
+        /* CE Combat Extended — grappler / pinner physical penalty when
+         * defending a third party's attack. Zero when CE is off or when
+         * the defender isn't a holder. Note: no target is passed here,
+         * so the "except vs partner" carve-out doesn't fire on defense
+         * — an edge case (a grappler being attacked by their own
+         * grapple partner is rare + the partner is at -2 themselves).
+         * If the attacker actor gets plumbed through this method in a
+         * later refactor, pass it as the second arg to enable the
+         * carve-out. */
+        const ceHoldDef = contextualPhysicalMod(this);
+        // Ad-hoc modifier from the defense prompt — anything the defender wants
+        // to fold in (cover bonus, GM ruling, situational). Adds to the total
+        // and surfaces as its own chip.
+        const extra = Math.round(Number(extraMod) || 0);
         // Base = governing stat + trained skill rank + skill modifier — the same
         // 1d10 + stat + skill every other roll uses — then the defense penalty
         // and any passive flat defense bonus (combatMods.flatDefenseMod).
         const base    = v.statVal + v.skillVal + v.skillMod;
-        const total   = base + penalty + statusDef + (Number(cm.flatDefenseMod) || 0);
+        /* Combat Extended — guard contribution. Closed = +2 every defense,
+         * Fool's = -2 every defense, Balanced = 0.
+         *
+         * Warding auto-apply: the attacker's declared hit location is
+         * plumbed through requestDefenseFromOwner → runDefenseChoice →
+         * here so `guardDefenseMod` can branch: +2 at the warded
+         * location, −1 anywhere else. When the location IS unknown
+         * (theatre-of-mind attack, no hit-location system on the strike)
+         * we fall back to a note asking the GM to apply manually — the
+         * old behavior. */
+        const guard    = guardOf(this);
+        const guardMod = guardDefenseMod(this, item, attackHitLocation);
+        const wardingNote = (() => {
+            if (guard.key !== "warding") return "";
+            const warded = this.system?.guard?.wardingLocations?.[item.id] ?? null;
+            if (!attackHitLocation) {
+                return warded
+                    ? `Warding this weapon at <b>${warded}</b>: +2 parry/block if the attack lands there, −1 otherwise — apply via Other Modifier (attacker's hit location wasn't threaded through).`
+                    : `Warding: pick a hit location on this weapon in Guard Config to activate the +2/−1 branch.`;
+            }
+            if (!warded) {
+                return `Warding: no location picked for <b>${item.name}</b> — pick one via Guard Config to earn the +2/−1 branch.`;
+            }
+            return warded === attackHitLocation
+                ? `Warding <b>${warded}</b> vs attack at <b>${attackHitLocation}</b> — <b>+2</b> applied.`
+                : `Warding <b>${warded}</b> vs attack at <b>${attackHitLocation}</b> — <b>−1</b> (unwarded) applied.`;
+        })();
+        /* ── EO weapon-quality contributions to defense ──────────────────
+         * Guard / Superior Guard:        +1 / +2 to Block & Parry rolls
+         * Indirect (this weapon):        -2 to Block & Parry rolls (the
+         *   weapon is awkward in defense per EO p.7)
+         * Feeble:                        if PARRYING with a feeble weapon,
+         *   we surface a warning note — the engine doesn't yet know what
+         *   the attacker's weapon is, so we can't auto-refuse the parry.
+         *   GM resolves per the rider note. */
+        const guardEoBonus      = weaponGuardBonus(item);
+        const indirectSelfPen   = weaponIndirectSelfPenalty(item);
+        const isFeebleParry     = !block && weaponIsFeeble(item);
+        const feebleNote        = isFeebleParry
+            ? `Feeble (EO p.7): this weapon can only Parry other Feeble weapons. If the attacker's weapon isn't Feeble, the parry fails. GM adjudicates per the attack card.`
+            : "";
+        /* EO Indirect (attacker side): when the attacker's weapon carries
+         * Indirect, the DEFENDER's Block / Parry rolls take an extra -2
+         * (EO p.7). This is the OTHER half of Indirect — the self-side
+         * -2 is `indirectSelfPen` above. Engaged via the
+         * attackerDamageFlags.indirect flag that qualitiesToDamageFlags
+         * sets when the attacker's weapon has the quality. */
+        const indirectVsAtk = (attackerDamageFlags?.indirect) ? -2 : 0;
+        /* Pirouette is now a bonus on the attacker's next attack (see
+         * weaponAttackMixin's feintBonus), not a penalty on the target's
+         * defense — no defender-side branch needed. */
+        const total   = base + penalty + statusDef + ceHoldDef + extra + guardMod
+                      + guardEoBonus + indirectSelfPen + indirectVsAtk
+                      + (Number(cm.flatDefenseMod) || 0);
         const formula = total >= 0 ? `1d10 + ${total}` : `1d10 - ${Math.abs(total)}`;
         const title   = block ? "Block" : "Parry";
 
+        /* Guard chip: keep this expressive so the attacker can see EXACTLY
+         * why the defender's number is what it is. Warding names the
+         * warded location + whether this attack landed on it; Closed /
+         * Fool's just show the guard key. */
+        const guardChipLabel = (() => {
+            if (!guardMod) return null;
+            if (guard.key !== "warding") return `Guard (${guard.key})`;
+            const warded = this.system?.guard?.wardingLocations?.[item.id];
+            if (!warded) return `Guard (warding)`;
+            if (!attackHitLocation) return `Guard (warding: ${warded})`;
+            return warded === attackHitLocation
+                ? `Guard (warding: ${warded} ✓)`
+                : `Guard (warding: ${warded} — off)`;
+        })();
+        const ceHoldChip = contextualPhysicalChip(this);
+        const defenseChips = [
+            { label: statName(v.meta.statKey), value: v.statVal },
+            { label: "Skill", value: v.skillVal },
+            v.skillMod ? { label: "Mod", value: `${v.skillMod >= 0 ? "+" : ""}${v.skillMod}` } : null,
+            penalty ? { label: title, value: String(penalty) } : null,
+            statusDef ? { label: "Status", value: signed(statusDef) } : null,
+            ceHoldChip,
+            extra ? { label: "Mod", value: signed(extra) } : null,
+            guardChipLabel ? { label: guardChipLabel, value: signed(guardMod) } : null,
+            guardEoBonus ? { label: "Weapon Guard", value: signed(guardEoBonus) } : null,
+            indirectSelfPen ? { label: "Indirect (self)", value: signed(indirectSelfPen) } : null,
+            indirectVsAtk ? { label: "Indirect (vs atk)", value: signed(indirectVsAtk) } : null
+        ].filter(Boolean);
         const flavorBase = defenseFlavor({
             actorName: this.name,
             title,
             subtitle: `${item.name} — defense`,
-            chips: [
-                { label: statName(v.meta.statKey), value: v.statVal },
-                { label: "Skill", value: v.skillVal },
-                v.skillMod ? { label: "Mod", value: `${v.skillMod >= 0 ? "+" : ""}${v.skillMod}` } : null,
-                penalty ? { label: title, value: String(penalty) } : null,
-                statusDef ? { label: "Status", value: signed(statusDef) } : null
-            ].filter(Boolean)
-        });
+            chips: defenseChips
+        }) + (wardingNote ? `<div class="wdm-defense-guardnote" style="margin-top:4px;font-size:0.6875rem;opacity:0.7;">${wardingNote}</div>` : "")
+          + (feebleNote  ? `<div class="wdm-defense-guardnote" style="margin-top:4px;font-size:0.6875rem;opacity:0.7;color:#b97;">${feebleNote}</div>` : "");
 
         // Block: keep the SP-spend button. Parry: no button — auto-stagger
         // happens below if the roll beats the attack.
@@ -403,14 +606,18 @@ export const defenseMixin = (Base) => class extends Base {
             flavor: flavorBase + buttons,
             flags:   (r) => engagementFlags(engagementId, r.total),
             suppressMessage: suppress
-        }, {});
+        }, { fumbleCategory: "armedDefense" });
 
         // NOTE: Parry's auto-stagger (RAW Core p.164: "Your opponent is
         // also staggered") fires from the ATTACKER's verdict patch, not
         // here. The attack roll happens AFTER the defense prompt resolves,
         // so at this point we don't yet know if the parry beat the attack.
 
-        await this.recordDefense();
+        /* Pass the action key so recordDefense can read the CE base cost
+         * (Parry 0, Block 0) when Combat Extended is on. Under RAW the
+         * key is ignored — recordDefense falls through to its legacy
+         * "1st free + 1 STA each extra" path. */
+        await this.recordDefense(mode === "block" ? "block" : "parry");
         // Return the rolled total + rendered HTML chunks so callers
         // (handleDefenseRequest → back over the socket → attacker's
         // weaponAttackMixin) can compute the attack-vs-defense verdict
@@ -419,7 +626,13 @@ export const defenseMixin = (Base) => class extends Base {
             ...result, formula, mode,
             defenseTotal: Number(result?.total) || 0,
             defenseFlavor: result?.flavor ?? "",
-            defenseBody:   result?.body   ?? ""
+            defenseBody:   result?.body   ?? "",
+            /* Structured chip data so the ATTACKER's unified card can
+             * render the defender's modifier breakdown inline (guard,
+             * status, weapon-quality, etc.) — the defender's own chat
+             * card is suppressed for engagement-linked defenses so
+             * without this the mods are invisible to the attacker. */
+            defenseChips
         };
     }
 
@@ -439,40 +652,82 @@ export const defenseMixin = (Base) => class extends Base {
      * reaction (first free, each extra costs 1 STA). Returns the roll result,
      * or null if invalid / stunned.
      */
-    async defendBySkill(skillKey, { label, engagementId = "", reposition = false } = {}) {
+    async defendBySkill(skillKey, { label, engagementId = "", reposition = false, extraMod = 0, attackerDamageFlags = null, baseOverride = null } = {}) {
         if (this._stunned || cannotDefend(this)) {
             ui.notifications?.warn(`${this.name} can't defend right now.`);
             return null;
         }
-        const v = this._readSkillValues(skillKey);
+        /* baseOverride swaps the entire "stat + skill rank + mod" spine
+         * — used by Witchers Reborn · Griffin · Knightly Stance to roll
+         * pure Witcher Training against Disarm / Trip instead of the
+         * defender's usual Dodge / Reposition skill. The extra situational
+         * modifier + status + guard math still layer on top. */
+        const v = baseOverride
+            ? {
+                  statVal:  Number(baseOverride.statVal)  || 0,
+                  skillVal: Number(baseOverride.skillVal) || 0,
+                  skillMod: Number(baseOverride.skillMod) || 0,
+                  meta: {
+                      statKey:  baseOverride.statKey  || "",
+                      skillKey: baseOverride.skillKey || skillKey
+                  }
+              }
+            : this._readSkillValues(skillKey);
         if (!v) return null;
 
         const title = label || game.i18n.localize(CONFIG.WITCHER.skillLabel(skillKey));
         const statusDef = statusDefenseMod(this);
-        const total = v.statVal + v.skillVal + v.skillMod + statusDef;
+        /* CE grappler/pinner penalty — see defendWith counterpart above
+         * for context. Applies on Dodge / Reposition / Athletics rolls
+         * routed through this generic defense path too. */
+        const ceHoldDef = contextualPhysicalMod(this);
+        const extra = Math.round(Number(extraMod) || 0);
+        /* Combat Extended guard contribution. Dodge / Reposition aren't a
+         * weapon defense so Warding's per-weapon location pick doesn't
+         * apply (Warding modifies parry / block, not dodge / relocate per
+         * rules1.png). Closed / Fool's still affect Dodge + Reposition
+         * since they're flat "all defenses" effects. */
+        const guard    = guardOf(this);
+        const guardMod = (guard.key === "closed") ?  2
+                      : (guard.key === "fools")  ? -2
+                      : 0;
+        const total = v.statVal + v.skillVal + v.skillMod + statusDef + ceHoldDef + extra + guardMod;
         const formula = total >= 0 ? `1d10 + ${total}` : `1d10 - ${Math.abs(total)}`;
 
+        const ceHoldChip = contextualPhysicalChip(this);
+        const defenseChips = [
+            { label: statName(v.meta.statKey), value: v.statVal },
+            { label: "Skill", value: v.skillVal },
+            v.skillMod ? { label: "Mod", value: `${v.skillMod >= 0 ? "+" : ""}${v.skillMod}` } : null,
+            statusDef ? { label: "Status", value: signed(statusDef) } : null,
+            ceHoldChip,
+            extra ? { label: "Mod", value: signed(extra) } : null,
+            guardMod ? { label: `Guard (${guard.key})`, value: signed(guardMod) } : null
+        ].filter(Boolean);
         const flavor = defenseFlavor({
             actorName: this.name,
             title,
             subtitle: "defense",
-            chips: [
-                { label: statName(v.meta.statKey), value: v.statVal },
-                { label: "Skill", value: v.skillVal },
-                v.skillMod ? { label: "Mod", value: `${v.skillMod >= 0 ? "+" : ""}${v.skillMod}` } : null,
-                statusDef ? { label: "Status", value: signed(statusDef) } : null
-            ].filter(Boolean)
+            chips: defenseChips
         });
 
         const suppress = !!engagementId;
+        /* Dodge / Reposition / Body Block route to the unarmed fumble
+         * table (RAW folds "Unarmed Defense / Dodge / Athletics" into
+         * one table). Skill-based defenses that fall outside this list
+         * (rare — e.g. Deceit for feint responses) also default here. */
         const result = await extendedRoll(formula, {
             speaker: ChatMessage.getSpeaker({ actor: this }),
             flavor,
             flags:   (r) => engagementFlags(engagementId, r.total),
             suppressMessage: suppress
-        }, {});
+        }, { fumbleCategory: "unarmedDefense" });
 
-        await this.recordDefense();
+        /* Pass the action key for CE base-cost lookup. Dodge → "dodge"
+         * (1 STA base under CE); Athletics-based scramble → "reposition"
+         * (2 STA base under CE — Relocate). RAW path ignores the key. */
+        const defenseKey = reposition ? "reposition" : (skillKey === "dodge" ? "dodge" : null);
+        await this.recordDefense(defenseKey);
 
         /* Reposition (Athletics-based scramble): RAW companion to the roll is
          * up to half-SPD movement. We compute the allowance, append it as a
@@ -510,7 +765,11 @@ export const defenseMixin = (Base) => class extends Base {
             ...result, formula, mode: skillKey,
             defenseTotal: Number(result?.total) || 0,
             defenseFlavor: result?.flavor ?? "",
-            defenseBody
+            defenseBody,
+            /* See defendWith — attacker's unified card needs the chip
+             * breakdown so the defender's modifiers are visible when the
+             * defender's own chat card is suppressed. */
+            defenseChips
         };
     }
 };

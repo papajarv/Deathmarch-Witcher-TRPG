@@ -29,6 +29,7 @@
 
 import { MODULE_ID } from "../setup/settings.js";
 import { loadEntries } from "../chrome/bestiary.js";
+import { t, tFormat } from "../lib/i18n.js";
 import {
   encKey,
   grantRpToEntry,
@@ -252,18 +253,41 @@ async function postBookChatMessage(actor, item, { title, detail, kind, excerpt }
   }[kind] ?? "rgba(184,148,100,0.35)";
 
   const excerptHtml = excerpt
-    ? `<div style="margin-top:8px;padding:8px 10px;background:rgba(0,0,0,0.25);border-left:2px solid rgba(184,148,100,0.40);font-style:italic;font-size:12px;line-height:1.6;">${escapeText(excerpt)}</div>`
+    ? `<div style="margin-top:8px;padding:8px 10px;background:rgba(0,0,0,0.25);border-left:2px solid rgba(184,148,100,0.40);font-style:italic;font-size:0.75rem;line-height:1.6;">${escapeText(excerpt)}</div>`
     : "";
+
+  /* Reading is a private act. Whisper the log to the actor's owners
+   * (typically the player playing this PC) plus any GM. Other players
+   * shouldn't see what someone else is reading. Falls back to a public
+   * message only if the actor has no discoverable owner (edge case). */
+  const whisper = collectBookAudience(actor);
 
   await ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor }),
+    whisper: whisper.length ? whisper : undefined,
     content: `
       <div style="border:1px dashed ${tint};padding:8px;background:rgba(0,0,0,0.15);">
-        <div style="font-family:var(--wdm-font-display,serif);font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:var(--wdm-amber-bright,#d6a55a);margin-bottom:4px;">${escapeText(title)}</div>
-        <div style="font-size:12px;line-height:1.5;">${escapeText(detail)}</div>
+        <div style="font-family:var(--wdm-font-display,serif);font-size:0.8125rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--wdm-amber-bright,#d6a55a);margin-bottom:4px;">${escapeText(title)}</div>
+        <div style="font-size:0.75rem;line-height:1.5;">${escapeText(detail)}</div>
         ${excerptHtml}
       </div>`
   });
+}
+
+/* Audience for a book-reading chat message: every user who OWNS the
+ * reading actor (usually the assigned player), plus all active GMs.
+ * De-duplicated. Empty return means "broadcast" — caller falls through
+ * to a public message so an unowned actor's reading doesn't vanish. */
+function collectBookAudience(actor) {
+  const ids = new Set();
+  const users = game.users?.contents ?? [];
+  for (const u of users) {
+    if (u.isGM) { ids.add(u.id); continue; }
+    /* OWNER = 3 in Foundry's permission table; testUserPermission is the
+     * canonical accessor and handles the "default" ownership fallback. */
+    if (actor?.testUserPermission?.(u, "OWNER")) ids.add(u.id);
+  }
+  return [...ids];
 }
 
 /* =========================================================================
@@ -289,7 +313,7 @@ async function studyMonsterBook(item, studyActor, cfg) {
   const matching = entries.filter(e => entryMatchesBook(e, mc));
 
   if (!matching.length) {
-    ui.notifications?.warn(`"${item.name}" matches no bestiary entries — check the book's configuration.`);
+    ui.notifications?.warn(tFormat("WITCHER.Notify.Study.NoMatches", { item: item.name }, "\"{item}\" matches no bestiary entries — check the book's configuration."));
     return;
   }
 
@@ -297,13 +321,13 @@ async function studyMonsterBook(item, studyActor, cfg) {
   const readingCount = Number(usage.readingCount ?? 0);
 
   if (readingCount >= totalReadings) {
-    ui.notifications?.info(`There's nothing more you can learn from "${item.name}".`);
+    ui.notifications?.info(tFormat("WITCHER.Notify.Study.NothingMore", { item: item.name }, "There's nothing more you can learn from \"{item}\"."));
     return;
   }
 
   const today = currentInGameDay();
   if (usage.lastAttemptDay >= today) {
-    ui.notifications?.info("You've already studied this book recently — wait a few hours before returning to it.");
+    ui.notifications?.info(t("WITCHER.Notify.Study.TooSoon", "You've already studied this book recently — wait a few hours before returning to it."));
     return;
   }
 
@@ -322,7 +346,7 @@ async function studyMonsterBook(item, studyActor, cfg) {
     await setBookUsage(studyActor, item.uuid, { lastAttemptDay: today });
     await applyStress(studyActor, 1);
     await postBookChatMessage(studyActor, item, {
-      title:  "Study Failed",
+      title:  t("WITCHER.Dialog.Study.Failed", "Study Failed"),
       detail: game.system?.api?.homebrew?.isEnabled?.("stress")
         ? "The words blur before your eyes. You set it down for today. +1 STRESS."
         : "The words blur before your eyes. You set it down for today.",
@@ -393,13 +417,13 @@ async function studyMonsterBook(item, studyActor, cfg) {
   const isLastPage = newReadingCount >= totalReadings;
   if (isLastPage) {
     await postBookChatMessage(studyActor, item, {
-      title:  "The Last Page",
+      title:  t("WITCHER.Dialog.Study.LastPage", "The Last Page"),
       detail: `You've read "${item.name}" front to back — ${payout}${affected.length ? ` on ${affected.join(", ")}` : ""}.`,
       kind:   "exhausted"
     });
   } else {
     await postBookChatMessage(studyActor, item, {
-      title:  "Study Session",
+      title:  t("WITCHER.Dialog.Study.Session", "Study Session"),
       detail: `${payout}${affected.length ? ` — ${affected.join(", ")}` : ""}. Reading ${newReadingCount}/${totalReadings}.`,
       kind:   "success"
     });
@@ -415,7 +439,7 @@ async function studySkillBook(item, studyActor, cfg) {
   const { skillStat, skillId, rangeMin = 0, rangeMax = 1 } = sc;
 
   if (!skillStat || !skillId) {
-    ui.notifications?.warn(`"${item.name}" is not fully configured — no skill selected.`);
+    ui.notifications?.warn(tFormat("WITCHER.Notify.Study.NoSkill", { item: item.name }, "\"{item}\" is not fully configured — no skill selected."));
     return;
   }
 
@@ -424,18 +448,18 @@ async function studySkillBook(item, studyActor, cfg) {
   const effectiveRank = Number(skillData?.modifiedValue ?? baseRank);
 
   if (effectiveRank < rangeMin) {
-    ui.notifications?.info(`Your rank is too low for "${item.name}" — it requires at least rank ${rangeMin}.`);
+    ui.notifications?.info(tFormat("WITCHER.Notify.Study.RankTooLow", { item: item.name, min: rangeMin }, "Your rank is too low for \"{item}\" — it requires at least rank {min}."));
     return;
   }
   if (effectiveRank >= rangeMax) {
-    ui.notifications?.info(`There's nothing more you can learn from "${item.name}".`);
+    ui.notifications?.info(tFormat("WITCHER.Notify.Study.NothingMore", { item: item.name }, "There's nothing more you can learn from \"{item}\"."));
     return;
   }
 
   const usage = getBookUsage(studyActor, item.uuid);
   const today = currentInGameDay();
   if (usage.lastAttemptDay >= today) {
-    ui.notifications?.info("You've already studied this book recently — wait a few hours before returning to it.");
+    ui.notifications?.info(t("WITCHER.Notify.Study.TooSoon", "You've already studied this book recently — wait a few hours before returning to it."));
     return;
   }
 
@@ -457,7 +481,7 @@ async function studySkillBook(item, studyActor, cfg) {
     await setBookUsage(studyActor, item.uuid, { lastAttemptDay: today });
     await applyStress(studyActor, 1);
     await postBookChatMessage(studyActor, item, {
-      title:  "Study Failed",
+      title:  t("WITCHER.Dialog.Study.Failed", "Study Failed"),
       detail: game.system?.api?.homebrew?.isEnabled?.("stress")
         ? "The concepts won't stick right now. +1 STRESS. Give it a few hours."
         : "The concepts won't stick right now. Give it a few hours.",
@@ -476,13 +500,13 @@ async function studySkillBook(item, studyActor, cfg) {
     await studyActor.update({ [`system.skills.${skillStat}.${skillId}.value`]: newRank });
     if (newRank >= rangeMax) {
       await postBookChatMessage(studyActor, item, {
-        title:  "Mastery Achieved",
+        title:  t("WITCHER.Dialog.Study.Mastery", "Mastery Achieved"),
         detail: `You've learned all this tome can teach. ${skillName} is now rank ${newRank}.`,
         kind:   "exhausted"
       });
     } else {
       await postBookChatMessage(studyActor, item, {
-        title:  "Rank Advanced!",
+        title:  t("WITCHER.Dialog.Study.RankUp", "Rank Advanced!"),
         detail: `${skillName} is now rank ${newRank}. Continue studying for rank ${newRank + 1}.`,
         kind:   "success"
       });
@@ -490,7 +514,7 @@ async function studySkillBook(item, studyActor, cfg) {
   } else {
     const hitsLeft = HITS_PER_RANK - hitsIntoRank;
     await postBookChatMessage(studyActor, item, {
-      title:  "Study Session",
+      title:  t("WITCHER.Dialog.Study.Session", "Study Session"),
       detail: `Progress toward ${skillName} rank ${baseRank + 1}: ${hitsIntoRank}/${HITS_PER_RANK} — ${hitsLeft} more to advance.`,
       kind:   "success"
     });
@@ -504,14 +528,14 @@ async function studySkillBook(item, studyActor, cfg) {
 async function readStressBook(item, readActor, cfg) {
   const steps = cfg.stress?.steps;
   if (!Array.isArray(steps) || !steps.length) {
-    ui.notifications?.warn(`"${item.name}" has no reading steps configured.`);
+    ui.notifications?.warn(tFormat("WITCHER.Notify.Study.NoSteps", { item: item.name }, "\"{item}\" has no reading steps configured."));
     return;
   }
 
   const usage = getBookUsage(readActor, item.uuid);
 
   if (usage.completed) {
-    ui.notifications?.info(`You've already finished reading "${item.name}".`);
+    ui.notifications?.info(tFormat("WITCHER.Notify.Study.AlreadyDone", { item: item.name }, "You've already finished reading \"{item}\"."));
     return;
   }
 
@@ -519,7 +543,7 @@ async function readStressBook(item, readActor, cfg) {
   const step    = steps[stepIdx];
   if (!step) {
     await setBookUsage(readActor, item.uuid, { completed: true });
-    ui.notifications?.info(`You've finished reading "${item.name}".`);
+    ui.notifications?.info(tFormat("WITCHER.Notify.Study.Finished", { item: item.name }, "You've finished reading \"{item}\"."));
     return;
   }
 
@@ -623,9 +647,9 @@ export function getBookProgress(item, actor) {
 
 export async function reviewStressBookChapters(itemOrUuid) {
   const item = (typeof itemOrUuid === "string") ? await fromUuid(itemOrUuid) : itemOrUuid;
-  if (!item || !isReadableBook(item)) { ui.notifications?.warn("Not a readable book."); return; }
+  if (!item || !isReadableBook(item)) { ui.notifications?.warn(t("WITCHER.Notify.Study.NotReadable", "Not a readable book.")); return; }
   const actor = (item.parent?.type === "character") ? item.parent : game.user?.character;
-  if (!actor) { ui.notifications?.warn("No character to review with."); return; }
+  if (!actor) { ui.notifications?.warn(t("WITCHER.Notify.Study.NoReviewer", "No character to review with.")); return; }
 
   const cfg   = getBookConfig(item);
   const steps = cfg?.stress?.steps ?? [];
@@ -633,7 +657,7 @@ export async function reviewStressBookChapters(itemOrUuid) {
   const readCount = usage.completed ? steps.length : Math.min(steps.length, Number(usage.currentStep ?? 0));
 
   if (readCount <= 0) {
-    ui.notifications?.info(`You haven't read any of "${item.name}" yet.`);
+    ui.notifications?.info(tFormat("WITCHER.Notify.Study.NoneRead", { item: item.name }, "You haven't read any of \"{item}\" yet."));
     return;
   }
 
@@ -645,7 +669,7 @@ export async function reviewStressBookChapters(itemOrUuid) {
 
   const DialogV2 = foundry.applications.api.DialogV2;
   await DialogV2.prompt({
-    window:  { title: `Reviewing — ${item.name}`, icon: "fa-solid fa-book-bookmark" },
+    window:  { title: tFormat("WITCHER.Dialog.Study.Reviewing", { item: item.name }, "Reviewing — {item}"), icon: "fa-solid fa-book-bookmark" },
     classes: ["wou-book-review-dialog"],
     position: { width: 520 },
     content: `<div class="wou-book-review">${rows}</div>`,
@@ -660,18 +684,18 @@ export async function reviewStressBookChapters(itemOrUuid) {
 
 export async function interactWithBook(itemOrUuid) {
   const item = (typeof itemOrUuid === "string") ? await fromUuid(itemOrUuid) : itemOrUuid;
-  if (!item || !isBookItem(item)) { ui.notifications?.warn("Not a book item."); return; }
+  if (!item || !isBookItem(item)) { ui.notifications?.warn(t("WITCHER.Notify.Study.NotBook", "Not a book item.")); return; }
 
   const cfg = getBookConfig(item);
   if (!cfg?.bookType) {
-    ui.notifications?.warn(`"${item.name}" is not configured. Right-click the item sheet's book icon to set it up.`);
+    ui.notifications?.warn(tFormat("WITCHER.Notify.Study.NotConfigured", { item: item.name }, "\"{item}\" is not configured. Right-click the item sheet's book icon to set it up."));
     return;
   }
 
   const actor = (item.parent?.type === "character") ? item.parent : game.user?.character;
-  if (!actor) { ui.notifications?.warn("No character to read with."); return; }
+  if (!actor) { ui.notifications?.warn(t("WITCHER.Notify.Study.NoReader", "No character to read with.")); return; }
   if (!actor.testUserPermission?.(game.user, "OWNER") && !game.user?.isGM) {
-    ui.notifications?.warn("You don't own this character."); return;
+    ui.notifications?.warn(t("WITCHER.Notify.Study.NotOwner", "You don't own this character.")); return;
   }
 
   if (cfg.bookType === BOOK_TYPES.MONSTER) return studyMonsterBook(item, actor, cfg);
@@ -836,7 +860,7 @@ export async function openBookConfigDialog(item) {
   let editSteps = (cfg.stress?.steps ?? []).map(s => ({ ...s }));
 
   const result = await DialogV2.wait({
-    window:  { title: `Configure Book — ${item.name}`, icon: "fa-solid fa-book-bookmark" },
+    window:  { title: tFormat("WITCHER.Dialog.Study.ConfigureBook", { item: item.name }, "Configure Book — {item}"), icon: "fa-solid fa-book-bookmark" },
     content: buildConfigDialogContent(cfg, sorted),
     classes: ["wou-book-config-dialog-window"],
     position: { width: 560 },

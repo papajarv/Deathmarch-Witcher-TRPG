@@ -123,3 +123,19 @@ test("Reposition voids the next Fast-attack shot unless the weapon ignores repos
   // And actually breaks the loop when all conditions hold.
   assert.match(src, /follow-up Fast-attack swing finds empty air[\s\S]*?break;/);
 });
+
+test("damageFor folds derived meleeBonus into melee & thrown weapon damage", () => {
+  // The weapon schema carries `appliesMeleeBonus` (default true). Prior
+  // to this fix nothing in the runtime consulted it and the RAW p.48
+  // bonus silently never applied. Assert the gate + the fold.
+  //
+  // Gate: weapon (not shield-bash), not a ranged shot, flag not explicitly false.
+  assert.match(src, /w\.type === "weapon"/);
+  assert.match(src, /!isRangedShot/);
+  assert.match(src, /w\.system\?\.appliesMeleeBonus !== false/);
+  // Fold: read from derivedStats.meleeBonus, join with signed operator
+  // INSIDE the strike multiplier so Strong Strike doubles it too.
+  assert.match(src, /this\.system\?\.derivedStats\?\.meleeBonus/);
+  assert.match(src, /mb > 0 \? "\+" : "-"/);
+  assert.match(src, /strikeMult !== 1 \? `\(\$\{base\}\)\*\$\{strikeMult\}` : base/);
+});

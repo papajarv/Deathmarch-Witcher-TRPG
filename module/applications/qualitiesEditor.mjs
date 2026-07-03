@@ -18,6 +18,7 @@
 
 import { WEAPON_QUALITIES, ARMOR_QUALITIES } from "../setup/config.mjs";
 
+import { t, tFormat } from "../chrome/lib/i18n.js";
 const SYSTEM_ID = "witcher-ttrpg-death-march";
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -35,11 +36,44 @@ const PARAM_TYPES = [
 const DAMAGE_FLAG_KEYS = [
     { key: "armorPiercing",         label: "Armor Piercing (negates DR)"           },
     { key: "improvedArmorPiercing", label: "Improved AP (negates DR + halves SP)"  },
-    { key: "ablating",              label: "Ablating (-1 SP on penetrating hit)"   },
+    { key: "ablating",              label: "Ablating (+1d6/2 SP damage on penetration, on top of the standard −1 SP chip)" },
+    { key: "doubleAblation",        label: "Double Ablation (doubles the standard chip to −2 SP, e.g. Crushing Force)" },
     { key: "bypassesWornArmor",     label: "Bypasses Worn Armor"                   },
     { key: "bypassesNaturalArmor",  label: "Bypasses Natural Armor"                },
     { key: "bypassesShield",        label: "Bypasses Shield (Quen)"                },
-    { key: "isSilver",              label: "Counts as Silver (vs monster resists)" }
+    { key: "isSilver",              label: "Counts as Silver (vs monster resists)" },
+    { key: "isMeteorite",           label: "Counts as Meteorite (vs monster resists)" },
+    { key: "deniesParry",           label: "Cannot Be Parried (e.g. Crushing Force)" }
+];
+
+/* Per-quality numeric and string effects — surfaced as individual inputs
+ * because they don't fit a checkbox grid.  Each consumer reads them by
+ * scanning the bearer's equipped weapons (or, for deniesParry, the
+ * attacker's weapon at defense-prompt time). */
+const NUMERIC_EFFECT_KEYS = [
+    { key: "parryPenaltyDelta",   label: "Parry Penalty Reduction",
+      hint: "Shaves N off the −3 parry penalty when DEFENDING with this weapon (Parrying = 2)." },
+    { key: "spellDCBonus",        label: "Spell DC Bonus",
+      hint: "Spells cast through this weapon treat their target DC as +N (Greater Focus = 2)." },
+    { key: "reliabilityBonus",    label: "Reliability Bonus",
+      hint: "Added to the weapon's max Reliability when this quality is present (Meteorite = 5)." },
+    { key: "chargeBonusPerMeter", label: "Charge Bonus / Meter",
+      hint: "Bonus damage dice per meter charged from a mount (Charging = 1, i.e. +1d6/m)." }
+];
+
+const STRING_EFFECT_KEYS = [
+    { key: "skillOverride",       label: "Attack Skill Override",
+      hint: "Forces the weapon's to-hit roll to use this skillMap key (rarely used — the weapon's own skillKey covers most cases). Blank = use the weapon's default." }
+];
+
+/* Boolean tactical flags that travel as top-level entry fields (not under
+ * damageFlags, because they're read OUTSIDE the damage pipeline). Mirror
+ * of DAMAGE_FLAG_KEYS for grid rendering — adding a new flag is one line. */
+const TACTICAL_FLAG_KEYS = [
+    { key: "ignoresRepositionDistance",
+      label: "Ignores Reposition Distance (long-reach weapon — defender's Reposition doesn't void follow-up swings)" },
+    { key: "addsDamageToUnarmed",
+      label: "Adds Damage to Unarmed (Brawling — cestus / spiked gauntlet folds its damage into punches/kicks)" }
 ];
 
 /* Post-hit rider kinds — pick one per quality. */
@@ -69,7 +103,7 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
         classes: ["witcher-ttrpg-death-march", "wdm-qualities-editor"],
         tag: "form",
         window: {
-            title: "Weapon & Armor Qualities",
+            title: t("WITCHER.Dialog.Qualities.Title", "Weapon & Armor Qualities"),
             icon: "fa-solid fa-list-check",
             resizable: true
         },
@@ -104,6 +138,10 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
         const flags = {};
         for (const { key: fk } of DAMAGE_FLAG_KEYS) flags[fk] = !!entry?.damageFlags?.[fk];
         const rider = entry?.rider ?? null;
+        const numerics = {};
+        for (const { key: nk } of NUMERIC_EFFECT_KEYS) numerics[nk] = Number(entry?.[nk]) || 0;
+        const strings = {};
+        for (const { key: sk } of STRING_EFFECT_KEYS) strings[sk] = String(entry?.[sk] ?? "");
         return {
             key,
             label: entry?.label ?? key,
@@ -118,7 +156,12 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
             // ArrayField on FormDataExtended); split / re-join at the IO edges.
             riderLocations: rider?.locations?.length ? rider.locations.join(",") : "",
             // Tactical flags — read by combat-flow code (not the damage pipeline).
+            tacticalFlags: Object.fromEntries(TACTICAL_FLAG_KEYS.map(t => [t.key, !!entry?.[t.key]])),
+            // Back-compat alias kept so older callers / templates see the
+            // same field; mirrors tacticalFlags.ignoresRepositionDistance.
             ignoresRepositionDistance: !!entry?.ignoresRepositionDistance,
+            numerics,
+            strings,
             isDefault
         };
     }
@@ -147,8 +190,23 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
             if (locs.length) rider.locations = locs;
             entry.rider = rider;
         }
-        // Tactical flags — only persist when set, same diff-tightness rule.
-        if (row.ignoresRepositionDistance) entry.ignoresRepositionDistance = true;
+        // Tactical flags — only persist truthy entries (diff-tightness rule).
+        for (const { key: tk } of TACTICAL_FLAG_KEYS) {
+            if (row.tacticalFlags?.[tk] || (tk === "ignoresRepositionDistance" && row.ignoresRepositionDistance)) {
+                entry[tk] = true;
+            }
+        }
+        // Numeric + string effects — only persist non-zero / non-empty so an
+        // untouched quality still diffs equal to its default and is omitted
+        // from the override.
+        for (const { key: nk } of NUMERIC_EFFECT_KEYS) {
+            const v = Number(row.numerics?.[nk]) || 0;
+            if (v) entry[nk] = v;
+        }
+        for (const { key: sk } of STRING_EFFECT_KEYS) {
+            const v = String(row.strings?.[sk] ?? "").trim();
+            if (v) entry[sk] = v;
+        }
         return entry;
     }
 
@@ -169,15 +227,29 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
                 const o = override[key];
                 if (o?.removed) continue;
                 const entry = o
-                    ? {
-                        label:       o.label       ?? defEntry.label,
-                        description: o.description ?? defEntry.description,
-                        param:       o.param       ?? defEntry.param ?? null,
-                        damageFlags: o.damageFlags ?? defEntry.damageFlags ?? {},
-                        rider:       o.rider       ?? defEntry.rider ?? null,
-                        ignoresRepositionDistance:
-                            o.ignoresRepositionDistance ?? defEntry.ignoresRepositionDistance ?? false
-                    }
+                    ? (() => {
+                        const merged = {
+                            label:       o.label       ?? defEntry.label,
+                            description: o.description ?? defEntry.description,
+                            param:       o.param       ?? defEntry.param ?? null,
+                            damageFlags: o.damageFlags ?? defEntry.damageFlags ?? {},
+                            rider:       o.rider       ?? defEntry.rider ?? null
+                        };
+                        // Tactical flags — same fall-through rule as above.
+                        for (const { key: tk } of TACTICAL_FLAG_KEYS) {
+                            merged[tk] = o[tk] ?? defEntry[tk] ?? false;
+                        }
+                        // Numeric / string effects — fall through to default if
+                        // override doesn't set them, so an untouched effect on
+                        // a partially-customized quality keeps its built-in.
+                        for (const { key: nk } of NUMERIC_EFFECT_KEYS) {
+                            merged[nk] = o[nk] ?? defEntry[nk] ?? 0;
+                        }
+                        for (const { key: sk } of STRING_EFFECT_KEYS) {
+                            merged[sk] = o[sk] ?? defEntry[sk] ?? "";
+                        }
+                        return merged;
+                    })()
                     : defEntry;
                 rows.push(QualitiesEditor.#rowFromEntry(key, entry, true));
             }
@@ -206,6 +278,25 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
                 const r = rows[idx];
                 const flags = {};
                 for (const { key: fk } of DAMAGE_FLAG_KEYS) flags[fk] = !!(r.flags?.[fk]);
+                const numerics = {};
+                // Clamp at zero — labels all read "Bonus" / "Reduction" /
+                // "Delta" with positive semantics. A negative `parryPenaltyDelta`
+                // would WORSEN parry instead of helping (the label promises
+                // reduction); same logic across the other fields. The HTML
+                // input gets min="0" too, but this is the authoritative gate.
+                for (const { key: nk } of NUMERIC_EFFECT_KEYS) numerics[nk] = Math.max(0, Number(r.numerics?.[nk]) || 0);
+                const strings = {};
+                for (const { key: sk } of STRING_EFFECT_KEYS) strings[sk] = String(r.strings?.[sk] ?? "").trim();
+                const tacticalFlags = {};
+                for (const { key: tk } of TACTICAL_FLAG_KEYS) {
+                    const v = r.tacticalFlags?.[tk];
+                    tacticalFlags[tk] = v === true || v === "true" || v === "on";
+                }
+                // Back-compat: the legacy standalone ignoresRepositionDistance
+                // input still posts under its old name; OR it in.
+                if (r.ignoresRepositionDistance === true || r.ignoresRepositionDistance === "true" || r.ignoresRepositionDistance === "on") {
+                    tacticalFlags.ignoresRepositionDistance = true;
+                }
                 next.push({
                     key: String(r.key ?? "").trim(),
                     label: String(r.label ?? "").trim(),
@@ -217,8 +308,10 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
                     riderKind:      String(r.riderKind   || "none"),
                     riderStatus:    String(r.riderStatus ?? "").trim(),
                     riderLocations: String(r.riderLocations ?? "").trim(),
-                    ignoresRepositionDistance:
-                        r.ignoresRepositionDistance === true || r.ignoresRepositionDistance === "true" || r.ignoresRepositionDistance === "on",
+                    tacticalFlags,
+                    ignoresRepositionDistance: !!tacticalFlags.ignoresRepositionDistance,
+                    numerics,
+                    strings,
                     isDefault: r.isDefault === true || r.isDefault === "true"
                 });
             }
@@ -273,7 +366,23 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
             riderHasLocations: row.riderKind === "stunSave",
             riderLocationKeysHint: RIDER_LOCATION_KEYS.join(", "),
             riderLocations: row.riderLocations ?? "",
-            ignoresRepositionDistance: !!row.ignoresRepositionDistance
+            tacticalControls: TACTICAL_FLAG_KEYS.map(t => ({
+                key:     t.key,
+                label:   t.label,
+                checked: !!row.tacticalFlags?.[t.key] || (t.key === "ignoresRepositionDistance" && !!row.ignoresRepositionDistance)
+            })),
+            numericControls: NUMERIC_EFFECT_KEYS.map(n => ({
+                key:   n.key,
+                label: n.label,
+                hint:  n.hint,
+                value: Number(row.numerics?.[n.key]) || 0
+            })),
+            stringControls: STRING_EFFECT_KEYS.map(s => ({
+                key:   s.key,
+                label: s.label,
+                hint:  s.hint,
+                value: String(row.strings?.[s.key] ?? "")
+            }))
         }));
         return { name, prefix: cfg.prefix, label, rows };
     }
@@ -299,7 +408,7 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
     static async #onResetCatalog(event, target) {
         const name = target.dataset.catalog;
         const ok = await foundry.applications.api.DialogV2.confirm({
-            window: { title: "Restore defaults?" },
+            window: { title: t("WITCHER.Dialog.RestoreDefaults", "Restore defaults?") },
             content: `<p>Discard your customizations to the ${name} qualities and restore the system defaults? This takes effect when you Save.</p>`,
             modal: true,
             rejectClose: false
@@ -331,7 +440,7 @@ export class QualitiesEditor extends HandlebarsApplicationMixin(ApplicationV2) {
                 const override = QualitiesEditor.#buildOverride(name, this.#working[name]);
                 await game.settings.set(SYSTEM_ID, cfg.setting, override);
             }
-            ui.notifications.info("Qualities catalogs saved.");
+            ui.notifications.info(t("WITCHER.Notify.Qualities.Saved", "Qualities catalogs saved."));
         } catch (e) {
             ui.notifications.error(e.message);
             throw e;

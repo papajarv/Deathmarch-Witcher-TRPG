@@ -75,8 +75,9 @@ export function damagePropertiesSchema() {
             // (combatRoundMixin.resetCombatRound).
             reloadProgress: new fields.NumberField({ initial: 0, integer: true, min: 0 })
         }),
-        // Area-of-effect radius in metres for THROWN weapons (e.g. bombs,
-        // Core p.88). Only meaningful when weaponType === "thrown".
+        // Area-of-effect radius in metres for area-effect weapons (e.g.
+        // bombs, Core p.88). Meaningful when the weapon is thrown (its
+        // `range` field is set) AND its intended use is AoE — otherwise 0.
         radius:             new fields.NumberField({ initial: 0, min: 0 }),
         effects:            new fields.HTMLField({ initial: "" }),
         qualities:          new fields.ArrayField(new fields.StringField(), { initial: [] }),
@@ -100,15 +101,22 @@ export function damagePropertiesSchema() {
             name: new fields.StringField({ initial: "" }),
             img:  new fields.StringField({ initial: "" })
         }), { initial: [] }),
+        // Attack skill. For melee weapons this is the swing/stab skill
+        // (smallblades, swordsmanship, melee, staffspear, brawling). For
+        // ranged weapons this is the shooting skill (archery, crossbow).
+        // A melee weapon with a non-empty `range` is throwable; the throw
+        // itself always rolls Athletics regardless of what's stored here.
         skillKey:           new fields.StringField({ initial: "" }),
-        // Skill rolled when a THROWN weapon is used in melee mode (the attack
-        // card offers a melee/thrown toggle). `skillKey` is the thrown skill
-        // (e.g. athletics); this is the in-hand skill (e.g. smallblades). Empty
-        // = no melee mode offered. Only meaningful when weaponType === "thrown".
+        // LEGACY field — pre-migration this held the melee skill of a
+        // "thrown"-typed weapon. Post-migration the melee skill lives in
+        // `skillKey` and any weapon with a `range` is throwable, so this
+        // field is dead weight. Kept in the schema so world data with
+        // legacy values still validates; readers fall back to `skillKey`.
         meleeSkillKey:      new fields.StringField({ initial: "" }),
-        // Attack-style class — drives template visibility and the
-        // melee-bonus damage rule (Core p.48: melee bonus is added to
-        // melee and thrown attacks, not to ranged).
+        // Attack-style class — "melee" for weapons you swing/stab (they
+        // become throwable when `range` is set) and "ranged" for weapons
+        // you shoot (bows, crossbows, siege). The legacy "thrown" value
+        // was collapsed into "melee" — see WeaponData.migrateData.
         weaponType:         new fields.StringField({ initial: "melee" }),
         // Per-weapon override of the default melee-bonus behavior.
         // Defaults true so most melee/thrown items just work; flip false

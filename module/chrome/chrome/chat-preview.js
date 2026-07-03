@@ -411,6 +411,12 @@ function previewContainer() {
   if (!el) {
     el = document.createElement("ol");
     el.id = "wdm-chat-previews";
+    /* Live on <body> in the root stacking context — that's what lets
+     * a plain z-index order it relative to the dock without inheriting
+     * whatever transform Foundry has applied to #interface. Its
+     * `bottom` position is kept in sync with the dock's on-screen top
+     * edge by notifications.js, which polls the post-transform
+     * bounding rect every frame. */
     document.body.appendChild(el);
   }
   return el;

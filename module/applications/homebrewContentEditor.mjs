@@ -16,6 +16,7 @@
 
 import { HOMEBREW } from "../setup/config.mjs";
 
+import { t, tFormat } from "../chrome/lib/i18n.js";
 const SYSTEM_ID = "witcher-ttrpg-death-march";
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -37,7 +38,7 @@ export class HomebrewContentEditor extends HandlebarsApplicationMixin(Applicatio
         classes: ["witcher-ttrpg-death-march", "wdm-homebrew-editor"],
         tag: "form",
         window: {
-            title: "Homebrew Content",
+            title: t("WITCHER.Dialog.Homebrew.Title", "Homebrew Content"),
             icon: "fa-solid fa-flask-vial",
             resizable: true
         },
@@ -77,7 +78,7 @@ export class HomebrewContentEditor extends HandlebarsApplicationMixin(Applicatio
                 anyChanged = true;
             }
         }
-        ui.notifications.info("Homebrew content saved.");
+        ui.notifications.info(t("WITCHER.Notify.Homebrew.Saved", "Homebrew content saved."));
         // Each homebrew.<key> setting is `requiresReload: true`, but Foundry's
         // automatic reload prompt only fires from the native Configure Settings
         // panel — custom editors have to call it themselves. Without this the

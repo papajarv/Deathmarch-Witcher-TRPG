@@ -15,6 +15,7 @@
 
 import { STRESS_CONFIG_DEFAULTS } from "../mechanics/stress.mjs";
 
+import { t, tFormat } from "../chrome/lib/i18n.js";
 const SYSTEM_ID = "witcher-ttrpg-death-march";
 const SETTING_KEY = "stressConfig";
 
@@ -27,7 +28,7 @@ export class StressConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
         classes: ["witcher-ttrpg-death-march", "wdm-stress-config"],
         tag: "form",
         window: {
-            title: "Stress Configuration",
+            title: t("WITCHER.Dialog.Stress.Title", "Stress Configuration"),
             icon: "fa-solid fa-brain",
             resizable: true
         },
@@ -77,7 +78,7 @@ export class StressConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
     static async #onResetDefaults() {
         const ok = await foundry.applications.api.DialogV2.confirm({
-            window: { title: "Reset stress config?" },
+            window: { title: t("WITCHER.Dialog.Stress.Reset", "Reset stress config?") },
             content: "<p>Discard all stress configuration overrides and restore the homebrew defaults? This takes effect when you Save.</p>",
             modal: true,
             rejectClose: false
@@ -106,7 +107,7 @@ export class StressConfigApp extends HandlebarsApplicationMixin(ApplicationV2) {
             woundStressDeadly:          Math.max(0, Number(raw.woundStressDeadly)    || 0)
         };
         await game.settings.set(SYSTEM_ID, SETTING_KEY, merged);
-        ui.notifications.info("Stress configuration saved.");
+        ui.notifications.info(t("WITCHER.Notify.Stress.Saved", "Stress configuration saved."));
         const SettingsConfig = foundry.applications?.settings?.SettingsConfig
                             ?? globalThis.SettingsConfig;
         try { await SettingsConfig?.reloadConfirm?.({ world: true }); }

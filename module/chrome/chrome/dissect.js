@@ -20,6 +20,7 @@
 import { MODULE_ID } from "../setup/settings.js";
 import { encKey, bestiaryKeyFor, bumpResearchIfZero } from "../lib/bestiary.js";
 
+import { t, tFormat } from "../lib/i18n.js";
 const DialogV2 = foundry.applications.api.DialogV2;
 
 const MONSTER_UUID_FLAG = "monsterUuid";   // set by monster-remains.js
@@ -54,17 +55,17 @@ const SKILLS_SKILLS = [
  *  pre-conditions aren't met so the carcass charges aren't spent. */
 export async function doDissect(item, actor) {
   if (!actor) {
-    ui.notifications?.warn("Dissect must be triggered from a character sheet, not the sidebar.");
+    ui.notifications?.warn(t("WITCHER.Notify.Dissect.NotSidebar", "Dissect must be triggered from a character sheet, not the sidebar."));
     return false;
   }
   const monsterUuid = item.system?.monsterUuid || item.flags?.[MODULE_ID]?.[MONSTER_UUID_FLAG];
   if (!monsterUuid) {
-    ui.notifications?.error("These remains aren't linked to a source monster.");
+    ui.notifications?.error(t("WITCHER.Notify.Dissect.NotLinked", "These remains aren't linked to a source monster."));
     return false;
   }
   const monster = await fromUuid(monsterUuid);
   if (!monster) {
-    ui.notifications?.error("The source monster could not be found.");
+    ui.notifications?.error(t("WITCHER.Notify.Dissect.MonsterMissing", "The source monster could not be found."));
     return false;
   }
 
@@ -142,7 +143,7 @@ async function pickLabAndType(monster) {
   const diffLabel = CONFIG.WITCHER?.monster?.threat?.[diffKey];
   const diff = diffLabel ? game.i18n.localize(diffLabel) : (diffKey || "—");
   const content = `
-    <div style="display:grid;gap:8px;font-size:12px;line-height:1.45;">
+    <div style="display:grid;gap:8px;font-size:0.75rem;line-height:1.45;">
       <p style="margin:0;">
         Dissecting <b>${escText(monster.name)}</b>
         — difficulty <b>${escText(diff)}</b> (DC <b>${dc}</b>).
@@ -166,7 +167,7 @@ async function pickLabAndType(monster) {
             <input type="radio" name="lab" value="${escAttr(o.id)}" ${i === 0 ? "checked" : ""} />
             <span>
               <span style="font-weight:bold;">${escText(o.label)}</span>
-              <span style="display:block;font-size:11px;opacity:0.75;">${escText(o.sub)}</span>
+              <span style="display:block;font-size:0.6875rem;opacity:0.75;">${escText(o.sub)}</span>
             </span>
             <span style="font-family:var(--font-mono,monospace);font-weight:bold;color:${o.bonus > 0 ? "#5a8a4a" : "#999"};">
               ${o.bonus > 0 ? `+${o.bonus}` : "—"}
@@ -190,7 +191,7 @@ async function pickLabAndType(monster) {
           value, <i>not</i> the rolled total of stat + rank).</div>
         <div style="margin-left:12px;">• <b>Alchemy</b> &nbsp;÷2 &nbsp;(only option for this category)</div>
       </div>
-      <p style="margin:0;font-size:11px;opacity:0.75;">
+      <p style="margin:0;font-size:0.6875rem;opacity:0.75;">
         Performing the dissection itself bumps a brand-new bestiary entry from
         research tier 0 → 1.
       </p>
@@ -209,7 +210,7 @@ async function pickLabAndType(monster) {
   });
 
   return DialogV2.wait({
-    window: { title: "Choose autopsy category" },
+    window: { title: t("WITCHER.Dialog.Dissect.Category", "Choose autopsy category") },
     content,
     position: { width: 560 },
     buttons: [
@@ -240,7 +241,7 @@ async function pickSkill(type, options) {
     </div>
   `;
   return DialogV2.wait({
-    window: { title: `Choose skill — ${typeLabel}` },
+    window: { title: tFormat("WITCHER.Dialog.Dissect.Skill", { type: typeLabel }, "Choose skill — {type}") },
     content,
     position: { width: 380 },
     buttons: [
@@ -269,23 +270,23 @@ function monsterDC(monster) {
 async function rollChosenSkill(actor, skill) {
   if (skill.isProfession) {
     if (typeof actor.rollProfessionSkill !== "function" || typeof actor.findProfessionSlot !== "function") {
-      ui.notifications?.error("System's profession-skill roll helper missing.");
+      ui.notifications?.error(t("WITCHER.Notify.Dissect.HelperMissingProf", "System's profession-skill roll helper missing."));
       return null;
     }
     const slot = actor.findProfessionSlot(skill.skillName);
     if (!slot) {
-      ui.notifications?.error(`${actor.name} doesn't have the "${skill.skillName}" profession skill.`);
+      ui.notifications?.error(tFormat("WITCHER.Notify.Dissect.NoSkill", { actor: actor.name, skill: skill.skillName }, "{actor} doesn't have the \"{skill}\" profession skill."));
       return null;
     }
     const roll = await actor.rollProfessionSkill(slot);
     return { total: roll?.total ?? 0, formula: roll?.formula ?? "" };
   }
   if (!CONFIG.WITCHER?.skillMap?.[skill.mapKey]) {
-    ui.notifications?.error(`Skill "${skill.mapKey}" missing from skillMap.`);
+    ui.notifications?.error(tFormat("WITCHER.Notify.Dissect.SkillMissingMap", { key: skill.mapKey }, "Skill \"{key}\" missing from skillMap."));
     return null;
   }
   if (typeof actor.rollSkillCheck !== "function") {
-    ui.notifications?.error("System's rollSkillCheck helper missing.");
+    ui.notifications?.error(t("WITCHER.Notify.Dissect.HelperMissingSkill", "System's rollSkillCheck helper missing."));
     return null;
   }
   const roll = await actor.rollSkillCheck(skill.mapKey, null);
@@ -303,14 +304,16 @@ function buildPool(type, monster) {
   return [];
 }
 
-/** Per inline attack row (claws, bite, etc.): name, damage, effect, ROF,
- *  plus each Weapon-Effect quality the attack carries. */
+/** Per inline attack row (claws, bite, etc.): name, damage, attack base
+ *  (the printed `Attack +X`), effect, ROF, plus each Weapon-Effect quality
+ *  the attack carries. */
 function buildCombatPool(monster) {
   const facts = [];
   const attacks = Array.isArray(monster.system?.combat?.attacks) ? monster.system.combat.attacks : [];
   attacks.forEach((atk, idx) => {
     facts.push(`attack:${idx}:name`);
     if (atk?.damage)                  facts.push(`attack:${idx}:damage`);
+    if (Number(atk?.flatBonus) || 0)  facts.push(`attack:${idx}:flatBonus`);
     if (String(atk?.effect ?? "").trim()) facts.push(`attack:${idx}:effect`);
     if (Number.isFinite(atk?.rof) && Number(atk.rof) > 1) {
       facts.push(`attack:${idx}:rof`);
@@ -321,13 +324,21 @@ function buildCombatPool(monster) {
   return facts;
 }
 
-/** All base stats + derived stats as candidate facts. */
+/** All base stats + derived stats as candidate facts. The
+ *  `*Unmodified` snapshots monster.mjs writes for the wound-penalty math
+ *  (refUnmodified, dexUnmodified, etc.) are internal — skip them so they
+ *  don't show up as discoverable facts on the bestiary card. */
+const INTERNAL_DERIVED_FACTS = new Set([
+  "refUnmodified", "dexUnmodified", "intUnmodified", "willUnmodified",
+  "stunUnmodified"
+]);
 function buildStatsPool(monster) {
   const facts = [];
   for (const k of Object.keys(monster.system?.stats ?? {})) {
     facts.push(`stat:${k}`);
   }
   for (const k of Object.keys(monster.system?.derivedStats ?? {})) {
+    if (INTERNAL_DERIVED_FACTS.has(k)) continue;
     facts.push(`derived:${k}`);
   }
   return facts;
@@ -410,24 +421,24 @@ function renderChatCard({ actorName, monster, item, type, skill, lab, dc, rolled
     ? revealedFacts.map(f => `<li>${escText(describeFact(f, monster))}</li>`).join("")
     : `<li style="opacity:0.7;font-style:italic;">No new information.</li>`;
   const exhaustNote = exhausted > 0
-    ? `<p style="margin:4px 0 0;font-size:11px;opacity:0.7;">${exhausted} hit${exhausted === 1 ? "" : "s"} fizzled — the bestiary entry is full on this category.</p>`
+    ? `<p style="margin:4px 0 0;font-size:0.6875rem;opacity:0.7;">${exhausted} hit${exhausted === 1 ? "" : "s"} fizzled — the bestiary entry is full on this category.</p>`
     : "";
   const passFail = effectiveTotal >= dc
     ? `<span style="color:#5a8a4a;font-weight:bold;">Pass</span>`
     : `<span style="color:#a25050;font-weight:bold;">Fail</span>`;
   const labBonus = Number(lab?.bonus) || 0;
   const formulaLine = formula ? `
-      <div style="font-size:11px;opacity:0.85;font-family:var(--font-mono,monospace);background:rgba(0,0,0,0.08);padding:2px 6px;margin:2px 0;">
+      <div style="font-size:0.6875rem;opacity:0.85;font-family:var(--font-mono,monospace);background:rgba(0,0,0,0.08);padding:2px 6px;margin:2px 0;">
         Rolled: ${escText(formula)} = <b>${rolledTotal}</b>${labBonus ? ` &nbsp;·&nbsp; Lab bonus: <b>+${labBonus}</b> (${escText(lab.label)}) &nbsp;→ <b>${effectiveTotal}</b>` : ""}
       </div>` : "";
   const labLine = !formula && lab ? `
-      <div style="font-size:11px;opacity:0.85;">
+      <div style="font-size:0.6875rem;opacity:0.85;">
         Setting: <b>${escText(lab.label)}</b>${labBonus ? ` (+${labBonus})` : ""}
       </div>` : "";
   return `
     <div class="wou-dissect-card">
       <h3 style="margin:0 0 4px;">Dissection · ${escText(item.name)}</h3>
-      <div style="font-size:11px;opacity:0.85;">
+      <div style="font-size:0.6875rem;opacity:0.85;">
         ${escText(actorName)} → ${escText(monster.name)} · ${typeLabel} (${escText(skill.label)})
       </div>
       ${formulaLine}${labLine}
@@ -470,10 +481,14 @@ function describeFact(factId, monster) {
     const atk = monster.system?.combat?.attacks?.[Number(idxStr)];
     if (!atk) return `Attack · (missing)`;
     const name = atk.name || "Attack";
-    if (prop === "name")    return `Attack · ${name}`;
-    if (prop === "damage")  return `Attack · ${name} damage: ${atk.damage ?? "?"}`;
-    if (prop === "effect")  return `Attack · ${name} effect: ${atk.effect ?? "?"}`;
-    if (prop === "rof")     return `Attack · ${name} ROF: ${atk.rof ?? "?"}`;
+    if (prop === "name")      return `Attack · ${name}`;
+    if (prop === "damage")    return `Attack · ${name} damage: ${atk.damage ?? "?"}`;
+    if (prop === "effect")    return `Attack · ${name} effect: ${atk.effect ?? "?"}`;
+    if (prop === "rof")       return `Attack · ${name} ROF: ${atk.rof ?? "?"}`;
+    if (prop === "flatBonus") {
+      const v = Number(atk.flatBonus) || 0;
+      return `Attack · ${name} base: ${v >= 0 ? "+" : ""}${v}`;
+    }
     if (prop === "quality") {
       const qidx = Number(tail[0]) || 0;
       const key = Array.isArray(atk.qualities) ? atk.qualities[qidx] : undefined;

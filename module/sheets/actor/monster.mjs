@@ -17,6 +17,7 @@ import { openFumbleDialog }   from "../../chrome/chrome/fumble-dialog.js";
 import { openCriticalDialog } from "../../chrome/chrome/critical-roll.js";
 import { buildMonsterVirtualWeapon } from "../../combat/monsterVirtualWeapon.mjs";
 
+import { t, tFormat } from "../../chrome/lib/i18n.js";
 const SYSTEM_ID  = "witcher-ttrpg-death-march";
 const MONSTER_TABS = ["combat", "skills", "knowledge", "loot", "inventory", "effects", "notes"];
 
@@ -266,7 +267,10 @@ export class WitcherMonsterSheet extends WitcherActorSheet {
                 index: i,
                 qualities: formatQualityList(row.qualities, row.qualityValues, qCatalog),
                 addableQualities: addableQualities(row.qualities, qCatalog),
-                skillOptions: skillOptions.map(o => ({ ...o, selected: o.value === row.skill })),
+                /* `skillOptions` removed: the template no longer renders a
+                 * skill picker on inline attacks (monsters always use
+                 * `flatBonus`). Knowledge tiers below still build the same
+                 * dropdown via their own context entry. */
                 damageTypeOptions: dmgTypeKeys.map(key => ({
                     key,
                     label:    game.i18n.localize(dmgTypeDefs[key] ?? key),
@@ -380,7 +384,7 @@ export class WitcherMonsterSheet extends WitcherActorSheet {
                     { scene: canvas?.scene?.id ?? null, active: true });
             }
             if (!combat) {
-                ui.notifications.error("Could not create or find a combat encounter.");
+                ui.notifications.error(t("WITCHER.Notify.Combat.NoEncounter", "Could not create or find a combat encounter."));
                 return;
             }
 
@@ -409,7 +413,7 @@ export class WitcherMonsterSheet extends WitcherActorSheet {
             }
             if (!combat.active && typeof combat.activate === "function") await combat.activate();
         } catch (err) {
-            ui.notifications.error("Failed to roll initiative into combat — see console.");
+            ui.notifications.error(t("WITCHER.Notify.Combat.InitiativeFailed", "Failed to roll initiative into combat — see console."));
             console.error(err);
         }
     }
@@ -475,7 +479,7 @@ export class WitcherMonsterSheet extends WitcherActorSheet {
                  <i class="fa-solid fa-folder-open"></i></button>
              </div>`;
         const result = await DialogV2.prompt({
-            window: { title: "Trophy/Remains Icons" },
+            window: { title: t("WITCHER.Dialog.Monster.TrophyIcons", "Trophy/Remains Icons") },
             content: `<form>${row("Remains icon", "remainsIcon", remains)}${row("Trophy icon", "trophyIcon", trophy)}</form>`,
             modal: false,
             rejectClose: false,
@@ -689,7 +693,7 @@ export class WitcherMonsterSheet extends WitcherActorSheet {
             });
         } catch (err) {
             console.warn("witcher-ttrpg-death-march | monster attack failed", err);
-            ui.notifications?.error("Monster attack failed — see console.");
+            ui.notifications?.error(t("WITCHER.Notify.Monster.AttackFailed", "Monster attack failed — see console."));
         }
     }
 

@@ -80,6 +80,29 @@ export class DiagramsData extends foundry.abstract.TypeDataModel {
                     required: false
                 })
             }),
+            // ── Alchemy Reborn: tiered outputs (Normal / Enhanced / Superior)
+            // ──────────────────────────────────────────────────────────
+            // The Normal tier output IS the existing `associatedItem`
+            // (the "Produced Item" slot pre-Reborn) — no separate field,
+            // so every legacy diagram already has a Normal output and the
+            // GM doesn't have to re-link anything. The Enhanced/Superior
+            // tiers add NEW slots (`outputEnhanced` / `outputSuperior`)
+            // as bare UUID strings; their names + images are resolved at
+            // render time via fromUuidSync so renames flow through without
+            // a save.
+            //
+            // Threshold semantics: the achieved tier is the HIGHEST whose
+            // threshold is met by the brew's total potency (sum of all
+            // picked ingredients' system.potency). e.g. with thresholds
+            // 5/15/25, total potency 18 → Enhanced (15 ≤ 18 < 25). A tier
+            // slot left empty falls through to the next-lower tier and
+            // ultimately to the associatedItem (Normal) — so a partially-
+            // authored diagram still produces SOMETHING.
+            outputEnhanced:  new fields.StringField({ initial: "", blank: true }),
+            outputSuperior:  new fields.StringField({ initial: "", blank: true }),
+            potencyNormal:   new fields.NumberField({ initial: 0, integer: true, min: 0 }),
+            potencyEnhanced: new fields.NumberField({ initial: 0, integer: true, min: 0 }),
+            potencySuperior: new fields.NumberField({ initial: 0, integer: true, min: 0 }),
             // Migration anchor — original diagram id on cloned learned
             // copies (from witcher-overhaul-ui's "memorize" flow). Kept
             // because old worlds carry this value on memorized diagrams.

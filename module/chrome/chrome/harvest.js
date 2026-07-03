@@ -25,6 +25,7 @@
 import { MODULE_ID } from "../setup/settings.js";
 import { bumpResearchIfZero } from "../lib/bestiary.js";
 
+import { t, tFormat } from "../lib/i18n.js";
 const DialogV2 = foundry.applications.api.DialogV2;
 
 const SURVIVAL_SKILL_KEY = "wilderness";
@@ -38,25 +39,25 @@ const CONTENTS_FLAG      = "harvest.contents";
 
 export async function doHarvest(item, actor) {
   if (!actor) {
-    ui.notifications?.warn("Harvest Materials must be triggered from a character sheet.");
+    ui.notifications?.warn(t("WITCHER.Notify.Harvest.NotSidebar", "Harvest Materials must be triggered from a character sheet."));
     return false;
   }
 
   const monsterUuid = item.system?.monsterUuid || item.flags?.[MODULE_ID]?.monsterUuid;
   if (!monsterUuid) {
-    ui.notifications?.error("These remains aren't linked to a source monster.");
+    ui.notifications?.error(t("WITCHER.Notify.Harvest.NotLinked", "These remains aren't linked to a source monster."));
     return false;
   }
   const monster = await fromUuid(monsterUuid);
   if (!monster) {
-    ui.notifications?.error("The source monster could not be found.");
+    ui.notifications?.error(t("WITCHER.Notify.Harvest.MonsterMissing", "The source monster could not be found."));
     return false;
   }
 
   const total = await rollWildernessSurvival(actor, SURVIVAL_DC);
 
   if (total < SURVIVAL_DC) {
-    ui.notifications?.info(`${actor.name} failed to harvest materials (rolled ${total} vs DC ${SURVIVAL_DC}).`);
+    ui.notifications?.info(tFormat("WITCHER.Notify.Harvest.Failed", { actor: actor.name, total: total, dc: SURVIVAL_DC }, "{actor} failed to harvest materials (rolled {total} vs DC {dc})."));
     /* Even a failed harvest attempt is "putting your hands on the body" —
      * counts as observation, so a fresh entry ticks up 0 → 1 (never
      * higher, never demotes). */
@@ -216,11 +217,11 @@ async function resolveQuantity(raw, label = "quantity") {
 
 async function rollWildernessSurvival(actor, dc) {
   if (!CONFIG.WITCHER?.skillMap?.[SURVIVAL_SKILL_KEY]) {
-    ui.notifications?.error(`Skill map entry "${SURVIVAL_SKILL_KEY}" missing from CONFIG.WITCHER.`);
+    ui.notifications?.error(tFormat("WITCHER.Notify.Harvest.SkillMapMissing", { key: SURVIVAL_SKILL_KEY }, "Skill map entry \"{key}\" missing from CONFIG.WITCHER."));
     return 0;
   }
   if (typeof actor.rollSkillCheck !== "function") {
-    ui.notifications?.error("System's rollSkillCheck helper missing.");
+    ui.notifications?.error(t("WITCHER.Notify.Harvest.HelperMissing", "System's rollSkillCheck helper missing."));
     return 0;
   }
   const roll = await actor.rollSkillCheck(SURVIVAL_SKILL_KEY, dc);
@@ -252,11 +253,11 @@ export async function openCarcassPopup(item) {
     : `<li class="wou-carcass-empty">Nothing left inside.</li>`;
 
   const dlg = await DialogV2.wait({
-    window: { title: `Carcass · ${item.name}` },
+    window: { title: tFormat("WITCHER.Dialog.Harvest.Carcass", { item: item.name }, "Carcass · {item}") },
     position: { width: 380 },
     content: `
       <div class="wou-carcass-popup">
-        <p style="margin:0 0 6px;font-size:11px;opacity:0.75;">
+        <p style="margin:0 0 6px;font-size:0.6875rem;opacity:0.75;">
           Click the hand icon to send a row to your assigned character.
           The trash icon discards a row outright.
         </p>
@@ -287,7 +288,7 @@ function wireCarcassPopup(dialog, item) {
 
     if (el.dataset.action === "take") {
       const target = game.user.character;
-      if (!target) return ui.notifications?.warn("No assigned character set — assign one in User Configuration first.");
+      if (!target) return ui.notifications?.warn(t("WITCHER.Notify.Harvest.NoCharacter", "No assigned character set — assign one in User Configuration first."));
       await transferEntryToActor(entry, target);
       const destroyed = await removeEntry(item, idx);
       if (destroyed) closeOpenCarcassPopup(item);
@@ -303,7 +304,7 @@ function wireCarcassPopup(dialog, item) {
 async function transferEntryToActor(entry, actor) {
   const src = await fromUuid(entry.sourceUuid);
   if (!src) {
-    ui.notifications?.warn(`${entry.name}: source item not found.`);
+    ui.notifications?.warn(tFormat("WITCHER.Notify.Harvest.SourceMissing", { entry: entry.name }, "{entry}: source item not found."));
     return;
   }
   const data = src.toObject();
@@ -314,7 +315,7 @@ async function transferEntryToActor(entry, actor) {
    * harvested row as its own document with its own quantity. */
   data.system.quantity = entry.quantity ?? 1;
   await actor.createEmbeddedDocuments("Item", [data]);
-  ui.notifications?.info(`${actor.name} took ${entry.name} ×${entry.quantity ?? 1}.`);
+  ui.notifications?.info(tFormat("WITCHER.Notify.Harvest.Took", { actor: actor.name, entry: entry.name, qty: entry.quantity ?? 1 }, "{actor} took {entry} ×{qty}."));
 }
 
 /** Remove one harvested row. If that empties a fully-spent carcass (0
@@ -345,7 +346,7 @@ function refreshOpenCarcassPopup(item) {
 function closeOpenCarcassPopup(item) {
   const open = foundry.applications.instances.values?.()
     ? [...foundry.applications.instances.values()]
-        .find(a => a?.options?.window?.title === `Carcass · ${item.name}`)
+        .find(a => a?.options?.window?.title === tFormat("WITCHER.Dialog.Harvest.Carcass", { item: item.name }, "Carcass · {item}"))
     : null;
   if (open) open.close({ submitted: false });
 }
@@ -361,7 +362,7 @@ function renderHarvestChatCard({ actor, item, monster, total, contents }) {
   return `
     <div class="wou-harvest-card">
       <h3 style="margin:0 0 4px;">Harvest · ${escText(item.name)}</h3>
-      <div style="font-size:11px;opacity:0.85;">
+      <div style="font-size:0.6875rem;opacity:0.85;">
         ${escText(actor.name)} → ${escText(monster.name)} ·
         <span style="color:#5a8a4a;font-weight:bold;">Pass</span>
         <b>${total}</b> vs DC <b>${SURVIVAL_DC}</b>

@@ -7,7 +7,7 @@
 <div class="wdm-fdc">
 
   <header class="wdm-fdc-head">
-    <h2><i class="fa-solid fa-utensils"></i> Food &amp; Drink Configuration</h2>
+    <h2><i class="fa-solid fa-utensils"></i> {{localize 'WITCHER.App.FoodAndDrinkConfig.Text.FoodDrinkConfiguration'}}</h2>
     <p class="wdm-fdc-blurb">
       Numeric knobs for the food &amp; drink homebrew. Changes require a world
       reload (the prompt fires on save). Defaults match the original spec —
@@ -19,7 +19,7 @@
 
     <section class="wdm-fdc-section">
       <div class="wdm-fdc-section-head">
-        <h3><i class="fa-solid fa-droplet-slash"></i> Satiety Decay</h3>
+        <h3><i class="fa-solid fa-droplet-slash"></i> {{localize 'WITCHER.App.FoodAndDrinkConfig.Text.SatietyDecay'}}</h3>
         <p class="wdm-fdc-section-hint">
           Per-hour drain: <code>base + ⌈BODY / divisor⌉</code>. Default is
           1 + ⌈BODY/4⌉, so a BODY-7 character loses 3 satiety per hour.
@@ -27,15 +27,15 @@
       </div>
       <div class="wdm-fdc-grid">
         <label class="wdm-fdc-cell">
-          <span class="wdm-fdc-label">Base / hour</span>
+          <span class="wdm-fdc-label">{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.BaseHour'}}</span>
           <input type="number" name="decay.base" value="{{decay.base}}" min="0" step="1" />
         </label>
         <label class="wdm-fdc-cell">
-          <span class="wdm-fdc-label">BODY divisor</span>
+          <span class="wdm-fdc-label">{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.BodyDivisor'}}</span>
           <input type="number" name="decay.bodyDivisor" value="{{decay.bodyDivisor}}" min="1" step="1" />
         </label>
         <label class="wdm-fdc-cell">
-          <span class="wdm-fdc-label">Satiety per STA spent (combat)</span>
+          <span class="wdm-fdc-label">{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.SatietyPerStaSpentCombat'}}</span>
           <input type="number" name="decay.combatStaPerUnit" value="{{decay.combatStaPerUnit}}" min="0" step="0.05" />
         </label>
       </div>
@@ -43,7 +43,7 @@
 
     <section class="wdm-fdc-section">
       <div class="wdm-fdc-section-head">
-        <h3><i class="fa-solid fa-bowl-food"></i> Hunger Tier Thresholds</h3>
+        <h3><i class="fa-solid fa-bowl-food"></i> {{localize 'WITCHER.App.FoodAndDrinkConfig.Text.HungerTierThresholds'}}</h3>
         <p class="wdm-fdc-section-hint">
           Minimum satiety value the tier kicks in at (read top-down). Famished
           has no minimum — anything below Hungry lands there. Range −100 to 125.
@@ -51,7 +51,7 @@
       </div>
       <table class="wdm-fdc-table">
         <thead>
-          <tr><th>Tier</th><th class="wdm-fdc-num">Satiety ≥</th></tr>
+          <tr><th>{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.Tier'}}</th><th class="wdm-fdc-num">Satiety ≥</th></tr>
         </thead>
         <tbody>
           {{#each hungerTiers}}
@@ -63,7 +63,7 @@
             </tr>
           {{/each}}
           <tr class="wdm-fdc-readonly">
-            <td>Famished</td>
+            <td>{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.Famished'}}</td>
             <td class="wdm-fdc-num"><span class="wdm-fdc-na">(below Hungry)</span></td>
           </tr>
         </tbody>
@@ -72,22 +72,22 @@
 
     <section class="wdm-fdc-section">
       <div class="wdm-fdc-section-head">
-        <h3><i class="fa-solid fa-glass-water"></i> Drunk Tier Metadata</h3>
+        <h3><i class="fa-solid fa-glass-water"></i> {{localize 'WITCHER.App.FoodAndDrinkConfig.Text.DrunkTierMetadata'}}</h3>
         <p class="wdm-fdc-section-hint">
           Per-tier defaults the alcohol Endurance roll references. Tiers VI–VIII
           can knock the bearer unconscious; VII–VIII carry a death-chance percent
           on KO. Per-tier stat changes / descriptions live in
-          <em>Status Effects → Edit Status Effects</em>.
+          <em>{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.StatusEffectsEditStatusEffects'}}</em>.
         </p>
       </div>
       <table class="wdm-fdc-table wdm-fdc-table-drunk">
         <thead>
           <tr>
-            <th>Tier</th>
-            <th class="wdm-fdc-num">Default DC</th>
-            <th class="wdm-fdc-num">Level Jump</th>
-            <th class="wdm-fdc-num">Unconscious DC</th>
-            <th class="wdm-fdc-num">Death %</th>
+            <th>{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.Tier'}}</th>
+            <th class="wdm-fdc-num">{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.DefaultDc'}}</th>
+            <th class="wdm-fdc-num">{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.LevelJump'}}</th>
+            <th class="wdm-fdc-num">{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.UnconsciousDc'}}</th>
+            <th class="wdm-fdc-num">{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.Death'}}</th>
           </tr>
         </thead>
         <tbody>

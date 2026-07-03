@@ -15,8 +15,8 @@
  */
 
 import { isHomebrewEnabled } from "../../api/homebrew.mjs";
-import { AIM_BONUS_CAP, AIM_BONUS_PER_TURN } from "../../setup/config.mjs";
-import { cannotAct, cannotRecover, cannotDefend } from "../../mechanics/statusEngine.mjs";
+import { AIM_BONUS_CAP, AIM_BONUS_PER_TURN, ARMOR_QUALITIES } from "../../setup/config.mjs";
+import { cannotAct, cannotRecover, cannotDefend, cannotEscape } from "../../mechanics/statusEngine.mjs";
 import { onCombatStaminaSpend } from "../../mechanics/foodAndDrink.mjs";
 
 const notify = (msg, type = "warn") => ui?.notifications?.[type]?.(msg);
@@ -161,9 +161,15 @@ export const combatRoundMixin = (Base) => class extends Base {
         /* Run (full-round): SPD×3 movement budget, locks all other slots.
          * `runUsed` is the "spent the full-round action on Run" flag set
          * by recordRun; when on, the movement cap is tripled and other
-         * action slots are already blocked by the _locked check above. */
+         * action slots are already blocked by the _locked check above.
+         *
+         * Viper heroic — Lightning Fast: rolled Nd6 bonus meters, stamped
+         * on flags.wr.lightningFastBonus by wrHeroic.lightningFast and
+         * cleared on turn end. Added AFTER the run multiplier so the
+         * bonus is additive rather than tripled by Run. */
         const runMul = this._round.runUsed ? 3 : 1;
-        const cap = spd ? spd * runMul : 0;
+        const wrBonus = Number(this.getFlag?.("witcher-ttrpg-death-march", "wr.lightningFastBonus")) || 0;
+        const cap = spd ? spd * runMul + wrBonus : 0;
 
         if (!split) {
             // RAW: movement must precede any action; acting forfeits it.
@@ -221,9 +227,21 @@ export const combatRoundMixin = (Base) => class extends Base {
         return true;
     }
 
-    /** Spend the single action with a display `label`. Returns false if gone. */
-    async recordAction(label = "Action") {
-        if (this._actionLocked) { notify(this._actionLockMsg); return false; }
+    /** Spend the single action with a display `label`. Returns false if gone.
+     *
+     *  Options:
+     *    escapeAttempt — bypass hold-family act-restrictions (pinned /
+     *                    chokeheld / clinched). RAW Core "Brawling &
+     *                    Wrestling" leaves Escape as the one action a
+     *                    held actor can still take, so a Pin has to
+     *                    stop *every other* action but still allow the
+     *                    dedicated Escape roll. True incapacitation
+     *                    (Paralyzed / Unconscious) still blocks. */
+    async recordAction(label = "Action", { escapeAttempt = false } = {}) {
+        const locked = escapeAttempt
+            ? (this._stunned || cannotEscape(this))
+            : this._actionLocked;
+        if (locked) { notify(this._actionLockMsg); return false; }
         if (!this._inActiveCombat) return true;        // out of combat: free, untracked
         if (!this._isMyTurn) { notify("Not your turn."); return false; }
         if (this._locked) { notify("Turn is committed to a full-round action."); return false; }
@@ -235,13 +253,27 @@ export const combatRoundMixin = (Base) => class extends Base {
         return true;
     }
 
-    /** Spend the extra action (3 STA, at -3). Returns false if gone. */
-    async recordExtraAction(label = "Extra Action") {
-        if (this._actionLocked) { notify(this._actionLockMsg); return false; }
+    /** Spend the extra action (3 STA, at -3). Returns false if gone.
+     *
+     * Per RAW (Core p.152) the extra action is a SECOND action — you
+     * can't take it without having used your normal action first.
+     * `requirePriorAction` enforces that. Special Actions (Combat
+     * Extended — Raise Shield, Change Guards) pass `false` to bypass
+     * the gate: paying the 3 STA cost is the player "giving up" their
+     * extra-action slot regardless of whether the regular action is
+     * still pending. */
+    async recordExtraAction(label = "Extra Action", { requirePriorAction = true, escapeAttempt = false } = {}) {
+        const locked = escapeAttempt
+            ? (this._stunned || cannotEscape(this))
+            : this._actionLocked;
+        if (locked) { notify(this._actionLockMsg); return false; }
         if (!this._inActiveCombat) return true;        // out of combat: free, no STA cost
         if (!this._isMyTurn) { notify("Not your turn."); return false; }
         if (this._locked) { notify("Turn is committed to a full-round action."); return false; }
-        if (!this._round.actionUsed) { notify("Use your action first — the extra action is a second action."); return false; }
+        if (requirePriorAction && !this._round.actionUsed) {
+            notify("Use your action first — the extra action is a second action.");
+            return false;
+        }
         if (this._round.extraUsed) { notify("Extra action already spent this turn."); return false; }
         await this.update({
             "system.combatRound.extraUsed": true,
@@ -287,6 +319,69 @@ export const combatRoundMixin = (Base) => class extends Base {
         if (!this._round.actionUsed) { await this.recordAction(label); return "action"; }
         if (!this._round.extraUsed)  { await this.recordExtraAction(label); return "extra"; }
         notify("No actions left this turn.");
+        return null;
+    }
+
+    /**
+     * Combat Extended (L5) — spend a slot for a Special Action (Raise
+     * Shield, Change Guards, etc.). Per rules1: "Spend move action or
+     * your action. Can be extra action but with the STA cost."
+     *
+     * Two modes:
+     *   - `{ slot: "movement" | "action" | "extra" }` — explicit pick
+     *     (used by the slot-picker prompt). Tries ONLY the named slot.
+     *   - omitted → auto-pick by priority (movement → action → extra).
+     *     Kept for non-interactive callers / backwards compat.
+     *
+     * Multi-use per round: the action economy itself caps the count
+     * (max three Special Actions per turn, since there are three slots
+     * total). When the picked / all slots are spent, this returns null.
+     *
+     * Returns the slot used ("movement" / "action" / "extra"), or null
+     * when the spend was refused. Out of combat returns "free" (no slot
+     * spent, Special Actions are free outside a fight).
+     */
+    async spendSpecialActionSlot(label = "Special Action", { slot = null } = {}) {
+        if (!this._inActiveCombat) return "free";
+        if (this._actionLocked) { notify(this._actionLockMsg); return null; }
+        if (this._locked)       { notify("Turn is committed to a full-round action."); return null; }
+
+        const moveAvail = !this._round.movementUsed && !((Number(this._round.movementMeters) || 0) > 0);
+        const actAvail  = !this._round.actionUsed;
+        const extraAvail= !this._round.extraUsed;
+
+        const spendMovement = async () => {
+            if (!moveAvail) { notify("Movement already used this turn."); return null; }
+            await this.update({
+                "system.combatRound.movementUsed": true,
+                "system.combatRound.actionLabel":  String(label)
+            });
+            return "movement";
+        };
+        const spendAction = async () => {
+            if (!actAvail) { notify("Action already used this turn."); return null; }
+            const ok = await this.recordAction(label);
+            return ok ? "action" : null;
+        };
+        const spendExtra = async () => {
+            if (!extraAvail) { notify("Extra action already used this turn."); return null; }
+            /* Special Actions bypass the "use your normal action first"
+             * RAW gate — paying the 3 STA cost is the player explicitly
+             * giving up their extra-action slot, regardless of whether
+             * the normal action is still pending. */
+            const ok = await this.recordExtraAction(label, { requirePriorAction: false });
+            return ok ? "extra" : null;
+        };
+
+        if (slot === "movement") return await spendMovement();
+        if (slot === "action")   return await spendAction();
+        if (slot === "extra")    return await spendExtra();
+
+        /* Auto-pick fallback — movement → action → extra. */
+        if (moveAvail)  return await spendMovement();
+        if (actAvail)   return await spendAction();
+        if (extraAvail) return await spendExtra();
+        notify("No slot left for a Special Action this turn.");
         return null;
     }
 
@@ -379,29 +474,103 @@ export const combatRoundMixin = (Base) => class extends Base {
 
     /** Recovery Action (full round): lock the turn first, then regain STA
      *  equal to REC. Lock before recovering so a dirty turn (already moved /
-     *  acted) is rejected without granting the STA. */
+     *  acted) is rejected without granting the STA.
+     *
+     *  Restricted Vision / Poor Vision (house variant of EO p.8): a worn
+     *  helm with the visor down HALVES the in-combat STA recovery rather
+     *  than blocking it entirely. The check scans the actor's equipped
+     *  armor for the `armorHalvesCombatStaRecovery` flag; if any piece
+     *  carries it, REC is floored to half. The chat notification calls
+     *  the reduction out so the player understands why the gain looks
+     *  short. */
     async takeRecoveryAction() {
         if (!(await this.recordFullRound("Recovery Action", { allowStunned: true }))) return;
-        const rec = Number(this.system?.derivedStats?.rec) || 0;
+        let rec = Number(this.system?.derivedStats?.rec) || 0;
+        const halved = this._inActiveCombat && this.#armorHalvesStaRecovery();
+        if (halved) rec = Math.floor(rec / 2);
         await this.recoverStamina(rec);
-        notify(`${this.name} catches their breath — recovered ${rec} STA.`, "info");
+        notify(halved
+            ? `${this.name} catches their breath — recovered ${rec} STA (halved by Restricted Vision).`
+            : `${this.name} catches their breath — recovered ${rec} STA.`, "info");
+    }
+
+    /** True if any equipped armor on this actor carries an
+     *  `armorHalvesCombatStaRecovery` flag (Restricted Vision / Poor
+     *  Vision — house variant that halves rather than blocks). */
+    #armorHalvesStaRecovery() {
+        const items = this.items?.contents ?? this.items ?? [];
+        for (const it of items) {
+            if (it.type !== "armor" || !it.system?.equipped) continue;
+            const qs = it.system?.effective?.qualities ?? it.system?.qualities ?? [];
+            for (const q of qs) {
+                if (ARMOR_QUALITIES[q]?.armorHalvesCombatStaRecovery) return true;
+            }
+        }
+        return false;
     }
 
     /**
-     * Record a defensive action. The first is free; each additional costs
-     * 1 STA — unless the character used their action to Actively Dodge this
-     * round, in which case defenses are free (Core p.152).
+     * Record a defensive action. Spend semantics depend on which ruleset
+     * is active:
+     *
+     *   RAW (Core p.152) — 1st defense free; each additional costs 1 STA
+     *   unless the actor used their action to Actively Dodge this round.
+     *   `actionKey` is ignored.
+     *
+     *   Combat Extended (rules2.png) — each defense has a BASE STA cost
+     *   from the active combat-actions table (Parry 0, Block 0, Dodge 1,
+     *   Reposition 2 by default), AND every defense after the first adds
+     *   an extra +1 STA on top. Actively Dodging still zeroes everything
+     *   (same letter of the Core "free defenses" rule). The freeDefenses
+     *   combatMod is honored under both rulesets — it shifts the "after
+     *   the first" boundary up by N.
+     *
+     * @param {string|null} actionKey — combat-actions key ("parry",
+     *   "block", "dodge", "reposition") OR null for non-CE-aware callers
+     *   (brawl block, etc.) which then default to the RAW shape.
      */
-    async recordDefense() {
+    async recordDefense(actionKey = null) {
         if (this._stunned || cannotDefend(this)) { notify(this._stunned ? STUN_MSG : LOCKED_MSG); return 0; }
         if (!this._inActiveCombat) return 0;           // out of combat: free, no STA cost
         const r = this._round;
         const next = (Number(r.defenseCount) || 0) + 1;
         await this.update({ "system.combatRound.defenseCount": next });
-        // 1st defense free; combatMods.freeDefenses grants extra free reactions
-        // beyond it. Each one past that costs 1 STA (unless Actively Dodging).
+        if (r.activelyDodging) return next;            // Active Dodge zeroes everything (RAW + CE)
         const freeDef = Number(this.system?.combatMods?.freeDefenses) || 0;
-        if (next > (1 + freeDef) && !r.activelyDodging) {
+
+        /* CE path: base STA from the actions table + the additive
+         * recurrence step. Imported lazily so the RAW path stays free
+         * of the CE dependency. */
+        let ceBase = null;
+        if (actionKey) {
+            try {
+                const { isCESubsystemEnabled } = await import("../../api/homebrew.mjs");
+                if (isCESubsystemEnabled("defenseCosts")) {
+                    const { getActiveCombatActions } = await import("../../data/combatExtended/actions.mjs");
+                    const entry = getActiveCombatActions()[actionKey];
+                    if (entry?.kind === "defense") ceBase = Number(entry.staCost) || 0;
+                }
+            } catch (_) { /* CE module missing — fall through to RAW */ }
+        }
+        if (ceBase !== null) {
+            /* Base cost on every defense (Parry/Block can be 0, that's fine
+             * — spendStamina(0) is a no-op). Recurrence: +1 per defense
+             * past the first (and past any freeDefenses combatMod). The
+             * recurrence step is gated by the `additiveDefenseRecurrence`
+             * tuneable — when OFF, only the base cost is charged. */
+            let recurOn = true;
+            try {
+                const { ceTuneable } = await import("../../api/homebrew.mjs");
+                recurOn = ceTuneable("additiveDefenseRecurrence") !== false;
+            } catch (_) { /* tuneable read failed — keep default behavior */ }
+            const recur = (recurOn && next > (1 + freeDef)) ? 1 : 0;
+            const total = ceBase + recur;
+            if (total > 0) await this.spendStamina(total, { reason: "defense" });
+            return next;
+        }
+
+        /* RAW (legacy) path — 1st free, +1 each extra. */
+        if (next > (1 + freeDef)) {
             await this.spendStamina(1, { reason: "defense" });
         }
         return next;
@@ -445,7 +614,13 @@ export const combatRoundMixin = (Base) => class extends Base {
             "system.combatRound.runUsed": false,
             "system.combatRound.defenseCount": 0,
             "system.combatRound.activelyDodging": false,
-            "system.combatRound.reloadedThisTurn": false
+            "system.combatRound.reloadedThisTurn": false,
+            "system.combatRound.repositionMeters": 0,
+            /* Witchers Reborn — Viper · Lightning Fast: heroic movement
+             * bonus is a per-turn effect; zero it on turn reset so a
+             * Viper who declared Lightning Fast last turn doesn't carry
+             * the extra meters into their next turn. */
+            "flags.witcher-ttrpg-death-march.wr.lightningFastBonus": 0
         });
 
         /* Also clear Foundry V13's per-token `_movementHistory`. The combat

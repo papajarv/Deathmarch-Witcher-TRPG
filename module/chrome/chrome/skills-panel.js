@@ -15,6 +15,7 @@
 import { MODULE_ID } from "../setup/settings.js";
 import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 
+import { t, tFormat } from "../lib/i18n.js";
 const POPOVER_ID = "wou-skills-pop";
 /* Luck and Speed are intentionally not in STATS: no skills hang off them in
  * the Witcher skillMap, so their tabs were empty save-only. STAT_ABBR /
@@ -100,7 +101,7 @@ function buildProfessionTab(actor) {
 
   if (isRollableProfSkill(sys.definingSkill)) {
     sections.push({
-      title: "Defining Skill",
+      title: t("WITCHER.Dialog.Skills.Defining", "Defining Skill"),
       cls: "wou-sp-prof-defining",
       skills: [sys.definingSkill],
     });
@@ -139,15 +140,15 @@ function injectInlineStyles() {
   s.textContent = `
     #wou-skills-pop {
       position: fixed;
-      width: 420px;
+      width: 26.25rem;
       z-index: 9080;
       display: none;
       background: linear-gradient(180deg, rgba(10,9,8,0.97) 0%, rgba(10,9,8,0.94) 100%);
       border: 1px solid rgba(140,133,121,0.22);
       border-top: 1px solid rgba(110,82,36,0.55);
-      box-shadow: 0 12px 36px rgba(0,0,0,0.85);
+      box-shadow: 0 0.75rem 2.25rem rgba(0,0,0,0.85);
       font-family: var(--wdm-font-display, "PF DIN Text Cond Pro", sans-serif);
-      font-size: 12px;
+      font-size: 0.75rem;
       color: var(--wdm-ink, #b0a994);
       pointer-events: auto;
       box-sizing: border-box;
@@ -164,8 +165,8 @@ function injectInlineStyles() {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 1px;
-      padding: 8px 0 7px 0 !important;
+      gap: 0.0625rem;
+      padding: 0.5rem 0 0.4375rem 0 !important;
       min-height: 0 !important;
       height: auto !important;
       width: auto !important;
@@ -175,7 +176,7 @@ function injectInlineStyles() {
       box-shadow: none !important;
       color: var(--wdm-ink-dim, #8c8579) !important;
       font-family: var(--wdm-font-display, inherit) !important;
-      font-size: 10px !important;
+      font-size: 0.625rem !important;
       font-weight: 600 !important;
       letter-spacing: 0.14em !important;
       text-transform: uppercase !important;
@@ -183,57 +184,57 @@ function injectInlineStyles() {
       cursor: pointer;
     }
     #wou-skills-pop .wou-sp-tab.is-active { color: var(--wdm-amber-bright, #d6a050) !important; }
-    #wou-skills-pop .wou-sp-tab .val { font-size: 11px; font-weight: 700; }
+    #wou-skills-pop .wou-sp-tab .val { font-size: 0.6875rem; font-weight: 700; }
     #wou-skills-pop .wou-sp-panel { display: none !important; }
     #wou-skills-pop .wou-sp-panel.is-active { display: block !important; }
     #wou-skills-pop .wou-sp-stat-head {
       display: grid;
       grid-template-columns: auto 1fr;
       align-items: center;
-      gap: 12px;
-      padding: 8px 12px;
+      gap: 0.75rem;
+      padding: 0.5rem 0.75rem;
       border-bottom: 1px dotted rgba(110,82,36,0.4);
     }
     #wou-skills-pop .wou-sp-stat-head .num {
-      font-weight: 700; font-size: 22px;
+      font-weight: 700; font-size: 1.375rem;
       color: var(--wdm-amber-bright, #d6a050);
-      min-width: 28px; text-align: center;
+      min-width: 1.75rem; text-align: center;
     }
     #wou-skills-pop .wou-sp-stat-head .nm {
-      font-size: 12px; font-weight: 600;
+      font-size: 0.75rem; font-weight: 600;
       letter-spacing: 0.22em; text-transform: uppercase;
       color: var(--wdm-amber-hi, #c8a878);
     }
     #wou-skills-pop .wou-sp-skills {
       list-style: none;
-      max-height: 220px;
+      max-height: 13.75rem;
       overflow-y: auto;
-      padding: 4px 0;
+      padding: 0.25rem 0;
       margin: 0;
     }
     #wou-skills-pop .wou-sp-skill {
       display: grid !important;
       grid-template-columns: 1fr auto auto;
-      gap: 12px;
+      gap: 0.75rem;
       align-items: baseline;
-      padding: 4px 14px;
-      font-size: 12px;
+      padding: 0.25rem 0.875rem;
+      font-size: 0.75rem;
       cursor: pointer;
       list-style: none;
     }
     #wou-skills-pop .wou-sp-skill:hover { background: rgba(184,148,100,0.10); }
     #wou-skills-pop .wou-sp-skill .name { color: var(--wdm-ink, #b0a994); }
-    #wou-skills-pop .wou-sp-skill .mod { color: var(--wdm-ink-faint, #6e6863); font-size: 10px; }
+    #wou-skills-pop .wou-sp-skill .mod { color: var(--wdm-ink-faint, #6e6863); font-size: 0.625rem; }
     #wou-skills-pop .wou-sp-skill.has-ae .mod { color: var(--wdm-amber-hi, #c8a878); font-style: italic; }
-    #wou-skills-pop .wou-sp-skill.has-ae .total { text-shadow: 0 0 6px rgba(214,160,80,0.35); }
+    #wou-skills-pop .wou-sp-skill.has-ae .total { text-shadow: 0 0 0.375rem rgba(214,160,80,0.35); }
     #wou-skills-pop .wou-sp-skill .total {
       color: var(--wdm-amber-bright, #d6a050);
-      font-weight: 700; font-size: 13px;
-      min-width: 22px; text-align: right;
+      font-weight: 700; font-size: 0.8125rem;
+      min-width: 1.375rem; text-align: right;
     }
     #wou-skills-pop .wou-sp-foot {
-      padding: 6px 12px;
-      font-size: 9px;
+      padding: 0.375rem 0.75rem;
+      font-size: 0.5625rem;
       letter-spacing: 0.20em;
       text-transform: uppercase;
       color: var(--wdm-ink-faint, #6e6863);
@@ -431,7 +432,7 @@ function getActiveActor() {
 function open(triggerEl) {
   const actor = getActiveActor();
   if (!actor) {
-    ui.notifications?.warn("Witcher Overhaul UI: select a token or assign a character.");
+    ui.notifications?.warn(t("WITCHER.Notify.Skills.NoActor", "Witcher Overhaul UI: select a token or assign a character."));
     return;
   }
   renderPopover(actor);
@@ -467,7 +468,7 @@ async function rollSkill(actor, skillKey) {
     if (typeof actor.rollSkill === "function") {
       await actor.rollSkill(skillKey);
     } else {
-      ui.notifications?.warn("No rollSkill on actor.");
+      ui.notifications?.warn(t("WITCHER.Notify.Skills.HelperMissing", "No rollSkill on actor."));
     }
   } catch (e) {
     console.warn(`${MODULE_ID} | rollSkill ${skillKey} failed`, e);
@@ -480,12 +481,12 @@ async function rollSkill(actor, skillKey) {
 async function rollProfessionSkill(actor, skillName) {
   try {
     if (typeof actor.rollProfessionSkill !== "function" || typeof actor.findProfessionSlot !== "function") {
-      ui.notifications?.warn("Actor does not support profession skills.");
+      ui.notifications?.warn(t("WITCHER.Notify.Skills.NoProfSkills", "Actor does not support profession skills."));
       return;
     }
     const slot = actor.findProfessionSlot(skillName);
     if (!slot) {
-      ui.notifications?.warn(`Profession skill "${skillName}" not found.`);
+      ui.notifications?.warn(tFormat("WITCHER.Notify.Skills.ProfSkillNotFound", { name: skillName }, "Profession skill \"{name}\" not found."));
       return;
     }
     await actor.rollProfessionSkill(slot);

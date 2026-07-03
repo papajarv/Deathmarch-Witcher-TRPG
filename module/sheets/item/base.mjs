@@ -13,11 +13,14 @@
  * use the type-specific subclasses defined in this directory.
  */
 
-import { buildEnhancementSlots, wireEnhancementSlots, detachEnhancement } from "./enhancementSlots.mjs";
+import { buildEnhancementSlots, buildEnhancementSlotGroups, wireEnhancementSlots, detachEnhancement } from "./enhancementSlots.mjs";
 import { buildComponentLinks, wireComponentDrop, removeComponent } from "./hexComponents.mjs";
-import { effectStatTargets, statusImmunityOptions } from "../../setup/config.mjs";
+import { buildStatusRiderRows, addStatusRider, removeStatusRider } from "./statusRiders.mjs";
+import { effectStatTargets, statusImmunityOptions, ARMOR_LOCATION_COVERAGE } from "../../setup/config.mjs";
 import { isHomebrewEnabled } from "../../api/homebrew.mjs";
+import { baseSummaryFor }    from "../../mechanics/alchemy.mjs";
 
+import { t, tFormat } from "../../chrome/lib/i18n.js";
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 const { ItemSheetV2 } = foundry.applications.sheets;
 
@@ -129,7 +132,7 @@ export class WitcherItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) {
         const effect = this.item.effects.get(id);
         if (!effect) return;
         const ok = await foundry.applications.api.DialogV2.confirm({
-            window: { title: "Delete Effect" },
+            window: { title: t("WITCHER.Dialog.DeleteEffect", "Delete Effect") },
             content: `<p>Remove <strong>${effect.name}</strong>?</p>`
         });
         if (ok) await effect.delete();
@@ -277,8 +280,9 @@ export class WitcherWeaponSheet extends WitcherItemSheet {
 
     static DEFAULT_OPTIONS = {
         actions: {
-            detachEnhancement: WitcherWeaponSheet._onDetachEnhancement,
-            reload:            WitcherWeaponSheet._onReload
+            detachEnhancement:               WitcherWeaponSheet._onDetachEnhancement,
+            reload:                          WitcherWeaponSheet._onReload,
+            "config-open-category-quality":  WitcherWeaponSheet._onConfigOpenCategory
         }
     };
 
@@ -286,6 +290,37 @@ export class WitcherWeaponSheet extends WitcherItemSheet {
         if (!this.isEditable) return;
         const idx = Number(target.closest("[data-enh-index]")?.dataset.enhIndex);
         if (await detachEnhancement(this.item, idx)) this.render({ force: false });
+    }
+
+    /** Open the structured-bonus dialog for an open-category quality
+     *  (Two-Hand, Close Quarters, Throwing, Strangling). The dialog
+     *  parses + re-emits the qualityValues[key] free-text bonus
+     *  string so the existing attack-pipeline parser keeps working. */
+    static async _onConfigOpenCategory(event, target) {
+        if (!this.isEditable) return;
+        const key = target?.dataset?.qualityKey;
+        if (!key) return;
+        const { openOpenCategoryConfigDialog } = await import("../../applications/openCategoryConfigDialog.mjs");
+        const newText = await openOpenCategoryConfigDialog(this.item, key);
+        if (newText == null) return;                       /* user cancelled */
+        /* Also toggle qualities-list membership to match the value:
+         *   non-empty text → ensure the quality key is listed (so the
+         *                    OC pipeline's `qs.includes(key)` gate fires)
+         *   empty text     → remove the key from the list (the GM has
+         *                    turned the bonus off)
+         * Without this, a user could set "+5 WA" via the structured dialog
+         * and see nothing apply because the checkbox in the qualities grid
+         * was still unticked — the parser found the value but the gate
+         * rejected the whole quality as inactive. */
+        const trimmed = String(newText).trim();
+        const cur = Array.isArray(this.item.system?.qualities) ? [...this.item.system.qualities] : [];
+        const has = cur.includes(key);
+        let nextQualities = cur;
+        if (trimmed && !has) nextQualities = [...cur, key];
+        else if (!trimmed && has) nextQualities = cur.filter(q => q !== key);
+        const patch = { [`system.qualityValues.${key}`]: newText };
+        if (nextQualities !== cur) patch["system.qualities"] = nextQualities;
+        await this.item.update(patch);
     }
 
     /* Chamber a slow-reload weapon from the selected eligible ammo. The
@@ -315,6 +350,13 @@ export class WitcherWeaponSheet extends WitcherItemSheet {
                      ?? this.item.toObject?.().system?.qualityValues
                      ?? {};
         ctx.weaponQualitiesCatalog = catalog;
+        /* Open-category qualities (the four EO "per-weapon authored
+         * bonus" entries) get a sliders affordance on their display
+         * chip — so a GM viewing a weapon doesn't need to flip into
+         * config mode to discover the structured-bonus editor. The
+         * template reads `isOpenCategory` to decide whether to render
+         * the button. */
+        const OPEN_CATEGORY_KEYS = new Set(["twoHand", "closeQuarters", "throwing", "strangling"]);
         ctx.weaponQualityList = (this.item.system?.qualities ?? [])
             .map(key => {
                 // Resolve entry from catalog; fall back to canonical
@@ -332,15 +374,40 @@ export class WitcherWeaponSheet extends WitcherItemSheet {
                         label = `${entry.label}(${v}${param.suffix ?? ""})`;
                     }
                 }
-                return { key, label, description: entry.description };
+                return {
+                    key, label, description: entry.description,
+                    isOpenCategory: OPEN_CATEGORY_KEYS.has(key),
+                    /* Honest UI hint: the chip carries a small marker
+                     * when the engine has no automatic consumer for
+                     * this quality. Set on the catalog entry's `extra`
+                     * for qualities like Concealment / Crew Reload /
+                     * Mounted (the catalog description's parenthetical
+                     * "(GM-resolved...)" spells out why). */
+                    displayOnly: !!entry.displayOnly
+                };
             })
             .filter(Boolean);
 
-        // Socketed enhancements + effective (enhanced) stats.
-        const slotCount = Number(this.item.system?.weaponEnhancement) || 0;
+        // Socketed enhancements + effective (enhanced) stats. The base
+        // slot count comes from the authored `weaponEnhancement`; the
+        // Meteorite quality (and any GM-flagged `meteoriteExtraEnchantSlot`
+        // quality) grants +1, capped at 3 per EO p.7. The bonus is
+        // exposed on the derived `effective.bonusSlots` field.
+        const baseSlots = Number(this.item.system?.weaponEnhancement) || 0;
+        const bonusSlots = Number(this.item.system?.effective?.bonusSlots) || 0;
+        const slotCount = baseSlots + bonusSlots;
         ctx.enhancementSlots = buildEnhancementSlots(this.item, slotCount);
         ctx.effective = this.item.system?.effective ?? null;
         ctx.isEnhanced = !!ctx.effective?.modified;
+        /* Combat Extended toggle — the weapon-sheet display view surfaces
+         * Range for MELEE weapons only when CE is on (EO gives most
+         * one-handed melee weapons a throwable Range field). Safe read:
+         * the settings map may not be ready during early renders, so
+         * catch and default to false. */
+        try {
+            const mod = await import("../../api/homebrew.mjs");
+            ctx.ceOn = mod.isCombatExtendedEnabled?.() === true;
+        } catch (_) { ctx.ceOn = false; }
         // Qualities the enhancements add on top of the weapon's own — shown
         // as a separate chip row so base vs. socketed reads clearly.
         const baseQ = new Set(this.item.system?.qualities ?? []);
@@ -357,7 +424,7 @@ export class WitcherWeaponSheet extends WitcherItemSheet {
                     const v = raw == null ? "" : String(raw).trim();
                     if (v.length) label = `${entry.label}(${v}${param.suffix ?? ""})`;
                 }
-                return { key, label, description: entry.description };
+                return { key, label, description: entry.description, displayOnly: !!entry.displayOnly };
             })
             .filter(Boolean);
         // Effective damage types not declared on the base weapon.
@@ -389,7 +456,14 @@ export class WitcherWeaponSheet extends WitcherItemSheet {
                     id:        e.item.id,
                     name:      e.item.name,
                     qty:       e.qty,
-                    container: e.container.name,
+                    /* container is null for LOOSE ammo (out-of-combat
+                     * loose-bolt eligibility, added 2026-07-02). Falling
+                     * back to a bare label instead of throwing on
+                     * e.container.name — the previous access threw
+                     * `Cannot read properties of null`, which crashed
+                     * the whole item sheet render + wrecked the
+                     * right-click ContextMenu wiring. */
+                    container: e.container?.name ?? "Loose",
                     selected:  selected ? e.item.id === selected.id : false
                 }))
             };
@@ -422,11 +496,18 @@ export class WitcherAmmoSheet extends WitcherItemSheet {
     static PARTS = partsFor("ammo");
 
     /* Ammo shares the weapon quality catalog (Armor-Piercing, etc.) but
-     * has no enhancement slots and no effective-stat derivation. */
+     * filtered to projectile-relevant entries — status riders + damage
+     * flags only. Wield/reach/skill qualities (Two-Hand, Long Reach,
+     * Brawling, …) are weapon-only and would never fire on a shot. */
     async _prepareContext(options) {
         const ctx = await super._prepareContext(options);
         const cfg = await import("../../setup/config.mjs");
-        const catalog  = cfg.getActiveWeaponQualities() ?? {};
+        const fullCatalog = cfg.getActiveWeaponQualities() ?? {};
+        const catalog  = cfg.filterAmmoQualities(fullCatalog);
+        /* `defaults` stays UNFILTERED — it's the fallback for resolving
+         * an entry on an item that already has a quality saved from
+         * before the filter existed (legacy data). The filtered catalog
+         * controls only the editable checkbox grid below. */
         const defaults = cfg.WEAPON_QUALITIES;
         const values   = this.item.system?.qualityValues
                       ?? this.item.toObject?.().system?.qualityValues
@@ -443,7 +524,7 @@ export class WitcherAmmoSheet extends WitcherItemSheet {
                     const v   = raw == null ? "" : String(raw).trim();
                     if (v.length) label = `${entry.label}(${v}${param.suffix ?? ""})`;
                 }
-                return { key, label, description: entry.description };
+                return { key, label, description: entry.description, displayOnly: !!entry.displayOnly };
             })
             .filter(Boolean);
         return ctx;
@@ -473,8 +554,12 @@ export class WitcherArmorSheet extends WitcherItemSheet {
     async _prepareContext(options) {
         const ctx = await super._prepareContext(options);
         const cfg = await import("../../setup/config.mjs");
-        const catalog  = cfg.getActiveArmorQualities?.() ?? cfg.ARMOR_QUALITIES ?? {};
-        const defaults = cfg.ARMOR_QUALITIES ?? {};
+        const fullCatalog = cfg.getActiveArmorQualities?.() ?? cfg.ARMOR_QUALITIES ?? {};
+        /* Armor pieces (helm/torso/limbs) don't see shield-only qualities
+         * (Sturdy shield / Parrying shield / Deployable / Blade Catcher /
+         * Archery Shield / Very Sturdy / deprecated Full Cover). */
+        const catalog  = cfg.filterArmorPieceQualities(fullCatalog);
+        const defaults = cfg.ARMOR_QUALITIES ?? {};  // unfiltered fallback for legacy saved keys
         const values   = this.item.system?.qualityValues
                       ?? this.item.toObject?.().system?.qualityValues
                       ?? {};
@@ -490,7 +575,7 @@ export class WitcherArmorSheet extends WitcherItemSheet {
                     const v = raw == null ? "" : String(raw).trim();
                     if (v.length) label = `${entry.label}(${v}${param.suffix ?? ""})`;
                 }
-                return { key, label, description: entry.description };
+                return { key, label, description: entry.description, displayOnly: !!entry.displayOnly };
             })
             .filter(Boolean);
 
@@ -517,16 +602,23 @@ export class WitcherArmorSheet extends WitcherItemSheet {
         // get no SP inputs; helmets only head; full coverage gets all
         // six. Keeps the form focused so the GM doesn't have to scroll
         // past slots that don't apply to the piece.
-        const LOC_TO_SP = {
-            head:   ["head"],
-            torso:  ["torso"],
-            arms:   ["leftArm", "rightArm"],
-            legs:   ["leftLeg", "rightLeg"],
-            full:   LOC_KEYS,
-            Shield: []
-        };
-        const activeKeys = LOC_TO_SP[src?.location] ?? [src?.location].filter(k => LOC_KEYS.includes(k));
+        // Coverage map: shared constant from config.mjs. RAW Core: "torso"
+        // includes arms; "arms" / "legs" are standalone arm- or leg-only
+        // pieces (bracers, greaves). Single source of truth keeps the
+        // sheet form, the inventory display, and the combat derivation
+        // in lockstep.
+        const activeKeys = ARMOR_LOCATION_COVERAGE[src?.location]
+            ?? [src?.location].filter(k => LOC_KEYS.includes(k));
         ctx.spInputs = activeKeys.map(buildRow);
+        /* AE slot inputs — same covered-location filter as SP. Authoring an
+         * AE slot on a location the armor doesn't cover (e.g., head slot on
+         * a torso-only jack) has no meaningful effect anyway. */
+        ctx.aeSlotInputs = activeKeys.map(k => ({
+            key:   k,
+            label: LOC_LABELS[k],
+            name:  `system.aeSlots.${k}`,
+            value: Number(src?.aeSlots?.[k]) || 0
+        }));
 
         // Hero number — shields show reliability.value (blocks
         // remaining); other armor shows the SP at the chosen primary
@@ -540,32 +632,49 @@ export class WitcherArmorSheet extends WitcherItemSheet {
             ctx.primaryStatLabel = "BLOCKS";
             ctx.coverageLabel    = "Shield";
         } else {
-            // Build the SP rows for every location the armor covers, so
-            // we can pick the hero from them AND derive a coverage
-            // label. Uses the full LOC_KEYS list (not the location-
-            // filtered spInputs) so multi-location armor shows all sides.
-            const allRows = LOC_KEYS.map(buildRow).filter(r => r.max > 0);
-            const sorted  = [...allRows].sort((a, b) => b.value - a.value);
-            const chosen  = sorted[0];
-            ctx.primarySP        = chosen?.value ?? 0;
-            ctx.primarySPMax     = chosen?.max   ?? 0;
+            /* Per-location SP. Each covered location has its OWN value
+             * (so a hauberk can be 10 torso / 5 arms), and the hero
+             * number shows the best-protected covered slot. Coverage is
+             * gated by the `location` enum — same map deriveArmorEffective
+             * uses — so a Torso piece never displays arm SP rows even if
+             * a stale leftArmStopping value sits in the document. */
+            // Same shared coverage map as the SP-input filter above —
+            // hero + per-location rows derive from it.
+            const coveredKeys = ARMOR_LOCATION_COVERAGE[src?.location]
+                ?? [src?.location].filter(k => LOC_KEYS.includes(k));
+            const coveredRows = coveredKeys.map(buildRow);
+            const sorted = [...coveredRows].sort((a, b) => b.value - a.value);
+            ctx.primarySP    = sorted[0]?.value ?? 0;
+            ctx.primarySPMax = sorted[0]?.max   ?? 0;
             ctx.primaryStatLabel = "STOPPING POWER";
-            // Coverage subline: locations with non-zero max, joined.
-            // Falls back to the declared primary location label when no
-            // SP has been entered yet (so a brand-new armor still
-            // displays meaningfully).
-            const locsLabel = allRows.length
-                ? allRows.map(r => r.label).join(" · ")
-                : (src?.location
-                    ? game.i18n.localize(CONFIG.WITCHER.armor.locations[src.location] ?? src.location)
-                    : "");
-            ctx.coverageLabel = locsLabel;
+            ctx.coverageLabel = coveredRows.map(r => r.label).join(" · ");
+            ctx.multiLocation = coveredRows.length > 1;
+            ctx.spLocations   = coveredRows.map(r => ({
+                label: r.label,
+                value: r.value,
+                max:   r.max
+            }));
         }
         ctx.isShield = isShield;
 
-        // Socketed enhancements + effective (enhanced) stats.
-        const slotCount = Number(src?.armorEnhancement) || 0;
-        ctx.enhancementSlots = buildEnhancementSlots(this.item, slotCount);
+        /* Socketed enhancements. Under EO, render distinct per-pool
+         * strips (one per covered AE location + one glyph strip) so
+         * the player can see which pool each slot belongs to and the
+         * drop target is unambiguous. Under RAW, fall back to the
+         * legacy single-strip view sized by `armorEnhancement`. */
+        const _eoMod = await import("../../mechanics/eoArmorModel.mjs");
+        ctx.eoArmorModelOn = _eoMod.isEoArmorModelOn();
+        if (ctx.eoArmorModelOn) {
+            ctx.enhancementSlotGroups = buildEnhancementSlotGroups(this.item);
+            /* Keep a flat slots list around too — some legacy code paths
+             * (and the test scaffolding) still read it. */
+            ctx.enhancementSlots = ctx.enhancementSlotGroups
+                .flatMap(g => g.slots.filter(s => s.filled));
+        } else {
+            const slotCount = Number(src?.armorEnhancement) || 0;
+            ctx.enhancementSlots      = buildEnhancementSlots(this.item, slotCount);
+            ctx.enhancementSlotGroups = null;
+        }
         const eff = this.item.system?.effective ?? null;
         ctx.effective  = eff;
         ctx.isEnhanced = !!eff?.modified;
@@ -591,7 +700,7 @@ export class WitcherArmorSheet extends WitcherItemSheet {
                     const v = raw == null ? "" : String(raw).trim();
                     if (v.length) label = `${entry.label}(${v}${param.suffix ?? ""})`;
                 }
-                return { key, label, description: entry.description };
+                return { key, label, description: entry.description, displayOnly: !!entry.displayOnly };
             })
             .filter(Boolean);
         return ctx;
@@ -617,12 +726,17 @@ export class WitcherShieldSheet extends WitcherItemSheet {
     }
 
     /* Shield prep: the Reliability pool is the hero number; quality chips
-     * and AE slots reuse the armor catalog + slot helpers. */
+     * and AE slots reuse the armor catalog + slot helpers, but the
+     * visible catalog is filtered to SHIELD-only entries (Sturdy shield,
+     * Parrying shield, Deployable, Blade Catcher, Archery Shield, Very
+     * Sturdy, deprecated Full Cover). Armor-piece entries (vision/SP/
+     * encumbrance/critical) don't apply to a shield. */
     async _prepareContext(options) {
         const ctx = await super._prepareContext(options);
         const cfg = await import("../../setup/config.mjs");
-        const catalog  = cfg.getActiveArmorQualities?.() ?? cfg.ARMOR_QUALITIES ?? {};
-        const defaults = cfg.ARMOR_QUALITIES ?? {};
+        const fullCatalog = cfg.getActiveArmorQualities?.() ?? cfg.ARMOR_QUALITIES ?? {};
+        const catalog  = cfg.filterShieldQualities(fullCatalog);
+        const defaults = cfg.ARMOR_QUALITIES ?? {};  // unfiltered fallback for legacy saved keys
         const src = ctx.source ?? this.item.toObject().system;
         const values = this.item.system?.qualityValues
                     ?? this.item.toObject?.().system?.qualityValues
@@ -639,7 +753,7 @@ export class WitcherShieldSheet extends WitcherItemSheet {
                     const v = raw == null ? "" : String(raw).trim();
                     if (v.length) label = `${entry.label}(${v}${param.suffix ?? ""})`;
                 }
-                return { key, label, description: entry.description };
+                return { key, label, description: entry.description, displayOnly: !!entry.displayOnly };
             })
             .filter(Boolean);
 
@@ -658,7 +772,10 @@ export class WitcherShieldSheet extends WitcherItemSheet {
             formula: this.item.actor ? cfg.shieldBashDamage(this.item.actor, this.item) : null
         };
 
-        // AE socketing — same slot UI armor uses (host type "armor").
+        /* AE socketing — same slot UI armor uses (host type "armor").
+         * Shields are not Difficult and aren't split per-location under
+         * EO — the EO p.4 "AE per location" applies to armor pieces, not
+         * shields. We keep the single-bucket model for shields. */
         const slotCount = Number(src?.armorEnhancement) || 0;
         ctx.enhancementSlots = buildEnhancementSlots(this.item, slotCount);
         return ctx;
@@ -666,6 +783,34 @@ export class WitcherShieldSheet extends WitcherItemSheet {
 }
 export class WitcherAlchemicalSheet extends WitcherItemSheet {
     static PARTS = partsFor("alchemical");
+
+    /* Always-visible "Use" button on the sheet header (player-flow
+     * audit #2). The chrome inventory + Items sidebar already
+     * register a context-menu Consume entry, but the alchemical
+     * sheet itself had no direct affordance — a GM viewing a
+     * decoction had View+Delete only. Click → consumeItem applies
+     * the embedded AE to the carrying actor (or the assigned PC if
+     * the item is unowned). */
+    static DEFAULT_OPTIONS = {
+        actions: { use: WitcherAlchemicalSheet._onUse }
+    };
+
+    static async _onUse(_event, _target) {
+        const item = this.item;
+        if (!item) return;
+        const actor = item.actor;
+        if (!actor) {
+            ui.notifications?.warn(tFormat("WITCHER.Notify.Item.NeedCharacter", { item: item.name }, "{item}: drag this onto a character first, or assign a default character to your user."));
+            return;
+        }
+        try {
+            const { consumeItem } = await import("../../chrome/policy/consume-item.js");
+            await consumeItem(item, actor);
+        } catch (err) {
+            console.warn("witcher-ttrpg-death-march | consume failed", err);
+            ui.notifications?.error(tFormat("WITCHER.Notify.Item.ConsumeFailed", { item: item.name }, "Failed to consume {item}."));
+        }
+    }
 
     // Effect-transfer for alchemicals (oils don't transfer to the holder,
     // consumables stay dormant until used) is owned by the consume-item
@@ -685,6 +830,7 @@ export class WitcherAlchemicalSheet extends WitcherItemSheet {
         const src = ctx.source ?? this.item.toObject().system;
         const type = src?.type ?? "potion";
         ctx.isBomb       = type === "bomb";
+        ctx.isOil        = type === "oil";
         // Toxicity is only meaningful for potions and decoctions (they add
         // to the Toxicity pool when consumed, Core p.84). Poisons, oils,
         // bombs, etc. don't carry a toxicity figure.
@@ -695,6 +841,9 @@ export class WitcherAlchemicalSheet extends WitcherItemSheet {
         ctx.isConsumableType = type === "potion" || type === "decoction" || type === "item";
         ctx.typeLabel    = game.i18n.localize(CONFIG.WITCHER.alchemical.types[type] ?? type);
 
+        // Alchemy Reborn toggle is needed BEFORE the hero math so oils
+        // pick the right hero (charges under Reborn, duration under RAW).
+        ctx.alchemyRebornOn = isHomebrewEnabled("alchemyPotency");
         if (ctx.isBomb) {
             ctx.heroValue = src?.damage || "—";
             ctx.heroLabel = "DAMAGE";
@@ -705,11 +854,32 @@ export class WitcherAlchemicalSheet extends WitcherItemSheet {
             ctx.heroValue = src?.toxicity ?? 0;
             ctx.heroLabel = "TOXICITY";
             ctx.heroSub   = src?.duration || "";
+        } else if (ctx.isOil) {
+            /* Oils: Reborn swaps the hero to charges; RAW shows the
+             * structured oilDuration (value + units). The free-text
+             * sys.duration is ignored for oils. */
+            if (ctx.alchemyRebornOn) {
+                const charges = Number(src?.oilCharges) || 0;
+                ctx.heroValue = charges > 0 ? charges : "—";
+                ctx.heroLabel = "CHARGES";
+                ctx.heroSub   = "";
+            } else {
+                const dv = Number(src?.oilDuration?.value) || 0;
+                const du = String(src?.oilDuration?.units || "");
+                ctx.heroValue = dv > 0 ? `${dv} ${du}` : ctx.typeLabel;
+                ctx.heroLabel = dv > 0 ? "DURATION" : "TYPE";
+                ctx.heroSub   = "";
+            }
         } else {
             ctx.heroValue = src?.duration || ctx.typeLabel;
             ctx.heroLabel = src?.duration ? "DURATION" : "TYPE";
             ctx.heroSub   = "";
         }
+        // (ctx.alchemyRebornOn was set above so the oil hero could read it.)
+        // Base summary for the display view — null when the item isn't a
+        // configured brew base, otherwise { typeLabel, modSigned, summary }
+        // so the W3 view can render "Potion / Decoction · -2 DC".
+        ctx.baseSummary = ctx.alchemyRebornOn ? baseSummaryFor(this.item) : null;
         return ctx;
     }
 }
@@ -722,8 +892,10 @@ export class WitcherSpellSheet extends WitcherItemSheet {
 
     static DEFAULT_OPTIONS = {
         actions: {
-            removeComponent: WitcherSpellSheet._onRemoveComponent,
-            openComponent:   WitcherSpellSheet._onOpenComponent
+            removeComponent:   WitcherSpellSheet._onRemoveComponent,
+            openComponent:     WitcherSpellSheet._onOpenComponent,
+            addStatusRider:    WitcherSpellSheet._onAddStatusRider,
+            removeStatusRider: WitcherSpellSheet._onRemoveStatusRider
         }
     };
 
@@ -738,6 +910,17 @@ export class WitcherSpellSheet extends WitcherItemSheet {
         if (!uuid) return;
         const doc = await fromUuid(uuid);
         doc?.sheet?.render(true);
+    }
+
+    static async _onAddStatusRider(event, target) {
+        if (!this.isEditable) return;
+        if (await addStatusRider(this.item)) this.render({ force: false });
+    }
+
+    static async _onRemoveStatusRider(event, target) {
+        if (!this.isEditable) return;
+        const idx = Number(target.closest("[data-status-rider-index]")?.dataset.statusRiderIndex);
+        if (await removeStatusRider(this.item, idx)) this.render({ force: false });
     }
 
     /* Resolve enum labels + the live component links for display. The config
@@ -769,6 +952,30 @@ export class WitcherSpellSheet extends WitcherItemSheet {
             ? unitLabel
             : `${val} ${unitLabel}`;
         ctx.componentLinks = buildComponentLinks(this.item);
+        ctx.statusRiderRows = buildStatusRiderRows(this.item);
+        /* Display-view labels for the new damage / area / status-rider
+         * fields. Reads the enum labels from CONFIG.WITCHER.magic; skips
+         * emitting anything when the field is at its "none" default so
+         * the tooltip stays tight on non-damaging spells. */
+        const dmgFormula = String(src?.damageFormula ?? "").trim();
+        if (dmgFormula) {
+            const el = String(src?.damageElement ?? "none");
+            const ty = String(src?.damageType ?? "none");
+            const elLabel = el === "none" ? "" : game.i18n.localize(M.damageElements?.[el] ?? el);
+            const tyLabel = ty === "none" ? "" : game.i18n.localize(M.damageTypes?.[ty] ?? ty);
+            const parts = [dmgFormula, elLabel, tyLabel].filter(Boolean);
+            ctx.damageLabel = parts.join(" · ");
+        } else {
+            ctx.damageLabel = "";
+        }
+        const aShape = String(src?.areaShape ?? "none");
+        if (aShape !== "none") {
+            const size = Number(src?.areaSize) || 0;
+            const shapeLabel = game.i18n.localize(M.areaShapes?.[aShape] ?? aShape);
+            ctx.areaLabel = size > 0 ? `${size}m ${shapeLabel}` : shapeLabel;
+        } else {
+            ctx.areaLabel = "";
+        }
         return ctx;
     }
 
@@ -787,7 +994,9 @@ export class WitcherHexSheet extends WitcherItemSheet {
     static DEFAULT_OPTIONS = {
         actions: {
             removeComponent: WitcherHexSheet._onRemoveComponent,
-            openComponent:   WitcherHexSheet._onOpenComponent
+            openComponent:     WitcherHexSheet._onOpenComponent,
+            addStatusRider:    WitcherHexSheet._onAddStatusRider,
+            removeStatusRider: WitcherHexSheet._onRemoveStatusRider
         }
     };
 
@@ -802,6 +1011,17 @@ export class WitcherHexSheet extends WitcherItemSheet {
         if (!uuid) return;
         const doc = await fromUuid(uuid);
         doc?.sheet?.render(true);
+    }
+
+    static async _onAddStatusRider(event, target) {
+        if (!this.isEditable) return;
+        if (await addStatusRider(this.item)) this.render({ force: false });
+    }
+
+    static async _onRemoveStatusRider(event, target) {
+        if (!this.isEditable) return;
+        const idx = Number(target.closest("[data-status-rider-index]")?.dataset.statusRiderIndex);
+        if (await removeStatusRider(this.item, idx)) this.render({ force: false });
     }
 
     /* Resolve enum labels + the live component links for display. The
@@ -822,6 +1042,29 @@ export class WitcherHexSheet extends WitcherItemSheet {
             ? unitLabel
             : `${val} ${unitLabel}`;
         ctx.componentLinks = buildComponentLinks(this.item);
+        ctx.statusRiderRows = buildStatusRiderRows(this.item);
+        /* Display-view labels for damage + area, same shape as spells.
+         * Reads CONFIG.WITCHER.hex.* (which re-exports the shared magic
+         * enums). Most RAW hexes have no damage; the labels stay empty. */
+        const HM = CONFIG.WITCHER?.hex ?? {};
+        const dmgFormula = String(src?.damageFormula ?? "").trim();
+        if (dmgFormula) {
+            const el = String(src?.damageElement ?? "none");
+            const ty = String(src?.damageType ?? "none");
+            const elLabel = el === "none" ? "" : game.i18n.localize(HM.damageElements?.[el] ?? el);
+            const tyLabel = ty === "none" ? "" : game.i18n.localize(HM.damageTypes?.[ty] ?? ty);
+            ctx.damageLabel = [dmgFormula, elLabel, tyLabel].filter(Boolean).join(" · ");
+        } else {
+            ctx.damageLabel = "";
+        }
+        const aShape = String(src?.areaShape ?? "none");
+        if (aShape !== "none") {
+            const size = Number(src?.areaSize) || 0;
+            const shapeLabel = game.i18n.localize(HM.areaShapes?.[aShape] ?? aShape);
+            ctx.areaLabel = size > 0 ? `${size}m ${shapeLabel}` : shapeLabel;
+        } else {
+            ctx.areaLabel = "";
+        }
         return ctx;
     }
 
@@ -901,6 +1144,35 @@ export class WitcherMutagenSheet extends WitcherItemSheet {
         const type = ctx.source?.type ?? "red";
         ctx.typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
         ctx.modifiers = summarizeEffectModifiers(this.item);
+        // Alchemy Reborn: surface the toggle so the substance + potency
+        // block on the mutagen sheet can hide when the homebrew is off.
+        // Direct import path — game.system.api.homebrew is wired at the
+        // `ready` hook, but a sheet can render before that (drag preview,
+        // compendium browse) and the optional-chain access would return
+        // undefined → toggle reads false even when it's actually on.
+        // isHomebrewEnabled reads game.settings directly so it works at
+        // any time after settings register (which is `init`).
+        ctx.alchemyRebornOn = isHomebrewEnabled("alchemyPotency");
+        // Substance hero on the display view — mirrors WitcherComponentSheet.
+        // Reads the same multi-source priority chain the chrome wheel uses
+        // (substanceType → substance → witcher-alchemy-craft flag) so
+        // stock-pack mutagens with the flag-only substance also render the
+        // hero. Potency line shown when the toggle is on AND the value is
+        // non-zero (a 0-potency mutagen contributes nothing to a brew).
+        const src = ctx.source ?? this.item.toObject().system;
+        const subs = CONFIG.WITCHER?.alchemical?.substances ?? {};
+        const art  = CONFIG.WITCHER?.alchemical?.substanceArt ?? {};
+        const subKey = String(src?.substanceType
+                           || src?.substance
+                           || this.item.flags?.["witcher-alchemy-craft"]?.substance
+                           || "").trim().toLowerCase();
+        ctx.hasSubstance = ctx.alchemyRebornOn && !!subKey;
+        if (ctx.hasSubstance) {
+            ctx.substanceKey  = subKey;
+            ctx.substanceName = game.i18n.localize(subs[subKey] ?? subKey);
+            ctx.substanceArt  = art[subKey] ?? "";
+        }
+        ctx.showPotency = ctx.alchemyRebornOn && (Number(src?.potency) || 0) > 0;
         return ctx;
     }
 }
@@ -1203,6 +1475,23 @@ export class WitcherComponentSheet extends WitcherItemSheet {
             ctx.substanceName = game.i18n.localize(subs[subKey] ?? subKey);
             ctx.substanceArt  = art[subKey] ?? "";
         }
+        // Alchemy Reborn gate: surface the homebrew toggle state so the
+        // template can show/hide the Potency stepper (and any other Reborn
+        // fields) without a hard-coded gate. Same shorthand as ctx.homebrew
+        // on the base sheet, scoped to the alchemyPotency flag.
+        // Direct import path — game.system.api.homebrew is wired at the
+        // `ready` hook, but a sheet can render before that (drag preview,
+        // compendium browse) and the optional-chain access would return
+        // undefined → toggle reads false even when it's actually on.
+        // isHomebrewEnabled reads game.settings directly so it works at
+        // any time after settings register (which is `init`).
+        ctx.alchemyRebornOn = isHomebrewEnabled("alchemyPotency");
+        // showPotency drives the Potency line in the W3 display hero —
+        // only show when the toggle is on, the component is a substance,
+        // AND the potency value is non-zero (a 0-potency component still
+        // satisfies count requirements but contributes nothing, so the
+        // hero line would just read "Potency 0" — confusing).
+        ctx.showPotency = ctx.alchemyRebornOn && ctx.hasHero && (Number(src?.potency) || 0) > 0;
         return ctx;
     }
 
@@ -1260,7 +1549,7 @@ export class WitcherEnhancementSheet extends WitcherItemSheet {
                     const v   = raw == null ? "" : String(raw).trim();
                     if (v.length) label = `${entry.label}(${v}${param.suffix ?? ""})`;
                 }
-                return { key, label, description: entry.description };
+                return { key, label, description: entry.description, displayOnly: !!entry.displayOnly };
             })
             .filter(Boolean);
 
@@ -1570,7 +1859,8 @@ export class WitcherDiagramsSheet extends WitcherItemSheet {
     static DEFAULT_OPTIONS = {
         actions: {
             removeOutput:     WitcherDiagramsSheet._onRemoveOutput,
-            removeIngredient: WitcherDiagramsSheet._onRemoveIngredient
+            removeIngredient: WitcherDiagramsSheet._onRemoveIngredient,
+            removeTierOutput: WitcherDiagramsSheet._onRemoveTierOutput
         }
     };
 
@@ -1676,6 +1966,67 @@ export class WitcherDiagramsSheet extends WitcherItemSheet {
         ctx.substancesRequired = ctx.substances.filter(s => s.qty > 0);
         ctx.hasSubstances = ctx.substancesRequired.length > 0;
 
+        // Alchemy Reborn: surface the toggle for the tier outputs block.
+        ctx.alchemyRebornOn = isHomebrewEnabled("alchemyPotency");
+
+        // Alchemy Reborn tier outputs — three slots authored as drop-zones.
+        // Normal IS the existing `system.associatedItem` ("Produced Item"
+        // pre-Reborn): every legacy diagram already has it set, so flipping
+        // Alchemy Reborn on doesn't leave compendium formulae empty-handed.
+        // Enhanced and Superior live on `system.outputEnhanced/Superior` —
+        // bare UUID strings whose name + img get resolved here for display.
+        // The standalone "Produced Item" section is gone (collapsed into
+        // the Normal tile so the GM sees one place to set it, not two).
+        const tierBuildAssociated = (tier, label, potencyField) => {
+            const assoc = src?.associatedItem ?? {};
+            const uuid = assoc.uuid || "";
+            let name = assoc.name || "", img = assoc.img || "icons/svg/item-bag.svg";
+            // Prefer the live document for name/img when available so a
+            // renamed associatedItem reflects without a save. The cached
+            // {name, img, uuid} stays as the fallback for compendium-only
+            // items that fromUuidSync can't resolve.
+            if (uuid && typeof fromUuidSync === "function") {
+                try {
+                    const d = fromUuidSync(uuid);
+                    if (d) { name = d.name; img = d.img ?? img; }
+                } catch (_) { /* unresolved — keep the cached values */ }
+            }
+            return {
+                tier,
+                label,
+                potency:      Number(src?.[potencyField]) || 0,
+                potencyField,
+                uuidField:    "associatedItem.uuid",   // unused (drop handler hardcodes the schema field for Normal)
+                uuid,
+                name,
+                img,
+                linked:       !!uuid,
+                dropZone:    `output-${tier}`
+            };
+        };
+        const tierBuildUuid = (tier, label, uuidField, potencyField) => {
+            const uuid = src?.[uuidField] ?? "";
+            let name = "", img = "icons/svg/item-bag.svg", linked = false;
+            if (uuid && typeof fromUuidSync === "function") {
+                try {
+                    const d = fromUuidSync(uuid);
+                    if (d) { name = d.name; img = d.img ?? img; linked = true; }
+                } catch (_) { /* unresolved */ }
+            }
+            return {
+                tier, label,
+                potency:      Number(src?.[potencyField]) || 0,
+                potencyField, uuidField,
+                uuid, name, img, linked,
+                dropZone:    `output-${tier}`
+            };
+        };
+        ctx.tierOutputs = [
+            tierBuildAssociated("normal",   game.i18n.localize("WITCHER.AlchemyReborn.Tier.Normal"),   "potencyNormal"),
+            tierBuildUuid("enhanced",       game.i18n.localize("WITCHER.AlchemyReborn.Tier.Enhanced"), "outputEnhanced", "potencyEnhanced"),
+            tierBuildUuid("superior",       game.i18n.localize("WITCHER.AlchemyReborn.Tier.Superior"), "outputSuperior", "potencySuperior")
+        ];
+
         return ctx;
     }
 
@@ -1750,12 +2101,43 @@ export class WitcherDiagramsSheet extends WitcherItemSheet {
             if (existing) existing.quantity = (Number(existing.quantity) || 0) + 1;
             else list.push({ uuid: item.uuid, name: item.name, quantity: 1 });
             await this.item.update({ "system.craftingComponents": list });
+        } else if (zone === "output-normal") {
+            /* Normal tier IS the existing Produced Item (associatedItem) —
+             * one place to set it, every legacy diagram already has it.
+             * Caches name/img alongside uuid the same way the original
+             * output drop did, so the tile renders fully even without an
+             * fromUuidSync lookup. */
+            await this.item.update({
+                "system.associatedItem": { name: item.name, uuid: item.uuid, img: item.img }
+            });
+        } else if (zone === "output-enhanced" || zone === "output-superior") {
+            /* Enhanced / Superior — bare UUID on the matching string field.
+             * Name + img resolve at render time via fromUuidSync so a rename
+             * flows through without a save round-trip; the diagram stays
+             * lean (no triplet cached). */
+            const tier = zone.slice("output-".length);
+            const field = `system.output${tier.charAt(0).toUpperCase()}${tier.slice(1)}`;
+            await this.item.update({ [field]: item.uuid });
         }
     }
 
     static async _onRemoveOutput(event, target) {
         if (!this.isEditable) return;
         await this.item.update({ "system.associatedItem": { name: "", uuid: "", img: null } });
+    }
+
+    static async _onRemoveTierOutput(event, target) {
+        if (!this.isEditable) return;
+        const tier = target?.dataset?.tier;
+        if (!tier) return;
+        if (tier === "normal") {
+            // Normal tier IS the associatedItem — clear the same triplet
+            // the legacy _onRemoveOutput did.
+            await this.item.update({ "system.associatedItem": { name: "", uuid: "", img: null } });
+            return;
+        }
+        const field = `system.output${tier.charAt(0).toUpperCase()}${tier.slice(1)}`;
+        await this.item.update({ [field]: "" });
     }
 
     static async _onRemoveIngredient(event, target) {
@@ -2023,6 +2405,68 @@ export class WitcherFoodSheet extends WitcherItemSheet {
         effect?.sheet?.render(true);
     }
 
+    /* Wipe orthogonal kind-specific blocks when the GM switches `kind`.
+     *
+     * Kind-specific blocks:
+     *   drink       → `system.drunk.*` (alcohol metadata)
+     *   ingredient  → `system.ingredient.*` (edible / makesSick)
+     *                 ingredients also DO NOT carry charges or pour metadata
+     *                 (the consume branch returns before either is read), so
+     *                 entering ingredient clears those too.
+     *   meal        → none
+     *
+     * Without this, switching drink→meal leaves `drunk.isAlcohol: true` lying
+     * around (the UI hides the editor when `kind !== "drink"` but the schema
+     * keeps the value), so a Pour-a-Glass spawn or a future re-toggle to
+     * drink resurrects the old "is alcohol" flag silently. Same with a
+     * meal→ingredient transition that leaves charges=5/5 on the ingredient —
+     * the config UI hides the Portions field for ingredients but the W3
+     * display tooltip reads `source.charges.max` unconditionally and prints
+     * a portions ticker on what should be a single-unit raw ingredient.
+     *
+     * Schema defaults (kept in sync with food.mjs):
+     *   drunk = { isAlcohol:false, dc:10, levelJump:1, flavorVerb:"drinks", effectIcon:"" }
+     *   ingredient = { edible:false, makesSick:false }
+     *   charges = { current:0, max:0 }   (max:0 disables the ticker)
+     *   pour* fields default to "" / false */
+    _prepareSubmitData(event, form, formData) {
+        const data = super._prepareSubmitData(event, form, formData);
+        if (!form) return data;
+        const newKind = form.querySelector('select[name="system.kind"]')?.value
+                     || form.querySelector('input[name="system.kind"]')?.value;
+        const curKind = this.item.system?.kind;
+        if (!newKind || newKind === curKind) return data;
+        // Leaving "drink" — clear alcohol metadata back to schema defaults.
+        if (curKind === "drink" && newKind !== "drink") {
+            foundry.utils.setProperty(data, "system.drunk", {
+                isAlcohol:  false,
+                dc:         10,
+                levelJump:  1,
+                flavorVerb: "drinks",
+                effectIcon: ""
+            });
+        }
+        // Leaving "ingredient" — clear ingredient toggles back to defaults.
+        if (curKind === "ingredient" && newKind !== "ingredient") {
+            foundry.utils.setProperty(data, "system.ingredient", {
+                edible:    false,
+                makesSick: false
+            });
+        }
+        // Entering "ingredient" — strip portions + pour metadata. Ingredients
+        // are atomic units (one entry = one ingredient); the consume branch
+        // ignores charges and the pour split is meaningless for raw inputs,
+        // so dropping these to schema defaults stops the W3 tooltip from
+        // printing a stale "5/5 Portions" line on the ingredient view.
+        if (newKind === "ingredient" && curKind !== "ingredient") {
+            foundry.utils.setProperty(data, "system.charges", { current: 0, max: 0 });
+            foundry.utils.setProperty(data, "system.pourLabel", "");
+            foundry.utils.setProperty(data, "system.pourIconCustom", false);
+            foundry.utils.setProperty(data, "system.pourIcon", "");
+        }
+        return data;
+    }
+
     /* Add the homebrew-gate flag the food.hbs template uses to hide the
      * taste / charges / satiety / drunk blocks when foodAndDrink is off,
      * plus the localized kind dropdown options and a `kind`-on-source
@@ -2033,6 +2477,11 @@ export class WitcherFoodSheet extends WitcherItemSheet {
     async _prepareContext(options) {
         const ctx = await super._prepareContext(options);
         ctx.foodAndDrinkOn = isHomebrewEnabled("foodAndDrink");
+        ctx.alchemyRebornOn = isHomebrewEnabled("alchemyPotency");
+        // Base summary mirrors the alchemical sheet so a drink configured
+        // as a potion base / an ingredient configured as a bomb base shows
+        // the same "Type · ±N DC" line on its display view.
+        ctx.baseSummary = ctx.alchemyRebornOn ? baseSummaryFor(this.item) : null;
         const src = ctx.source ?? this.item.toObject().system;
         ctx.kind = src?.kind || "meal";
         ctx.kindOptions = {
@@ -2043,6 +2492,44 @@ export class WitcherFoodSheet extends WitcherItemSheet {
         ctx.kindLabel = ctx.kindOptions[ctx.kind] ?? ctx.kind;
         ctx.isDrink = ctx.kind === "drink";
         ctx.isIngredient = ctx.kind === "ingredient";
+        // Tier dropdown for the bland-diet / bonus-axis mechanic.
+        ctx.tier = src?.tier || "medium";
+        ctx.tierOptions = {
+            poor:   "Poor",
+            medium: "Medium",
+            good:   "Good",
+            lavish: "Lavish"
+        };
+        // Bland-eating checkbox — only consulted at runtime when tier is
+        // "poor", but the field is always surfaced so the GM can flip it on
+        // POOR forage / sweet / ritual items. Default is true (schema initial).
+        ctx.blandFood = src?.blandFood !== false;
+        // Player-facing tier label for the display view subtitle stripe.
+        ctx.tierLabel = {
+            poor:   "Bland meal",
+            medium: "Modest meal",
+            good:   "Good meal",
+            lavish: "Lavish meal"
+        }[ctx.tier] ?? "";
+        // Bonus hint — parse the first wdm-tagged AE on the item to produce
+        // a human-readable "Grants +1 STA recovery for 4h" line for the
+        // display view. POOR/MEDIUM items don't carry an axis AE so the
+        // hint stays empty.
+        try {
+            const axisAE = this.item.effects?.find?.(e => e.flags?.wdm?.foodAxis);
+            if (axisAE) {
+                const axisTag = String(axisAE.flags.wdm.foodAxis);
+                const axis = axisTag.split("-")[0];
+                const hours = Math.round((axisAE.duration?.seconds || 0) / 3600);
+                const value = Number(axisAE.changes?.[0]?.value) || 1;
+                const axisDescr = {
+                    stamax:    "STA max",
+                    starec:    "Recovery",
+                    hphealing: "HP max"
+                }[axis] || axis;
+                ctx.foodBonus = `+${value} ${axisDescr} for ${hours}h`;
+            }
+        } catch {}
         // Surface the two ingredient toggles so the template can branch the
         // Satiety field on `edible` and show the sickness toggle directly.
         ctx.ingredientEdible    = !!src?.ingredient?.edible;

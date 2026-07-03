@@ -205,6 +205,25 @@ export class WitcherActiveEffectConfig extends ActiveEffectConfig {
             `<div class="form-fields"><input type="text" name="${name}" value="${cur}" placeholder="1d6/2" /></div>` +
             `<p class="hint">${game.i18n.localize("WITCHER.Effect.DurationFormulaHint")}</p>`;
         tab.appendChild(group);
+
+        /* "Immediate" toggle — appended to the same Duration tab. When set,
+         * the AE fires its onApply actions on create then auto-deletes
+         * (a fire-and-forget effect: "stun bomb explodes → applies
+         * Stunned to targets → bomb AE removes itself"). Persistent stat
+         * modifiers should leave this OFF; their `changes` need the AE
+         * alive to fold into prepareDerivedData. */
+        const immediateName = `flags.${SYSTEM_ID}.immediate`;
+        if (!tab.querySelector(`input[name="${immediateName}"]`)) {
+            const immGroup = document.createElement("div");
+            immGroup.className = "form-group";
+            const checked = this.document.flags?.[SYSTEM_ID]?.immediate ? "checked" : "";
+            immGroup.innerHTML =
+                `<label>${game.i18n.localize("WITCHER.Effect.Immediate") || "Immediate"}</label>` +
+                `<div class="form-fields"><input type="checkbox" name="${immediateName}" ${checked} /></div>` +
+                `<p class="hint">${game.i18n.localize("WITCHER.Effect.ImmediateHint")
+                    || "Fire this effect's actions on create, then delete the effect. Use for one-shot triggers (apply a status, deal damage); leave OFF for persistent stat modifiers."}</p>`;
+            tab.appendChild(immGroup);
+        }
     }
 
     /** flags.<sys>.actions arrives from the form as an index-keyed object

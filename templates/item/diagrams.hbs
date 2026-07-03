@@ -45,19 +45,19 @@
         {{#if source.craftingTime}}
           <li class="wdm-w3-stat">
             <span class="val">{{source.craftingTime}}</span>
-            <span class="lbl">Crafting Time</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Diagrams.Text.CraftingTime'}}</span>
           </li>
         {{/if}}
         {{#unless (eq source.investment 0)}}
           <li class="wdm-w3-stat">
             <span class="val">{{source.investment}}</span>
-            <span class="lbl">Investment (crowns)</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Diagrams.Text.InvestmentCrowns'}}</span>
           </li>
         {{/unless}}
         {{#if source.learned}}
           <li class="wdm-w3-stat is-positive">
             <span class="val"><i class="fa-solid fa-check"></i></span>
-            <span class="lbl">Memorized</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Diagrams.Text.Memorized'}}</span>
           </li>
         {{/if}}
       </ul>
@@ -66,27 +66,45 @@
         <div class="wdm-w3-output">
           <img src="{{output.img}}" alt="" />
           <div class="wdm-w3-output-meta">
-            <span class="wdm-w3-output-kicker">Produces</span>
+            <span class="wdm-w3-output-kicker">{{localize 'WITCHER.Sheet.Diagrams.Text.Produces'}}</span>
             <span class="wdm-w3-output-name">{{output.name}}</span>
           </div>
         </div>
       {{/if}}
 
       {{#if hasIngredients}}
-        <div class="wdm-w3-section-label">Ingredients</div>
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Diagrams.Text.Ingredients'}}</div>
         <ul class="wdm-w3-ingredients">
           {{#each ingredients}}
-            <li class="wdm-w3-ingredient">
-              <img src="{{this.img}}" alt="" />
-              <span class="nm">{{this.name}}</span>
-              <span class="qt">×{{this.quantity}}</span>
-            </li>
+            {{!-- Each ingredient is a Foundry content-link <a> when its
+                 component resolves to a compendium item — click opens the
+                 component sheet; drag pulls the item onto an actor. When
+                 the UUID is empty (linker missed it or hand-authored),
+                 fall back to a bare <li> so the row still renders. --}}
+            {{#if this.uuid}}
+              <li class="wdm-w3-ingredient">
+                <a class="content-link" draggable="true"
+                   data-uuid="{{this.uuid}}" data-type="Item"
+                   data-tooltip="Open / drag {{this.name}}">
+                  <img src="{{this.img}}" alt="" />
+                  <span class="nm">{{this.name}}</span>
+                  <span class="qt">×{{this.quantity}}</span>
+                </a>
+              </li>
+            {{else}}
+              <li class="wdm-w3-ingredient is-unlinked"
+                  data-tooltip="No compendium item resolved for &quot;{{this.name}}&quot;">
+                <img src="{{this.img}}" alt="" />
+                <span class="nm">{{this.name}}</span>
+                <span class="qt">×{{this.quantity}}</span>
+              </li>
+            {{/if}}
           {{/each}}
         </ul>
       {{/if}}
 
       {{#if hasSubstances}}
-        <div class="wdm-w3-section-label">Substances</div>
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Diagrams.Text.Substances'}}</div>
         <div class="wdm-w3-subs">
           {{#each substancesRequired}}
             <span class="wdm-w3-sub" style="--sub-color: var(--wdm-sub-{{this.key}})">
@@ -101,13 +119,13 @@
       {{/if}}
 
       <div class="wdm-w3-footer">
-        <span class="wdm-w3-foot-cell" title="Weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Diagrams.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
         {{#unless (eq source.quantity 1)}}
-          <span class="wdm-w3-foot-cell" title="Quantity"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+          <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Diagrams.Tooltip.Quantity'}}"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
         {{/unless}}
         <span class="wdm-w3-foot-spacer"></span>
         <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
-        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Sheet.Diagrams.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
       </div>
 
     </div>
@@ -120,28 +138,28 @@
     <div class="wdm-cfg-form">
 
       <div class="wdm-cfg-head">
-        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
-        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Diagram name" />
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Diagrams.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Diagrams.Hint.DiagramName'}}" />
       </div>
 
-      <div class="wdm-cfg-section">Classification</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Diagrams.Text.Classification'}}</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row" title="What this entry represents. Diagram → Crafting roll. Formula → Alchemy roll (uses the nine substances). Recipe → Cooking roll (homebrew food & drink).">
-          <span>Kind</span>
+        <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Diagrams.Tooltip.WhatThisEntryRepresentsDiagramCraftingRo'}}">
+          <span>{{localize 'WITCHER.Sheet.Diagrams.Text.Kind'}}</span>
           <select name="system.kind">
             {{#each kindOptions}}
               <option value="{{@key}}" {{#if (eq @key ../kind)}}selected{{/if}}>{{this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>Level</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Diagrams.Text.Level'}}</span>
           <select name="system.level">
             {{#each levels}}
               <option value="{{@key}}" {{#if (eq @key ../source.level)}}selected{{/if}}>{{localize this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>Sub-type</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Diagrams.Text.SubType'}}</span>
           <select name="system.type">
             <option value="" {{#if (eq source.type "")}}selected{{/if}}>— none —</option>
             {{#each subtypeOptions}}
@@ -151,59 +169,94 @@
         </label>
       </div>
 
-      <div class="wdm-cfg-section">Crafting</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Diagrams.Text.Crafting'}}</div>
       <div class="wdm-cfg-grid">
         <label class="wdm-cfg-row"><span>{{dcLabel}}</span>
           <input type="number" min="0" name="{{dcField}}" value="{{dc}}"
                  title="Difficulty of the {{dcLabel}} roll." />
         </label>
         {{#if isDiagram}}
-        <label class="wdm-cfg-row is-checkbox" title="Metalwork — crafting this needs a Forge rather than a portable Crafting kit. Drives the tool requirement on the crafting panel.">
-          <span>Requires Forge</span>
+        <label class="wdm-cfg-row is-checkbox" title="{{localize 'WITCHER.Sheet.Diagrams.Tooltip.MetalworkCraftingThisNeedsAForgeRatherTh'}}">
+          <span>{{localize 'WITCHER.Sheet.Diagrams.Text.RequiresForge'}}</span>
           <input type="checkbox" name="system.requiresForge" {{#if source.requiresForge}}checked{{/if}} />
         </label>
         {{/if}}
-        <label class="wdm-cfg-row"><span>Crafting Time</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Diagrams.Text.CraftingTime'}}</span>
           <input type="text" name="system.craftingTime" value="{{source.craftingTime}}" placeholder="1 Hour / 2 Days" />
         </label>
-        <label class="wdm-cfg-row"><span>Investment</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Diagrams.Text.Investment'}}</span>
           <input type="number" min="0" name="system.investment" value="{{source.investment}}"
-                 title="Crowns paid to speed up the craft (Core p.130)." />
+                 title="{{localize 'WITCHER.Sheet.Diagrams.Tooltip.CrownsPaidToSpeedUpTheCraftCoreP130'}}" />
         </label>
-        <label class="wdm-cfg-row is-checkbox" title="Memorized — craftable without the physical diagram in hand.">
-          <span>Memorized</span>
+        <label class="wdm-cfg-row is-checkbox" title="{{localize 'WITCHER.Sheet.Diagrams.Tooltip.MemorizedCraftableWithoutThePhysicalDiag'}}">
+          <span>{{localize 'WITCHER.Sheet.Diagrams.Text.Memorized'}}</span>
           <input type="checkbox" name="system.learned" {{#if source.learned}}checked{{/if}} />
         </label>
       </div>
 
-      <div class="wdm-cfg-section">Produced Item</div>
-      <div class="wdm-drop-zone" data-drop-zone="output">
-        {{#if output.linked}}
-          <div class="wdm-link-row">
-            <img src="{{output.img}}" alt="" />
-            <span class="wdm-link-name">{{output.name}}</span>
-            <button type="button" class="wdm-link-remove" data-action="removeOutput" title="Unlink"><i class="fa-solid fa-xmark"></i></button>
+      {{!-- Produced Item / tier outputs. Two layouts:
+            - Alchemy Reborn ON + formula: three tier drop-zones
+              (Normal / Enhanced / Superior). The Normal slot IS the
+              `system.associatedItem` triplet that pre-Reborn diagrams
+              already used as "Produced Item" — flipping the toggle on
+              doesn't lose the existing link, every compendium formula
+              just becomes a Normal-tier output automatically.
+            - Anything else: the original single Produced Item zone. --}}
+      {{#if (and isFormula alchemyRebornOn)}}
+        <div class="wdm-cfg-section">{{localize "WITCHER.AlchemyReborn.Section.TierOutputs"}}</div>
+        <p class="wdm-cfg-hint">{{localize "WITCHER.AlchemyReborn.TierOutputs.Hint"}}</p>
+        {{#each tierOutputs}}
+          <div class="wdm-tier-output">
+            <div class="wdm-tier-output-head">
+              <span class="wdm-tier-output-label">{{this.label}}</span>
+              <label class="wdm-tier-output-potency">
+                <span>{{localize "WITCHER.AlchemyReborn.Tier.PotencyLabel"}}</span>
+                <input type="number" min="0" name="system.{{this.potencyField}}" value="{{this.potency}}" />
+              </label>
+            </div>
+            <div class="wdm-drop-zone" data-drop-zone="{{this.dropZone}}">
+              {{#if this.linked}}
+                <div class="wdm-link-row">
+                  <img src="{{this.img}}" alt="" />
+                  <span class="wdm-link-name">{{this.name}}</span>
+                  <button type="button" class="wdm-link-remove" data-action="removeTierOutput" data-tier="{{this.tier}}" title="{{localize 'WITCHER.Sheet.Diagrams.Tooltip.Unlink'}}"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+              {{else}}
+                <div class="wdm-drop-hint"><i class="fa-solid fa-hand-pointer"></i> {{localize "WITCHER.AlchemyReborn.TierOutputs.DropHint"}}</div>
+              {{/if}}
+            </div>
           </div>
-        {{else}}
-          <div class="wdm-drop-hint"><i class="fa-solid fa-hand-pointer"></i> Drop the produced item here</div>
-        {{/if}}
-      </div>
+        {{/each}}
+      {{else}}
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Diagrams.Text.ProducedItem'}}</div>
+        <div class="wdm-drop-zone" data-drop-zone="output">
+          {{#if output.linked}}
+            <div class="wdm-link-row">
+              <img src="{{output.img}}" alt="" />
+              <span class="wdm-link-name">{{output.name}}</span>
+              <button type="button" class="wdm-link-remove" data-action="removeOutput" title="{{localize 'WITCHER.Sheet.Diagrams.Tooltip.Unlink'}}"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          {{else}}
+            <div class="wdm-drop-hint"><i class="fa-solid fa-hand-pointer"></i> {{localize 'WITCHER.Sheet.Diagrams.Text.DropTheProducedItemHere'}}</div>
+          {{/if}}
+        </div>
+      {{/if}}
 
-      <div class="wdm-cfg-section">Ingredients</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Diagrams.Text.Ingredients'}}</div>
       <div class="wdm-drop-zone is-list" data-drop-zone="ingredient">
         {{#each ingredients}}
           <div class="wdm-link-row" data-ingredient-index="{{this.index}}">
             <img src="{{this.img}}" alt="" />
             <span class="wdm-link-name">{{this.name}}</span>
-            <input class="wdm-link-qty" type="number" min="0" value="{{this.quantity}}" data-ingredient-qty="{{this.index}}" title="Quantity required" />
-            <button type="button" class="wdm-link-remove" data-action="removeIngredient" title="Remove"><i class="fa-solid fa-xmark"></i></button>
+            <input class="wdm-link-qty" type="number" min="0" value="{{this.quantity}}" data-ingredient-qty="{{this.index}}" title="{{localize 'WITCHER.Sheet.Diagrams.Tooltip.QuantityRequired'}}" />
+            <button type="button" class="wdm-link-remove" data-action="removeIngredient" title="{{localize 'WITCHER.Sheet.Diagrams.Tooltip.Remove'}}"><i class="fa-solid fa-xmark"></i></button>
           </div>
         {{/each}}
-        <div class="wdm-drop-hint"><i class="fa-solid fa-plus"></i> Drop ingredient items here</div>
+        <div class="wdm-drop-hint"><i class="fa-solid fa-plus"></i> {{localize 'WITCHER.Sheet.Diagrams.Text.DropIngredientItemsHere'}}</div>
       </div>
 
       {{#if isFormula}}
-        <div class="wdm-cfg-section">Substances Required</div>
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Diagrams.Text.SubstancesRequired'}}</div>
         <div class="wdm-sub-grid">
           {{#each substances}}
             <label class="wdm-sub-cell">
@@ -214,32 +267,33 @@
             </label>
           {{/each}}
         </div>
+
       {{/if}}
 
-      <div class="wdm-cfg-section">Procurement</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Diagrams.Text.Procurement'}}</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span>Availability</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Diagrams.Text.Availability'}}</span>
           <select name="system.availability">
             {{#each WITCHER.availability}}
               <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>Weight (kg)</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Diagrams.Text.WeightKg'}}</span>
           <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
         </label>
-        <label class="wdm-cfg-row"><span>Cost</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Diagrams.Text.Cost'}}</span>
           <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
         </label>
-        <label class="wdm-cfg-row"><span>Quantity</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Diagrams.Text.Quantity'}}</span>
           <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
         </label>
       </div>
 
       {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
 
-      <div class="wdm-cfg-section">Description</div>
-      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="What the diagram describes, where it was found…">{{source.description}}</textarea>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Diagrams.Text.Description'}}</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="{{localize 'WITCHER.Sheet.Diagrams.Hint.WhatTheDiagramDescribesWhereItWasFound'}}">{{source.description}}</textarea>
 
     </div>
   </div>

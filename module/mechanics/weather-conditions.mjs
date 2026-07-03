@@ -51,7 +51,10 @@ function stunValue(actor) {
     return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
-/** AE duration counting down `hours` of world time from now. */
+/** AE duration counting down `hours` of world time from now. Uses the
+ *  Foundry-v14 legacy `duration.startTime` shim — the BaseActiveEffect
+ *  migrateData hook converts it to `start.time` and fills the required
+ *  sibling fields (initiative/round/turn) with their schema defaults. */
 function coldDuration(hours) {
     const spd = game.time?.calendar?.secondsPerDay || 86400;
     const seconds = Math.max(1, Math.round(hours)) * (spd / 24);

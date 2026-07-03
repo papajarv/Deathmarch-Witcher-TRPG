@@ -1,0 +1,70 @@
+{{!-- Configure UI Scaling dialog body. Rendered by UIScaleConfig (ApplicationV2). --}}
+
+<div class="wou-ui-scale-config-body">
+
+  <p class="hint">
+    Auto sizes the chrome proportionally to your viewport height. Manual multiplies
+    on top of that with the UI Scale slider. Detailed unlocks a per-element slider
+    for each chrome region.
+  </p>
+
+  <div class="form-group" data-row="mode">
+    <label for="wou-uis-mode">UI Scale Mode</label>
+    <select id="wou-uis-mode" name="scaleMode">
+      <option value="auto"     {{#if (eq mode "auto")}}selected{{/if}}>Auto (viewport + DPI)</option>
+      <option value="manual"   {{#if (eq mode "manual")}}selected{{/if}}>Manual</option>
+      <option value="detailed" {{#if (eq mode "detailed")}}selected{{/if}}>Detailed (per-element)</option>
+    </select>
+  </div>
+
+  {{!-- Auto/Manual sliders. JS toggles visibility live via data-row. --}}
+  <div class="form-group" data-row="scale">
+    <label for="wou-uis-scale">UI Scale <span data-display="scale">{{scale}}</span>×</label>
+    <input id="wou-uis-scale" name="scale" type="range" min="0.6" max="1.6" step="0.05" value="{{scale}}">
+  </div>
+
+  <div class="form-group" data-row="bars">
+    <label for="wou-uis-bars">Chrome Bars Scale <span data-display="chromeBarsScale">{{bars}}</span>×</label>
+    <input id="wou-uis-bars" name="chromeBarsScale" type="range" min="0.6" max="1.6" step="0.05" value="{{bars}}">
+  </div>
+
+  {{!-- Detailed sliders — visibility toggled by JS via data-detailed-block. --}}
+  <div data-detailed-block>
+    <p class="hint" style="margin-top:0.25rem;">
+      Each slider drives one chrome region. Popups covers actor sheets, item sheets,
+      dialogs, and the compendium browser.
+    </p>
+
+    <div class="form-group">
+      <label for="wou-uis-d-ui">UI Scale (text) <span data-display="detailed.ui">{{detailed.ui}}</span>×</label>
+      <input id="wou-uis-d-ui" name="detailed.ui" type="range" min="0.6" max="1.6" step="0.05" value="{{detailed.ui}}">
+    </div>
+    <div class="form-group">
+      <label for="wou-uis-d-topbar">Top Bar <span data-display="detailed.topbar">{{detailed.topbar}}</span>×</label>
+      <input id="wou-uis-d-topbar" name="detailed.topbar" type="range" min="0.6" max="1.6" step="0.05" value="{{detailed.topbar}}">
+    </div>
+    <div class="form-group">
+      <label for="wou-uis-d-dock">Bottom Dock <span data-display="detailed.dock">{{detailed.dock}}</span>×</label>
+      <input id="wou-uis-d-dock" name="detailed.dock" type="range" min="0.6" max="1.6" step="0.05" value="{{detailed.dock}}">
+    </div>
+    <div class="form-group">
+      <label for="wou-uis-d-sidebar">Right Sidebar <span data-display="detailed.sidebar">{{detailed.sidebar}}</span>×</label>
+      <input id="wou-uis-d-sidebar" name="detailed.sidebar" type="range" min="0.6" max="1.6" step="0.05" value="{{detailed.sidebar}}">
+    </div>
+    <div class="form-group">
+      <label for="wou-uis-d-scenecontrols">Left Scene Controls <span data-display="detailed.scenecontrols">{{detailed.scenecontrols}}</span>×</label>
+      <input id="wou-uis-d-scenecontrols" name="detailed.scenecontrols" type="range" min="0.6" max="1.6" step="0.05" value="{{detailed.scenecontrols}}">
+    </div>
+    <div class="form-group">
+      <label for="wou-uis-d-popups">Popups (sheets, dialogs, compendium) <span data-display="detailed.popups">{{detailed.popups}}</span>×</label>
+      <input id="wou-uis-d-popups" name="detailed.popups" type="range" min="0.6" max="1.6" step="0.05" value="{{detailed.popups}}">
+    </div>
+  </div>
+
+  <footer class="wou-ui-scale-config-footer">
+    <button type="button" data-action="reset" title="Reset every slider to 1.00× (mode stays as-is)."><i class="fa-solid fa-rotate-left"></i> Reset all</button>
+    <button type="button" data-action="cancel"><i class="fa-solid fa-xmark"></i> Cancel</button>
+    <button type="button" data-action="apply"><i class="fa-solid fa-check"></i> Apply</button>
+  </footer>
+
+</div>

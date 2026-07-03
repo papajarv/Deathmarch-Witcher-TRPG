@@ -12,10 +12,20 @@
  *     `system.loaded`; firing spends a chambered round and is refused when
  *     the chamber is empty.
  *
- * Ammo is only eligible if it lives inside one of the wielder's EQUIPPED
- * containers (a worn quiver / bolt-case). Loose ammo and ammo in stowed
- * packs cannot be drawn mid-combat.
+ * Ammo eligibility depends on combat state (user spec 2026-07-02):
+ *   • In combat: only ammo inside a WORN, equipped container counts —
+ *     matches RAW's action-economy for drawing rounds mid-fight.
+ *   • Out of combat: LOOSE ammo (in the actor's on-person inventory
+ *     but not stored inside any container) is also eligible, alongside
+ *     equipped-container ammo. Reflects the low-stakes preparation of
+ *     stringing your crossbow between encounters.
+ *
+ * "Loose" means on the actor's Items and not referenced by any
+ * container's `system.content`. Ammo inside a STOWED (isStored) container
+ * is never eligible either way — you'd have to unpack it first.
  */
+
+import { isActorInActiveCombat } from "../../chrome/lib/actor.js";
 
 export const reloadMixin = (Base) => class extends Base {
 
@@ -46,24 +56,56 @@ export const reloadMixin = (Base) => class extends Base {
     }
 
     /** Ammo the wielder may load: type "ammo", matching this weapon's
-     *  ammoType (arrows in bows, bolts in crossbows), quantity > 0, inside
-     *  one of the actor's equipped containers. Returns
-     *  [{ item, container, qty }]. */
+     *  ammoType (arrows in bows, bolts in crossbows), quantity > 0.
+     *
+     *  In combat: only ammo inside an equipped container counts.
+     *  Out of combat: ALSO include loose ammo (on-person, not stored
+     *  inside any container). See the file header for the rationale.
+     *
+     *  Returns [{ item, container, qty }] — `container` is null for
+     *  loose ammo (callers use it to render a source label). */
     getEligibleAmmo() {
         const actor = this.actor;
         if (!actor) return [];
         const want = this.ammoType;
         const out = [];
         const seen = new Set();
+        /* Pass 1 — equipped-container ammo (always eligible). */
+        const containerRefs = new Set();
         for (const c of actor.items) {
             if (c.type !== "container" || c.system?.equipped !== true) continue;
             for (const ref of c.system?.content ?? []) {
+                containerRefs.add(ref);
                 const it = (typeof fromUuidSync === "function") ? fromUuidSync(ref) : null;
                 if (!it || it.type !== "ammo" || seen.has(it.id)) continue;
                 if ((it.system?.ammoType || "arrow") !== want) continue;
                 if ((Number(it.system?.quantity) || 0) <= 0) continue;
                 seen.add(it.id);
                 out.push({ item: it, container: c, qty: Number(it.system?.quantity) || 0 });
+            }
+        }
+        /* Pass 2 — loose ammo on the actor (out of combat only). Loose
+         * means: type=ammo, not marked isStored, and NOT referenced by
+         * any container's content list (a stowed container's ammo is
+         * still ineligible because the ammo is inside — we'd have to
+         * unpack it first). We also collect refs from ALL containers,
+         * not just equipped ones, so ammo inside a stowed pack isn't
+         * accidentally re-added as "loose". */
+        if (!isActorInActiveCombat(actor)) {
+            /* Collect refs from every container to filter loose. */
+            const anyContainerRefs = new Set(containerRefs);
+            for (const c of actor.items) {
+                if (c.type !== "container") continue;
+                for (const ref of c.system?.content ?? []) anyContainerRefs.add(ref);
+            }
+            for (const it of actor.items) {
+                if (it.type !== "ammo" || seen.has(it.id)) continue;
+                if ((it.system?.ammoType || "arrow") !== want) continue;
+                if ((Number(it.system?.quantity) || 0) <= 0) continue;
+                if (it.system?.isStored === true) continue;
+                if (anyContainerRefs.has(it.uuid) || anyContainerRefs.has(it.id)) continue;
+                seen.add(it.id);
+                out.push({ item: it, container: null, qty: Number(it.system?.quantity) || 0 });
             }
         }
         return out;
@@ -196,7 +238,14 @@ export const reloadMixin = (Base) => class extends Base {
         const ammo = ammoId ? this.#resolveAmmo(ammoId) : this.getSelectedAmmo();
         const have = Number(ammo?.system?.quantity) || 0;
         if (!ammo || have <= 0) return { ok: false, reason: "noAmmo" };
-        await ammo.update({ "system.quantity": have - 1 });
+        /* Free Ammunition (EO p.13 — sling rocks, etc.) — the weapon's
+         * `freeAmmunition` quality says environment-found rounds don't
+         * deplete the carried stack. The check lives on the WEAPON side
+         * (a sling carries the quality), not on the ammo. */
+        const wq = this.system?.effective?.qualities ?? this.system?.qualities ?? [];
+        if (!wq.includes("freeAmmunition")) {
+            await ammo.update({ "system.quantity": have - 1 });
+        }
         return { ok: true, ammo };
     }
 };

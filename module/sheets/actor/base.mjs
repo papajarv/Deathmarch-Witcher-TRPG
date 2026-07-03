@@ -23,6 +23,7 @@ import { getCapacityDisplay } from "../../chrome/lib/container.js";
 import { isActorInActiveCombat } from "../../chrome/lib/actor.js";
 import { isAdrenalineEnabled } from "../../api/adrenaline.mjs";
 
+import { t, tFormat } from "../../chrome/lib/i18n.js";
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 const { ActorSheetV2 } = foundry.applications.sheets;
 
@@ -138,7 +139,10 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
         }
         // Character-build items (perk, race, homeland) aren't physical gear, so
         // they skip the combat "pick up" action cost — drop straight through.
-        if (["perk", "race", "homeland"].includes(item?.type)) {
+        // Same for spells / hexes / rituals — they're learned, not picked up
+        // off the ground. Dragging a spell from the sidebar / a compendium
+        // should never require a combat action or be refused mid-combat.
+        if (["perk", "race", "homeland", "spell", "hex", "ritual"].includes(item?.type)) {
             return super._onDropItem(event, item);
         }
         // Picking an item up off the world is a combat action — refuse if no slot.
@@ -202,7 +206,7 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
             <p>Choose <strong>${choose}</strong> skill${choose > 1 ? "s" : ""} for <strong>${profName}</strong>:</p>
             ${rows}</div>`;
         const picked = await DialogV2.wait({
-            window: { title: `Skill Package — ${profName}` },
+            window: { title: tFormat("WITCHER.Dialog.Skill.Package", { prof: profName }, "Skill Package — {prof}") },
             content,
             buttons: [{
                 action: "ok", label: "Confirm", default: true,
@@ -1015,7 +1019,7 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
                     { scene: canvas?.scene?.id ?? null, active: true });
             }
             if (!combat) {
-                ui.notifications.error("Could not create or find a combat encounter.");
+                ui.notifications.error(t("WITCHER.Notify.Combat.NoEncounter", "Could not create or find a combat encounter."));
                 return;
             }
 
@@ -1044,7 +1048,7 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
             }
             if (!combat.active && typeof combat.activate === "function") await combat.activate();
         } catch (err) {
-            ui.notifications.error("Failed to roll initiative into combat — see console.");
+            ui.notifications.error(t("WITCHER.Notify.Combat.InitiativeFailed", "Failed to roll initiative into combat — see console."));
             console.error(err);
         }
     }
@@ -1058,6 +1062,16 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
         const sta = this.actor.system?.derivedStats?.sta;
         const rec = Number(this.actor.system?.derivedStats?.rec) || 0;
         if (!sta) return;
+        /* Phase 8 — Stifling armor (EO p.8): wearing a Stifling piece
+         * refuses the rest cycle. We gate the in-combat Take a Breath
+         * action since that's the only "rest" surface in the system. */
+        const stiflingPiece = (this.actor.items ?? []).find(a =>
+            a.type === "armor" && a.system?.equipped &&
+            ((a.system?.effective?.qualities ?? a.system?.qualities ?? []).includes("stifling")));
+        if (stiflingPiece) {
+            ui.notifications?.warn(tFormat("WITCHER.Notify.Rest.Stifling", { actor: this.actor.name, piece: stiflingPiece.name }, "{actor} can't rest in {piece} (Stifling)."));
+            return;
+        }
         const next = Math.min((Number(sta.value) || 0) + rec, Number(sta.max) || 0);
         await this.actor.update({ "system.derivedStats.sta.value": next });
         ChatMessage.create({
@@ -1258,7 +1272,7 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
     }
     static async _onAddLifeEvent(event, target) {
         const result = await foundry.applications.api.DialogV2.prompt({
-            window: { title: "New Life Event" },
+            window: { title: t("WITCHER.Dialog.LifeEvent.New", "New Life Event") },
             content: WitcherActorSheet._lifeEventDialogContent(),
             ok: { label: "Add", callback: (event, button) => WitcherActorSheet._readLifeEventForm(button) }
         });
@@ -1279,7 +1293,7 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
             location: this.actor.getFlag("witcher-ttrpg-death-march", `lifeEventLocations.${id}`) ?? ""
         };
         const result = await foundry.applications.api.DialogV2.prompt({
-            window: { title: "Edit Life Event" },
+            window: { title: t("WITCHER.Dialog.LifeEvent.Edit", "Edit Life Event") },
             content: WitcherActorSheet._lifeEventDialogContent(populated),
             ok: { label: "Save", callback: (event, button) => WitcherActorSheet._readLifeEventForm(button) }
         });
@@ -1290,7 +1304,7 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
         const id = target.closest("[data-event-id]")?.dataset.eventId;
         if (!id) return;
         const ok = await foundry.applications.api.DialogV2.confirm({
-            window: { title: "Delete Life Event" },
+            window: { title: t("WITCHER.Dialog.LifeEvent.Delete", "Delete Life Event") },
             content: "<p>Remove this life event?</p>"
         });
         if (!ok) return;
@@ -1319,7 +1333,16 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
         const path = target.dataset.target;
         const delta = Number(target.dataset.delta);
         if (!path || !Number.isFinite(delta)) return;
-        const current = Number(foundry.utils.getProperty(this.actor.system, path.replace(/^system\./, ""))) || 0;
+        // Read the SOURCE value, not the prepared one. The prepared value
+        // includes AE-applied modifications (e.g. the Gryphon Witcher
+        // perk's "+2 Vigor"), so reading prepared+delta and writing it
+        // back to source means the AE delta gets baked into source on
+        // every click — minus drifts upward, plus jumps by +delta+1 per
+        // tick. _source bypasses the AE apply pipeline and gives us what
+        // the user last persisted, which is the only honest base for
+        // an adjustment write.
+        const relPath = path.replace(/^system\./, "");
+        const current = Number(foundry.utils.getProperty(this.actor._source.system, relPath)) || 0;
         let next = current + delta;
         const lo = target.dataset.min !== undefined ? Number(target.dataset.min) : 0;
         const hi = target.dataset.max !== undefined ? Number(target.dataset.max) : Number.POSITIVE_INFINITY;
@@ -1346,7 +1369,7 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
         if (current === "profession") {
             const hasProfession = this.actor.items?.some?.(i => i.type === "profession");
             if (hasProfession) {
-                ui.notifications?.info?.("Profession skill — granted by your profession.");
+                ui.notifications?.info?.(t("WITCHER.Notify.Skill.ProfessionGranted", "Profession skill — granted by your profession."));
                 return;
             }
             await this.actor.update({ [`system.skills.${stat}.${skill}.category`]: "" });
@@ -1397,7 +1420,7 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
         const item = this.actor.items.get(id);
         if (!item) return;
         const ok = await foundry.applications.api.DialogV2.confirm({
-            window: { title: "Delete Item" },
+            window: { title: t("WITCHER.Dialog.DeleteItem", "Delete Item") },
             content: `<p>Remove <strong>${item.name}</strong> from this actor?</p>`
         });
         if (ok) await item.delete();
@@ -1516,7 +1539,7 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
         const esc = foundry.utils.escapeHTML ?? (s => String(s ?? ""));
         const options = containers.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
         const containerId = await foundry.applications.api.DialogV2.prompt({
-            window: { title: `Stow ${item.name}` },
+            window: { title: tFormat("WITCHER.Dialog.StowItem", { item: item.name }, "Stow {item}") },
             content: `<div class="wdm-event-form"><label class="wdm-event-field"><span>Container</span><select name="container">${options}</select></label></div>`,
             ok: { label: "Stow", callback: (_event, button) => button.form.elements.container?.value }
         }).catch(() => null);
@@ -1543,7 +1566,7 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
                 const item = this.actor?.items?.get(el?.dataset?.itemId);
                 if (!item) return;
                 const ok = await foundry.applications.api.DialogV2.confirm({
-                    window: { title: "Delete Item" },
+                    window: { title: t("WITCHER.Dialog.DeleteItem", "Delete Item") },
                     content: `<p>Remove <strong>${item.name}</strong> from this actor?</p>`
                 });
                 if (ok) await item.delete();
@@ -1570,7 +1593,7 @@ export class WitcherActorSheet extends HandlebarsApplicationMixin(ActorSheetV2) 
         const effect = this.actor.effects.get(id);
         if (!effect) return;
         const ok = await foundry.applications.api.DialogV2.confirm({
-            window: { title: "Delete Effect" },
+            window: { title: t("WITCHER.Dialog.DeleteEffect", "Delete Effect") },
             content: `<p>Remove <strong>${effect.name}</strong>?</p>`
         });
         if (ok) await effect.delete();

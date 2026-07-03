@@ -36,27 +36,27 @@ function injectStyles() {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 6px 14px;
-      padding: 4px 8px;
-      margin: 2px 0;
+      gap: 0.375rem 0.875rem;
+      padding: 0.25rem 0.5rem;
+      margin: 0.125rem 0;
       border-top: 1px solid rgba(0, 0, 0, 0.12);
       border-bottom: 1px solid rgba(0, 0, 0, 0.12);
     }
     .wou-shield-tickbox {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 0.3125rem;
       white-space: nowrap;
     }
     .wou-shield-field {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 0.25rem;
       white-space: nowrap;
       font-size: 0.9em;
     }
     .wou-shield-field input[type="number"] {
-      width: 48px;
+      width: 3rem;
       text-align: center;
     }
     .wou-shield-fields.wou-hidden {
@@ -66,7 +66,7 @@ function injectStyles() {
       display: inline-flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 6px 12px;
+      gap: 0.375rem 0.75rem;
     }
   `;
   document.head.appendChild(style);
@@ -79,7 +79,7 @@ Hooks.on("renderWitcherWeaponSheet", (app, _html, _ctx, _opts) => {
 
   injectStyles();
 
-  // The system's `.item-options` row is a fixed-height (54px), two-column
+  // The system's `.item-options` row is a fixed-height (3.375rem), two-column
   // flex block — appending into it overflows or clips on narrow windows.
   // Instead, drop our own wrap-friendly bar immediately after it.
   const options = root.querySelector(".item-options");

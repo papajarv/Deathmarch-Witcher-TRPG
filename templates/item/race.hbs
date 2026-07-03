@@ -23,7 +23,7 @@
       <header class="wdm-race-head">
         <img class="wdm-race-portrait" src="{{item.img}}" alt="" />
         <div class="wdm-race-head-titles">
-          <div class="wdm-race-eyebrow">Race</div>
+          <div class="wdm-race-eyebrow">{{localize 'WITCHER.Sheet.Race.Text.Race'}}</div>
           <h1 class="wdm-race-title">{{item.name}}</h1>
         </div>
       </header>
@@ -44,7 +44,7 @@
       {{/if}}
 
       {{#if effects.length}}
-        <div class="wdm-prof-section-label">Granted Effects</div>
+        <div class="wdm-prof-section-label">{{localize 'WITCHER.Sheet.Race.Text.GrantedEffects'}}</div>
         <ul class="wdm-race-effects">
           {{#each effects}}
             <li class="wdm-race-effect {{#if this.disabled}}is-disabled{{/if}}">
@@ -66,28 +66,33 @@
     <div class="wdm-cfg-form">
 
       <div class="wdm-cfg-head">
-        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
-        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Race (e.g. Witcher, Elf, Dwarf)" />
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Race.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Race.Hint.RaceEGWitcherElfDwarf'}}" />
       </div>
 
-      <div class="wdm-cfg-section">Race Qualities</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Race.Text.RaceQualities'}}</div>
       <div class="wdm-race-qual-grid">
         {{#each qualityBoxes}}
           <div class="wdm-race-qual-box">
             <input type="text" class="wdm-race-qual-input" name="system.qualities.{{key}}.name"
                    value="{{name}}" placeholder="Quality {{n}}" />
             <textarea class="wdm-cfg-textarea" name="system.qualities.{{key}}.description"
-                      placeholder="What this quality does…">{{description}}</textarea>
+                      placeholder="{{localize 'WITCHER.Sheet.Race.Hint.WhatThisQualityDoes'}}">{{description}}</textarea>
           </div>
         {{/each}}
       </div>
 
       <label class="wdm-race-vp-toggle">
         <input type="checkbox" name="system.variablePortrait" {{#if source.variablePortrait}}checked{{/if}} />
-        <span>Variable portrait <span class="wdm-cfg-sub">(adds a toxicity-portrait button to the character chrome)</span></span>
+        <span>{{localize 'WITCHER.Sheet.Race.Text.VariablePortrait'}} <span class="wdm-cfg-sub">(adds a toxicity-portrait button to the character chrome)</span></span>
       </label>
 
-      <div class="wdm-cfg-section">Effects <span class="wdm-cfg-sub">(transfer to the actor when the race is added)</span></div>
+      <label class="wdm-race-vp-toggle">
+        <input type="checkbox" name="system.foodSicknessImmune" {{#if source.foodSicknessImmune}}checked{{/if}} />
+        <span>Immune to food sickness <span class="wdm-cfg-sub">(spoiled food never triggers the Endurance hazard on characters of this race)</span></span>
+      </label>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Race.Text.Effects'}} <span class="wdm-cfg-sub">(transfer to the actor when the race is added)</span></div>
       <div class="wdm-cfg-effects">
         {{#if effects.length}}
           <ul class="wdm-effect-list">
@@ -100,14 +105,14 @@
                   <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
                     <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
                   </a>
-                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
-                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Race.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Race.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
                 </div>
               </li>
             {{/each}}
           </ul>
         {{else}}
-          <p class="wdm-empty">No effects configured.</p>
+          <p class="wdm-empty">{{localize 'WITCHER.Sheet.Race.Text.NoEffectsConfigured'}}</p>
         {{/if}}
         <button type="button" class="wdm-add-effect" data-action="createEffect">
           <i class="fa-solid fa-plus"></i> Add Effect
@@ -116,9 +121,9 @@
 
       {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
 
-      <div class="wdm-cfg-section">Description</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Race.Text.Description'}}</div>
       <textarea class="wdm-cfg-textarea is-tall" name="system.description"
-                placeholder="Lore, appearance, lineage…">{{source.description}}</textarea>
+                placeholder="{{localize 'WITCHER.Sheet.Race.Hint.LoreAppearanceLineage'}}">{{source.description}}</textarea>
 
     </div>
   </div>

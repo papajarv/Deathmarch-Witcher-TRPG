@@ -28,13 +28,28 @@
         </div>
       </header>
 
+      {{!-- Alchemy Reborn — substance hero precedes the Mutation DC when a
+            substance is authored. Mirrors the component layout exactly so
+            the inventory inspect card and the item sheet read identically. --}}
+      {{#if hasSubstance}}
+        <div class="wdm-w3-hero">
+          <div class="wdm-w3-hero-value is-substance" style="--sub-color: var(--wdm-sub-{{substanceKey}})">
+            <img class="wdm-sub-icon" src="{{substanceArt}}" alt="" />{{substanceName}}
+          </div>
+          <div class="wdm-w3-hero-label">SUBSTANCE</div>
+          {{#if showPotency}}
+            <div class="wdm-w3-hero-sub">Potency {{source.potency}}</div>
+          {{/if}}
+        </div>
+      {{/if}}
+
       <div class="wdm-w3-hero">
         <div class="wdm-w3-hero-value">{{source.mutationDC}}</div>
-        <div class="wdm-w3-hero-label">MUTATION DC</div>
+        <div class="wdm-w3-hero-label">{{localize 'WITCHER.Sheet.Mutagen.Text.MutationDc'}}</div>
       </div>
 
       {{#if modifiers.length}}
-        <div class="wdm-w3-section-label">Effect</div>
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Mutagen.Text.Effect'}}</div>
         <ul class="wdm-w3-stats">
           {{#each modifiers}}
             <li class="wdm-w3-stat">
@@ -46,12 +61,12 @@
       {{/if}}
 
       {{#if source.minorEffect}}
-        <div class="wdm-w3-section-label">Minor Effect</div>
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Mutagen.Text.MinorEffect'}}</div>
         <div class="wdm-w3-effects">{{source.minorEffect}}</div>
       {{/if}}
 
       {{#if source.transmutation}}
-        <div class="wdm-w3-section-label">Transmutation</div>
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Mutagen.Text.Transmutation'}}</div>
         <div class="wdm-w3-effects">{{source.transmutation}}</div>
       {{/if}}
 
@@ -65,33 +80,55 @@
     <div class="wdm-cfg-form">
 
       <div class="wdm-cfg-head">
-        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
-        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Mutagen name" />
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Mutagen.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Mutagen.Hint.MutagenName'}}" />
       </div>
 
-      <div class="wdm-cfg-section">Mutagen</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Mutagen.Text.Mutagen'}}</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span title="Colour of the mutagen">Type</span>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Mutagen.Tooltip.ColourOfTheMutagen'}}">Type</span>
           <select name="system.type">
-            <option value="red"   {{#if (eq source.type "red")}}selected{{/if}}>Red</option>
-            <option value="green" {{#if (eq source.type "green")}}selected{{/if}}>Green</option>
-            <option value="blue"  {{#if (eq source.type "blue")}}selected{{/if}}>Blue</option>
+            <option value="red"   {{#if (eq source.type "red")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Mutagen.Text.Red'}}</option>
+            <option value="green" {{#if (eq source.type "green")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Mutagen.Text.Green'}}</option>
+            <option value="blue"  {{#if (eq source.type "blue")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Mutagen.Text.Blue'}}</option>
           </select>
         </label>
-        <label class="wdm-cfg-row"><span title="DC of the mutation roll to install">Mutation DC</span>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Mutagen.Tooltip.DcOfTheMutationRollToInstall'}}">Mutation DC</span>
           <input type="number" min="0" name="system.mutationDC" value="{{source.mutationDC}}" />
         </label>
       </div>
 
-      <div class="wdm-cfg-section">Minor Effect</div>
-      <textarea class="wdm-cfg-textarea is-short" name="system.minorEffect" placeholder="Small blue horns">{{source.minorEffect}}</textarea>
+      {{!-- Alchemy Reborn: mutagens carry a substance and potency value so
+            they can satisfy a brew's substance requirement (per alch7-9).
+            The whole block hides when the homebrew toggle is off so legacy
+            "install-only" mutagens don't pick up an unwanted field. --}}
+      {{#if alchemyRebornOn}}
+        <div class="wdm-cfg-section">{{localize "WITCHER.AlchemyReborn.Section.Ingredient"}}</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.SubstanceType.Label"}}</span>
+            <select name="system.substanceType">
+              <option value="" {{#if (eq source.substanceType "")}}selected{{/if}}>— none —</option>
+              {{#each WITCHER.alchemical.substances}}
+                <option value="{{@key}}" {{#if (eq @key ../source.substanceType)}}selected{{/if}}>{{localize this}}</option>
+              {{/each}}
+            </select>
+          </label>
+          <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Potency.Label"}}</span>
+            <input type="number" min="0" max="10" step="1" name="system.potency" value="{{source.potency}}"
+                   title="{{localize 'WITCHER.AlchemyReborn.Potency.HintMutagen'}}" />
+          </label>
+        </div>
+      {{/if}}
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Mutagen.Text.MinorEffect'}}</div>
+      <textarea class="wdm-cfg-textarea is-short" name="system.minorEffect" placeholder="{{localize 'WITCHER.Sheet.Mutagen.Hint.SmallBlueHorns'}}">{{source.minorEffect}}</textarea>
 
       {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
 
-      <div class="wdm-cfg-section">Transmutation</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Mutagen.Text.Transmutation'}}</div>
       <textarea class="wdm-cfg-textarea is-short" name="system.transmutation">{{source.transmutation}}</textarea>
 
-      <div class="wdm-cfg-section">Effect <span class="wdm-cfg-sub">(applied on install — does not auto-transfer)</span></div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Mutagen.Text.Effect'}} <span class="wdm-cfg-sub">(applied on install — does not auto-transfer)</span></div>
       <div class="wdm-cfg-effects">
         {{#if effects.length}}
           <ul class="wdm-effect-list">
@@ -104,14 +141,14 @@
                   <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
                     <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
                   </a>
-                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
-                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Mutagen.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Mutagen.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
                 </div>
               </li>
             {{/each}}
           </ul>
         {{else}}
-          <p class="wdm-empty">No effect configured.</p>
+          <p class="wdm-empty">{{localize 'WITCHER.Sheet.Mutagen.Text.NoEffectConfigured'}}</p>
         {{/if}}
         <button type="button" class="wdm-add-effect" data-action="createEffect">
           <i class="fa-solid fa-plus"></i> Add Effect

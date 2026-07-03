@@ -23,7 +23,7 @@ test("SP fully soaks weapon damage → no HP change, no ablation, early exit", (
   assert.ok(r.stages.some(s => s.stage === "sp" && s.soakedAll));
 });
 
-test("Partial SP penetration → remaining damage flows, ablation marked", () => {
+test("Partial SP penetration on a plain weapon → damage flows, -1 SP base chip per contributing armor (RAW: default ablation)", () => {
   const r = resolveDamage({
     damageSource: dmgWeapon({ weaponDamage: 12, location: { key: "torso", mult: 1 } }),
     target:       tgtArmor("torso", 5)
@@ -31,6 +31,35 @@ test("Partial SP penetration → remaining damage flows, ablation marked", () =>
   assert.equal(r.finalDamage, 7);
   assert.equal(r.patches.hp.delta, -7);
   assert.deepEqual(r.patches.armorAblation, [{ itemId: "a1", spDelta: -1 }]);
+});
+
+test("Partial SP penetration with Ablating weapon → -1 base + rolled 1d6/2 bonus (pre-rolled at apply time)", () => {
+  // ablatingChipBonus is rolled by handleApplyDamage; the calculator just
+  // adds it to the base chip. Force a deterministic value of 2 here.
+  const r = resolveDamage({
+    damageSource: dmgWeapon({ weaponDamage: 12, ablating: true, ablatingChipBonus: 2, location: { key: "torso", mult: 1 } }),
+    target:       tgtArmor("torso", 5)
+  });
+  assert.equal(r.finalDamage, 7);
+  assert.deepEqual(r.patches.armorAblation, [{ itemId: "a1", spDelta: -3 }]);
+});
+
+test("Partial SP penetration with Crushing Force (doubleAblation) → -2 SP per contributing armor", () => {
+  const r = resolveDamage({
+    damageSource: dmgWeapon({ weaponDamage: 12, doubleAblation: true, location: { key: "torso", mult: 1 } }),
+    target:       tgtArmor("torso", 5)
+  });
+  assert.equal(r.finalDamage, 7);
+  assert.deepEqual(r.patches.armorAblation, [{ itemId: "a1", spDelta: -2 }]);
+});
+
+test("Crushing Force + Ablating compose: doubled base chip plus rolled Ablating bonus", () => {
+  const r = resolveDamage({
+    damageSource: dmgWeapon({ weaponDamage: 12, doubleAblation: true, ablating: true, ablatingChipBonus: 3, location: { key: "torso", mult: 1 } }),
+    target:       tgtArmor("torso", 5)
+  });
+  // base chip = 2 (Crushing Force), ablating roll = 3, total = 5
+  assert.deepEqual(r.patches.armorAblation, [{ itemId: "a1", spDelta: -5 }]);
 });
 
 test("Improved AP halves SP before subtraction", () => {
@@ -120,6 +149,26 @@ test("Silver weapon bypasses non-silver resist", () => {
   assert.equal(r.finalDamage, 10);
 });
 
+test("Hybrid Silver-quality weapon vs resistNonSilver: base halves, silver portion added on top", () => {
+  // 1d6+1 rolled = 5, 3d6 silver rolled = 12. Against a silver-resistant
+  // target: floor(5/2) + 12 = 14.
+  const r = resolveDamage({
+    damageSource: dmgWeapon({ weaponDamage: 5, silverDamage: 12, location: { key: "torso", mult: 1 } }),
+    target:       makeTarget({ monsterFlags: { resistNonSilver: true } })
+  });
+  assert.equal(r.finalDamage, 14);
+});
+
+test("Hybrid Silver-quality weapon vs non-silver-resistant target: silver portion ignored", () => {
+  // Same roll, but the target doesn't care about silver. Only the base
+  // applies; the silver portion is dropped.
+  const r = resolveDamage({
+    damageSource: dmgWeapon({ weaponDamage: 5, silverDamage: 12, location: { key: "torso", mult: 1 } }),
+    target:       makeTarget()    // no monsterFlags
+  });
+  assert.equal(r.finalDamage, 5);
+});
+
 test("Fire bypasses non-silver resist (errata sidebar)", () => {
   const r = resolveDamage({
     damageSource: dmgWeapon({ weaponDamage: 10, damageTypes: ["fire"], location: { key: "torso", mult: 1 } }),
@@ -136,12 +185,47 @@ test("Vulnerability doubles damage", () => {
   assert.equal(r.finalDamage, 20);
 });
 
-test("Per-type immunity zeroes weapon damage but crit bonus still rides", () => {
+test("Per-type immunity zeroes weapon damage AND crit bonus (crit is same-type)", () => {
   const r = resolveDamage({
     damageSource: dmgWeapon({ weaponDamage: 10, critBonus: 5, damageTypes: ["fire"], location: { key: "torso", mult: 1 } }),
     target:       makeTarget({ monsterFlags: { immuneToTypes: ["fire"] } })
   });
-  // weapon: zeroed; crit bonus: 5; ×1 location → 5
+  // Natural resistances shape ALL incoming damage under the rework —
+  // fire crit bonus lands on a fire-immune target as 0. Untyped crits
+  // (no damageTypes match) still ride past the immunity gate.
+  assert.equal(r.finalDamage, 0);
+});
+
+test("Improved AP bypasses per-type immunity (weapon damage lands at full)", () => {
+  const r = resolveDamage({
+    damageSource: dmgWeapon({ weaponDamage: 10, improvedArmorPiercing: true, damageTypes: ["fire"], location: { key: "torso", mult: 1 } }),
+    target:       makeTarget({ monsterFlags: { immuneToTypes: ["fire"] } })
+  });
+  assert.equal(r.finalDamage, 10);
+});
+
+test("Improved AP bypasses per-type resist (no halve)", () => {
+  const r = resolveDamage({
+    damageSource: dmgWeapon({ weaponDamage: 10, improvedArmorPiercing: true, damageTypes: ["slashing"], location: { key: "torso", mult: 1 } }),
+    target:       makeTarget({ monsterFlags: { resistTypes: ["slashing"] } })
+  });
+  assert.equal(r.finalDamage, 10);
+});
+
+test("Improved AP does NOT bypass resistNonSilver (silver weakness gate still applies)", () => {
+  const r = resolveDamage({
+    damageSource: dmgWeapon({ weaponDamage: 10, improvedArmorPiercing: true, location: { key: "torso", mult: 1 } }),
+    target:       makeTarget({ monsterFlags: { resistNonSilver: true } })
+  });
+  // resistNonSilver gate fires regardless of IAP → halved
+  assert.equal(r.finalDamage, 5);
+});
+
+test("Improved AP does NOT bypass resistNonMeteorite (meteorite weakness gate still applies)", () => {
+  const r = resolveDamage({
+    damageSource: dmgWeapon({ weaponDamage: 10, improvedArmorPiercing: true, location: { key: "torso", mult: 1 } }),
+    target:       makeTarget({ monsterFlags: { resistNonMeteorite: true } })
+  });
   assert.equal(r.finalDamage, 5);
 });
 
@@ -320,12 +404,14 @@ test("onPenetrate does NOT fire when SP fully soaks the hit", () => {
 /* Tie everything together — a head crit with shield + DR                     */
 /* -------------------------------------------------------------------------- */
 
-test("Full pipeline: shield(3) → SP(4) → DR(fire) → vulnerability → crit(+5) → head×3", () => {
+test("Full pipeline: shield(3) → vulnerability → DR(fire) → SP(4) → crit(+5, resist-scaled) → head×3", () => {
   const r = resolveDamage({
     damageSource: dmgWeapon({
       weaponDamage: 20,
       critBonus:    5,
       damageTypes:  ["fire"],
+      // Plain weapon now: base -1 SP chip lands by default on a penetrating
+      // hit (no `ablating: true` needed for the chip itself).
       location:     { key: "head", mult: 3, label: "Head" }
     }),
     target: makeTarget({
@@ -334,9 +420,9 @@ test("Full pipeline: shield(3) → SP(4) → DR(fire) → vulnerability → crit
       monsterFlags: { vulnerableTo: ["fire"] }
     })
   });
-  // 20 → shield 3 = 17 → SP 4 = 13 → DR halve = 6 → vulnerability ×2 = 12
-  // → +5 crit = 17 → ×3 head = 51
-  assert.equal(r.finalDamage, 51);
+  // 20 → shield 3 = 17 → vulnerability ×2 = 34 → DR halve = 17 → SP 4 = 13
+  // → crit 5 (also ×2 vulnerable) = 10 → 13 + 10 = 23 → head ×3 = 69.
+  assert.equal(r.finalDamage, 69);
   assert.equal(r.patches.shield.delta, -3);
   assert.deepEqual(r.patches.armorAblation, [{ itemId: "h1", spDelta: -1 }]);
 });

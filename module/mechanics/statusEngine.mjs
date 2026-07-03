@@ -173,10 +173,43 @@ export function cannotAct(actor) {
     return false;
 }
 
+/** Statuses whose `restrict.act` comes from being HELD (pinned / chokeheld /
+ *  clinched) rather than from true incapacitation (paralyzed / unconscious).
+ *  Escape must remain possible from these — RAW Core "Brawling & Wrestling":
+ *  "You can only attempt to Escape while pinned." — so `cannotEscape` filters
+ *  them out. Keep this in sync with mechanics/holdLink.HOLD_STATUSES. */
+const HOLD_STATUS_IDS = ["grappled", "pinned", "clinched", "chokeheld"];
+
+/** True if any active status forbids EVEN attempting an Escape. Filters out
+ *  the hold-family statuses whose whole point is that Escape is the one
+ *  action the held actor can still take; a paralyzed / unconscious / dead
+ *  actor still can't escape, but a pinned one can. Consumed by the dock's
+ *  Action-menu escape wiring and by combatRoundMixin's action-spend gate
+ *  when the spend is flagged as an escape attempt. */
+export function cannotEscape(actor) {
+    for (const id of (actor?.statuses ?? [])) {
+        if (HOLD_STATUS_IDS.includes(id)) continue;
+        if (clauseFor(id)?.restrict?.act) return true;
+    }
+    return false;
+}
+
 /** True if any active status forbids defending. */
 export function cannotDefend(actor) {
     for (const id of (actor?.statuses ?? [])) {
         if (clauseFor(id)?.restrict?.defend) return true;
+    }
+    return false;
+}
+
+/** True if any active status forbids voluntary movement (Grappled per RAW
+ *  Core "Brawling & Wrestling" — the target cannot move away from the
+ *  grappler; also Pinned, which is a hard immobilize). Consumed by the
+ *  canvas-movement policy + the dock's Move button to refuse a move
+ *  attempt with a warning instead of silently accepting the drag. */
+export function cannotMove(actor) {
+    for (const id of (actor?.statuses ?? [])) {
+        if (clauseFor(id)?.restrict?.move) return true;
     }
     return false;
 }
@@ -217,13 +250,24 @@ export function selfClearOptions() {
 /** Every status whose end-check is player-triggered from the dock Action menu
  *  (clause `endCheck.viaAction`), in registry order:
  *  `{ id, label, icon, skill, dc, onPass, actionCost, statusName }`. The dock
- *  lists these as roll-actions (greyed unless the bearer has the status). */
+ *  lists these as roll-actions (greyed unless the bearer has the status).
+ *
+ *  Alchemy Reborn gate: the RAW `overdosed` status is superseded by the
+ *  toxicity-mild/strong/severe/deadly tier ladder when the Alchemy Reborn
+ *  homebrew is on. Hide `overdosed` (and therefore its Purge Overdose
+ *  Action-menu entry) so the dock doesn't offer a purge that doesn't apply
+ *  to any status the actor can carry. */
 export function actionEndCheckOptions() {
     const clauses = getActiveClauses();
+    const alchemyReborn = (() => {
+        try { return !!game?.settings?.get?.("witcher-ttrpg-death-march", "homebrew.alchemyPotency"); }
+        catch (_) { return false; }
+    })();
     const out = [];
     for (const [id, c] of Object.entries(clauses)) {
         const ec = c?.endCheck;
         if (!ec || !ec.viaAction || ec.kind !== "skill") continue;
+        if (alchemyReborn && id === "overdosed") continue;
         out.push({
             id,
             label: ec.label || `End ${statusLabel(id)}`,

@@ -42,9 +42,9 @@ test("status dropdown is fed from CONFIG.statusEffects at render time", () => {
 });
 
 test("template renders the Damage Flags checkbox grid and the Status Rider block", () => {
-  assert.match(templateSrc, /Damage Flags/);
+  assert.match(templateSrc, /WITCHER\.App\.QualitiesEditor\.Text\.DamageFlags/);
   assert.match(templateSrc, /name="\{\{\.\.\/cat\.prefix\}\}\.\{\{\.\.\/q\.index\}\}\.flags\.\{\{f\.key\}\}"/);
-  assert.match(templateSrc, /Status Rider/);
+  assert.match(templateSrc, /WITCHER\.App\.QualitiesEditor\.Text\.StatusRider/);
   assert.match(templateSrc, /name="\{\{cat\.prefix\}\}\.\{\{q\.index\}\}\.riderKind"/);
   assert.match(templateSrc, /name="\{\{cat\.prefix\}\}\.\{\{q\.index\}\}\.riderStatus"/);
 });

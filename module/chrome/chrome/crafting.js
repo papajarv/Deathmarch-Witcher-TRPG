@@ -32,6 +32,7 @@ import { getAssignedActor, VIEWER_OVERRIDE_HOOK } from "../lib/actor.js";
 import { renderViewAsPicker, wireViewAsPicker } from "../lib/view-as.js";
 import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 
+import { t, tFormat } from "../lib/i18n.js";
 const MODULE_ID = "witcher-ttrpg-death-march";
 const PANEL_ID  = "wou-crafting";
 
@@ -284,10 +285,10 @@ function positionBounds() {
   const left   = (leftOpen   && leftbar) ? Math.max(0, leftbar.getBoundingClientRect().right) : 0;
   const right  = (rightOpen  && sidebar) ? Math.max(0, W - sidebar.getBoundingClientRect().left) : 0;
 
-  panelEl.style.top    = `${top}px`;
-  panelEl.style.bottom = `${bottom}px`;
-  panelEl.style.left   = `${left}px`;
-  panelEl.style.right  = `${right}px`;
+  panelEl.style.top = `calc(${top}px / var(--wdm-scale, 1))`;
+  panelEl.style.bottom = `calc(${bottom}px / var(--wdm-scale, 1))`;
+  panelEl.style.left = `calc(${left}px / var(--wdm-scale, 1))`;
+  panelEl.style.right = `calc(${right}px / var(--wdm-scale, 1))`;
 
   /* Pin the close-X to the centre of the topbar Crafting tab. */
   const tab = document.querySelector('#wou-top-bar [data-tab="crafting"]');
@@ -309,7 +310,12 @@ function positionBounds() {
  *     collapse animation finishes.
  */
 function wireChromeObservers() {
-  const reposition = () => requestAnimationFrame(positionBounds);
+  /* Coalesced: one positionBounds per frame regardless of trigger count. */
+  let _pending = 0;
+  const reposition = () => {
+    if (_pending) return;
+    _pending = requestAnimationFrame(() => { _pending = 0; positionBounds(); });
+  };
 
   if ("ResizeObserver" in window) {
     _chromeResizeObs = new ResizeObserver(reposition);
@@ -351,7 +357,14 @@ function getActor() {
 
 function getInt() {
   const actor = getActor();
-  return Number(actor?.system?.stats?.int?.value) || 0;
+  const raw = Number(actor?.system?.stats?.int?.value) || 0;
+  /* Witchers Reborn — Griffin · Studied Wisdom: memory cap is double INT.
+   * Reads the same flag stamped by the race AE; homebrew gate is enforced
+   * via the settings key on the flag path (flag only lands when WR toggle
+   * is on and character owns the race). */
+  const SYSTEM_ID = "witcher-ttrpg-death-march";
+  const doubled = !!actor?.getFlag?.(SYSTEM_ID, "wr.studiedWisdom");
+  return doubled ? raw * 2 : raw;
 }
 
 /* Memorization model — clone-based so it survives deleting the paper.
@@ -519,26 +532,40 @@ function formulaSubstances(f) {
   return out;
 }
 
-/** Compendium-style substance type for a component / mutagen item, lower-case. */
+/** Compendium-style substance type for a component / mutagen item, lower-case.
+ *  Three storage paths exist in the wild and we read all three in priority
+ *  order:
+ *    1. `system.substanceType` — canonical (our ComponentData schema)
+ *    2. `system.substance` — legacy alias on the same schema
+ *    3. `flags["witcher-alchemy-craft"].substance` — what the upstream
+ *       alchemy-craft module stored for components and mutagens from its
+ *       compendium packs (and the Witcher core compendium components that
+ *       ride that pattern). Without this fallback, a stock-pack component
+ *       like "Vitriol Crystal" reads as substance-less and the wheel won't
+ *       display it under any substance row, even though `system.isSubstance`
+ *       is true — so the brew button can never become ready.
+ *  Mutagens follow the same hierarchy. */
 function ingredientSubstance(item) {
   if (!item) return "";
-  /* Components store the substance type in a system field */
-  if (item.type === "component") {
-    return String(item.system?.substanceType ?? "").toLowerCase();
-  }
-  /* Mutagens — alchemy-craft module stores substance as a flag */
-  if (item.type === "mutagen") {
-    const flagSub = item.flags?.["witcher-alchemy-craft"]?.substance
-                 ?? item.system?.substance
-                 ?? "";
-    return String(flagSub).toLowerCase();
-  }
-  return "";
+  if (item.type !== "component" && item.type !== "mutagen") return "";
+  const sub = item.system?.substanceType
+          || item.system?.substance
+          || item.flags?.["witcher-alchemy-craft"]?.substance
+          || "";
+  return String(sub).toLowerCase();
 }
 
-/** Potency value for a component or mutagen.  Same convention as the
- *  witcher-alchemy-craft module (flag `potency`, may be 0). */
+/** Potency value for a component or mutagen. Priority order mirrors
+ *  ingredientSubstance() so the same authoring channel feeds both the
+ *  substance row and the tier resolution:
+ *    1. system.potency  — canonical Alchemy Reborn schema field
+ *       (ComponentData / MutagenData). Authored via item sheet.
+ *    2. flags["witcher-alchemy-craft"].potency — upstream module's
+ *       compendium pack convention; preserved as a fallback so stock
+ *       Witcher packs work without re-authoring every component. */
 function ingredientPotency(item) {
+  const sysP  = Number(item?.system?.potency);
+  if (Number.isFinite(sysP) && sysP > 0) return sysP;
   return Number(item?.flags?.["witcher-alchemy-craft"]?.potency) || 0;
 }
 
@@ -564,10 +591,27 @@ function ingredientsForSubstance(substance) {
    isn't active.
    ========================================================================= */
 
+/* Read order:
+ *   1. game.system.api.alchemy.isBaseOfType  (single source of truth —
+ *      delegates to mechanics/alchemy.readBase which handles the
+ *      Alchemy Reborn alchemyBase schema, the legacy alchemical
+ *      top-level fields, and the defensive valuable read).
+ *   2. game.witcherAlchemy.isBaseOfType (external alchemy-craft module).
+ *   3. Local fallback: read our system.alchemyBase first (the canonical
+ *      Alchemy Reborn shape) so a fresh world without alchemy-craft
+ *      still resolves bases correctly. Then the legacy alchemy-craft
+ *      flags as the absolute last resort so stock-pack items keep
+ *      working before the GM saves them through. */
 function isBaseOfType(item, type) {
   if (!item) return false;
+  const ours = game?.system?.api?.alchemy?.isBaseOfType;
+  if (typeof ours === "function") return !!ours(item, type);
   const ext = game?.witcherAlchemy?.isBaseOfType;
   if (typeof ext === "function") return ext(item, type);
+  const ab = item.system?.alchemyBase;
+  if (ab && ab.enabled !== false && ab.baseType === type) return true;
+  // Legacy alchemical top-level (pre-migration).
+  if (item.type === "alchemical" && item.system?.baseType === type) return true;
   const f = item.flags?.["witcher-alchemy-craft"] ?? {};
   if (f.baseType === type) return true;
   if (type === "oil"    && f.oilBaseMod    !== undefined) return true;
@@ -577,8 +621,17 @@ function isBaseOfType(item, type) {
 
 function baseModFor(item) {
   if (!item) return 0;
+  const ours = game?.system?.api?.alchemy?.getBaseMod;
+  if (typeof ours === "function") return Number(ours(item)) || 0;
   const ext = game?.witcherAlchemy?.getBaseMod;
   if (typeof ext === "function") return Number(ext(item)) || 0;
+  const ab = item.system?.alchemyBase;
+  if (ab && ab.enabled !== false && Number.isFinite(Number(ab.baseMod))) {
+    return Number(ab.baseMod) || 0;
+  }
+  if (item.type === "alchemical" && Number.isFinite(Number(item.system?.baseMod))) {
+    return Number(item.system.baseMod) || 0;
+  }
   const f = item.flags?.["witcher-alchemy-craft"] ?? {};
   const m = Number(f.baseMod);
   if (Number.isFinite(m)) return m;
@@ -749,10 +802,17 @@ function predictedQuality(diagram) {
                ?? diagram.flags?.["witcher-alchemy-craft"] ?? {};
     return ext(totalPotency(), flags);
   }
+  /* Prefer our own schema (diagram.system.*) — that's what the actual
+   * craft resolver `tierFor` reads (crafting.js ~L2411). Falling back
+   * to the legacy alchemy-craft flag bag keeps pre-Death-March worlds
+   * working when no system-level thresholds were ever authored. The
+   * older `potencyEnchanted` spelling is the upstream-module typo we
+   * inherited; still tolerated on the flag path for legacy data. */
+  const s = diagram.system ?? {};
   const f = diagram.flags?.["witcher-alchemy-craft"] ?? {};
-  const pn = Number(f.potencyNormal) || 0;
-  const pe = Number(f.potencyEnhanced ?? f.potencyEnchanted) || 0;
-  const ps = Number(f.potencySuperior) || 0;
+  const pn = Number(s.potencyNormal)   || Number(f.potencyNormal)                    || 0;
+  const pe = Number(s.potencyEnhanced) || Number(f.potencyEnhanced ?? f.potencyEnchanted) || 0;
+  const ps = Number(s.potencySuperior) || Number(f.potencySuperior)                  || 0;
   const t = totalPotency();
   if (ps > 0 && t >= ps) return "Superior";
   if (pe > 0 && t >= pe) return "Enhanced";
@@ -803,7 +863,14 @@ function effectiveDC(diagram) {
     catch (err) { console.warn("[witcher-ttrpg-death-march] alchemy-craft computeEffectiveDC threw, falling back:", err); }
   }
   const raw    = Number(diagram.system?.alchemyDC) || Number(diagram.system?.craftingDC) || 0;
-  const baseDC = memorized ? raw : raw - 2;
+  // Memorized = the brewer has the formula by heart → -2 DC (RAW p.124).
+  // Matches the canonical mechanics/alchemy.mjs computeEffectiveDC. An
+  // earlier copy of this fallback had the sign inverted (lifted from the
+  // legacy alchemy-craft module, which used the opposite convention) — it
+  // only fired when the api wasn't wired so the impact was small, but the
+  // inconsistency would surface in any session that races a roll before
+  // `ready`. Aligned now.
+  const baseDC = raw + (memorized ? -2 : 0);
   return baseDC + (base ? baseModFor(base) : 0);
 }
 
@@ -820,14 +887,31 @@ function formatBaseMod(modOrItem) {
 }
 
 /** Readiness summary for the Prepare button.  Returns { ready, reason }.
- *  RAW alchemy: every formula (potion/oil/decoction/bomb) is crafted like a
- *  diagram — roll Alchemy vs its DC and consume its named components. The
- *  base / substance / potency gating belongs to the deferred potency system
- *  and no longer blocks brewing. */
+ *  RAW alchemy (Core p.142-143) gates a brew on TWO independent checks:
+ *    1. Named crafting components on the diagram (legacy `craftingComponents`
+ *       — flasks, reagents, etc.) all present in inventory.
+ *    2. Substance requirements on the diagram (`alchemyComponents` map —
+ *       e.g. {vitriol: 2, sol: 1}) covered by the player's wheel picks
+ *       (selectedIngredients).
+ *  The substance check used to be deferred; that left a brew button that
+ *  fired with zero substances selected, consumed nothing on the substance
+ *  side, and produced an output anyway. Both halves now block.
+ *
+ *  Reason strings are deliberately specific ("need 2 more vitriol") so the
+ *  tooltip surfaces the exact shortfall — the wheel UI does NOT also render
+ *  a separate "missing X" badge, so this string is the only feedback the
+ *  player gets at the brew button. */
 function craftReadiness(diagram) {
   if (!diagram) return { ready: false, reason: "no formula selected" };
   for (const c of resolveCraftingComponents(diagram)) {
     if (!c.met) return { ready: false, reason: `missing ${c.name}` };
+  }
+  const required = formulaSubstances(diagram);
+  for (const [sub, need] of Object.entries(required)) {
+    const have = substanceUsed(sub);
+    if (have < need) {
+      return { ready: false, reason: `need ${need - have} more ${sub}` };
+    }
   }
   return { ready: true, reason: "" };
 }
@@ -1321,8 +1405,17 @@ function renderCompass(active) {
     return `<div class="wou-crf-compass-empty">— select a formula —</div>`;
   }
 
-  /* Bombs use named components only — no substance wheel needed. */
-  if (formulaSubtype(active) === "bomb") {
+  /* Bombs without substance requirements get the named-components-only
+   * Craft button — no wheel to render. Bombs WITH substance requirements
+   * (e.g. compendium "Acid Solution Formula" needs vitriol×3 / aether /
+   * quebrith / vermilion) fall through to the standard substance wheel so
+   * the player can pick ingredients off-the-wheel just like a potion or
+   * oil. Prior behavior skipped the wheel unconditionally for any bomb,
+   * which hid the substance reqs even when the diagram clearly authored
+   * them. */
+  const substances = formulaSubstances(active);
+  const hasSubReqs = Object.keys(substances).length > 0;
+  if (formulaSubtype(active) === "bomb" && !hasSubReqs) {
     const dc    = Number(active.system?.craftingDC) || Number(active.system?.alchemyDC) || 0;
     const ready = craftReadiness(active);
     return `
@@ -1346,8 +1439,6 @@ function renderCompass(active) {
       </div>
     `;
   }
-
-  const substances = formulaSubstances(active);
 
   /* Static scatter — pick the hand-tuned position for each substance.
    * Falls back to centre if a new key shows up without a position. */
@@ -1420,7 +1511,6 @@ function renderCompass(active) {
         <span class="hex-label">
           <i class="fa-solid fa-mortar-pestle"></i>
           Prepare
-          ${totalPot > 0 ? `<span class="hex-sub">Pot ${totalPot}${quality ? ` · ${quality}` : ""}</span>` : ""}
         </span>
       </button>
     </div>
@@ -1438,13 +1528,18 @@ function renderCompass(active) {
  *  Tiles are drag sources (and click-to-select fallbacks).  Empty / "not
  *  supported" states render as compact one-liners. */
 function renderBaseGrid(diagram) {
+  /* Bases are an Alchemy Reborn concept: per-base DC modifier from a
+   * separate base item (Cheap Vodka, White Gull, Phosphorus, etc.). In
+   * RAW Witcher TRPG (Core p.142) alchemy formulae use only substances
+   * — the base-picker UI is suppressed. The pipe below (base shelf,
+   * drop slot, base consume in craftAlchemy) lives behind this gate so
+   * the homebrew toggle alone flips the whole bases UX. */
+  if (!isHomebrewEnabled?.("alchemyPotency")) return "";
   const type = formulaSubtype(diagram);
-  if (type === "bomb") {
-    return `<div class="wou-crf-base-note">Bombs require no base — gather the components and craft directly.</div>`;
-  }
-  if (!["potion", "oil", "decoction"].includes(type)) {
-    return `<div class="wou-crf-base-note">No base required for ${escapeText(type || "this type")}.</div>`;
-  }
+  // Bombs use named components only — no base shelf even under Reborn,
+  // matching the source-sheet "Bomb Bases" being authored as standalone
+  // recipes rather than a wheel pick.
+  if (type === "bomb") return "";
   const bases = getAvailableBases(diagram);
   /* Drop stale selection if base was used up between renders. */
   if (activeBaseId && !bases.find(b => b.id === activeBaseId)) {
@@ -1527,10 +1622,15 @@ function buildBaseTooltip(base, formulaType) {
   return `<div class="wcu-tip"><strong>${escapeText(base.name)}</strong>${rows.join("")}${desc ? `<div class="wcu-tip-flavor" style="margin-top:6px;font-style:italic;opacity:0.85">${escapeText(desc)}${desc.length === 220 ? "…" : ""}</div>` : ""}</div>`;
 }
 
-/** Circular drop slot pinned to the top of the wheel, just above Vitriol. */
+/** Circular drop slot pinned to the top of the wheel, just above Vitriol.
+ *  Mirrors renderBaseGrid's gate: shown under Alchemy Reborn for
+ *  potion / oil / decoction; hidden in RAW; hidden for bombs (named
+ *  components only). */
 function renderBaseDropSlot(diagram) {
-  const type = formulaSubtype(diagram);
-  if (!["potion", "oil", "decoction"].includes(type)) return "";
+  if (!isHomebrewEnabled?.("alchemyPotency")) return "";
+  const t = formulaSubtype(diagram);
+  if (t === "bomb") return "";
+  if (!["potion", "oil", "decoction"].includes(t)) return "";
 
   const actor = getActor();
   const base  = activeBaseId ? actor?.items?.get(activeBaseId) : null;
@@ -1569,8 +1669,14 @@ function renderDetail(active) {
    * (to the right of the compass wheel). */
   const previewHtml = formulaSubtype(active) !== "bomb" ? renderOutputPreview(active) : "";
 
-  /* Bombs use only named craftingComponents — no substances, no ingredient list. */
-  if (formulaSubtype(active) === "bomb") {
+  /* Bombs WITHOUT substance reqs get the named-components-only detail
+   * card (matches renderCompass's no-wheel branch at the same gate). Bombs
+   * WITH substance reqs (e.g. Acid Solution Formula → vitriol×3, aether,
+   * quebrith, vermilion) fall through to the standard substance/ingredient
+   * panel so clicking a substance on the wheel surfaces the matching
+   * component list. Without this dual gate the wheel was rendering but
+   * its clicks landed on this stub. */
+  if (formulaSubtype(active) === "bomb" && Object.keys(formulaSubstances(active)).length === 0) {
     const components = resolveCraftingComponents(active);
     return `
       <div class="wou-crf-detail-head">
@@ -1683,12 +1789,16 @@ function renderComponentStrip(components) {
  *  whether current totalPotency clears each, so the player can see
  *  "i'm one stride short of Enhanced". */
 function renderQualityThresholdRows(diagram) {
+  /* Same authoring-channel priority as predictedQuality / tierFor:
+   * Death March schema (diagram.system.*) first, legacy alchemy-craft
+   * flags as fallback for un-migrated diagrams. */
+  const s = diagram.system ?? {};
   const f = diagram.flags?.["witcher-alchemy-craft"] ?? {};
   const total = totalPotency();
   const rows = [
-    { label: "Normal",    threshold: Number(f.potencyNormal)    || 0, color: "#a8d5a2" },
-    { label: "Enhanced",  threshold: Number(f.potencyEnhanced ?? f.potencyEnchanted) || 0, color: "#d4af37" },
-    { label: "Superior",  threshold: Number(f.potencySuperior)  || 0, color: "#7ec8e3" }
+    { label: "Normal",    threshold: Number(s.potencyNormal)   || Number(f.potencyNormal)                              || 0, color: "#a8d5a2" },
+    { label: "Enhanced",  threshold: Number(s.potencyEnhanced) || Number(f.potencyEnhanced ?? f.potencyEnchanted)      || 0, color: "#d4af37" },
+    { label: "Superior",  threshold: Number(s.potencySuperior) || Number(f.potencySuperior)                            || 0, color: "#7ec8e3" }
   ].filter(r => r.threshold > 0);
   if (!rows.length) return "";
   return rows.map(r => {
@@ -1950,9 +2060,9 @@ function wireShell() {
     const actor   = getActor();
     const diagrams = getCraftingDiagrams();
     const active  = diagrams.find(d => d.id === activeCraftingDiagramId);
-    if (!actor || !active) { ui.notifications?.warn("Pick a diagram first."); return; }
+    if (!actor || !active) { ui.notifications?.warn(t("WITCHER.Notify.Craft.PickDiagram", "Pick a diagram first.")); return; }
     const ready = craftReadinessCrafting(active);
-    if (!ready.ready) { ui.notifications?.warn(`Cannot craft: ${ready.reason}.`); return; }
+    if (!ready.ready) { ui.notifications?.warn(tFormat("WITCHER.Notify.Craft.CannotCraft", { reason: ready.reason }, "Cannot craft: {reason}.")); return; }
     await craftDiagram(actor, active);
   });
 
@@ -1970,9 +2080,9 @@ function wireShell() {
     const actor   = getActor();
     const recipes = getRecipes();
     const active  = recipes.find(r => r.id === activeRecipeId);
-    if (!actor || !active) { ui.notifications?.warn("Pick a recipe first."); return; }
+    if (!actor || !active) { ui.notifications?.warn(t("WITCHER.Notify.Craft.PickRecipe", "Pick a recipe first.")); return; }
     const ready = craftReadinessCrafting(active);
-    if (!ready.ready) { ui.notifications?.warn(`Cannot cook: ${ready.reason}.`); return; }
+    if (!ready.ready) { ui.notifications?.warn(tFormat("WITCHER.Notify.Craft.CannotCook", { reason: ready.reason }, "Cannot cook: {reason}.")); return; }
     await cookRecipe(actor, active);
   });
 }
@@ -2062,6 +2172,21 @@ async function toggleMemorize(diagramId) {
    grant the diagram's associatedItem on success, recovery roll on failure.
    ========================================================================= */
 
+/** Consume `qty` of a specific inventory item by ID. Used by the alchemy
+ *  wheel to deduct the substance ingredients the player physically picked
+ *  (selectedIngredients Map). Different from `_consumeComponent` because
+ *  the wheel already knows the exact item id — no UUID/name lookup needed.
+ *  If qty meets or exceeds the stack, the item is deleted; otherwise
+ *  quantity decrements. Silently no-ops if the item vanished mid-flow. */
+async function _consumePickedItem(actor, itemId, qty) {
+  const item = actor.items.get(itemId);
+  if (!item || qty <= 0) return;
+  const have = Number(item.system?.quantity) || 1;
+  const take = Math.min(have, qty);
+  if (have - take <= 0) await item.delete();
+  else await item.update({ "system.quantity": have - take });
+}
+
 /** Consume `qty` of a named crafting component from the actor's inventory.
  *  UUID match is tried first; falls back to case-insensitive name match. */
 async function _consumeComponent(actor, comp) {
@@ -2105,7 +2230,7 @@ async function _returnComponent(actor, comp, qty) {
       }
     } catch {}
   }
-  ui.notifications?.warn(`Could not return ${comp.name ?? "component"} — add it manually.`);
+  ui.notifications?.warn(tFormat("WITCHER.Notify.Craft.ReturnFailed", { comp: comp.name ?? "component" }, "Could not return {comp} — add it manually."));
 }
 
 /** Show a yes/no confirm dialog using DialogV2.wait (Foundry v13).
@@ -2143,9 +2268,20 @@ async function askConfirm(title, content) {
  *  the dock's Awareness modifier prompt. Returns `{ situational, situationalParts }`
  *  to fold into rollSkillCheck, or null if the player cancelled. Degrades to a
  *  zero modifier (no prompt) when DialogV2 is unavailable. */
-async function promptCraftModifier(skillLabel, actor) {
+async function promptCraftModifier(skillLabel, actor, { allowExtraHour = false } = {}) {
   const DialogV2 = foundry?.applications?.api?.DialogV2;
-  if (!DialogV2) return { situational: 0, situationalParts: [] };
+  if (!DialogV2) return { situational: 0, situationalParts: [], extraHour: false };
+  /* Alchemy Reborn: a brew normally takes 30 in-game minutes, but the
+   * brewer can take an extra half-hour (full hour total) for +1 to the
+   * check (per alch1.png "Crafting Time" box). The checkbox only appears
+   * when the caller opts in (allowExtraHour) — craftAlchemy passes true
+   * when the alchemyPotency homebrew is on; crafting / cooking pass
+   * nothing so the dialog stays unchanged for them. */
+  const extraHourRow = allowExtraHour ? `
+      <label class="wou-skillmod-manual">
+        <span>${escapeText(game.i18n.localize("WITCHER.AlchemyReborn.Craft.ExtraHour.Label") || "Take an hour (+1 to the check)")}</span>
+        <input type="checkbox" name="extraHour" />
+      </label>` : "";
   const content = `
     <div class="wou-skillmod-prompt">
       <div class="wou-skillmod-head">${escapeText(skillLabel)} check — ${escapeText(actor.name)}</div>
@@ -2153,38 +2289,59 @@ async function promptCraftModifier(skillLabel, actor) {
         <span>Situational modifier</span>
         <input type="number" name="manual" step="1" value="0" autofocus />
       </label>
+      ${extraHourRow}
     </div>`;
-  const parts = await DialogV2.prompt({
+  const result = await DialogV2.prompt({
     window: { title: `${skillLabel} — ${actor.name}` },
     content,
     ok: {
       label: "Roll",
       callback: (_e, btn) => {
-        const manual = Number(btn.form.elements.manual?.value) || 0;
-        return manual ? [{ label: "Situational", value: manual }] : [];
+        const manual    = Number(btn.form.elements.manual?.value) || 0;
+        const extraHour = !!btn.form.elements.extraHour?.checked;
+        const parts = [];
+        if (manual)    parts.push({ label: "Situational", value: manual });
+        if (extraHour) parts.push({ label: game.i18n.localize("WITCHER.AlchemyReborn.Craft.ExtraHour.Part") || "Took an hour", value: 1 });
+        return { parts, extraHour };
       }
     },
     rejectClose: false
   }).catch(() => null);
-  if (parts == null) return null;   // cancelled
+  if (result == null) return null;   // cancelled
+  const parts = result.parts ?? [];
   const situational = parts.reduce((s, p) => s + (Number(p.value) || 0), 0);
-  return { situational, situationalParts: parts };
+  return { situational, situationalParts: parts, extraHour: !!result.extraHour };
 }
 
-/** Post a clear pass/fail result card to chat after a craft/brew attempt. */
-function postCraftResult({ actor, label, pass, dc, total, itemName, itemImg }) {
+/** Post a clear pass/fail result card to chat after a craft/brew attempt.
+ *  Optional fields (Alchemy Reborn only):
+ *    tier                    — "Normal" / "Enhanced" / "Superior" string.
+ *    totalPotency            — sum of ingredient potencies fed into the
+ *                              brew. Null when not in Alchemy Reborn mode.
+ *    rollPassedButTierMissed — true when the Alchemy roll succeeded but
+ *                              total potency didn't reach the Normal
+ *                              threshold; alters the failure copy. */
+function postCraftResult({ actor, label, pass, dc, total, itemName, itemImg, tier = "", totalPotency = null, rollPassedButTierMissed = false }) {
   const tone = pass ? "#7fae5a" : "#b5503f";
   const head = `<b>${escapeText(actor.name)}</b> ${pass ? "succeeds at" : "fails"} the `
              + `${escapeText(label)} check &mdash; rolled <b>${total}</b> vs DC ${dc}.`;
   let body;
   if (pass && itemName) {
+    const tierBadge = tier
+      ? ` <span style="opacity:0.85">(${escapeText(tier)})</span>`
+      : "";
     body = `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;">`
          + (itemImg ? `<img src="${escapeAttr(itemImg)}" width="28" height="28" style="border:none;border-radius:4px;flex:0 0 auto;">` : "")
-         + `<span>Crafted <b>${escapeText(itemName)}</b>.</span></div>`;
+         + `<span>Crafted <b>${escapeText(itemName)}</b>${tierBadge}.</span></div>`;
   } else if (pass) {
     body = `<div style="margin-top:4px;">Crafted successfully.</div>`;
+  } else if (rollPassedButTierMissed) {
+    body = `<div style="margin-top:4px;">${game.i18n.localize("WITCHER.AlchemyReborn.Craft.TierMissed")}</div>`;
   } else {
     body = `<div style="margin-top:4px;">No item produced.</div>`;
+  }
+  if (Number.isFinite(totalPotency)) {
+    body += `<div style="margin-top:2px;opacity:0.75;font-size:0.9em">${game.i18n.format("WITCHER.AlchemyReborn.Craft.TotalPotency", { n: totalPotency })}</div>`;
   }
   ChatMessage.create({
     content: `<div class="witcher-craft-result" style="border-left:3px solid ${tone};padding-left:8px;">${head}${body}</div>`,
@@ -2198,10 +2355,50 @@ function postCraftResult({ actor, label, pass, dc, total, itemName, itemImg }) {
  *  is added to inventory; on failure the player may attempt a recovery roll
  *  (Alchemy vs DC) to reclaim one of the components used. */
 async function craftAlchemy(actor, diagram) {
-  const dc           = (Number(diagram.system?.alchemyDC) || Number(diagram.system?.craftingDC) || 0) + craftToolPenalty(diagram);
+  /* Effective DC folds in memorization (-2 when learned), the picked
+   * base's baseMod (Alchemy Reborn — Bad +2, Optimal -6, …), and the
+   * craft-tool penalty (no Alchemy Set in inventory → +2 to DC). Using
+   * raw `system.alchemyDC` here was the bug: a player who picked a
+   * −3-mod base would still roll against the unmodified DC, undoing
+   * the whole Alchemy Reborn base advantage. */
+  const dc           = effectiveDC(diagram) + craftToolPenalty(diagram);
   const requiredComps = (diagram.system?.craftingComponents ?? []).filter(c => Number(c.quantity) > 0);
 
-  const mods = await promptCraftModifier("Alchemy", actor);
+  /* Snapshot the player's wheel picks BEFORE rolling — these are the
+   * substance-system ingredients (and the chosen base, auto-added to the
+   * map by the base picker). The previous flow only consumed the diagram's
+   * static `craftingComponents`, which is empty for alchemy formulae since
+   * those use `alchemyComponents` (substance requirements) instead. Result:
+   * brews drew ingredients from inventory for the substance/potency math,
+   * but never decremented them. We also snapshot the item's name + toObject
+   * data so the recovery path can recreate a stack the consume already
+   * deleted. */
+  const pickedIds = [...selectedIngredients.entries()]
+    .map(([id, qty]) => {
+      const it = actor.items.get(id);
+      return {
+        id,
+        qty: Number(qty) || 0,
+        name: it?.name ?? "ingredient",
+        proto: it ? it.toObject() : null
+      };
+    })
+    .filter(p => p.id && p.qty > 0);
+
+  /* Alchemy Reborn — total ingredient potency (sum of every picked item's
+   * system.potency × qty) drives the achieved quality tier. When the
+   * toggle is off this is 0 and tier resolution falls back to the
+   * single associatedItem. Reads via the chrome-local ingredientPotency
+   * which already prioritises system.potency over the legacy flag. */
+  const alchemyRebornOn = isHomebrewEnabled("alchemyPotency");
+  const totalPotency = alchemyRebornOn
+    ? pickedIds.reduce((sum, { id, qty }) => {
+        const it = actor.items.get(id);
+        return sum + (Number(ingredientPotency(it)) * qty);
+      }, 0)
+    : 0;
+
+  const mods = await promptCraftModifier("Alchemy", actor, { allowExtraHour: alchemyRebornOn });
   if (mods == null) return;   // cancelled at the modifier prompt
 
   let roll;
@@ -2209,18 +2406,87 @@ async function craftAlchemy(actor, diagram) {
   if (!roll) return;
   const pass = roll.total >= dc;
 
+  /* Consume the diagram's static named components first (legacy crafting
+   * components on alchemy diagrams that pre-date the substance system). */
   for (const comp of requiredComps) await _consumeComponent(actor, comp);
+  /* Then consume the player's wheel picks — substance ingredients + base.
+   * Regardless of pass/fail per RAW Core p.142 ("the components are spent
+   * whether or not the brew succeeds"). */
+  for (const { id, qty } of pickedIds) await _consumePickedItem(actor, id, qty);
+
+  /* Alchemy Reborn — advance worldTime by the brew duration. 30 min default,
+   * 1 hour when the player accepted the +1 DC bonus. Skip when the toggle
+   * is off to keep RAW behaviour unchanged. GM-only write so multi-client
+   * sessions don't race. */
+  if (alchemyRebornOn && game.user?.isActiveGM) {
+    const minutes = mods.extraHour ? 60 : 30;
+    try { await game.time.advance(minutes * 60); }
+    catch (err) { console.warn("witcher-ttrpg-death-march | alchemy brew time-advance failed", err); }
+  }
+
+  /* Tier resolution. Highest threshold met by totalPotency wins; below
+   * the Normal threshold = no tier achieved (treated as a fail even if
+   * the Alchemy roll passed — the brew's quality wasn't sufficient to
+   * stabilise). Empty-string output UUID for a tier falls through to
+   * the next-lower tier or the associatedItem fallback. */
+  const tierFor = (totalP, diag) => {
+    if (!alchemyRebornOn) return null;
+    const sup = Number(diag.system?.potencySuperior) || 0;
+    const enh = Number(diag.system?.potencyEnhanced) || 0;
+    const nor = Number(diag.system?.potencyNormal)   || 0;
+    if (sup > 0 && totalP >= sup) return "superior";
+    if (enh > 0 && totalP >= enh) return "enhanced";
+    if (nor > 0 && totalP >= nor) return "normal";
+    if (sup === 0 && enh === 0 && nor === 0) return "normal";  // diagram didn't author thresholds → treat as Normal
+    return null;
+  };
+  const outputForTier = (tier, diag) => {
+    /* The Normal tier IS the diagram's `associatedItem` (the pre-Reborn
+     * "Produced Item" slot). Enhanced and Superior are NEW UUID fields
+     * authored under Alchemy Reborn. Resolution walks Superior →
+     * Enhanced → Normal-as-associatedItem, returning the first non-empty
+     * slot so a partially-authored diagram still produces something. */
+    if (!tier) return diag.system?.associatedItem?.uuid || "";
+    const order = ["superior", "enhanced", "normal"];
+    const map = {
+      superior: diag.system?.outputSuperior,
+      enhanced: diag.system?.outputEnhanced,
+      normal:   diag.system?.associatedItem?.uuid
+    };
+    let start = order.indexOf(tier);
+    if (start < 0) start = order.length - 1;
+    for (let i = start; i < order.length; i++) {
+      const uuid = map[order[i]];
+      if (uuid) return uuid;
+    }
+    return diag.system?.associatedItem?.uuid || "";
+  };
+  const achievedTier = tierFor(totalPotency, diagram);
+  const tierLabel = achievedTier === "superior" ? "Superior"
+                  : achievedTier === "enhanced" ? "Enhanced"
+                  : achievedTier === "normal"   ? "Normal"
+                  : "";
+  /* A brew fails BOTH if the Alchemy roll missed OR (Alchemy Reborn) the
+   * total potency didn't meet even the Normal threshold. */
+  const tierMet = !alchemyRebornOn || !!achievedTier;
+  const effectivePass = pass && tierMet;
 
   let itemName = "", itemImg = "";
-  if (pass) {
-    const outputUuid = diagram.system?.associatedItem?.uuid;
+  if (effectivePass) {
+    const outputUuid = outputForTier(achievedTier, diagram);
     if (outputUuid) {
       try {
         const output = await fromUuid(outputUuid);
         if (output) {
-          await actor.addItem(output, 1);
+          const created = await actor.addItem(output, 1);
           itemName = output.name;
           itemImg  = output.img;
+          /* Alchemy Reborn — no tier stamp on the awarded item: alchemical
+           * items are pure RESULTS of a brew, not carriers of brew
+           * metadata. The tier shows in the item NAME ("Trance (Normal)")
+           * already, which the install macro and any GM-authored variants
+           * use; downstream readers (oilTierFromPotency, chat templates)
+           * derive tier from the name suffix instead. */
         }
       } catch (err) {
         console.warn("[witcher-ttrpg-death-march] craftAlchemy: could not resolve output item", err);
@@ -2228,9 +2494,26 @@ async function craftAlchemy(actor, diagram) {
     }
   }
 
-  postCraftResult({ actor, label: "Alchemy", pass, dc, total: roll.total, itemName, itemImg });
+  postCraftResult({
+    actor, label: "Alchemy", pass: effectivePass, dc, total: roll.total,
+    itemName, itemImg,
+    // Alchemy Reborn: surface the achieved quality tier and total potency
+    // on the chat card so the table sees WHY a brew came out Normal vs
+    // Superior (or why a roll-passed brew failed for insufficient potency).
+    tier: alchemyRebornOn ? tierLabel : "",
+    totalPotency: alchemyRebornOn ? totalPotency : null,
+    rollPassedButTierMissed: alchemyRebornOn && pass && !tierMet
+  });
 
-  if (!pass && requiredComps.length) {
+  /* Recovery roll: a failed brew can recover one piece of input. Eligible
+   * pool combines named diagram components (legacy) AND the player's wheel
+   * picks (substance system). Without the second source, substance brews
+   * silently skipped the recovery prompt. */
+  const recoverablePool = [
+    ...requiredComps.map(c => ({ kind: "named", comp: c })),
+    ...pickedIds.map(p => ({ kind: "picked", id: p.id, name: p.name, proto: p.proto }))
+  ];
+  if (!effectivePass && recoverablePool.length) {
     const attempt = await askConfirm(
       "Recovery Roll",
       `Brewing failed. Attempt a recovery roll (Alchemy DC ${dc}) to reclaim one component?`
@@ -2239,14 +2522,37 @@ async function craftAlchemy(actor, diagram) {
       let recovery;
       try { recovery = await actor.rollSkillCheck?.("alchemy", dc, mods); } catch { /* dismissed */ }
       if (recovery && recovery.total >= dc) {
-        const comp = requiredComps[Math.floor(Math.random() * requiredComps.length)];
-        await _returnComponent(actor, comp, 1);
+        const pick = recoverablePool[Math.floor(Math.random() * recoverablePool.length)];
+        let name = "component";
+        if (pick.kind === "named") {
+          await _returnComponent(actor, pick.comp, 1);
+          name = pick.comp.name || "component";
+        } else {
+          /* The picked item was already consumed/deleted above. Bump the
+           * surviving stack by 1 if it's still in inventory; otherwise
+           * recreate from the snapshot we took before consuming. */
+          const live = actor.items.get(pick.id);
+          if (live) {
+            await live.update({ "system.quantity": (Number(live.system?.quantity) || 0) + 1 });
+            name = live.name;
+          } else if (pick.proto) {
+            try {
+              const data = foundry.utils.deepClone(pick.proto);
+              data.system = { ...data.system, quantity: 1 };
+              delete data._id;
+              await actor.createEmbeddedDocuments("Item", [data]);
+            } catch (err) { console.warn("[witcher-ttrpg-death-march] alchemy recovery recreate failed", err); }
+            name = pick.name;
+          } else {
+            name = pick.name;
+          }
+        }
         ChatMessage.create({
-          content: `<b>${escapeText(actor.name)}</b> recovered <b>${escapeText(comp.name)}</b> from the failed brew.`,
+          content: `<b>${escapeText(actor.name)}</b> recovered <b>${escapeText(name)}</b> from the failed brew.`,
           speaker: ChatMessage.getSpeaker({ actor })
         });
       } else if (recovery) {
-        ui.notifications?.warn("Recovery failed — all materials lost.");
+        ui.notifications?.warn(t("WITCHER.Notify.Craft.RecoveryFailed", "Recovery failed — all materials lost."));
       }
     }
   }
@@ -2316,7 +2622,7 @@ async function craftDiagram(actor, diagram) {
             speaker: ChatMessage.getSpeaker({ actor })
           });
         } else {
-          ui.notifications?.warn("Salvage failed — all materials lost.");
+          ui.notifications?.warn(t("WITCHER.Notify.Craft.SalvageFailedMaterials", "Salvage failed — all materials lost."));
         }
       }
     }
@@ -2385,7 +2691,7 @@ async function cookRecipe(actor, recipe) {
           speaker: ChatMessage.getSpeaker({ actor })
         });
       } else {
-        ui.notifications?.warn("Salvage failed — all ingredients lost.");
+        ui.notifications?.warn(t("WITCHER.Notify.Craft.SalvageFailedIngredients", "Salvage failed — all ingredients lost."));
       }
     }
   }
@@ -2398,12 +2704,12 @@ async function onBrewClick() {
   const formulae = getFormulae();
   const active   = formulae.find(f => f.id === activeFormulaId);
   if (!actor || !active) {
-    ui.notifications?.warn("Pick a formula first.");
+    ui.notifications?.warn(t("WITCHER.Notify.Craft.PickFormula", "Pick a formula first."));
     return;
   }
   const ready = craftReadiness(active);
   if (!ready.ready) {
-    ui.notifications?.warn(`Cannot brew: ${ready.reason}.`);
+    ui.notifications?.warn(tFormat("WITCHER.Notify.Craft.CannotBrew", { reason: ready.reason }, "Cannot brew: {reason}."));
     return;
   }
 

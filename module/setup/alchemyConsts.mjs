@@ -39,13 +39,3 @@ export const FORMULA_TYPE_LABELS = Object.freeze({
     "elderfolk-armor":    "Elderfolk Armor"
 });
 
-/**
- * Toxicity status effects — added to CONFIG.statusEffects when the
- * alchemyPotency homebrew is on. Damage column is tick damage per round.
- */
-export const TOXICITY_TIERS = Object.freeze([
-    { id: "toxicity-mild",   name: "WITCHER.Status.ToxicityMild",   img: "icons/svg/poison.svg",    damage: 1 },
-    { id: "toxicity-strong", name: "WITCHER.Status.ToxicityStrong", img: "icons/svg/poison.svg",    damage: 2 },
-    { id: "toxicity-severe", name: "WITCHER.Status.ToxicitySevere", img: "icons/svg/poison.svg",    damage: 3 },
-    { id: "toxicity-deadly", name: "WITCHER.Status.ToxicityDeadly", img: "icons/svg/skull.svg",     damage: 0 }
-]);

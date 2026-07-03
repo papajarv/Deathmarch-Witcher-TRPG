@@ -8,7 +8,7 @@
 <div class="wdm-qe">
 
   <header class="wdm-qe-head">
-    <h2>Weapon &amp; Armor Qualities</h2>
+    <h2>{{localize 'WITCHER.App.QualitiesEditor.Text.WeaponArmorQualities'}}</h2>
     <p class="wdm-qe-blurb">
       Edit the runtime catalog of weapon and armor qualities. Each card is one
       quality: its display name, description, and an optional parameter — the
@@ -25,7 +25,7 @@
         <i class="fa-solid fa-plus"></i> Add
       </button>
       <button type="button" class="wdm-qe-reset" data-action="resetCatalog" data-catalog="{{cat.name}}"
-              title="Discard your override; revert to system defaults">
+              title="{{localize 'WITCHER.App.QualitiesEditor.Tooltip.DiscardYourOverrideRevertToSystemDefault'}}">
         <i class="fa-solid fa-arrow-rotate-left"></i> Reset to defaults
       </button>
     </div>
@@ -42,7 +42,7 @@
 
         <div class="wdm-qe-card-head">
           <label class="wdm-se-field wdm-qe-name">
-            <span class="wdm-se-label">Name</span>
+            <span class="wdm-se-label">{{localize 'WITCHER.App.QualitiesEditor.Text.Name'}}</span>
             <input type="text" name="{{cat.prefix}}.{{q.index}}.label" value="{{q.label}}" />
           </label>
           <label class="wdm-se-field wdm-qe-key">
@@ -53,19 +53,19 @@
                    {{#if q.isDefault}}readonly{{/if}} placeholder="camelCaseKey" />
           </label>
           <button type="button" class="wdm-se-remove" data-action="removeQuality"
-                  data-catalog="{{cat.name}}" data-index="{{q.index}}" title="Remove this quality">
+                  data-catalog="{{cat.name}}" data-index="{{q.index}}" title="{{localize 'WITCHER.App.QualitiesEditor.Tooltip.RemoveThisQuality'}}">
             <i class="fa-solid fa-trash"></i>
           </button>
         </div>
 
         <label class="wdm-se-field">
-          <span class="wdm-se-label">Description</span>
+          <span class="wdm-se-label">{{localize 'WITCHER.App.QualitiesEditor.Text.Description'}}</span>
           <textarea name="{{cat.prefix}}.{{q.index}}.description" rows="2" spellcheck="false">{{q.description}}</textarea>
         </label>
 
         <div class="wdm-qe-param">
           <label class="wdm-se-mini">
-            <span>Parameter</span>
+            <span>{{localize 'WITCHER.App.QualitiesEditor.Text.Parameter'}}</span>
             <select name="{{cat.prefix}}.{{q.index}}.paramType">
               {{#each q.paramTypeOptions as |o|}}
               <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
@@ -73,12 +73,12 @@
             </select>
           </label>
           <label class="wdm-se-mini">
-            <span>Placeholder</span>
+            <span>{{localize 'WITCHER.App.QualitiesEditor.Text.Placeholder'}}</span>
             <input type="text" name="{{cat.prefix}}.{{q.index}}.paramPlaceholder" value="{{q.paramPlaceholder}}"
                    placeholder="e.g. 25" />
           </label>
           <label class="wdm-se-mini">
-            <span>Suffix</span>
+            <span>{{localize 'WITCHER.App.QualitiesEditor.Text.Suffix'}}</span>
             <input type="text" name="{{cat.prefix}}.{{q.index}}.paramSuffix" value="{{q.paramSuffix}}"
                    placeholder="e.g. %" />
           </label>
@@ -87,7 +87,7 @@
         {{!-- Damage-pipeline flags — wired into the damage calculator on
               every hit involving this quality.  Checkboxes are derived from
               DAMAGE_FLAG_KEYS so adding a new flag is one-line. --}}
-        <div class="wdm-qe-section-label">Damage Flags</div>
+        <div class="wdm-qe-section-label">{{localize 'WITCHER.App.QualitiesEditor.Text.DamageFlags'}}</div>
         <div class="wdm-qe-flags">
           {{#each q.flagControls as |f|}}
           <label class="wdm-se-check">
@@ -99,26 +99,60 @@
         </div>
 
         {{!-- Tactical flags — read by combat-flow code (not the damage
-              pipeline). Currently exposes "Ignores Reposition Distance"
-              (Long Reach): when set, a defender's successful Reposition
-              against this weapon does NOT void follow-up Fast-attack swings. --}}
-        <div class="wdm-qe-section-label">Tactical Flags</div>
+              pipeline). Grid is driven by TACTICAL_FLAG_KEYS so adding a
+              new flag is one line in the editor + one consumer wired in
+              the appropriate engine surface. --}}
+        <div class="wdm-qe-section-label">{{localize 'WITCHER.App.QualitiesEditor.Text.TacticalFlags'}}</div>
         <div class="wdm-qe-flags">
+          {{#each q.tacticalControls as |t|}}
           <label class="wdm-se-check">
-            <input type="checkbox" name="{{cat.prefix}}.{{q.index}}.ignoresRepositionDistance"
-                   {{#if q.ignoresRepositionDistance}}checked{{/if}} />
-            <span>Ignores Reposition Distance (weapon has reach beyond original square)</span>
+            <input type="checkbox" name="{{../cat.prefix}}.{{../q.index}}.tacticalFlags.{{t.key}}"
+                   {{#if t.checked}}checked{{/if}} />
+            <span>{{t.label}}</span>
           </label>
+          {{/each}}
         </div>
+
+        {{!-- Numeric effects — read by combat-flow / cast-flow consumers
+              that scan a bearer's equipped weapons for the quality. Leave
+              at 0 to disable. Each entry is one editable input. --}}
+        {{#if q.numericControls.length}}
+        <div class="wdm-qe-section-label">{{localize 'WITCHER.App.QualitiesEditor.Text.NumericEffects'}}</div>
+        <div class="wdm-qe-flags">
+          {{#each q.numericControls as |n|}}
+          <label class="wdm-se-mini" title="{{n.hint}}">
+            <span>{{n.label}}</span>
+            <input type="number" name="{{../cat.prefix}}.{{../q.index}}.numerics.{{n.key}}"
+                   value="{{n.value}}" step="1" min="0" />
+          </label>
+          {{/each}}
+        </div>
+        {{/if}}
+
+        {{!-- String effects — currently just skillOverride (forces the
+              weapon's attack roll onto a specific skillMap key, e.g.
+              "brawling" for a Brawling-quality weapon). --}}
+        {{#if q.stringControls.length}}
+        <div class="wdm-qe-section-label">{{localize 'WITCHER.App.QualitiesEditor.Text.StringEffects'}}</div>
+        <div class="wdm-qe-flags">
+          {{#each q.stringControls as |s|}}
+          <label class="wdm-se-mini" title="{{s.hint}}">
+            <span>{{s.label}}</span>
+            <input type="text" name="{{../cat.prefix}}.{{../q.index}}.strings.{{s.key}}"
+                   value="{{s.value}}" placeholder="e.g. brawling" />
+          </label>
+          {{/each}}
+        </div>
+        {{/if}}
 
         {{!-- Status rider — pick a kind and a status effect to apply when
               the hit lands.  Status dropdown is fed from CONFIG.statusEffects
               so any GM-added status appears here automatically.  Stun-save
               kind reveals the optional location filter. --}}
-        <div class="wdm-qe-section-label">Status Rider <span class="wdm-qe-section-sub">(applied on a damaging hit)</span></div>
+        <div class="wdm-qe-section-label">{{localize 'WITCHER.App.QualitiesEditor.Text.StatusRider'}} <span class="wdm-qe-section-sub">(applied on a damaging hit)</span></div>
         <div class="wdm-qe-rider">
           <label class="wdm-se-mini">
-            <span>Kind</span>
+            <span>{{localize 'WITCHER.App.QualitiesEditor.Text.Kind'}}</span>
             <select name="{{cat.prefix}}.{{q.index}}.riderKind">
               {{#each q.riderKindOptions as |o|}}
               <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
@@ -126,7 +160,7 @@
             </select>
           </label>
           <label class="wdm-se-mini">
-            <span>Status Effect</span>
+            <span>{{localize 'WITCHER.App.QualitiesEditor.Text.StatusEffect'}}</span>
             <select name="{{cat.prefix}}.{{q.index}}.riderStatus">
               {{#each q.riderStatusOptions as |o|}}
               <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
@@ -135,7 +169,7 @@
           </label>
           {{#if q.riderHasLocations}}
           <label class="wdm-se-mini wdm-qe-rider-locs">
-            <span title="Comma-separated location keys this rider fires on (defaults to head, torso for Stun Save). Available: {{q.riderLocationKeysHint}}">Locations</span>
+            <span title="Comma-separated location keys this rider fires on (defaults to head, torso for Stun Save). Available: {{q.riderLocationKeysHint}}">{{localize 'WITCHER.App.QualitiesEditor.Text.Locations'}}</span>
             <input type="text" name="{{cat.prefix}}.{{q.index}}.riderLocations"
                    value="{{q.riderLocations}}" placeholder="head, torso" />
           </label>

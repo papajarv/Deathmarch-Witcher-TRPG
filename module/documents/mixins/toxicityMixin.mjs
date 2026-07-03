@@ -20,14 +20,27 @@ const toxAmount = (effect) => Number(effect?.getFlag?.(SYSTEM_ID, "consumedToxic
 
 export const toxicityMixin = (Base) => class extends Base {
 
-    /** Bring the Overdosed status in line with current toxicity. With the RAW
-     *  rule on: value over the cap → Overdosed; at/under cap → clear it. Rule
-     *  off → ensure it's cleared. No-op for actors without a toxicity pool. */
+    /** Bring the Overdosed status in line with current toxicity.
+     *
+     *  Gating order:
+     *    1. Alchemy Reborn (alchemyPotency) is ON → suppress Overdosed
+     *       entirely. The Reborn toxicity tier engine (Slight / Strong /
+     *       Deadly markers in consume-item.js) replaces the at-cap RAW
+     *       penalty with a finer-grained DoT ladder, so running both
+     *       systems in parallel would double-bill the over-cap bearer.
+     *       If an old Overdosed marker is on the actor (toggle just got
+     *       flipped on), clear it.
+     *    2. RAW toxicity rule (rawToxicity) is ON → value over cap →
+     *       Overdosed; at/under cap → clear it.
+     *    3. Both off → ensure no Overdosed.
+     *  No-op for actors without a toxicity pool. */
     async reconcileToxicity() {
         const tox = this.system?.stats?.toxicity;
         if (!tox) return;
         const has  = !!this.statuses?.has?.(OVERDOSED);
-        const over = isHomebrewEnabled("rawToxicity")
+        const rebornOn = isHomebrewEnabled("alchemyPotency");
+        const over = !rebornOn
+            && isHomebrewEnabled("rawToxicity")
             && (Number(tox.value) || 0) > (Number(tox.max) || 0);
         if (over && !has)      await this.toggleStatusEffect?.(OVERDOSED, { active: true });
         else if (!over && has) await this.toggleStatusEffect?.(OVERDOSED, { active: false });

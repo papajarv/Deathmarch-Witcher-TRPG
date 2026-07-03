@@ -26,6 +26,7 @@ import { registerItemAction } from "../chrome/context-menu-item.js";
 import { isActorInActiveCombat } from "../lib/actor.js";
 import { getRail } from "../lib/container.js";
 
+import { t, tFormat } from "../lib/i18n.js";
 /* In combat you can only reach gear stowed in a container EQUIPPED on your
  * rail — true if `item` sits in one of `actor`'s railed containers. */
 function inEquippedContainer(actor, item) {
@@ -102,7 +103,7 @@ export async function consumeItem(item, actor = null) {
   if (!isConsumable(item)) return false;
   actor = actor ?? (item.parent instanceof Actor ? item.parent : null);
   if (!actor) {
-    ui.notifications?.warn(`${item.name} must be carried by a character to be used.`);
+    ui.notifications?.warn(tFormat("WITCHER.Notify.Consume.NeedsCarrier", { item: item.name }, "{item} must be carried by a character to be used."));
     return true;
   }
 
@@ -111,7 +112,7 @@ export async function consumeItem(item, actor = null) {
    * Out of combat there's no restriction and no cost. */
   if (isActorInActiveCombat(actor)) {
     if (!inEquippedContainer(actor, item)) {
-      ui.notifications?.warn(`In combat, ${actor.name} can only use a consumable stowed in an equipped container — put ${item.name} in a bag on the rail first.`);
+      ui.notifications?.warn(tFormat("WITCHER.Notify.Consume.NeedsContainer", { actor: actor.name, item: item.name }, "In combat, {actor} can only use a consumable stowed in an equipped container — put {item} in a bag on the rail first."));
       return true;
     }
     if (actor.system?.combatRound) {                       // characters track the budget
@@ -187,7 +188,7 @@ function registerConsumeAction() {
     condition: (item) => isConsumable(item),
     callback:  (item, actor) => {
       if (!actor) {
-        ui.notifications?.warn(`Assign a character (in your User Configuration) to consume ${item.name}.`);
+        ui.notifications?.warn(tFormat("WITCHER.Notify.Consume.AssignCharacter", { item: item.name }, "Assign a character (in your User Configuration) to consume {item}."));
         return;
       }
       consumeItem(item, actor);
@@ -260,7 +261,122 @@ async function recomputeConsumedToxicity(actor) {
   }
   const cur = Number(actor.system.stats.toxicity.value) || 0;
   if (cur !== sum) await actor.update({ "system.stats.toxicity.value": sum });
+  // Tier sync is NOT called from here. The actor.update above triggers
+  // the updateActor hook (installed in installConsumeFeature), which is
+  // the SOLE driver of syncAlchemyRebornToxicityTier. Calling it from
+  // both places raced on the toggleStatusEffect await window and
+  // produced two copies of the same tier AE — doubling the DoT (e.g.
+  // Severe ticked 6 damage instead of 3).
 }
+
+/* Alchemy Reborn tier engine — four-tier ladder gated on % over your
+ * toxicity threshold (alch2.png + user-confirmed bands):
+ *
+ *   tox ≤  1.00 × max   → no tier             (within or at threshold)
+ *   tox >  1.00 × max   → toxicity-mild       (0–25% over — DoT 1 Poison/turn)
+ *   tox ≥  1.26 × max   → toxicity-strong     (26–51% over — DoT 2 Poison/turn)
+ *   tox ≥  1.52 × max   → toxicity-severe     (52–99% over — DoT 3 Poison/turn)
+ *   tox ≥  2.00 × max   → toxicity-deadly     (twice threshold — Death State)
+ *
+ * All tier DoTs bypass armor (statusClauses). The Deadly tier stamps
+ * HP→0 on tier entry (Death State per WTRPG Core p.171). No per-turn
+ * toxicity decay engine — toxicity drops naturally as the underlying
+ * potion AEs expire on their own durations, and the tier auto-clears
+ * via the AE-update hook when the pool falls back through each band.
+ *
+ * Idempotent: if the matching tier is already on the actor, no write
+ * happens. When the toggle is off the whole engine is a no-op and any
+ * pre-existing tier AE is wiped so RAW worlds aren't left with stale
+ * Alchemy Reborn markers. */
+const ALCHEMY_REBORN_TIER_IDS = ["toxicity-mild", "toxicity-strong", "toxicity-severe", "toxicity-deadly"];
+async function syncAlchemyRebornToxicityTier(actor, currentTox) {
+  const on = game.settings?.get?.(MODULE_ID, "homebrew.alchemyPotency");
+
+  // Dedup pass — find every AE carrying any tier status, group by id,
+  // delete all but one per id. Necessary because actor.statuses is a
+  // Set (collapses duplicates for free), so a "we already have this
+  // tier" check based on it can't tell 1 vs N AEs. Pre-existing dupes
+  // from the prior race-condition window get cleaned up here on the
+  // first call after reload. Single delete call to minimise hook churn.
+  const tierAEsById = new Map();
+  for (const e of actor.effects) {
+    if (e.disabled) continue;
+    for (const id of (e.statuses ?? [])) {
+      if (ALCHEMY_REBORN_TIER_IDS.includes(id)) {
+        if (!tierAEsById.has(id)) tierAEsById.set(id, []);
+        tierAEsById.get(id).push(e);
+        break;
+      }
+    }
+  }
+  const dupIds = [];
+  for (const aes of tierAEsById.values()) {
+    if (aes.length > 1) dupIds.push(...aes.slice(1).map(ae => ae.id));
+  }
+  if (dupIds.length) {
+    try { await actor.deleteEmbeddedDocuments("ActiveEffect", dupIds); }
+    catch (err) { console.warn(`${MODULE_ID} | tier dedup failed`, err); }
+  }
+
+  // Source of truth for "is this tier present" is actor.statuses (the union
+  // Set Foundry maintains over every AE's statuses field) — much more
+  // reliable than walking actor.effects and bag-matching ids, and it's
+  // what the token HUD reads to decide which icon to paint.
+  const currentTiers = ALCHEMY_REBORN_TIER_IDS.filter(id => actor.statuses?.has?.(id));
+
+  const removeTier = async (id) => {
+    try { await actor.toggleStatusEffect(id, { active: false }); }
+    catch (err) { console.warn(`${MODULE_ID} | tier remove (${id}) failed`, err); }
+  };
+
+  if (!on) {
+    for (const id of currentTiers) await removeTier(id);
+    return;
+  }
+
+  const cap = Number(actor.system?.stats?.toxicity?.max) || 100;
+  const ratio = cap > 0 ? (Number(currentTox) || 0) / cap : 0;
+  let target = "";
+  if      (ratio >= 2.00) target = "toxicity-deadly";
+  else if (ratio >= 1.52) target = "toxicity-severe";
+  else if (ratio >= 1.26) target = "toxicity-strong";
+  else if (ratio >  1.00) target = "toxicity-mild";
+
+  // Already exactly at the right tier?
+  if (currentTiers.length === 1 && currentTiers[0] === target) return;
+
+  // Drop any wrong-tier markers (and everything if target === "" → low tox).
+  for (const id of currentTiers) {
+    if (id !== target) await removeTier(id);
+  }
+
+  if (!target) return;
+  if (actor.statuses?.has?.(target)) return; // just removed-and-was-also-the-target edge
+
+  // toggleStatusEffect runs ActiveEffect.fromStatusEffect(target) under the
+  // hood, which builds the AE from CONFIG.statusEffects[target] with the
+  // expected core.statusId flag + deterministic id. The previous direct
+  // createEmbeddedDocuments call skipped that step, producing an AE that
+  // never registered as the carrier of the status — no token icon, no
+  // status-clause DoT pickup. This is the canonical Foundry v13 path.
+  try { await actor.toggleStatusEffect(target, { active: true }); }
+  catch (err) { console.warn(`${MODULE_ID} | tier create (${target}) failed`, err); }
+
+  // Entering Deadly tier = "Thrown into Death State" per alch2.png. The
+  // canonical Witcher TRPG way to enter Death State is HP → 0 (Core
+  // p.171, death saves cycle from there). Only triggers on the
+  // TRANSITION into deadly (currentTiers didn't already include it) so
+  // re-rendering on the same tier doesn't keep wiping HP — useful if
+  // a healer somehow gets the bearer back above 0 while still deadly.
+  if (target === "toxicity-deadly" && !currentTiers.includes("toxicity-deadly")) {
+    const hp = actor.system?.derivedStats?.hp;
+    if (hp && Number(hp.value) > 0) {
+      try { await actor.update({ "system.derivedStats.hp.value": 0 }); }
+      catch (err) { console.warn(`${MODULE_ID} | deadly tier HP→0 failed`, err); }
+    }
+  }
+}
+
 
 /* Recompute the carrier's pool whenever a toxicity-bearing effect is added,
  * removed, or enabled/disabled. Cheap and idempotent. */
@@ -299,6 +415,25 @@ export function installConsumeFeature() {
   Hooks.on("createActiveEffect", onToxicityEffectChange);
   Hooks.on("updateActiveEffect", onToxicityEffectChange);
   Hooks.on("deleteActiveEffect", onToxicityEffectChange);
+
+  /* Reconcile Alchemy Reborn tier markers when the toxicity pool itself
+   * changes — covers manual sheet edits, console writes, GM adjustments,
+   * and the .max being changed (which moves the 1.25× / 1.50× / 2.00×
+   * thresholds). Without this, only AE-driven toxicity changes triggered
+   * the tier engine; setting `system.stats.toxicity.value = 115` by hand
+   * was invisible. We DON'T re-run recomputeConsumedToxicity here (that
+   * would snap the manual write back to the AE-flag sum); just call
+   * syncTier directly with the post-update value. */
+  Hooks.on("updateActor", (actor, changes) => {
+    if (!iShouldWriteToxicity(actor)) return;
+    const touchedValue = foundry.utils.hasProperty(changes, "system.stats.toxicity.value");
+    const touchedMax   = foundry.utils.hasProperty(changes, "system.stats.toxicity.max");
+    if (!touchedValue && !touchedMax) return;
+    const cur = Number(actor.system?.stats?.toxicity?.value) || 0;
+    syncAlchemyRebornToxicityTier(actor, cur).catch(err => {
+      console.warn(`${MODULE_ID} | manual-edit tier sync failed`, err);
+    });
+  });
 
   /* Consume is a unified item action — one registration lights it up on the
    * actor sheet, the chrome inventory overlay, and the Items sidebar. */

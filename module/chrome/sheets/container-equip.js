@@ -27,24 +27,24 @@ function injectStyles() {
     .wou-slotcfg {
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      margin: 4px 0 6px;
+      gap: 0.25rem;
+      margin: 0.25rem 0 0.375rem;
     }
     .wou-slotcfg .wou-slotcfg-head {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 0.5rem;
       flex-wrap: wrap;
       font-size: 0.9em;
     }
     .wou-slotcfg .wou-slotcfg-head label {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 0.25rem;
       white-space: nowrap;
     }
     .wou-slotcfg .wou-slotcfg-head input[type="number"] {
-      width: 64px;
+      width: 4rem;
       text-align: center;
     }
     .wou-slotcfg .wou-slotcfg-title {
@@ -54,38 +54,38 @@ function injectStyles() {
     .wou-slotcfg .wou-slotcfg-rows {
       display: flex;
       flex-direction: column;
-      gap: 3px;
-      padding-left: 2px;
+      gap: 0.1875rem;
+      padding-left: 0.125rem;
     }
     .wou-slotcfg .wou-slotcfg-row {
       display: grid;
-      grid-template-columns: 1.1fr 1.2fr 52px 0.9fr 24px;
+      grid-template-columns: 1.1fr 1.2fr 3.25rem 0.9fr 1.5rem;
       align-items: center;
-      gap: 4px;
+      gap: 0.25rem;
       font-size: 0.9em;
     }
     .wou-slotcfg .wou-slotcfg-row.no-conceal {
-      grid-template-columns: 1.1fr 1.2fr 52px 0.9fr 24px;
+      grid-template-columns: 1.1fr 1.2fr 3.25rem 0.9fr 1.5rem;
     }
     .wou-slotcfg select { min-width: 0; width: 100%; }
     .wou-slotcfg input[type="number"].wou-slotcfg-count {
-      width: 52px;
+      width: 3.25rem;
       text-align: center;
     }
     .wou-slotcfg .wou-slotcfg-remove {
       background: none;
       border: 1px solid rgba(0, 0, 0, 0.2);
-      border-radius: 3px;
+      border-radius: 0.1875rem;
       padding: 0;
-      width: 22px;
-      height: 22px;
+      width: 1.375rem;
+      height: 1.375rem;
       cursor: pointer;
       line-height: 1;
       font-size: 1.1em;
     }
     .wou-slotcfg .wou-slotcfg-add {
       align-self: flex-start;
-      padding: 2px 8px;
+      padding: 0.125rem 0.5rem;
       cursor: pointer;
       font-size: 0.85em;
     }

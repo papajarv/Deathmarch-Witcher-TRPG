@@ -17,6 +17,7 @@ import { drawWeapon, sheathWeapon, findContainerHoldingItem } from "./inventory.
 import { isConsumable, consumeItem } from "../policy/consume-item.js";
 import { runPrimaryItemAction, fastDrawWeapon } from "./context-menu-item.js";
 
+import { t, tFormat } from "../lib/i18n.js";
 const SLOTS = [1, 2, 3, 4, 5];
 const FLAG_BASE = "hotbar";
 
@@ -81,7 +82,7 @@ function bindSlotEvents(el, n, actor) {
     e.preventDefault();
     el.classList.remove("is-drag-target");
     if (!actor) {
-      ui.notifications?.warn("Witcher Overhaul UI: assign a character before using the hotbar.");
+      ui.notifications?.warn(t("WITCHER.Notify.Hotbar.NoCharacter", "Witcher Overhaul UI: assign a character before using the hotbar."));
       return;
     }
     const data = parseDropData(e);
@@ -146,7 +147,7 @@ async function activateSlot(actor, n, slotEl = null, { shift = false } = {}) {
   try {
     const doc = await fromUuid(slot.uuid);
     if (!doc) {
-      ui.notifications?.warn(`Witcher Overhaul UI: slot ${n} target no longer exists. Clearing.`);
+      ui.notifications?.warn(tFormat("WITCHER.Notify.Hotbar.SlotMissing", { n: n }, "Witcher Overhaul UI: slot {n} target no longer exists. Clearing."));
       await clearSlot(actor, n);
       return;
     }

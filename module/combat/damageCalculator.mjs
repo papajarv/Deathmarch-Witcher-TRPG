@@ -17,18 +17,19 @@
  *
  * Pipeline (all stages skip cleanly when their inputs aren't present):
  *
- *   Stages 1–6 operate on weaponDamage only:
+ *   Pipeline order (RAW: natural resistances → armor → SP → crit → location):
  *     1. Basic Quen shield drain        (RAW Core p.114 + errata)
  *     2. Active Shield drain            (RAW Core p.115 + errata)
- *     3. SP subtraction (worn + natural, AP / Improved AP rules)
- *     4. Damage Resistance halve        (typed; bypassed by any AP)
- *     5. Monster non-silver resist      (errata: fire bypasses)
- *     6. Vulnerability ×2
- *
- *   Stages 7–9 operate on the combined total:
- *     7. + critBonus                    (joins AFTER armor/resist stages)
- *     8. × location multiplier          (head ×3, limbs ×½, etc.)
- *     9. Apply to HP                    (patch only — caller commits)
+ *     3. Natural resistances            (monster immune / type resist /
+ *                                        non-silver / non-meteorite / vuln)
+ *                                       — apply to weaponDamage AND critBonus,
+ *                                        since these are intrinsic monster
+ *                                        traits that shape ALL incoming damage.
+ *     4. Armor DR halve                 (typed; bypassed by any AP)
+ *     5. SP subtraction (worn + natural, AP / Improved AP rules)
+ *     6. + critBonus (already resist-scaled at stage 3, bypasses armor)
+ *     7. × location multiplier          (head ×3, limbs ×½, etc.)
+ *     8. Apply to HP                    (patch only — caller commits)
  *
  * If stage 3 fully soaks the weapon damage (and there's no crit bonus),
  * the pipeline returns early — no ablation, no DR/resist math, no HP
@@ -57,6 +58,12 @@ export function makeDamageSource(over = {}) {
         bypassesShield:        !!over.bypassesShield,
         tangible:              over.tangible !== false,   // default true
         ablating:              !!over.ablating,
+        doubleAblation:        !!over.doubleAblation,
+        deniesParry:           !!over.deniesParry,
+        /* Pre-rolled Ablating SP-chip bonus (1d6/2 — Core p.156). Rolled
+         * by handleApplyDamage before the calculator runs so this module
+         * stays deterministic and the breakdown can show the exact value. */
+        ablatingChipBonus:     Math.max(0, Number(over.ablatingChipBonus) || 0),
         silverDamage:          Math.max(0, Number(over.silverDamage) || 0),
         isSilver:              !!over.isSilver,
         isMeteorite:           !!over.isMeteorite,
@@ -161,12 +168,89 @@ export function resolveDamage({ damageSource, target }) {
         }
     }
 
-    /* ── Stage 3: SP subtraction (per-location, AP-aware) ────────────────
-     * If SP fully soaks the WEAPON damage AND there's no crit bonus, we
-     * stop here — no ablation, no DR/resist stages, no HP delta. With a
-     * crit bonus present, weaponDamage falls to 0 but the pipeline keeps
-     * going so the armor-bypassing bonus can still land. */
-    const locKey   = src.location.key;
+    const locKey = src.location.key;
+
+    /* ── Stage 3: Natural resistances ────────────────────────────────────
+     * Monster intrinsic traits — type immunity / resist / vulnerability
+     * and the silver/meteorite weakness gates. Applied to weaponDamage
+     * BEFORE armor. The same helper runs again in stage 6 on the crit
+     * bonus, since natural resistances SHAPE all incoming damage while
+     * armor stops only base weapon damage.
+     *   Immune → zero. Resist → halve. Non-silver resist (non-silver
+     *   weapon, target has silver weakness, damage isn't fire) → halve;
+     *   silver-damage portion adds ON TOP of the halved base for hybrid
+     *   silver weapons. Vulnerable → ×2. Improved AP bypasses immunity
+     *   and per-type resist (built to overcome resistant biology) but
+     *   NOT the silver/meteorite gates (intrinsic monster defences). */
+    function applyNaturalResists(value, { tagPrefix }) {
+        if (value <= 0) return value;
+        let v = value;
+        if (!src.improvedArmorPiercing
+            && tgt.monsterFlags.immuneToTypes.length
+            && src.damageTypes.some(t => tgt.monsterFlags.immuneToTypes.includes(t))) {
+            stages.push({ stage: `${tagPrefix}monsterImmune`, before: v, zeroed: true });
+            return 0;
+        }
+        if (!src.improvedArmorPiercing
+            && tgt.monsterFlags.resistTypes.length
+            && src.damageTypes.some(t => tgt.monsterFlags.resistTypes.includes(t))) {
+            const after = Math.floor(v / 2);
+            stages.push({ stage: `${tagPrefix}monsterTypeResist`, before: v, halved: true, after });
+            v = after;
+        }
+        if (v > 0 && tgt.monsterFlags.resistNonSilver && !src.isSilver && !src.damageTypes.includes("fire")) {
+            const halvedBase = Math.floor(v / 2);
+            // Silver-portion add-on only applies to the base weapon-damage
+            // pass, not the crit bonus (bonus damage is untyped).
+            const silver = tagPrefix === "" ? Math.max(0, Number(src.silverDamage) || 0) : 0;
+            const after  = halvedBase + silver;
+            stages.push({
+                stage:       `${tagPrefix}monsterResist`,
+                before:      v,
+                halved:      true,
+                halvedBase,
+                silverAdded: silver,
+                after
+            });
+            v = after;
+        }
+        if (v > 0 && tgt.monsterFlags.resistNonMeteorite && !src.isMeteorite && !src.damageTypes.includes("fire")) {
+            const after = Math.floor(v / 2);
+            stages.push({ stage: `${tagPrefix}monsterMeteoriteResist`, before: v, halved: true, after });
+            v = after;
+        }
+        if (v > 0 && src.damageTypes.some(t => tgt.monsterFlags.vulnerableTo.includes(t))) {
+            const after = v * 2;
+            stages.push({ stage: `${tagPrefix}vulnerability`, before: v, doubled: true, after });
+            v = after;
+        }
+        return v;
+    }
+    dmg = applyNaturalResists(dmg, { tagPrefix: "" });
+
+    /* ── Stage 4: Armor DR halve ─────────────────────────────────────────
+     * Skipped by ANY AP. Halves once if the worn or natural armor at the
+     * location resists ANY of the source's damage types. Applied to
+     * post-natural-resist weaponDamage only; crit bonus bypasses armor. */
+    if (dmg > 0 && !src.armorPiercing && !src.improvedArmorPiercing) {
+        const drList = [
+            ...(tgt.armor[locKey]?.dr        ?? []),
+            ...(tgt.naturalArmor[locKey]?.dr ?? [])
+        ];
+        const hit = src.damageTypes.some(t => drList.includes(t));
+        if (hit) {
+            const after = Math.floor(dmg / 2);
+            stages.push({ stage: "dr", before: dmg, halved: true, after });
+            dmg = after;
+        }
+    }
+
+    /* ── Stage 4: SP subtraction (per-location, AP-aware) ────────────────
+     * If SP fully soaks the (post-resist) WEAPON damage AND there's no
+     * crit bonus, we stop here — no ablation, no monster-resist stages,
+     * no HP delta. With a crit bonus present, weaponDamage falls to 0
+     * but the pipeline keeps going so the armor-bypassing bonus can
+     * still land. */
     const wornSP   = src.bypassesWornArmor    ? 0 : Number(tgt.armor[locKey]?.sp        ?? 0);
     const naturalSP= src.bypassesNaturalArmor ? 0 : Number(tgt.naturalArmor[locKey]?.sp ?? 0);
     let totalSP    = wornSP + naturalSP;
@@ -181,10 +265,36 @@ export function resolveDamage({ damageSource, target }) {
             }
         } else {
             const after = dmg - totalSP;
-            stages.push({ stage: "sp", before: dmg, sp: totalSP, after, ablated: true });
-            // Mark every contributing armor item for -1 SP ablation.
+            /* SP ablation (RAW Core p.156).
+             *   Default rule: every penetrating hit reduces armor SP by 1.
+             *   Crushing Force: doubles the default chip to −2 SP.
+             *   Ablating:      adds N SP damage ON TOP of the default,
+             *                  where N is rolled OUTSIDE the calculator
+             *                  (handleApplyDamage rolls 1d6/2 and stamps
+             *                  it on `src.ablatingChipBonus`) so this
+             *                  module stays deterministic.
+             * Effects compose: a Crushing-Force + Ablating swing lands −2
+             * from the doubled base plus the rolled Ablating bonus.
+             * `ablated: true` is preserved as the downstream on-penetrate
+             * trigger; `spDelta` reports the final chip amount so the
+             * breakdown card can show it. */
+            const baseChip     = src.doubleAblation ? 2 : 1;
+            const ablatingChip = Math.max(0, Number(src.ablatingChipBonus) || 0);
+            const spDelta      = -(baseChip + ablatingChip);
+            const spChipped    = true;   // RAW: every penetrating hit chips SP
+            stages.push({
+                stage:       "sp",
+                before:      dmg,
+                sp:          totalSP,
+                after,
+                ablated:     true,
+                spChipped,
+                spDelta,
+                baseChip,
+                ablatingChip
+            });
             for (const itemId of (tgt.armor[locKey]?.itemIds ?? [])) {
-                patches.armorAblation.push({ itemId, spDelta: -1 });
+                patches.armorAblation.push({ itemId, spDelta });
             }
             dmg = after;
         }
@@ -193,84 +303,20 @@ export function resolveDamage({ damageSource, target }) {
         stages.push({ stage: "sp", before: dmg, sp: 0, after: dmg });
     }
 
-    /* ── Stage 4: Damage Resistance halve ────────────────────────────────
-     * Skipped by ANY AP. Halves once if the worn or natural armor at the
-     * location resists ANY of the source's damage types. */
-    if (dmg > 0 && !src.armorPiercing && !src.improvedArmorPiercing) {
-        const drList = [
-            ...(tgt.armor[locKey]?.dr        ?? []),
-            ...(tgt.naturalArmor[locKey]?.dr ?? [])
-        ];
-        const hit = src.damageTypes.some(t => drList.includes(t));
-        if (hit) {
-            const after = Math.floor(dmg / 2);
-            stages.push({ stage: "dr", before: dmg, halved: true, after });
-            dmg = after;
-        }
-    }
-
-    /* ── Stage 5a: Per-type immunity ─────────────────────────────────────
-     * If ANY of the source's damage types is in the monster's immunity
-     * list, damage is zeroed. Crit bonus still rides past this — bonus
-     * damage operates outside stages 1-6. */
-    if (dmg > 0 && tgt.monsterFlags.immuneToTypes.length &&
-        src.damageTypes.some(t => tgt.monsterFlags.immuneToTypes.includes(t))) {
-        stages.push({ stage: "monsterImmune", before: dmg, zeroed: true });
-        dmg = 0;
-    }
-
-    /* ── Stage 5b: Per-type resist (halve) ───────────────────────────────
-     * Halve once if any source type is in the monster's resist list. */
-    if (dmg > 0 && tgt.monsterFlags.resistTypes.length &&
-        src.damageTypes.some(t => tgt.monsterFlags.resistTypes.includes(t))) {
-        const after = Math.floor(dmg / 2);
-        stages.push({ stage: "monsterTypeResist", before: dmg, halved: true, after });
-        dmg = after;
-    }
-
-    /* ── Stage 5c: Monster non-silver resist ─────────────────────────────
-     * Half damage from non-silver weapons. Fire bypasses this (errata
-     * sidebar). A silver-tagged weapon also bypasses. Stacks with any
-     * per-type DR / resist already applied (so a slashing-DR + non-silver
-     * monster hit by a steel sword takes 1/4 damage; hit by a silver
-     * sword takes 1/2). */
-    if (dmg > 0 && tgt.monsterFlags.resistNonSilver && !src.isSilver && !src.damageTypes.includes("fire")) {
-        const after = Math.floor(dmg / 2);
-        stages.push({ stage: "monsterResist", before: dmg, halved: true, after });
-        dmg = after;
-    }
-
-    /* ── Stage 5d: Monster non-meteorite resist (optional novel rule p.175) ─
-     * Mirror of stage 5c for the alternate weakness category — half
-     * damage from non-meteorite weapons. The two flags are independent
-     * (a single monster wears only one in RAW, but the engine doesn't
-     * enforce that — leaves room for homebrew). */
-    if (dmg > 0 && tgt.monsterFlags.resistNonMeteorite && !src.isMeteorite && !src.damageTypes.includes("fire")) {
-        const after = Math.floor(dmg / 2);
-        stages.push({ stage: "monsterMeteoriteResist", before: dmg, halved: true, after });
-        dmg = after;
-    }
-
-    /* ── Stage 6: Vulnerability ×2 ───────────────────────────────────────
-     * If any source damage type matches the target's vulnerableTo list,
-     * double the damage. (Errata: silver doubles automatically against
-     * monsters susceptible to silver — wire that via vulnerableTo too.) */
-    if (dmg > 0 && src.damageTypes.some(t => tgt.monsterFlags.vulnerableTo.includes(t))) {
-        const after = dmg * 2;
-        stages.push({ stage: "vulnerability", before: dmg, doubled: true, after });
-        dmg = after;
-    }
-
-    /* ── Stage 7: + crit bonus ───────────────────────────────────────────
-     * Crit bonus damage bypasses SP / DR / shield (handled by not being
-     * in stages 1-6). Adds to the weapon damage HERE, then the combined
-     * total is multiplied by location mult at stage 8. */
+    /* ── Stage 6: + crit bonus (resist-scaled, armor-bypassing) ──────────
+     * Crit bonus damage bypasses armor (SP + DR + shield) but IS modified
+     * by the target's natural resistances — monster type
+     * immunity/resist/vulnerability shape ALL incoming damage, not just
+     * the base weapon roll. Run the same natural-resist helper on the
+     * bonus (tagged "crit-" so the audit shows both passes distinctly),
+     * then add the scaled bonus to the post-armor weapon damage. */
     if (src.critBonus > 0) {
-        stages.push({ stage: "critBonus", added: src.critBonus, weaponDamage: dmg, total: dmg + src.critBonus });
-        dmg += src.critBonus;
+        const scaledCrit = applyNaturalResists(src.critBonus, { tagPrefix: "crit-" });
+        stages.push({ stage: "critBonus", added: scaledCrit, weaponDamage: dmg, total: dmg + scaledCrit });
+        dmg += scaledCrit;
     }
 
-    /* ── Stage 8: Location multiplier ────────────────────────────────────
+    /* ── Stage 7: Location multiplier ────────────────────────────────────
      * Head ×3, torso ×1, limbs ×½, tail/wing ×½ (Core p.152-154). */
     if (dmg > 0 && src.location.mult !== 1) {
         const after = Math.floor(dmg * src.location.mult);
@@ -278,7 +324,7 @@ export function resolveDamage({ damageSource, target }) {
         dmg = after;
     }
 
-    /* ── Stage 9: HP patch ───────────────────────────────────────────────*/
+    /* ── Stage 8: HP patch ───────────────────────────────────────────────*/
     patches.hp.delta = -dmg;
 
     /* Rider: on-penetrate. We can re-derive "did weapon damage make it

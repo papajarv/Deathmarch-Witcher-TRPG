@@ -250,9 +250,40 @@ function installClickHandlers() {
     if (event.key === "Escape") closePicker();
   });
 
-  // Keep the popup glued to its row as the bar or window moves.
-  window.addEventListener("resize", closePicker);
-  window.addEventListener("scroll", closePicker, true);
+  /* Only close on WINDOW resize, not on layout-driven resizes that
+   * bubble to window (which happen when we scale scene-controls or
+   * write --wdm-topbar-h to the root). Track resize events but ignore
+   * any whose target is a specific element rather than the window
+   * itself — those are element-scoped layout shifts, not the user
+   * literally resizing the viewport. */
+  window.addEventListener("resize", (event) => {
+    if (event.target && event.target !== window && event.target !== document) return;
+    closePicker();
+  });
+
+  /* Close on scroll ONLY when the scroll originates outside the picker
+   * AND outside scene-controls (where the trigger row lives — zoom on
+   * the left bar can cause scroll events during a click, which would
+   * otherwise slam the picker shut before the click resolves). The
+   * user only wants outside-clicks / selections / Escape to dismiss.  */
+  window.addEventListener("scroll", (event) => {
+    if (!floatingPicker) return;
+    if (floatingPicker.contains(event.target)) return;
+    if (event.target?.closest?.("#scene-controls")) return;
+    closePicker();
+  }, true);
+}
+
+/* Stop wheel events over the picker from bubbling to the scene canvas.
+ * The picker itself is `overflow-y: auto`, so native browser scroll on
+ * the element still works; we just prevent the fall-through zoom. Passive
+ * false so preventDefault (when we're at a scroll boundary) can also
+ * work if we ever need it. Bound once at picker mount time via
+ * togglePicker → wireInternalScroll. */
+function wireInternalScroll(el) {
+  el.addEventListener("wheel", (event) => {
+    event.stopPropagation();
+  }, { passive: false });
 }
 
 function togglePicker(rowEl) {
@@ -268,6 +299,7 @@ function togglePicker(rowEl) {
   document.body.appendChild(el);
   floatingPicker = el;
   positionPicker(el, rowEl);
+  wireInternalScroll(el);
 }
 
 // Anchor the picker to the right edge of the row, clamped into the viewport.

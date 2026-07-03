@@ -20,6 +20,7 @@
 
 import { MODULE_ID } from "../setup/settings.js";
 
+import { t, tFormat } from "../lib/i18n.js";
 const PANEL_ID = "wou-gm-panel";
 
 /* Tab definitions — order is the strip order. icon = FontAwesome glyph. */
@@ -147,8 +148,8 @@ function injectGmButton() {
   btn.type = "button";
   btn.id = "wou-gm-fab";
   btn.className = "wou-gm-btn";
-  btn.title = "GM Panel";
-  btn.setAttribute("aria-label", "GM Panel");
+  btn.title = t("WITCHER.Tooltip.GMPanel", "GM Panel");
+  btn.setAttribute("aria-label", t("WITCHER.Tooltip.GMPanel", "GM Panel"));
   btn.innerHTML = `<i class="fa-solid fa-eye"></i>`;
   host.appendChild(btn);
   alignFab();
@@ -168,7 +169,7 @@ function getPanel() {
   panel.id = PANEL_ID;
   panel.className = "wou-gm-panel";
   panel.setAttribute("role", "dialog");
-  panel.setAttribute("aria-label", "GM Panel");
+  panel.setAttribute("aria-label", t("WITCHER.Tooltip.GMPanel", "GM Panel"));
   document.body.appendChild(panel);
   return panel;
 }
@@ -649,8 +650,8 @@ function positionPanel(panel, anchorBtn) {
   if (rightLimit - w < leftLimit) left = leftLimit;
   const bottom = window.innerHeight - rect.top + 14;            /* 14px gap above the button */
 
-  panel.style.left = `${left}px`;
-  panel.style.bottom = `${bottom}px`;
+  panel.style.left = `calc(${left}px / var(--wdm-scale, 1))`;
+  panel.style.bottom = `calc(${bottom}px / var(--wdm-scale, 1))`;
   panel.style.visibility = "";
 }
 
@@ -964,7 +965,7 @@ export function setupGMPanel() {
     if (!ev.target.closest?.(`#${PANEL_ID} [data-ref-cat-add]`)) return;
     ev.preventDefault(); ev.stopPropagation();
     const data = getReference();
-    data.categories.push({ id: foundry.utils.randomID(), title: "New category", rows: [] });
+    data.categories.push({ id: foundry.utils.randomID(), title: t("WITCHER.Dialog.GM.NewCategory", "New category"), rows: [] });
     await setReference(data); rerenderRef();
   });
   // remove category
@@ -1027,7 +1028,7 @@ export function setupGMPanel() {
     const key = sel?.value;
     if (!key) return;
     const pcs = partyPCs();
-    if (!pcs.length) { ui.notifications?.warn("No player-owned characters to roll for."); return; }
+    if (!pcs.length) { ui.notifications?.warn(t("WITCHER.Notify.GM.NoPCs", "No player-owned characters to roll for.")); return; }
     /* Roll-mode select uses legacy CONST.DICE_ROLL_MODES values; validate
        against the four valid keys, then map to the v14 messageMode the
        roll threads into ChatMessage.create. */
@@ -1048,9 +1049,9 @@ export function setupGMPanel() {
     const ip    = Math.trunc(Number(ipIn?.value) || 0);
     const crown = Math.trunc(Number(crownIn?.value) || 0);
     const pcs = partyPCs();
-    if ((!ip && !crown) || !pcs.length) { ui.notifications?.warn("Nothing to grant."); return; }
+    if ((!ip && !crown) || !pcs.length) { ui.notifications?.warn(t("WITCHER.Notify.GM.NothingToGrant", "Nothing to grant.")); return; }
     const ok = await foundry.applications.api.DialogV2.confirm({
-      window: { title: "Distribute rewards" },
+      window: { title: t("WITCHER.Dialog.GM.DistributeRewards", "Distribute rewards") },
       content: `<p>Grant <b>${ip} IP</b> and <b>${crown} crowns</b> to <b>${pcs.length}</b> player character(s)?</p>`,
       modal: true,
     });
@@ -1068,6 +1069,6 @@ export function setupGMPanel() {
       }
       await actor.update(update, { render: false });
     }
-    ui.notifications?.info(`Granted ${ip} IP and ${crown} crowns to ${pcs.length} character(s).`);
+    ui.notifications?.info(tFormat("WITCHER.Notify.GM.Granted", { ip: ip, crown: crown, n: pcs.length }, "Granted {ip} IP and {crown} crowns to {n} character(s)."));
   });
 }

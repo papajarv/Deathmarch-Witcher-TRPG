@@ -154,15 +154,23 @@ function buildHUD(token) {
     const el = document.createElement("div");
     el.id = HUD_ID;
     el.className = "wdm-token-hud";
-    /* Inline dimensions on the container + the portrait img as a safety
-     * net. If the system CSS file fails to load (cache miss, override
-     * conflict), the panel still renders at sane dimensions instead of
-     * blowing up into a screen-filling natural-resolution image. */
-    el.style.cssText = "width:240px;max-width:240px;box-sizing:border-box;";
+    /* Popup-scale hook stamps this too via its MutationObserver, but on
+     * a later microtask. Setting it up-front means the transform: scale
+     * from the [data-wdm-scaled="1"] rule is in place before the HUD
+     * measures itself for the anchor-edge overflow check. */
+    el.setAttribute("data-wdm-scaled", "1");
+    /* Inline safety net: keep the panel and portrait from blowing up if the
+     * system CSS fails to load (cache miss, override conflict). Uses
+     * `max-width` / `max-height` rather than fixed `width` so the CSS
+     * `15rem` / `1.5rem` sizing (which scales via the rem chain) can still
+     * drive layout under normal operation. The cap is 4× the CSS baseline
+     * so scaling up stays possible without the raw image ballooning to
+     * its natural resolution. */
+    el.style.cssText = "max-width:960px;box-sizing:border-box;";
     el.innerHTML = `
         <header class="wdm-hud-titlebar" data-drag-handle="1">
             ${portraitSrc ? `<img class="wdm-hud-portrait" src="${escapeAttr(portraitSrc)}" alt="" draggable="false"
-                                 style="width:24px;height:24px;max-width:24px;max-height:24px;object-fit:cover;border-radius:50%;flex:0 0 auto;border:1px solid #6b5a3a;background:#0a0907;"/>` : ""}
+                                 style="max-width:96px;max-height:96px;object-fit:cover;border-radius:50%;flex:0 0 auto;border:1px solid #6b5a3a;background:#0a0907;"/>` : ""}
             <div class="wdm-hud-title">${escapeText(name)}</div>
             <button type="button" class="wdm-hud-close" data-action="close" title="Close HUD">
                 <i class="fa-solid fa-xmark"></i>
@@ -414,11 +422,22 @@ async function toggleCombatant(token) {
             const cls = getDocumentClass("Combat");
             await cls.create({ scene: canvas.scene.id });
         }
-        await game.combat.createEmbeddedDocuments("Combatant", [{
+        const [created] = await game.combat.createEmbeddedDocuments("Combatant", [{
             tokenId: token.id,
             sceneId: canvas.scene.id,
             actorId: token.actor?.id ?? null
         }]);
+        /* Auto-roll initiative on add. Without this, the token sits in the
+         * tracker at no initiative value until the GM clicks the d20 button,
+         * which is an extra step for every monster on a busy encounter. The
+         * second arg is the standard `combat.rollInitiative` options shape;
+         * `updateTurn:false` keeps the active turn pointer where it is so
+         * adding mid-combat doesn't rip control away from the current
+         * combatant. */
+        if (created?.id) {
+            try { await game.combat.rollInitiative([created.id], { updateTurn: false }); }
+            catch (err) { console.warn("witcher-ttrpg-death-march | auto-roll initiative failed", err); }
+        }
     }
 }
 

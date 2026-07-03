@@ -19,6 +19,7 @@ import { FoodAndDrinkConfigApp, FOOD_AND_DRINK_CONFIG_DEFAULTS } from "../applic
 import { StressConfigApp } from "../applications/stressConfig.mjs";
 import { STRESS_CONFIG_DEFAULTS } from "../mechanics/stress.mjs";
 import { STATUS_OVERRIDE_SETTING, invalidateStatusClauseCache } from "../mechanics/statusOverrides.mjs";
+import { CombatActionsEditor } from "../applications/combatActionsEditor.mjs";
 
 const SYSTEM_ID = "witcher-ttrpg-death-march";
 
@@ -51,43 +52,18 @@ export function registerSettings() {
         requiresReload: true
     });
 
-    /* Token facing offset for the "auto-face target" feature (see
-     * policy/canvas-auto-face.mjs). Different VTT token art faces
-     * different compass directions at rotation 0:
-     *   asset faces NORTH (head-up portrait)         →  +90
-     *   asset faces EAST  (sideways, facing right)   →    0  (default)
-     *   asset faces SOUTH (looking at the viewer)    →  -90
-     *   asset faces WEST  (sideways, facing left)    → +180
-     * The setting is added to the rotation atan2 to compute facing.
-     * If your tokens face the wrong way when auto-facing, try a
-     * different offset. */
-    game.settings.register(SYSTEM_ID, "tokenFacingOffsetDeg", {
-        name: "Token facing offset (auto-face)",
-        hint: "Offset added to computed facing rotations. Pick whichever direction your token art naturally faces at rotation 0. The Witcher portrait packs (and most VTT-marketplace tokens) draw the character looking AT the viewer — that's SOUTH at rotation 0, default -90. If facing comes out backward, try one of the other values.",
+    /* Meters of movement charged per 90° of intentional token rotation
+     * in combat (canvas-rotation.mjs). Rotating in place spends from the
+     * actor's per-turn movement budget; this knob controls the conversion
+     * rate. Default 1m per 90° (two 45° turns = 1m, four 22.5° turns also
+     * = 1m via the accumulator). Set to 0 to make rotation free. */
+    game.settings.register(SYSTEM_ID, "rotationMovementPer90", {
+        name: "Rotation costs movement — meters per 90°",
+        hint: "How much of your per-turn movement budget is spent for every 90° of token rotation in combat. Sub-90° rotations accumulate. Default 1m. Set to 0 to make rotation free.",
         scope: "world",
         config: true,
         type: Number,
-        choices: {
-            "-90": "-90° — asset faces SOUTH at rotation 0 (looking at viewer, DEFAULT)",
-              "0": "0° — asset faces EAST at rotation 0 (sideways → right)",
-             "90": "90° — asset faces NORTH at rotation 0 (head-up portrait)",
-            "180": "180° — asset faces WEST at rotation 0 (sideways → left)"
-        },
-        default: -90
-    });
-
-    /* One-shot migration flag — early releases of this setting shipped
-     * with defaults 0 and +90 before the user's table identified that
-     * their token art is south-facing (looking-at-viewer). Worlds that
-     * upgraded already have a cached value that doesn't match the new
-     * default. We bump those once on ready (see registerFacingOffsetMigration
-     * in setup/hooks.mjs) and then set this flag so the migration never
-     * re-runs — if the GM later picks a different value, we respect it. */
-    game.settings.register(SYSTEM_ID, "tokenFacingOffsetMigratedV1", {
-        scope: "world",
-        config: false,
-        type: Boolean,
-        default: false
+        default: 1
     });
 
     /* Stamina spent per adrenaline die (RAW default 10, Core p.176). Only
@@ -518,6 +494,49 @@ export function registerSettings() {
             hint: "Toggle the recovery penalty on/off, tune the WILL-save threshold multiplier and post-save clear target, set the breakdown-cap-before-handover, and adjust the stress granted by each critical wound severity. Boon / break tables and stress-shield dice live in the Status Effects editor.",
             icon: "fa-solid fa-brain",
             type: StressConfigApp,
+            restricted: true
+        });
+    }
+
+    /* Combat Extended — combat-actions override map. Always registered so
+     * GM edits survive a toggle flip; the editor menu is only attached to
+     * the Configure Settings panel when extendedCombat is currently on.
+     * No requiresReload — getActiveCombatActions() reads the live setting
+     * on every call so changes propagate to the next attack/defense roll. */
+    game.settings.register(SYSTEM_ID, "combatActionsOverride", {
+        scope: "world",
+        config: false,
+        type: Object,
+        default: {}
+    });
+    /* Combat Extended — per-subsystem toggle map. GM can switch off any
+     * single subsystem (guards / raiseShield / actionCosts / defenseCosts)
+     * without disabling the whole CE suite. Missing keys default to true
+     * (see isCESubsystemEnabled). Edited through the Combat Actions
+     * editor's Subsystems section. */
+    game.settings.register(SYSTEM_ID, "combatExtendedSubsystems", {
+        scope: "world",
+        config: false,
+        type: Object,
+        default: {}
+    });
+    /* Combat Extended — secondary tuneable knobs (defense recurrence on/off,
+     * raise-shield auto-balance, head-cover Restricted Vision, etc.).
+     * Missing keys fall back to CE_TUNEABLE_DEFAULTS. Persisted as an
+     * Object so the editor can round-trip the diff. */
+    game.settings.register(SYSTEM_ID, "combatExtendedTuneables", {
+        scope: "world",
+        config: false,
+        type: Object,
+        default: {}
+    });
+    if (game.settings.get(SYSTEM_ID, "homebrew.extendedCombat")) {
+        game.settings.registerMenu(SYSTEM_ID, "combatActionsEditor", {
+            name:  "WITCHER.CombatExtended.ActionsEditor.Name",
+            label: "WITCHER.CombatExtended.ActionsEditor.Title",
+            hint:  "WITCHER.CombatExtended.ActionsEditor.Hint",
+            icon:  "fa-solid fa-burst",
+            type:  CombatActionsEditor,
             restricted: true
         });
     }

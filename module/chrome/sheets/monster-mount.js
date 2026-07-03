@@ -1,3 +1,4 @@
+import { t, tFormat } from "../lib/i18n.js";
 /**
  * Monster sheet · Mount slot.
  *
@@ -141,7 +142,7 @@ function wireSlot(slot, actor) {
 
     const dropped = await fromUuid(data.uuid);
     if (!dropped || dropped.type !== "mount") {
-      ui.notifications?.warn("Drop a mount-type item here.");
+      ui.notifications?.warn(t("WITCHER.Notify.Mount.DropMount", "Drop a mount-type item here."));
       return;
     }
 

@@ -45,6 +45,7 @@ import {
   actionValue
 } from "../../setup/config.mjs";
 import { clauseFor, runTurnStartMutations } from "../../mechanics/statusEngine.mjs";
+import { ceChokeholdDoTAmount } from "../../mechanics/holdModifiers.mjs";
 import { getLocationSP, decrementArmorSP } from "../chrome/dock.js";
 
 const LEGACY_MOD = "witcher-bug-fixes";   // old namespace — read-only fallback
@@ -67,6 +68,40 @@ function readFlag(effect, key) {
  * Public install
  * ────────────────────────────────────────────────────────────────────────── */
 
+/* Toxicity tier marker ids — kept here so the real-time DoT interval
+ * below can cheaply check "does this actor carry any tier?" without
+ * importing from consume-item.js (would create another circular). */
+const TOXICITY_TIER_STATUS_IDS = [
+  "toxicity-mild", "toxicity-strong", "toxicity-severe", "toxicity-deadly"
+];
+
+/* Wall-clock real-time DoT for toxicity tier markers. worldTime only
+ * advances when something explicitly bumps it (manual buttons, time-flow
+ * modules, combat); for a poisoned character resting at the table while
+ * the GM narrates, the OOC tick path in tickActorOverTime never fires
+ * because no worldTime ever advances. This setInterval runs once per
+ * 3 real seconds (= one in-game turn at default CONFIG.time.turnTime),
+ * GM-only, no-op during active combat. Limited to toxicity tier statuses
+ * so other DoTs (bleed/burning/poison) still need either combat or a
+ * worldTime advance to bite — those have author intent we shouldn't
+ * silently override. */
+const REAL_TIME_DOT_INTERVAL_MS = 3000;
+let _realTimeDotTimer = null;
+function startRealTimeToxicityDotTimer() {
+  if (_realTimeDotTimer) return;
+  _realTimeDotTimer = setInterval(async () => {
+    try {
+      if (!game.user?.isActiveGM) return;
+      if (game.combat?.started) return;
+      for (const actor of game.actors ?? []) {
+        const has = TOXICITY_TIER_STATUS_IDS.some(id => actor.statuses?.has?.(id));
+        if (!has) continue;
+        await applyStatusDotsOverTicks(actor, 1);
+      }
+    } catch (err) { console.warn("witcher-ttrpg-death-march | real-time tox DoT failed", err); }
+  }, REAL_TIME_DOT_INTERVAL_MS);
+}
+
 export function installTickEffects() {
   /* Delete expired effects natively instead of just flagging them. Core
    * defaults expiryAction to "update" (mark duration.expired, keep the
@@ -78,6 +113,11 @@ export function installTickEffects() {
    * the reclaim hooks; it matches what sweepExpiredEffects already does in
    * combat, so the two are consistent. */
   CONFIG.ActiveEffect.expiryAction = "delete";
+
+  /* Kick off the wall-clock toxicity tier DoT timer once the world is
+   * ready. Setting it up at ready (rather than init) means game.actors
+   * is populated and game.user is resolved on the first fire. */
+  Hooks.once("ready", () => { startRealTimeToxicityDotTimer(); });
 
   Hooks.on("updateCombat", async (combat, update) => {
     if (!("turn" in update) && !("round" in update)) return;
@@ -429,8 +469,30 @@ async function applyStatusDots(actor) {
   }
   for (const [id, instances] of counts) {
     const dot = clauseFor(id)?.dot;
-    const amount = Number(dot?.amount) || 0;
+    let amount = Number(dot?.amount) || 0;
+    /* CE Combat Extended chokehold damage — suffocation induced by an
+     * active chokeheld pair uses `3 + max(0, choker.meleeBonus)`
+     * instead of the clause's flat 3. Only fires when CE is on AND
+     * this actor is the TARGET of at least one chokeheld pair; other
+     * sources of suffocation (drowning, poison) still use the flat
+     * clause amount. */
+    if (id === "suffocation") {
+        const ceAmt = ceChokeholdDoTAmount(actor);
+        if (typeof ceAmt === "number") amount = ceAmt;
+    }
     if (amount <= 0) continue;
+    /* Cadence gate: a clause may declare `dot.cadence: N` to mean "fire
+     * the damage every N turns, not every turn". Used by Alchemy Reborn's
+     * toxicity tiers (Slight = every 3 turns, Strong = every 2). Default
+     * cadence 1 → every turn, matching the legacy behaviour. We anchor
+     * on combat.round so two same-cadence effects always fire on the
+     * same rounds (no per-actor drift); out of combat there's no round
+     * counter — caller in tickEffect handles that path separately. */
+    const cadence = Math.max(1, Number(dot?.cadence) || 1);
+    if (cadence > 1) {
+      const round = Number(game.combat?.round) || 0;
+      if (round <= 0 || (round % cadence) !== 0) continue;
+    }
     const ablate = Number(dot?.ablateArmor) || 0;
     for (let i = 0; i < instances; i++) {
       const action = {
@@ -502,6 +564,62 @@ async function tickActorOverTime(actor, delta, turnTime) {
     if (ticks <= 0) continue;
     if (ticks > MAX_OOC_TICKS) ticks = MAX_OOC_TICKS;
     await tickEffect(actor, effect, ticks);
+  }
+  // Status-clause DoTs (poison/bleed/burning/toxicity tiers/etc.) need to
+  // bite out of combat too — a character resting at Severe toxicity should
+  // still bleed HP every 3 seconds of worldTime, not freeze damage until
+  // the next encounter. applyStatusDots in-combat fires once per combat
+  // turn; here we apply it floor(delta/turnTime) times in a single OOC
+  // pass, capped at MAX_OOC_TICKS for safety on long advances.
+  let dotTicks = Math.floor(delta / turnTime);
+  if (dotTicks > MAX_OOC_TICKS) dotTicks = MAX_OOC_TICKS;
+  if (dotTicks > 0) await applyStatusDotsOverTicks(actor, dotTicks);
+}
+
+/* OOC equivalent of applyStatusDots — but BATCHED. Instead of firing
+ * `applyDamageAction` once per virtual turn (which would flood chat with
+ * 200 messages on a 10-minute timeskip), the per-status totals are
+ * summed and applied as a single hit per status: amount × fires ×
+ * instances. Cadence is honoured via floor(ticks / cadence) so a
+ * cadence-3 status still respects its rate. All current Alchemy Reborn
+ * tiers have cadence 1, so the math collapses to amount × ticks ×
+ * instances. Armor ablation runs at most once per OOC sweep (matches
+ * the in-combat "once per turn, not multiplied" invariant). */
+async function applyStatusDotsOverTicks(actor, ticks) {
+  if (!(ticks > 0)) return;
+  const counts = new Map();
+  for (const e of (actor.appliedEffects ?? actor.effects ?? [])) {
+    if (e.disabled || e.system?.isSuppressed) continue;
+    for (const id of (e.statuses ?? [])) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  for (const [id, instances] of counts) {
+    const dot = clauseFor(id)?.dot;
+    let amount = Number(dot?.amount) || 0;
+    /* CE chokehold — see in-combat path above. Same rule applies for
+     * OOC ticks (a chokehold left running over world-time still uses
+     * the choker's melee mod for its per-turn damage). */
+    if (id === "suffocation") {
+        const ceAmt = ceChokeholdDoTAmount(actor);
+        if (typeof ceAmt === "number") amount = ceAmt;
+    }
+    if (amount <= 0) continue;
+    const cadence = Math.max(1, Number(dot?.cadence) || 1);
+    const fires = Math.floor(ticks / cadence);
+    if (fires <= 0) continue;
+    const total = amount * fires * instances;
+    if (total <= 0) continue;
+    const action = {
+      type: "damage",
+      formula: String(total),
+      locations: dot.scope === "all-locations" ? ["everyLocation"] : ["torso"],
+      throughArmor: !!dot.bypassArmor,
+      ablateArmor: Number(dot?.ablateArmor) || 0
+    };
+    // Name the source so the chat line reads as e.g. "Toxicity Severe
+    // (×20 turns)" rather than the bare status label — helps the table
+    // see that this hit represents accumulated OOC ticks.
+    const label = `${statusDisplayLabel(id)} (×${fires}${cadence > 1 ? `/c${cadence}` : ""} turn${fires === 1 ? "" : "s"})`;
+    await applyDamageAction(actor, { name: label }, action);
   }
 }
 

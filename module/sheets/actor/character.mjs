@@ -21,9 +21,10 @@ import { WitcherActorSheet } from "./base.mjs";
 import { healSheetMixin } from "./mixins/healSheetMixin.mjs";
 import { openFumbleDialog }   from "../../chrome/chrome/fumble-dialog.js";
 import { openCriticalDialog } from "../../chrome/chrome/critical-roll.js";
-import { tierForSatiety } from "../../mechanics/foodAndDrink.mjs";
+import { tierForSatiety, isHungerActive, setHungerActive } from "../../mechanics/foodAndDrink.mjs";
 import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 
+import { t, tFormat } from "../../chrome/lib/i18n.js";
 // Statblock cell order + 3-letter abbreviations (BOD / WIL match the
 // printed sheet). LUCK and REP are appended as special cells.
 const STAT_ORDER = ["int", "ref", "dex", "body", "spd", "emp", "will", "cra"];
@@ -45,6 +46,8 @@ export class WitcherCharacterSheet extends healSheetMixin(WitcherActorSheet) {
             castItem(event, target) { return this._onCastItem(target); },
             toggleProfSkill(event, target) { return this._onToggleProfSkill(target); },
             clearIpLog(event, target) { return this._onClearIpLog(); },
+            // Per-actor hunger opt-in — GM checkbox in the tracker strip.
+            toggleHunger(event, target) { return this._onToggleHunger(target); },
             // Saves — prompt for a modifier (shared saveMixin dialog).
             rollStunSave(event, target) { return this.actor.promptSave?.({ type: "stun" }); },
             rollDeathSave(event, target) { return this.actor.promptSave?.({ type: "death" }); },
@@ -55,6 +58,16 @@ export class WitcherCharacterSheet extends healSheetMixin(WitcherActorSheet) {
         }
     };
 
+    /* Persist the hunger opt-in flag from the tracker checkbox. GM-only —
+     * mirrors the same permission gate as satiety edits. Reads the checkbox
+     * state at click time (Foundry has already toggled it by then). */
+    async _onToggleHunger(target) {
+        if (!game.user?.isGM) return;
+        const checked = !!target?.checked;
+        await setHungerActive(this.actor, checked);
+        ui.notifications?.info(`Hunger ${checked ? "enabled" : "disabled"} for ${this.actor.name}.`);
+    }
+
     /* Wipe the IP spending ledger (system.logs.ipLog). This only clears the
      * history readout — it does NOT refund or recompute improvementPoints,
      * which are tracked separately. Confirmed first since it's irreversible. */
@@ -62,7 +75,7 @@ export class WitcherCharacterSheet extends healSheetMixin(WitcherActorSheet) {
         const entries = this.actor.system?.logs?.ipLog ?? [];
         if (!entries.length) return;
         const ok = await foundry.applications.api.DialogV2.confirm({
-            window: { title: "Clear IP Log" },
+            window: { title: t("WITCHER.Dialog.IpLog.Clear", "Clear IP Log") },
             content: `<p>Clear all <strong>${entries.length}</strong> IP log ${entries.length === 1 ? "entry" : "entries"}? This only clears the history — it won't change your IP totals.</p>`
         });
         if (ok) await this.actor.update({ "system.logs.ipLog": [] });
@@ -97,6 +110,42 @@ export class WitcherCharacterSheet extends healSheetMixin(WitcherActorSheet) {
             pm.addEventListener("close", async () => {
                 await this.submit({ render: false }).catch(() => {});
                 this.render(false);
+            });
+        }
+        /* Skill-rank inputs are unnamed (see the template comment): they
+         * display EFFECTIVE rank (source + AE addend) and translate back
+         * on change so the SOURCE is what actually persists. Without this
+         * intercept, an AE-granted rank would either be double-counted
+         * (Foundry writes effective → source, AE re-adds on top) or the
+         * rank input would fight the AE every render. The delegated
+         * change listener bypasses the form-submit path and calls
+         * `actor.update` directly with the source value. */
+        const rankInputs = this.element?.querySelectorAll?.('[data-skill-input]');
+        for (const inp of (rankInputs ?? [])) {
+            if (inp.dataset.wdmRankWired) continue;
+            inp.dataset.wdmRankWired = "1";
+            inp.addEventListener("change", async (ev) => {
+                /* Stop the form-submit chain — this input isn't part of
+                 * the tracked schema binding. */
+                ev.stopPropagation();
+                const addend = Number(inp.dataset.aeAddend) || 0;
+                const stat   = String(inp.dataset.stat  ?? "");
+                const skill  = String(inp.dataset.skill ?? "");
+                if (!stat || !skill) return;
+                let effective = Math.round(Number(inp.value) || 0);
+                /* Clamp to the same window the input's min/max enforce,
+                 * defensively — direct type-in bypasses the min/max
+                 * validation in older browsers. Floor at addend (the AE
+                 * would restore anything below), ceiling at 10. */
+                effective = Math.max(addend, Math.min(10, effective));
+                const source = Math.max(0, effective - addend);
+                try {
+                    await this.actor.update({
+                        [`system.skills.${stat}.${skill}.value`]: source
+                    });
+                } catch (err) {
+                    console.warn("witcher-ttrpg-death-march | skill rank update failed", err);
+                }
             });
         }
     }
@@ -179,7 +228,7 @@ export class WitcherCharacterSheet extends healSheetMixin(WitcherActorSheet) {
         const d = sys.derivedStats ?? {};
         const mb = Number(d.meleeBonus) || 0;
         ctx.derivedPills = [
-            { label: "Stun",    val: d.stun, action: "rollStunSave", title: "Stun save — 1d10 ≤ Stun (Core p.152)" },
+            { label: "Stun",    val: d.stun, action: "rollStunSave", title: t("WITCHER.Dialog.StunSave", "Stun save — 1d10 ≤ Stun (Core p.152)") },
             { label: "Run",     val: d.run },
             { label: "Leap",    val: d.leap },
             { label: "Enc",     val: d.enc },
@@ -226,7 +275,11 @@ export class WitcherCharacterSheet extends healSheetMixin(WitcherActorSheet) {
                 value:   satVal,
                 tier,
                 tierLabel: tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : "",
-                isGM:    !!game.user?.isGM
+                isGM:    !!game.user?.isGM,
+                /* Per-actor hunger opt-in (see foodAndDrink.mjs). Rendered as
+                 * a GM-only checkbox next to the satiety readout; unchecked
+                 * means the hourly sweep skips this actor. */
+                hungerActive: isHungerActive(this.actor)
             };
         } else {
             ctx.satiety = null;

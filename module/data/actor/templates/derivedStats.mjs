@@ -66,6 +66,17 @@ export function derivedStatsSchema() {
             resolve:        num(),
             stun:           num(),
             stunUnmodified: num(),
+            /* Pre-halving snapshots taken in monster.mjs BEFORE the
+             * wound/dying mutates this.stats. monsterVirtualWeapon reads
+             * `refUnmodified` to compute the flat-bonus wound penalty
+             * (penalty = snapshot − current). Declared on the schema so
+             * the prepared data carries them through Foundry's strict
+             * SchemaField cleanup without ambiguity. PC actors leave
+             * them at 0. */
+            refUnmodified:  num(),
+            dexUnmodified:  num(),
+            intUnmodified:  num(),
+            willUnmodified: num(),
             rec:            num(),
             woundThreshold: num(),
             enc:            num(),

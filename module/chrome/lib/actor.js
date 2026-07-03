@@ -20,12 +20,35 @@ import { isAdrenalineEnabled } from "../../api/adrenaline.mjs";
 
 export const VIEWER_OVERRIDE_HOOK = "witcher-ttrpg-death-march:viewerOverrideChanged";
 let _actorOverrideId = null;
+/* When the override targets a TOKEN's synthetic actor (unlinked token),
+ * we ALSO capture the token id so getAssignedActor can resolve back to
+ * the synthetic instead of the shared world actor. Without this, three
+ * unlinked tokens of the same monster would all resolve to the world
+ * actor on every dock interaction — shared HP, shared action budget,
+ * shared everything — even though the tokens themselves have independent
+ * deltas. */
+let _actorOverrideTokenId = null;
 
-export function setActorOverride(actorId) {
-  const next = actorId ? String(actorId) : null;
-  if (next === _actorOverrideId) return;
-  _actorOverrideId = next;
-  Hooks.callAll(VIEWER_OVERRIDE_HOOK, next);
+/* Accept EITHER a string actorId (legacy) OR an Actor instance. When
+ * passed an Actor, we also pull its token reference (synthetic actors
+ * carry .token). Pass null to clear. */
+export function setActorOverride(actorOrId) {
+  let nextActorId = null;
+  let nextTokenId = null;
+  if (actorOrId) {
+    if (typeof actorOrId === "string") {
+      nextActorId = actorOrId;
+    } else if (typeof actorOrId === "object") {
+      // Actor instance — synthetic actors expose their TokenDocument via
+      // `.token`; world actors return null and stay world-resolved.
+      nextActorId = actorOrId.id ?? null;
+      nextTokenId = actorOrId.token?.id ?? null;
+    }
+  }
+  if (nextActorId === _actorOverrideId && nextTokenId === _actorOverrideTokenId) return;
+  _actorOverrideId      = nextActorId;
+  _actorOverrideTokenId = nextTokenId;
+  Hooks.callAll(VIEWER_OVERRIDE_HOOK, nextActorId);
 }
 
 export function getActorOverride() {
@@ -35,12 +58,19 @@ export function getActorOverride() {
 export function getAssignedActor() {
   const u = game?.user;
   if (u?.isGM && _actorOverrideId) {
+    /* Token-scoped override (unlinked token): resolve via the token's
+     * synthetic actor so updates land on the token's delta, not the
+     * shared world actor. Search the active scene; fall back to the
+     * world actor lookup if the token can't be found (scene change,
+     * token deleted, etc.). */
+    if (_actorOverrideTokenId) {
+      const tokenDoc = canvas?.scene?.tokens?.get?.(_actorOverrideTokenId);
+      const synth = tokenDoc?.actor ?? null;
+      if (synth?.type === "character" || synth?.type === "monster") return synth;
+    }
     const override = game.actors?.get?.(_actorOverrideId);
     /* Accept BOTH character and monster overrides — take-control on
-     * turn binds the dock to whichever combatant is up. The dock's
-     * weapon-list render (dock.js renderWeaponList) branches on
-     * actor.type === "monster" to draw inline attacks from
-     * system.combat.attacks alongside any equipped weapon items. */
+     * turn binds the dock to whichever combatant is up. */
     if (override?.type === "character" || override?.type === "monster") return override;
   }
   // A single controlled, owned token drives the dock — so the action-economy
@@ -213,6 +243,14 @@ export function getDockData(actor) {
   // slot pills repaint live. SPD rides along for the movement prompt default.
   const cr  = s.combatRound ?? {};
   const spd = safe(() => Number(s.stats?.spd?.value) || 0, 0);
+  /* Witchers Reborn — Viper · Lightning Fast: the rolled Nd6 bonus (in
+   * meters) is stamped on flags.wr.lightningFastBonus by
+   * wrHeroic.lightningFast and cleared on turn end by
+   * combatRoundMixin.resetCombatRound. Ridden along here so the dock's
+   * Movement pill shows the extended cap live once the heroic is
+   * invoked. */
+  const lightningFastBonus = safe(() =>
+    Number(actor?.flags?.["witcher-ttrpg-death-march"]?.wr?.lightningFastBonus) || 0, 0);
   const combatRound = {
     movementUsed:    !!cr.movementUsed,
     movementMeters:  Number(cr.movementMeters) || 0,
@@ -228,7 +266,8 @@ export function getDockData(actor) {
     runUsed:         !!cr.runUsed,
     defenseCount:    Number(cr.defenseCount) || 0,
     activelyDodging: !!cr.activelyDodging,
-    spd
+    spd,
+    lightningFastBonus
   };
 
   return {

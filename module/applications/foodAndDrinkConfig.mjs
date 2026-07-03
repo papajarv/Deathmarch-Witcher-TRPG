@@ -1,3 +1,4 @@
+import { t, tFormat } from "../chrome/lib/i18n.js";
 /**
  * FoodAndDrinkConfigApp — the GM-facing editor for the numeric knobs of the
  * food & drink homebrew. Opens from Configure Settings → "Food & Drink
@@ -79,7 +80,7 @@ export class FoodAndDrinkConfigApp extends HandlebarsApplicationMixin(Applicatio
         classes: ["witcher-ttrpg-death-march", "wdm-food-drink-config"],
         tag: "form",
         window: {
-            title: "Food & Drink Configuration",
+            title: t("WITCHER.Dialog.FoodAndDrink.Title", "Food & Drink Configuration"),
             icon: "fa-solid fa-utensils",
             resizable: true
         },
@@ -176,7 +177,7 @@ export class FoodAndDrinkConfigApp extends HandlebarsApplicationMixin(Applicatio
         }
 
         await game.settings.set(SYSTEM_ID, "foodAndDrinkConfig", next);
-        ui.notifications.info("Food & Drink config saved.");
+        ui.notifications.info(t("WITCHER.Notify.FoodAndDrink.Saved", "Food & Drink config saved."));
 
         // requiresReload:true → prompt for a reload so the satiety tick,
         // hunger tier ranges, and drunk roll metadata pick up fresh values.

@@ -25,7 +25,7 @@
         <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
         <div class="wdm-w3-titles">
           <h1 class="wdm-w3-title">{{item.name}}</h1>
-          <div class="wdm-w3-subtitle">Container</div>
+          <div class="wdm-w3-subtitle">{{localize 'WITCHER.Sheet.Container.Text.Container'}}</div>
         </div>
       </header>
 
@@ -45,7 +45,7 @@
       <ul class="wdm-w3-stats">
         <li class="wdm-w3-stat">
           <span class="val">{{contentCount}}</span>
-          <span class="lbl">Items Stored</span>
+          <span class="lbl">{{localize 'WITCHER.Sheet.Container.Text.ItemsStored'}}</span>
         </li>
       </ul>
 
@@ -54,12 +54,12 @@
       {{/if}}
 
       <div class="wdm-w3-footer">
-        <span class="wdm-w3-foot-cell" title="Empty weight (kg)"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Container.Tooltip.EmptyWeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
         {{#if source.equipped}}
-          <span class="wdm-w3-foot-cell" title="Equipped"><i class="fa-solid fa-person-walking-luggage"></i>Worn</span>
+          <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Container.Tooltip.Equipped'}}"><i class="fa-solid fa-person-walking-luggage"></i>Worn</span>
         {{/if}}
         <span class="wdm-w3-foot-spacer"></span>
-        <span class="wdm-w3-foot-cell wdm-w3-price" title="Crowns"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Sheet.Container.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
       </div>
 
     </div>
@@ -72,39 +72,39 @@
     <div class="wdm-cfg-form">
 
       <div class="wdm-cfg-head">
-        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
-        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Container name" />
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Container.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Container.Hint.ContainerName'}}" />
       </div>
 
-      <div class="wdm-cfg-section">Capacity</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Container.Text.Capacity'}}</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span>Capacity (kg)</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Container.Text.CapacityKg'}}</span>
           <input type="number" min="0" step="0.1" name="system.carry" value="{{source.carry}}"
-                 title="Maximum weight this container can hold. 0 = unlimited." />
+                 title="{{localize 'WITCHER.Sheet.Container.Tooltip.MaximumWeightThisContainerCanHold0Unlimi'}}" />
         </label>
-        <label class="wdm-cfg-row"><span>Equipped</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Container.Text.Equipped'}}</span>
           <input type="checkbox" name="system.equipped" {{#if source.equipped}}checked{{/if}}
-                 title="Worn / carried on the body." />
+                 title="{{localize 'WITCHER.Sheet.Container.Tooltip.WornCarriedOnTheBody'}}" />
         </label>
       </div>
 
-      <div class="wdm-cfg-section">Procurement</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Container.Text.Procurement'}}</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span>Empty Weight (kg)</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Container.Text.EmptyWeightKg'}}</span>
           <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
         </label>
-        <label class="wdm-cfg-row"><span>Cost</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Container.Text.Cost'}}</span>
           <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
         </label>
-        <label class="wdm-cfg-row"><span>Quantity</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Container.Text.Quantity'}}</span>
           <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
         </label>
       </div>
 
       {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
 
-      <div class="wdm-cfg-section">Description</div>
-      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="What it looks like, where it's worn…">{{source.description}}</textarea>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Container.Text.Description'}}</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="{{localize 'WITCHER.Sheet.Container.Hint.WhatItLooksLikeWhereItSWorn'}}">{{source.description}}</textarea>
 
     </div>
   </div>

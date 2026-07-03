@@ -1,15 +1,17 @@
 /**
  * Canvas-rotation movement charge.
  *
- * RAW houserule (per request): rotating a token IN PLACE costs movement
- * from the actor's per-turn budget. 90° of cumulative rotation = 1m of
- * movement spent; sub-90° rotations accumulate until they cross the
- * threshold (two 45° turns = 1m). Pure facing changes are gated:
+ * Houserule: rotating a token IN PLACE costs movement from the actor's
+ * per-turn budget. The conversion rate is configurable via the system
+ * setting `rotationMovementPer90` (default 1m per 90°). Sub-90° rotations
+ * accumulate until they cross the threshold (two 45° turns = 1m at the
+ * default rate). Pure facing changes are gated:
  *
  *   - Out of combat: free (no budget).
  *   - In combat, on the actor's own turn: charged via `recordMovement`.
  *     If the actor has no movement budget left, the rotation is BLOCKED
  *     (preUpdateToken returns false → Foundry snaps the rotation back).
+ *   - Setting at 0: rotation is free even in combat.
  *
  * Rotations bundled with a token x/y change (drag-while-rotating) are
  * NOT charged here — the move itself is the dominant cost and is handled
@@ -21,7 +23,20 @@
  */
 
 const SYSTEM_ID = "witcher-ttrpg-death-march";
-const DEG_PER_MOVEMENT_UNIT = 90;   // 90° = 1m of movement (user spec)
+const DEG_PER_ROTATION_UNIT = 90;   // 90° of rotation = 1 charging unit
+
+/* Movement meters charged per 90° of rotation. GM-configurable via
+ * the `rotationMovementPer90` setting. 0 = rotation is free. The value
+ * is read lazily so a GM change takes effect on the next rotation
+ * without a reload. */
+function metersPerRotationUnit() {
+    try {
+        const v = Number(game.settings?.get?.(SYSTEM_ID, "rotationMovementPer90"));
+        return Number.isFinite(v) && v > 0 ? v : 0;
+    } catch (_) {
+        return 0;
+    }
+}
 
 /** Shortest signed angular distance between two angles (degrees), wrapped
  *  to (-180, 180]. Magnitude is what we charge. */
@@ -86,21 +101,23 @@ function onPreUpdateToken(tokenDoc, changes, options, userId) {
     const delta   = Math.abs(shortestAngleDelta(fromDeg, toDeg));
     if (delta <= 0) return;
 
+    /* GM-configured meters per 90° unit. 0 = rotation is free. */
+    const metersPerUnit = metersPerRotationUnit();
+    if (metersPerUnit <= 0) return;   // free rotation — skip the charge
+
     /* Accumulate + see if we crossed 90° thresholds. */
     const prior = readAccum(actor.id);
     const total = prior + delta;
-    const chargeUnits = Math.floor(total / DEG_PER_MOVEMENT_UNIT);
-    if (chargeUnits <= 0) {
+    const units = Math.floor(total / DEG_PER_ROTATION_UNIT);
+    if (units <= 0) {
         // Below threshold — bank the rotation, allow the update.
         writeAccum(actor.id, total);
         return;
     }
 
-    /* Speculative charge: try to record the movement BEFORE allowing the
-     * rotation. recordMovement returns true on success, false on refusal
-     * (no budget / stunned / wrong turn / full-round-locked). On refusal
-     * we restore the accumulator and block the rotation. */
-    const residue = total - chargeUnits * DEG_PER_MOVEMENT_UNIT;
+    /* Meters of movement to charge for the units crossed. */
+    const chargeMeters = units * metersPerUnit;
+    const residue = total - units * DEG_PER_ROTATION_UNIT;
     /* recordMovement is async; preUpdate hooks can't await. We optimistically
      * commit the accumulator + dispatch the recordMovement; if it fails the
      * snap-back hook will run via the rollback flag. Synchronously check the
@@ -119,25 +136,23 @@ function onPreUpdateToken(tokenDoc, changes, options, userId) {
     const runMul = actor._round?.runUsed ? 3 : 1;
     const cap = spd ? spd * runMul : 0;
     const remaining = cap ? Math.max(0, cap - prior_m) : Infinity;
-    if (cap && chargeUnits > remaining) {
-        ui.notifications?.warn(`Can't rotate ${delta}° — would cost ${chargeUnits}m of movement but only ${remaining}m left this turn.`);
+    if (cap && chargeMeters > remaining) {
+        ui.notifications?.warn(`Can't rotate ${delta}° — would cost ${chargeMeters}m of movement but only ${remaining}m left this turn.`);
         return false;
     }
 
     /* All pre-checks passed — bank the residue + record the meters spent
      * in the per-actor running total (so a subsequent canvas drag's
      * post-update writer can ADD them on top of path-history meters and
-     * not erase the rotation cost), then ASYNC charge the movement.
-     * We don't await; the rotation visual commits immediately and the
-     * budget update lands microtasks later. */
+     * not erase the rotation cost), then ASYNC charge the movement. */
     writeAccum(actor.id, residue);
     rotationMetersSpent.set(
         actor.id,
-        (Number(rotationMetersSpent.get(actor.id)) || 0) + chargeUnits
+        (Number(rotationMetersSpent.get(actor.id)) || 0) + chargeMeters
     );
     Promise.resolve().then(async () => {
         try {
-            const ok = await actor.recordMovement(chargeUnits);
+            const ok = await actor.recordMovement(chargeMeters);
             if (!ok) {
                 /* Edge case: budget refused at the actor level even though our
                  * pre-check passed (race with another concurrent move). Revert
@@ -145,7 +160,7 @@ function onPreUpdateToken(tokenDoc, changes, options, userId) {
                 writeAccum(actor.id, prior + delta);
                 rotationMetersSpent.set(
                     actor.id,
-                    Math.max(0, (Number(rotationMetersSpent.get(actor.id)) || 0) - chargeUnits)
+                    Math.max(0, (Number(rotationMetersSpent.get(actor.id)) || 0) - chargeMeters)
                 );
                 try {
                     await tokenDoc.update({ rotation: fromDeg }, { wdmRollback: true });

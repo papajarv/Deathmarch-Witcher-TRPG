@@ -33,6 +33,14 @@ export class ShieldData extends foundry.abstract.TypeDataModel {
             // Pavise-style full cover (Core p.81); `effect` carries any other
             // special rule as free text.
             fullCover: new fields.BooleanField({ initial: false }),
+            // Cover Value (Equipment Overhaul / Combat Extended): how many
+            // hit locations this shield can cover via the Raise Shield
+            // action. CV 1 = one location; CV 2-3 typical for bucklers /
+            // round shields; CV 6+ = full cover (no picker, all locations);
+            // CV 7+ also too unwieldy to Parry / Block in melee (cover only).
+            // Schema present always so values survive a CE toggle flip;
+            // surfaced on the shield item sheet only when CE is on.
+            coverValue: num(),
             effect:    new fields.HTMLField({ initial: "" }),
             // Wielding model — a shield is a plain one-handed (or two-handed
             // pavise) hand item. It is NEVER a quick item: it occupies a full

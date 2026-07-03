@@ -20,6 +20,9 @@ import {
     BRAWL_ACTIONS, BRAWL_GROUPS, STRIKE_TYPES, ATTACK_LOCATIONS,
     ATTACK_MODIFIERS, EXTRA_ACTION
 } from "../setup/config.mjs";
+import { getHoldsSync } from "../mechanics/holdRegistry.mjs";
+import { normalizedActorUuid } from "../mechanics/holdLink.mjs";
+import { isCombatExtendedEnabled } from "../api/homebrew.mjs";
 
 const esc = (s) => Handlebars.escapeExpression(String(s ?? ""));
 const L   = (k) => game.i18n.localize(k);
@@ -35,7 +38,9 @@ function actionView(meta) {
         isDefense:  meta.kind === "defense",
         isGrapple:  meta.kind === "grapple",
         showStrike: !!meta.strikes && !meta.forceStrike,
-        showLocation: !!meta.location,
+        /* `randomLoc: true` forces random hit location — no picker.
+         * RAW-mandated for Trip (kick lands at a random spot). */
+        showLocation: !!meta.location && !meta.randomLoc,
         showSituational: meta.kind !== "defense",
         forcedStrike: meta.forceStrike ?? null
     };
@@ -50,6 +55,63 @@ function buildContent(ctx) {
 
     // Action picker — grouped exactly as BRAWL_GROUPS, with a short to-hit /
     // damage tag per option so the player sees the shape before choosing.
+    /* One-time reads used by the picker's gating logic below.
+     *
+     *   • holdsAnyGrapple — is this actor currently the HOLDER of any
+     *     `grappled` pair? Drives the "grapple prereq" grey-out for
+     *     Pin / Choke / Throw (RAW + CE) and Trip / Disarm / Ride
+     *     (CE additions).
+     *   • _ceOn — the master extendedCombat toggle. Trip / Disarm /
+     *     Ride are standalone in RAW; only CE flips them to
+     *     grapple-gated. */
+    const actorUuid = normalizedActorUuid(ctx.actor);
+    const holdsAnyGrapple = actorUuid
+        ? getHoldsSync(actorUuid).some(p => p.holderUuid === actorUuid && p.kind === "grappled")
+        : false;
+    /* Route through the canonical `isCombatExtendedEnabled()` helper so
+     * this stays in step with everywhere else that reads the CE toggle
+     * (brawlMixin, holdModifiers, statusOverrides). Direct
+     * `game.settings.get(...) === true` had a subtle failure mode: the
+     * setting object's stored value can come back as truthy-but-not-
+     * strict-true depending on how a GM edited it (e.g. a JSON import
+     * that landed `1`), which the strict compare silently dropped. */
+    let _ceOn = false;
+    try { _ceOn = !!isCombatExtendedEnabled(); }
+    catch (_) { /* settings not ready — default to RAW-only gating */ }
+    /* CE grapple-gated actions. Per the user-supplied CE spec:
+     *   Ride  — "You can attempt to climb onto a larger enemy if you're
+     *           grappling them OR on higher ground." Grapple is one of
+     *           two prereqs (the runtime prompt covers the higher-ground
+     *           alternative when the actor isn't currently grappling).
+     *
+     * Trip and Disarm are NOT in this set — per the CE spec they're
+     * STANDALONE actions with enhancements when grappling (Trip gets
+     * double kick + 1d6m tumble + Stun save; Disarm gets a DC 18 steal +
+     * random toss rider). The runtime `ceTripEnhanced` / disarm rider
+     * hooks handle the enhancement; gating them on grapple would break
+     * their standalone use. */
+    const CE_GRAPPLE_GATED = new Set(["ride"]);
+    /* Actions that only exist as valid picks when Combat Extended is on.
+     * Trip / Disarm stay visible under RAW (Core p.163 lists both as
+     * standalone options); the CE-only additions are the ones RAW has
+     * no analogue for. Filtered out of the picker entirely rather than
+     * shown greyed — under RAW they're conceptually not offered at all,
+     * so a "you can't do that" grey-out would misrepresent the ruleset. */
+    const CE_ONLY_ACTIONS = new Set(["ride", "reverseGrapple", "push"]);
+    /* Grapple / Release Grapple contextual visibility. A grappler is
+     * conceptually COMMITTED to their current hold — they don't stand
+     * around looking for a new opponent to grab while still holding the
+     * first one. So when the actor is already the holder of any
+     * grappled pair:
+     *   • the `grapple` (initiate) action is HIDDEN — you're already in
+     *     a grapple, offering a fresh Grapple button here misleads.
+     *   • the `releaseGrapple` action becomes VISIBLE — the voluntary
+     *     end of the hold, which we only offer while there's a hold to
+     *     let go of. Inverse gate: hidden when there's nothing held.
+     * Filtered out (not just greyed) — an unavailable-by-context action
+     * shouldn't take up a picker slot. */
+    const isHolder = holdsAnyGrapple;
+
     const optionFor = (key) => {
         const a = BRAWL_ACTIONS[key];
         const bits = [];
@@ -61,16 +123,76 @@ function buildContent(ctx) {
         // defensive reaction and stays available. Charge additionally needs the
         // whole turn free.
         const needsSlot = a.kind !== "defense";
-        const blocked = (needsSlot && !ctx.canAct) || (a.fullRound && !ctx.canFullRound);
+        /* Escape (RAW Core "Brawling & Wrestling") requires the actor to
+         * currently be in a hold pair. Gate the option so it's greyed
+         * out when there's nothing to escape from. The status set on the
+         * escaping actor mirrors HOLD_STATUSES in mechanics/holdLink. */
+        const heldStatuses = ["grappled", "pinned", "clinched", "chokeheld"];
+        const isHeld = heldStatuses.some(s => ctx.actor?.statuses?.has?.(s));
+        const escapeBlocked = a.requiresHeld && !isHeld;
+        /* Reverse Grapple (CE Combat Extended 2026-07-03) requires the
+         * actor to be grappled but NOT also pinned or choked. Grey out
+         * when either condition fails so the picker mirrors Escape's
+         * "not held" affordance. Same self-state check — no target
+         * lookup needed because reversal is on the actor's own hold. */
+        const isGrappled     = ctx.actor?.statuses?.has?.("grappled") === true;
+        const isPinnedOrChoked = ["pinned", "chokeheld"].some(s => ctx.actor?.statuses?.has?.(s));
+        const reverseBlocked = a.requiresGrappledOnly && (!isGrappled || isPinnedOrChoked);
+        /* Grapple-prereq gate (CE + RAW). Pin / Choke / Throw carry
+         * `needsGrapple: true` in BRAWL_ACTIONS; Trip / Disarm / Ride
+         * flip to grapple-gated under CE via CE_GRAPPLE_GATED. Grey out
+         * when the actor isn't currently the holder of any `grappled`
+         * pair — the picker doesn't know the target yet, so this is
+         * the loose gate (holds ANYONE); the runtime check in
+         * brawlMixin tightens to "holds THIS target" and warns if not. */
+        const wantsGrapple = a.needsGrapple === true || (_ceOn && CE_GRAPPLE_GATED.has(key));
+        const grappleBlocked = wantsGrapple && !holdsAnyGrapple;
+        const blocked = (needsSlot && !ctx.canAct) || (a.fullRound && !ctx.canFullRound) || escapeBlocked || reverseBlocked || grappleBlocked;
         if (needsSlot && !ctx.canAct) bits.push(L("WITCHER.Attack.NeedsAction"));
         else if (a.fullRound && !ctx.canFullRound) bits.push(L("WITCHER.Attack.NeedsFullRound"));
+        else if (escapeBlocked) bits.push("not held");
+        else if (reverseBlocked) bits.push(isPinnedOrChoked ? "pin/choke first" : "not grappled");
+        else if (grappleBlocked) bits.push("no grapple");
         const tail = bits.length ? ` (${bits.join(", ")})` : "";
         const sel  = (key === actionKey && !blocked) ? " selected" : "";
-        return `<option value="${key}"${sel}${blocked ? " disabled" : ""}>${esc(L(a.labelKey))}${esc(tail)}</option>`;
+        /* `data-blocked="1"` is a secondary JS hook: some Chromium/Electron
+         * builds ignore CSS colors on <option> and render disabled options
+         * indistinguishably from enabled ones. The render() handler reads
+         * this attribute on change to snap the picker back to the previous
+         * valid action, so the "non-selectable" contract holds even when the
+         * visual `disabled` fade doesn't paint. Prefixing the label with "⊘"
+         * gives a text-level cue that never depends on the theme. */
+        const prefix = blocked ? "⊘ " : "";
+        return `<option value="${key}"${sel}${blocked ? ' disabled data-blocked="1"' : ""}>${esc(prefix + L(a.labelKey))}${esc(tail)}</option>`;
     };
-    const actionOpts = BRAWL_GROUPS.map(g =>
-        `<optgroup label="${esc(L(g.labelKey))}">${g.actions.map(optionFor).join("")}</optgroup>`
-    ).join("");
+    /* Charging status (from dock's Full Round → Charge) locks the
+     * brawl picker to the Charge action only — user's spec: "only
+     * let me select strong strike". BRAWL_ACTIONS.charge forces
+     * strong strike internally; the fullRound + prone-on-block
+     * rider fire the same way as if picked from a normal menu. */
+    const _isCharging = !!ctx.actor?.statuses?.has?.("charging");
+    /* Filter picker entries by static + contextual visibility. Empty
+     * groups (all their entries filtered out) are also dropped so we
+     * don't render a labeled optgroup with zero children. */
+    const visibleActionsFor = (group) =>
+        group.actions.filter(k => {
+            /* CE-only actions vanish under RAW. */
+            if (!_ceOn && CE_ONLY_ACTIONS.has(k)) return false;
+            /* `grapple` (initiate) hides when the actor is already holding
+             * someone — a fresh Grapple button while committed to a hold
+             * misleads. `releaseGrapple` mirrors: only visible while there
+             * IS a hold to voluntarily let go of. */
+            if (k === "grapple" && isHolder) return false;
+            if (k === "releaseGrapple" && !isHolder) return false;
+            return true;
+        });
+    const actionOpts = _isCharging
+        ? `<optgroup label="${esc(L("WITCHER.Brawl.GroupSpecial"))}">${optionFor("charge")}</optgroup>`
+        : BRAWL_GROUPS.map(g => {
+            const keys = visibleActionsFor(g);
+            if (!keys.length) return "";
+            return `<optgroup label="${esc(L(g.labelKey))}">${keys.map(optionFor).join("")}</optgroup>`;
+        }).join("");
 
     // Strike-type picker (punch/kick only). Charge forces a strong strike and
     // shows it read-only instead.
@@ -194,6 +316,10 @@ function collect(root, ctx) {
     if (meta.fixedLoc) {
         const loc = ATTACK_LOCATIONS[meta.fixedLoc];
         location = { mode: "specific", key: meta.fixedLoc, penalty: 0, mult: loc?.mult ?? 1, label: L(loc?.labelKey ?? meta.fixedLoc) };
+    } else if (meta.randomLoc) {
+        /* Trip (RAW): kick damage to a RANDOM hit location — no picker.
+         * brawlMixin rolls the d10 face after the dialog closes. */
+        location = { mode: "random", kind: "human", penalty: 0, mult: null, label: L("WITCHER.Attack.LocRandomHuman") };
     } else if (view.showLocation) {
         const locVal = q('[name="location"]')?.value || "random:human";
         if (locVal.startsWith("random:")) {
@@ -269,8 +395,13 @@ export async function openBrawlDialog(actor, opts = {}) {
     // Action economy: with no action slot left, attacks/grapples are disabled and
     // only Block (a defensive reaction) remains — so default the picker to it.
     const canAct = actor?.hasActionSlot !== false;
+    /* Charging (from dock's Full Round → Charge) forces the picker to
+     * Charge only — default the initial actionKey so the dialog opens
+     * pre-selected on it. */
+    const isCharging = !!actor?.statuses?.has?.("charging");
+    const initialAction = isCharging ? "charge" : (canAct ? "punch" : "block");
     const ctx = {
-        actor, actionKey: canAct ? "punch" : "block",
+        actor, actionKey: initialAction,
         base: opts.base ?? { total: 0, chips: [] },
         aimMod, forcedExtra, canAct,
         // Gates the full-round Charge action in the picker.
@@ -294,6 +425,17 @@ export async function openBrawlDialog(actor, opts = {}) {
                 // Changing the action swaps which fields apply (strike/location
                 // appear for punch/kick, vanish for grapple/block), so rebuild.
                 if (e.target?.name === "action") {
+                    /* Belt-and-suspenders for the disabled-option contract:
+                     * if the newly-selected option carries data-blocked, snap
+                     * the picker back to the previous valid action and skip
+                     * the rebuild. Handles the Electron/Chromium edge where
+                     * `disabled` on <option> is honored by the OS dropdown
+                     * paint but somehow still commits a value change. */
+                    const opt = e.target.selectedOptions?.[0];
+                    if (opt?.dataset?.blocked === "1") {
+                        e.target.value = ctx.actionKey;
+                        return;
+                    }
                     ctx.actionKey = e.target.value;
                     const host = root.querySelector(".wdm-atk");
                     if (host) host.outerHTML = buildContent(ctx);

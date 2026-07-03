@@ -6,17 +6,23 @@
    ========================================================================= */
 
 body.witcher-ttrpg-death-march #wdm-token-hud {
-  width: 240px;
-  padding: 8px 10px 10px;
+  width: 15rem;
+  padding: 0.5rem 0.625rem 0.625rem;
   font-family: var(--wdm-font-body, sans-serif);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--wdm-ink-hi, #e8e1cb);
+  /* Scale-tracking is driven by the shared `[data-wdm-scaled="1"]` rule
+   * in tokens.css — the popup-scale hook (chrome/setup/popup-scale.js)
+   * stamps that attribute on this HUD, so it picks up the same
+   * transform: scale(--wdm-popup-scale) treatment Foundry popups get.
+   * Auto: viewport-DPI picked, Manual: UI slider, Detailed: Popups
+   * slider independently of the UI slider. */
   background:
-    radial-gradient(ellipse 280px 140px at 50% 0%, rgba(184, 148, 100, 0.13), transparent 75%),
+    radial-gradient(ellipse 17.5rem 8.75rem at 50% 0%, rgba(184, 148, 100, 0.13), transparent 75%),
     linear-gradient(180deg, rgba(22, 18, 13, 0.96) 0%, rgba(10, 9, 8, 0.96) 100%);
   border: 1px solid var(--wdm-amber-dim, #6b5a3a);
   box-shadow:
-    0 6px 18px rgba(0, 0, 0, 0.65),
+    0 0.375rem 1.125rem rgba(0, 0, 0, 0.65),
     0 0 0 1px rgba(0, 0, 0, 0.4),
     inset 0 0 0 1px rgba(184, 148, 100, 0.10);
   pointer-events: auto;
@@ -27,9 +33,9 @@ body.witcher-ttrpg-death-march #wdm-token-hud {
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-titlebar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 6px 4px 4px;
-  margin: -8px -10px 8px -10px;  /* span the panel padding */
+  gap: 0.375rem;
+  padding: 0.25rem 0.375rem 0.25rem 0.25rem;
+  margin: -0.5rem -0.625rem 0.5rem -0.625rem;  /* span the panel padding */
   background: linear-gradient(180deg, rgba(184, 148, 100, 0.10) 0%, transparent 100%);
   border-bottom: 1px solid var(--wdm-amber-dim, #6b5a3a);
   cursor: grab;
@@ -40,8 +46,8 @@ body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-titlebar:active {
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-portrait {
   flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
   border: 1px solid var(--wdm-amber-dim, #6b5a3a);
   object-fit: cover;
@@ -50,7 +56,7 @@ body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-portrait {
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-title {
   flex: 1 1 auto;
   font-family: var(--wdm-font-display, "Bebas Neue", serif);
-  font-size: 12px;
+  font-size: 0.75rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--wdm-amber-bright, #c8a878);
@@ -61,8 +67,8 @@ body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-title {
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-close {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 1.375rem;
+  height: 1.375rem;
   padding: 0;
   background: transparent;
   border: 1px solid transparent;
@@ -84,15 +90,15 @@ body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-body {
 
 /* ─────── SECTIONS ─────── */
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-section {
-  margin-top: 8px;
+  margin-top: 0.5rem;
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-section-label {
   font-family: var(--wdm-font-display, sans-serif);
-  font-size: 10px;
+  font-size: 0.625rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--wdm-ink-dim, #8e8470);
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 /* Collapsible sections (<details>): hide the native marker, use our own
    chevron that rotates 90° when open. Summary stays click-friendly. */
@@ -100,13 +106,13 @@ body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-section-collapsible > sum
   list-style: none;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   cursor: pointer;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-section-collapsible > summary::-webkit-details-marker { display: none; }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-chev {
-  font-size: 9px;
+  font-size: 0.5625rem;
   color: var(--wdm-amber-hi, #b89464);
   transition: transform 0.18s ease-out, color 0.18s ease-out;
 }
@@ -125,19 +131,19 @@ body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-section-collapsible:not([
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-section-collapsible[data-section="statuses"][open] > summary .wdm-hud-chev {
   color: var(--wdm-amber-bright, #c8a878);
-  transform: translateX(2px);
+  transform: translateX(0.125rem);
 }
 
 /* ─────── BUTTON ROWS ─────── */
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-row,
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-foot {
   display: flex;
-  gap: 4px;
+  gap: 0.25rem;
   flex-wrap: wrap;
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-foot {
-  margin-top: 10px;
-  padding-top: 8px;
+  margin-top: 0.625rem;
+  padding-top: 0.5rem;
   border-top: 1px solid rgba(184, 148, 100, 0.18);
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-btn {
@@ -145,14 +151,14 @@ body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 5px 8px;
+  gap: 0.3125rem;
+  padding: 0.3125rem 0.5rem;
   background: rgba(184, 148, 100, 0.06);
   border: 1px solid var(--wdm-amber-dim, #6b5a3a);
   border-radius: 0;
   color: var(--wdm-amber-bright, #c8a878);
   font-family: var(--wdm-font-display, sans-serif);
-  font-size: 10px;
+  font-size: 0.625rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   cursor: pointer;
@@ -168,7 +174,7 @@ body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-btn.is-on {
   color: var(--wdm-ink-hi, #e8e1cb);
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-btn i {
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 /* ─────── STATUS GRID ─────── */
@@ -184,20 +190,20 @@ body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-section-collapsible[data-
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-status-grid {
   display: grid;
-  grid-template-columns: repeat(8, 28px);
-  gap: 3px;
+  grid-template-columns: repeat(8, 1.75rem);
+  gap: 0.1875rem;
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-section-collapsible[data-section="statuses"][open] > .wdm-hud-status-grid {
   position: absolute;
-  top: -6px;
-  left: calc(100% + 8px);
-  padding: 8px;
+  top: -0.375rem;
+  left: calc(100% + 0.5rem);
+  padding: 0.5rem;
   background:
-    radial-gradient(ellipse 280px 140px at 50% 0%, rgba(184, 148, 100, 0.13), transparent 75%),
+    radial-gradient(ellipse 17.5rem 8.75rem at 50% 0%, rgba(184, 148, 100, 0.13), transparent 75%),
     linear-gradient(180deg, rgba(22, 18, 13, 0.96) 0%, rgba(10, 9, 8, 0.96) 100%);
   border: 1px solid var(--wdm-amber-dim, #6b5a3a);
   box-shadow:
-    0 6px 18px rgba(0, 0, 0, 0.65),
+    0 0.375rem 1.125rem rgba(0, 0, 0, 0.65),
     0 0 0 1px rgba(0, 0, 0, 0.4),
     inset 0 0 0 1px rgba(184, 148, 100, 0.10);
   z-index: 1;
@@ -239,11 +245,11 @@ body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-status.is-active img {
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-status-count {
   position: absolute;
-  right: 1px;
+  right: 0.0625rem;
   bottom: 0;
-  min-width: 14px;
-  padding: 0 3px;
-  font: 700 10px/1.2 var(--wdm-display-font, system-ui, sans-serif);
+  min-width: 0.875rem;
+  padding: 0 0.1875rem;
+  font: 700 0.625rem/1.2 var(--wdm-display-font, system-ui, sans-serif);
   text-align: center;
   color: var(--wdm-amber-bright, #c8a878);
   background: rgba(10, 9, 7, 0.85);
@@ -255,21 +261,21 @@ body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-status-count {
 /* ─────── VITALITY BARS ─────── */
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-bar {
   display: grid;
-  grid-template-columns: 28px 1fr auto;
+  grid-template-columns: 1.75rem 1fr auto;
   align-items: center;
-  gap: 6px;
-  padding: 2px 0;
+  gap: 0.375rem;
+  padding: 0.125rem 0;
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-bar-label {
   font-family: var(--wdm-font-display, sans-serif);
-  font-size: 10px;
+  font-size: 0.625rem;
   letter-spacing: 0.10em;
   text-transform: uppercase;
   color: var(--wdm-ink-dim, #8e8470);
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-bar-track {
   position: relative;
-  height: 8px;
+  height: 0.5rem;
   background: var(--wdm-bg-deep, #0a0907);
   border: 1px solid rgba(184, 148, 100, 0.22);
 }
@@ -289,7 +295,7 @@ body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-bar-fill[data-kind="sta"]
 }
 body.witcher-ttrpg-death-march #wdm-token-hud .wdm-hud-bar-num {
   font-family: var(--wdm-font-mono, monospace);
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--wdm-ink-hi, #e8e1cb);
   white-space: nowrap;
 }

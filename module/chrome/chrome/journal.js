@@ -23,6 +23,7 @@
 import { getAssignedActor, VIEWER_OVERRIDE_HOOK } from "../lib/actor.js";
 import { renderViewAsPicker, wireViewAsPicker } from "../lib/view-as.js";
 
+import { t, tFormat } from "../lib/i18n.js";
 const MODULE_ID = "witcher-ttrpg-death-march";
 const PANEL_ID  = "wou-journal";
 
@@ -256,10 +257,10 @@ function positionBounds() {
   const left   = (leftOpen   && leftbar)? Math.max(0, leftbar.getBoundingClientRect().right) : 0;
   const right  = (rightOpen  && sidebar)? Math.max(0, W - sidebar.getBoundingClientRect().left) : 0;
 
-  panelEl.style.top    = `${top}px`;
-  panelEl.style.bottom = `${bottom}px`;
-  panelEl.style.left   = `${left}px`;
-  panelEl.style.right  = `${right}px`;
+  panelEl.style.top = `calc(${top}px / var(--wdm-scale, 1))`;
+  panelEl.style.bottom = `calc(${bottom}px / var(--wdm-scale, 1))`;
+  panelEl.style.left = `calc(${left}px / var(--wdm-scale, 1))`;
+  panelEl.style.right = `calc(${right}px / var(--wdm-scale, 1))`;
 
   /* Pin the close-arrow chevron to the center of the topbar Journal tab so it
    * always reads as "this is what closes the panel you just opened". Stored
@@ -274,7 +275,12 @@ function positionBounds() {
 }
 
 function wireChromeObservers() {
-  const reposition = () => requestAnimationFrame(positionBounds);
+  /* Coalesced: one positionBounds per frame regardless of trigger count. */
+  let _pending = 0;
+  const reposition = () => {
+    if (_pending) return;
+    _pending = requestAnimationFrame(() => { _pending = 0; positionBounds(); });
+  };
   if ("ResizeObserver" in window) {
     _chromeResizeObs = new ResizeObserver(reposition);
     for (const sel of CHROME_SELECTORS) {
@@ -372,7 +378,7 @@ async function getOrCreateJournal(actor) {
     return journal;
   } catch (e) {
     console.warn(`${MODULE_ID} | could not create journal for ${actor.name}`, e);
-    ui.notifications?.warn("Could not create journal — ask your GM to enable journal creation for players.");
+    ui.notifications?.warn(t("WITCHER.Notify.Journal.CreateBlocked", "Could not create journal — ask your GM to enable journal creation for players."));
     return null;
   }
 }
@@ -1505,7 +1511,7 @@ async function onClick(ev) {
       let confirmed = false;
       try {
         confirmed = await DialogV2.confirm({
-          window: { title: "Delete relationship" },
+          window: { title: t("WITCHER.Dialog.Journal.DeleteRelationship", "Delete relationship") },
           content: `<p>Delete <b>${escapeHTML(displayName)}</b>?  Their portrait, bio, personality tags, and recorded events will all be lost.  This can't be undone.</p>`,
           modal: true,
           rejectClose: false,
@@ -1586,7 +1592,7 @@ async function onClick(ev) {
 function openPortraitPicker(actor, relId, currentPath) {
   const FP = foundry.applications?.apps?.FilePicker?.implementation ?? globalThis.FilePicker;
   if (!FP) {
-    ui.notifications?.error?.("FilePicker not available.");
+    ui.notifications?.error?.(t("WITCHER.Notify.Journal.NoFilePicker", "FilePicker not available."));
     return;
   }
   const fp = new FP({
@@ -1597,7 +1603,7 @@ function openPortraitPicker(actor, relId, currentPath) {
       if (!clean) return;
       const ext = clean.split(".").pop()?.toLowerCase();
       if (!PORTRAIT_EXTS.includes(ext)) {
-        ui.notifications?.warn?.(`Portrait must be PNG, JPEG, or WebP — got .${ext}.`);
+        ui.notifications?.warn?.(tFormat("WITCHER.Notify.Journal.PortraitFormat", { ext: ext }, "Portrait must be PNG, JPEG, or WebP — got .{ext}."));
         return;
       }
       await updateRelationship(actor, relId, { portrait: clean });
@@ -1725,7 +1731,7 @@ async function createNewPage(journal) {
     return created;
   } catch (e) {
     console.warn(`${MODULE_ID} | failed to create page`, e);
-    ui.notifications?.warn("Could not create page.");
+    ui.notifications?.warn(t("WITCHER.Notify.Journal.PageCreateFailed", "Could not create page."));
     return null;
   }
 }
@@ -1787,7 +1793,7 @@ async function confirmDeletePage(journal, pageId) {
   let confirmed = false;
   try {
     confirmed = await DialogV2.confirm({
-      window: { title: "Delete page" },
+      window: { title: t("WITCHER.Dialog.Journal.DeletePage", "Delete page") },
       content: `<p>Delete "<b>${escapeHTML(page.name)}</b>"?  This can't be undone.</p>`,
       modal: true,
       rejectClose: false

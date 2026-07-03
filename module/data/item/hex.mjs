@@ -36,6 +36,45 @@ export class HexData extends foundry.abstract.TypeDataModel {
             // Severity rating — low | medium | high.
             danger:      new fields.StringField({ initial: "medium" }),
             effect:      new fields.HTMLField({ initial: "" }),
+            // Structured damage the hex deals on a successful weave. Empty
+            // formula = non-damaging (nearly all RAW hexes fall here — the
+            // 12 corpus items all impose long-term status penalties, not
+            // HP damage). Same shape as SpellData.damageFormula, including
+            // {sta}/{margin} placeholder support for future scaling.
+            damageFormula: new fields.StringField({ initial: "" }),
+            damageElement: new fields.StringField({ initial: "none" }),
+            damageType:    new fields.StringField({ initial: "none" }),
+            // Tangibility — see spell.mjs. Hexes are typically INTANGIBLE
+            // (curses working through magic rather than physical impact),
+            // so the default is FALSE for hexes. Author flips it on for
+            // the rare hex that delivers physical damage.
+            tangible: new fields.BooleanField({ initial: false }),
+            // Area shape + size — used for cursed-area hexes (none currently
+            // in RAW; kept for parity with SpellData in case a GM authors
+            // an area-effect hex).
+            areaShape: new fields.StringField({ initial: "none" }),
+            areaSize:  new fields.NumberField({ initial: 0, integer: false, min: 0 }),
+            // See SpellData.areaAnchor. Caster-anchored curses (an aura
+            // around the hexer) vs free-placed (a cursed patch of ground
+            // in the distance). Default caster.
+            areaAnchor: new fields.StringField({ initial: "caster" }),
+            // Status effect riders — mirrors SpellData (see spell.mjs for
+            // full docs on mode / stripOnExit / staScale semantics).
+            statusRiders: new fields.ArrayField(new fields.SchemaField({
+                statusId:    new fields.StringField({ required: true, blank: false }),
+                chance:      new fields.NumberField({ initial: 100, integer: true, min: 0, max: 100 }),
+                duration:    new fields.SchemaField({
+                    value: new fields.StringField({ initial: "" }),
+                    unit:  new fields.StringField({ initial: "instant" })
+                }),
+                mode:        new fields.StringField({ initial: "onHit" }),
+                stripOnExit: new fields.BooleanField({ initial: true }),
+                staScale:    new fields.SchemaField({
+                    offset:  new fields.NumberField({ initial: 0, integer: true }),
+                    divisor: new fields.NumberField({ initial: 1, integer: true, min: 1 }),
+                    cap:     new fields.NumberField({ initial: 0, integer: true })
+                })
+            })),
             // What it takes to break the curse (RAW "lifting requirement").
             liftRequirement: new fields.HTMLField({ initial: "" }),
             // Required materials, as links to real items (any type), each
@@ -45,7 +84,35 @@ export class HexData extends foundry.abstract.TypeDataModel {
                 name: new fields.StringField(),
                 img:  new fields.StringField(),
                 qty:  new fields.NumberField({ initial: 1, integer: true, min: 1 })
-            }))
+            })),
+            // Narrative-only escape hatch (see SpellData.narrative).
+            narrative: new fields.BooleanField({ initial: false }),
+            // Handler registry key (see SpellData.mechanicHandler).
+            mechanicHandler: new fields.StringField({ initial: "" }),
+            // Clone the hex item's authored AEs onto the target on
+            // successful hex — see SpellData.castsAuthoredAE. Some
+            // hexes (Bones of Glass, Hex of Forgetfulness) are best
+            // authored as AEs on the item since the effect is a
+            // static list of stat/skill deltas.
+            castsAuthoredAE: new fields.BooleanField({ initial: false }),
+            // See SpellData.areaPersist / areaExcludeCaster — a rare
+            // cursed-area hex needs these too (a Zone of Ill Omen aura).
+            areaPersist:       new fields.BooleanField({ initial: false }),
+            areaExcludeCaster: new fields.BooleanField({ initial: true }),
+            // Escape check for shakeable curses (Curse of Sedna's slow-
+            // drowning check, some Journeyman hexes). See SpellData.
+            escapeCheck: new fields.SchemaField({
+                skill:          new fields.StringField({ initial: "" }),
+                dcSource:       new fields.StringField({ initial: "castRoll" }),
+                dcDrift:        new fields.NumberField({ initial: 0, integer: true }),
+                cadence:        new fields.StringField({ initial: "round" }),
+                consumesAction: new fields.BooleanField({ initial: false })
+            }),
+            // Per-round escalation (Seirff Haul DC drift).
+            escalationPerRound: new fields.SchemaField({
+                attribute: new fields.StringField({ initial: "" }),
+                delta:     new fields.NumberField({ initial: 0, integer: true })
+            })
         };
     }
 

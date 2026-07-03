@@ -1,0 +1,1789 @@
+{
+  "_comment": "Backfill table for magic pack castables. Keyed on item.name. Full field list: damageFormula, damageElement, damageType, damagePer, hitChance, bypassArmor, areaShape, areaSize, areaAnchor, areaPersist, areaExcludeCaster, statusRiders[{statusId, chance, duration, mode, stripOnExit, staScale}], tangible, narrative, mechanicHandler, defense[], variableCost, duration{value,unit}. Everything omitted stays at schema default. See module/data/item/spell.mjs for authoritative schema.",
+  "Yrden": {
+    "_note": "Errata p.5 authoritative: staScale offset -1, divisor 2, cap -4 → -1/-2/-3/-4 at 1/3/5/7 STA. Hits REF + SPD (clause yrden was corrected). Incorporeal-becomes-corporeal-on-entry is bespoke (handler), noted in effect. | Errata p.5: penalty is -1 base + 1 per 2 extra STA beyond the first, cap -4; SPD and REF only, cleared on exit; incorporeals become corporeal on entry. Persistent 3m radius circle around caster.",
+    "areaShape": "radius",
+    "areaSize": 3,
+    "areaAnchor": "caster",
+    "areaPersist": true,
+    "areaExcludeCaster": true,
+    "duration": {
+      "value": "5",
+      "unit": "rounds"
+    },
+    "defense": [],
+    "variableCost": true,
+    "statusRiders": [
+      {
+        "statusId": "yrden",
+        "chance": 100,
+        "mode": "zone",
+        "stripOnExit": true,
+        "duration": {
+          "value": "",
+          "unit": "instant"
+        },
+        "staScale": {
+          "offset": -1,
+          "divisor": 2,
+          "cap": -4
+        }
+      }
+    ]
+  },
+  "Suffocate": {
+    "_note": "Errata p.4 defense Resist Magic (already correct). Core p.107: 1d10 HP/round, staggered, upkeep 4 STA/round, breaks if caster hit or drops concentration. Damage is per-round; tangibility already false (matches errata's suffocation carve-out).",
+    "damagePer": "round",
+    "damageElement": "none",
+    "statusRiders": [
+      {
+        "statusId": "staggered",
+        "chance": 100,
+        "mode": "onTick",
+        "stripOnExit": false,
+        "duration": {
+          "value": "1",
+          "unit": "rounds"
+        }
+      }
+    ]
+  },
+  "Somne": {
+    "_note": "Unconscious + stunned riders authored (100% each, 8h). stripOnExit cleared (onHit, not zone). Variable STA tiers (2/4/6/7) drive wake-up conditions per RAW — those tier-specific rules are in the effect text; the picker itself is Wave 2 dependency. | Description explicitly says 'falls asleep + Stunned for 8 hours'. Adding stunned rider alongside unconscious. Variable tiers still control wake-up conditions once Wave 2 wires the tier picker. | ATOC p.101 sign — variable STA tiers (2/4/6/7) control how easily target wakes. Falls asleep + Stunned for 8h. Bespoke tier picker + stunned+asleep rider.",
+    "damageType": "none",
+    "statusRiders": [
+      {
+        "statusId": "unconscious",
+        "chance": 100,
+        "mode": "onHit",
+        "stripOnExit": false,
+        "duration": {
+          "value": "8",
+          "unit": "hours"
+        }
+      },
+      {
+        "statusId": "stunned",
+        "chance": 100,
+        "mode": "onHit",
+        "stripOnExit": false,
+        "duration": {
+          "value": "8",
+          "unit": "hours"
+        }
+      }
+    ],
+    "variableTiers": [
+      {
+        "staMin": 2,
+        "label": "Roused by damage/shake/noise"
+      },
+      {
+        "staMin": 4,
+        "label": "Only by damage or action"
+      },
+      {
+        "staMin": 6,
+        "label": "Only by damage or full-round"
+      },
+      {
+        "staMin": 7,
+        "label": "Only by damage"
+      }
+    ]
+  },
+  "Puppet": {
+    "_note": "Ensuring escapeCheck fires: target rolls Resist Magic vs the caster's Spell Casting each round. Duration = STA spent (variable rounds). The 'target becomes your ally' status is bespoke — no matching status clause yet; kept riders empty and let GM narrate the compulsion until we author a 'charmed' or 'controlled' status. | RAW Core p.116: each round the target may Resist Magic vs original cast to break free.",
+    "escapeCheck": {
+      "skill": "resistmagic",
+      "dcSource": "castRoll",
+      "dcDrift": 0,
+      "cadence": "round",
+      "consumesAction": false
+    }
+  },
+  "Mental Command": {
+    "_note": "Core p.108 sidebar 'Shaking Off Commands': target retries Resist Magic vs original cast every 1d6 rounds.",
+    "escapeCheck": {
+      "skill": "resistmagic",
+      "dcSource": "castRoll",
+      "cadence": "1d6rounds",
+      "consumesAction": false
+    }
+  },
+  "Web of Lies": {
+    "_note": "Errata p.5 rewrites: stuns target; once per round on their turn roll 1d10 under INT to end. Errata p.4 defense Resist Magic (already correct). Tangibility already false.",
+    "statusRiders": [
+      {
+        "statusId": "stunned",
+        "chance": 100,
+        "mode": "onHit",
+        "stripOnExit": false,
+        "duration": {
+          "value": "",
+          "unit": "permanent"
+        }
+      }
+    ],
+    "escapeCheck": {
+      "skill": "int",
+      "dcSource": "fixed",
+      "dcDrift": 0,
+      "cadence": "round",
+      "consumesAction": false
+    }
+  },
+  "Bekker's Dark Mirror": {
+    "_note": "ToC p.89: incorporeal mental stat drain — tangible false; bespoke stat-reduction mechanic.",
+    "tangible": false,
+    "narrative": true
+  },
+  "Ainfra's Extraction": {
+    "_note": "Description promises 8d6 STA loss on failed defense. Un-narrative so the STA drain fires. The 'free follow-up cast' (Rhewi/Ice Slick/Water Jet) stays GM-adjudicated. | ToC p.90: incorporeal water/STA drain — tangible false.",
+    "tangible": false,
+    "narrative": false
+  },
+  "Curse of Sedna": {
+    "_note": "Errata p.4 confirms Dodge. Suffocation-via-whirlpool — incorporeal.",
+    "tangible": false,
+    "areaAnchor": "free",
+    "narrative": true
+  },
+  "Aard": {
+    "_note": "Staggered 100% and prone 10% base already in riders (previous fix). Description promises prone chance scaling 10% per extra STA — that's a chance-per-STA pattern the current schema doesn't support (staScale scales magnitude, not chance). Base 10% is the closest correct encoding until a chancePerSta field lands. | Description promises staggered on hit + prone 10% (with STA scaling). Adding staggered 100% rider so it actually applies. Prone STA scaling requires a chance-scaling schema field not yet built — the base 10% remains; STA scaling deferred. | Core p.114: 2m Cone (not 4m). Sign — caster-anchored. Errata p.4 confirms Dodge.",
+    "areaSize": 2,
+    "areaAnchor": "caster",
+    "statusRiders": [
+      {
+        "statusId": "staggered",
+        "chance": 100,
+        "mode": "onHit",
+        "stripOnExit": false,
+        "duration": {
+          "value": "",
+          "unit": "instant"
+        }
+      },
+      {
+        "statusId": "prone",
+        "chance": 10,
+        "mode": "onHit",
+        "stripOnExit": false,
+        "duration": {
+          "value": "",
+          "unit": "instant"
+        }
+      }
+    ]
+  },
+  "Aard Sweep": {
+    "_note": "Riders authored. stripOnExit cleared (they're one-shot onHit riders, not zone). Description says 10% per STA chance for BOTH prone + staggered; same chance-per-STA limitation as Aard. | Core p.115: caster-anchored self-emanating burst.",
+    "areaAnchor": "caster",
+    "statusRiders": [
+      {
+        "statusId": "prone",
+        "chance": 10,
+        "mode": "onHit",
+        "stripOnExit": false,
+        "duration": {
+          "value": "",
+          "unit": "instant"
+        }
+      },
+      {
+        "statusId": "staggered",
+        "chance": 10,
+        "mode": "onHit",
+        "stripOnExit": false,
+        "duration": {
+          "value": "",
+          "unit": "instant"
+        }
+      }
+    ]
+  },
+  "Active Shield": {
+    "_note": "Errata p.115: caster + 1 adjacent ally. Blocks physical only (poison/disease/suffocation pass through the shield). On collapse: 2m push + 1d6 torso to adjacent things. Filling shield.* sub-schema so the primitives are authored (runtime consumption for on-expire push is Wave 4). | Errata p.115: caster-only shield; caster-anchored.",
+    "areaAnchor": "caster",
+    "shield": {
+      "hpPerSta": 10,
+      "regenPerSta": 0,
+      "blocksTangibleOnly": true,
+      "coversAllies": 1,
+      "onExpireEffect": "activeShieldPush"
+    }
+  },
+  "Aenye": {
+    "damageFormula": "4d6",
+    "damageElement": "fire",
+    "damageType": "hp",
+    "statusRiders": [
+      {
+        "statusId": "burning",
+        "chance": 75
+      }
+    ]
+  },
+  "Akhan Daal": {
+    "_note": "A Book of Tales p.166: Range 4m / 2m Radius (stored 6m is wrong). Free-placed AoE.",
+    "areaSize": 2,
+    "areaAnchor": "free"
+  },
+  "Alzur's Thunder": {
+    "_note": "Core p.107: line passes through targets, damage decays 1d6 per hop — encode pierce.",
+    "pierce": {
+      "enabled": true,
+      "decayFormula": "1d6"
+    },
+    "areaAnchor": "free"
+  },
+  "Anialwch": {
+    "_note": "Description says 4d6 damage bypassing armor + 4d6 STA drain. Un-narrative so the HP damage + bypassArmor fires. Secondary STA drain remains prose (bespoke — would need a secondary-damage-type schema field or a handler). | Core p.107: 4d6 damage 'cannot be blocked by armor or shields' → bypassArmor; secondary 4d6 STA drain covered by narrative flag. Tangible false (dehydration).",
+    "bypassArmor": true,
+    "tangible": false,
+    "narrative": false
+  },
+  "Ball Lightning": {
+    "_note": "Description promises 3d6 damage on failed dodge. Un-narrative so the base damage fires. The persistent orb re-attack on later turns is genuinely bespoke — GM adjudicates the followup. | ToC p.87: bespoke re-attack on subsequent turns if first dodge — needs handler beyond schema.",
+    "narrative": false
+  },
+  "Bekker's Rockslide": {
+    "_note": "Primary target takes 6d6 + prone; secondary 6m radius is a second-stage AoE that would need modes[]. Un-narrative the primary hit; secondary handled in prose until Wave 2 wires the 2-stage AoE pattern. | ToC p.86: primary 6d6 Reposition + secondary 6m radius 4d6 DC:16 Athletics with knock-down. Two-stage AoE — narrative flag.",
+    "areaAnchor": "free",
+    "narrative": false
+  },
+  "Blaze of the Korath": {
+    "_note": "ToC p.90: persistent 40m aura, on-cast + on-round + on-entry 2d6 STA drain, Recovery suppressed. Zone persist, per-round tick, incorporeal.",
+    "areaPersist": true,
+    "areaAnchor": "free",
+    "damagePer": "round",
+    "tangible": false
+  },
+  "Brand of Fire": {
+    "_note": "Description says 1d6 damage + permanent scar. Un-narrative so the 1d6 fires; scar is cosmetic/GM prose. | Errata p.4 confirms None defense. Bespoke branding — permanent scar.",
+    "narrative": false
+  },
+  "Breath of Fire": {
+    "_note": "ToC p.84: 4m cone (stored areaSize blank).",
+    "areaSize": 4,
+    "areaAnchor": "caster"
+  },
+  "Bronwyn's Bow": {
+    "_note": "ToC p.83: aids thrown-weapon attack via Spell Casting; damage varies with item — bespoke.",
+    "narrative": true
+  },
+  "Bronwyn's Gust": {
+    "_note": "Description says 1d6 damage + push-per-margin. Un-narrative so 1d6 fires; knockback is bespoke. | Core p.104: damage is FLAT 1d6; margin drives KNOCKBACK METERS, not dice. Stored {margin}d6 formula was wrong.",
+    "damageFormula": "1d6",
+    "narrative": false
+  },
+  "Carys' Hail": {
+    "_note": "Errata p.104 removed 'each roll counts as its own attack' — single margin-scaled resolution now.",
+    "areaAnchor": "free"
+  },
+  "Cenlly Graig": {
+    "_note": "Errata p.102 removed 'Each roll counts as its own attack' — single margin-scaled resolution.",
+    "areaAnchor": "free"
+  },
+  "Cinder Door": {
+    "_note": "4d6 ablation per round for 3 rounds while maintained. damagePer:round is set. Un-narrative so the tick fires; cover-target specifics are still GM-mediated (the cast picks a cover section rather than a token). | ToC p.87: 4d6 ablation/round on cover while maintained; free-placed target. Bespoke cover-ablation.",
+    "damagePer": "round",
+    "areaAnchor": "free",
+    "narrative": false
+  },
+  "Cleansing Fire": {
+    "_note": "Core p.112: duration 'Until Put Out' (fire persists on target).",
+    "duration": {
+      "value": "",
+      "unit": "permanent"
+    }
+  },
+  "Deluge of Ys": {
+    "_note": "ToC p.90: 40m range, 20m cube; free-placed. Defense None per RAW; DC:24 Physique for prone.",
+    "areaAnchor": "free"
+  },
+  "Earthen Spike": {
+    "damageFormula": "5d6",
+    "damageElement": "physical",
+    "damageType": "hp"
+  },
+  "Fire Stream": {
+    "damageFormula": "{sta}d6",
+    "damageElement": "fire",
+    "damageType": "hp",
+    "statusRiders": [
+      {
+        "statusId": "burning",
+        "chance": 75
+      }
+    ],
+    "_note": "Sign — 1d6 fire per STA + burning 75%. Description matches. Upkeep = half casting STA and 'change targets on your turn / aim at specific hit locations' are bespoke maintenance mechanics; noted in effect.",
+    "areaAnchor": "caster"
+  },
+  "Flaming Vortex": {
+    "damageFormula": "5d6",
+    "damageElement": "fire",
+    "damageType": "hp",
+    "statusRiders": [
+      {
+        "statusId": "burning",
+        "chance": 50
+      }
+    ],
+    "_note": "range '10m Radius' → shape/size (free-placed fire vortex).",
+    "areaShape": "radius",
+    "areaSize": 10,
+    "areaAnchor": "free"
+  },
+  "Igni": {
+    "damageFormula": "{sta}d6",
+    "damageElement": "fire",
+    "damageType": "hp",
+    "statusRiders": [
+      {
+        "statusId": "burning",
+        "chance": 50
+      }
+    ],
+    "_note": "Sign — 1d6 fire per STA + burning 50%, 2m caster-anchored cone. Errata p.5 clarifies: always torso EXCEPT at point-blank range where a body location can be aimed. That fixed-location constraint isn't in the schema yet (would need a fixedLocation field or handler); noted in effect text. | Sign — stream of fire from caster's hand. Caster-anchored cone. | range '2m Cone' → shape/size (sign — caster-anchored cone).",
+    "areaShape": "cone",
+    "areaSize": 2,
+    "areaAnchor": "caster"
+  },
+  "Invisible Ribbon": {
+    "damageFormula": "3d6",
+    "damageElement": "air",
+    "damageType": "hp"
+  },
+  "Javed's Swarm": {
+    "damageFormula": "1d6",
+    "damageElement": "none",
+    "damageType": "hp",
+    "statusRiders": [
+      {
+        "statusId": "poisoned",
+        "chance": 100
+      }
+    ]
+  },
+  "Korath's Breath": {
+    "damageElement": "physical",
+    "damageType": "none",
+    "areaShape": "cone",
+    "areaSize": 3,
+    "statusRiders": [
+      {
+        "statusId": "blinded",
+        "chance": 100,
+        "duration": {
+          "value": "1d6",
+          "unit": "rounds"
+        }
+      }
+    ]
+  },
+  "Light of Penance": {
+    "damageFormula": "2d6",
+    "damageElement": "none",
+    "damageType": "sta",
+    "tangible": false
+  },
+  "Lightning Storm": {
+    "_note": "RAW Core p.108: '35% chance of being struck' — pre-defense hitChance. Fill area size + anchor (ranged zone).",
+    "hitChance": 35,
+    "areaSize": 20,
+    "areaAnchor": "free"
+  },
+  "Magic Flare": {
+    "areaShape": "radius",
+    "areaSize": 8,
+    "statusRiders": [
+      {
+        "statusId": "blinded",
+        "chance": 100,
+        "duration": {
+          "value": "1d6",
+          "unit": "rounds"
+        }
+      }
+    ]
+  },
+  "Magic Trap": {
+    "_note": "The 'strikes the nearest foe each round' targeting is bespoke — the zone engine applies to ALL tokens inside a persistent template, not the nearest. Marking narrative until a nearest-target handler lands. Duration 'X rounds where X = STA' is variable-tier-ish; noted in effect. | RAW Core p.116: '3m Radius' — free-placed zone, not a self emanation.",
+    "areaShape": "radius",
+    "areaSize": 3,
+    "areaAnchor": "free",
+    "narrative": true
+  },
+  "Melgar's Fire": {
+    "_note": "RAW Core p.108 (errata: renamed from Fire from the Sky): 40m radius, 75% pre-defense strike per round; 2d6-round persistent zone.",
+    "hitChance": 75,
+    "areaSize": 40,
+    "areaAnchor": "free",
+    "areaPersist": true,
+    "damagePer": "round"
+  },
+  "Merigold's Hailstorm": {
+    "_note": "RAW Core p.107: hailstorm hits each round — persistent zone with damagePer:round and 30m radius filled in.",
+    "areaSize": 30,
+    "areaAnchor": "free",
+    "areaPersist": true,
+    "damagePer": "round"
+  },
+  "Mirror Effect": {
+    "damageFormula": "10d6",
+    "damageElement": "fire",
+    "damageType": "hp",
+    "areaShape": "line"
+  },
+  "Quen": {
+    "damageFormula": "{sta}*5",
+    "damageElement": "none",
+    "damageType": "shieldHp",
+    "areaShape": "self",
+    "_note": "Filling shield.* sub-schema. blocksTangibleOnly:true encodes 'no protection against unblockable / poison / disease / suffocation'. The recast-lockout ('cannot recast until exhausted or duration ends') is a handler concern, not schema.",
+    "shield": {
+      "hpPerSta": 5,
+      "regenPerSta": 0,
+      "blocksTangibleOnly": true,
+      "coversAllies": 0,
+      "onExpireEffect": ""
+    }
+  },
+  "Sagitta Aurea": {
+    "_note": "ATOC p.93 master invocation — line spear hitting every target along its path; 7d6 damage; anti-demon rider (demon takes damage, expelled, no abilities next round) is bespoke.",
+    "areaSize": 20,
+    "areaAnchor": "free",
+    "pierce": {
+      "enabled": true,
+      "decayFormula": ""
+    }
+  },
+  "Static Storm": {
+    "_note": "Errata p.4 defense None (already []). Core p.104 — 5m radius; 2 dmg/rd to anyone in it wearing metal armor or holding metal weapons; excludes caster. Damage cadence is per-round tick, not instant.",
+    "damagePer": "round",
+    "areaAnchor": "free",
+    "areaPersist": true,
+    "areaExcludeCaster": true
+  },
+  "Storm of Souls": {
+    "_note": "Master spell — summons 1d6+4 wraiths that attack indiscriminately (including caster). Bespoke summon; wraiths from bestiary.",
+    "damageType": "none",
+    "summon": {
+      "actorUuid": "",
+      "count": "1d6+4",
+      "controlled": false,
+      "durationOnCasterDeath": "persist"
+    },
+    "narrative": true
+  },
+  "Tanio Ilchar": {
+    "_note": "Errata p.4 defense Dodge (already correct). ATOC p.84 — 2m cube fire burst with 100% burning.",
+    "damageElement": "fire",
+    "damageType": "hp",
+    "areaAnchor": "free"
+  },
+  "Tryferi Gaeaf": {
+    "_note": "Errata p.5 rewrites entirely: shoot floor(SpellCasting/2) 2m ice spikes; each 5d6, if it beats armor freezes 2/round until snapped off (DC:20 Physique or 20 dmg). Errata p.4 defense Dodge/Block (already correct).",
+    "damageFormula": "5d6",
+    "damageElement": "cold",
+    "damageType": "hp",
+    "attackCount": "floor(spellcasting/2)",
+    "statusRiders": [
+      {
+        "statusId": "frozen",
+        "chance": 100,
+        "mode": "onHit",
+        "stripOnExit": false,
+        "duration": {
+          "value": "",
+          "unit": "permanent"
+        }
+      }
+    ],
+    "escapeCheck": {
+      "skill": "physique",
+      "dcSource": "fixed",
+      "dcDrift": 0,
+      "cadence": "round",
+      "consumesAction": true
+    }
+  },
+  "Vahila's Smoke": {
+    "_note": "ATOC p.84 — blinded + suffocating on failed defense; retry defense vs new Spell Casting each round to escape. Add escape check + areaSize + anchor. Zone is 2-round persistent smoke.",
+    "areaSize": 3,
+    "areaAnchor": "free",
+    "areaPersist": true,
+    "areaExcludeCaster": false,
+    "escapeCheck": {
+      "skill": "dodge",
+      "dcSource": "castRoll",
+      "dcDrift": 0,
+      "cadence": "round",
+      "consumesAction": true
+    }
+  },
+  "Van Adelaide's Gale": {
+    "_note": "Air spell — 2m sphere, 6m knockback + prone, ramming damage. Defense: stored empty defense, add dodge per RAW parity.",
+    "defense": [
+      "dodge"
+    ]
+  },
+  "Water Jet": {
+    "_note": "ATOC p.84 — choose slashing/piercing/bludgeoning damage type at cast. Defense Dodge/Block (already stored). Add areaShape line and multi-mode damage type picker.",
+    "areaShape": "line",
+    "areaSize": 8,
+    "areaAnchor": "caster",
+    "modes": [
+      {
+        "id": "slashing",
+        "label": "Slashing",
+        "damageFormula": "4d6"
+      },
+      {
+        "id": "piercing",
+        "label": "Piercing",
+        "damageFormula": "4d6"
+      },
+      {
+        "id": "bludgeoning",
+        "label": "Bludgeoning",
+        "damageFormula": "4d6"
+      }
+    ]
+  },
+  "Wave of Fire": {
+    "_note": "Errata p.4 defense Dodge/Block (already correct). Core p.105 — 3m cone, 2d6, 50% burning. Add areaAnchor.",
+    "areaAnchor": "caster"
+  },
+  "Waves of the Naglfar": {
+    "_note": "Errata p.4 defense Dodge/Block (already correct). Core p.107 — 3m radius, 4d6, freeze on fail. Add areaAnchor.",
+    "areaAnchor": "caster"
+  },
+  "Zephyr": {
+    "_note": "Errata p.4 defense None (already []); errata rewrites text: 2m self-emanation, 6m knockback, 1d6 damage, ramming damage on collision. Anchor caster.",
+    "areaShape": "radius",
+    "areaSize": 2,
+    "areaAnchor": "caster",
+    "areaExcludeCaster": true
+  },
+  "Eternal Judgement": {
+    "damageElement": "fire",
+    "damageType": "hp",
+    "statusRiders": [
+      {
+        "statusId": "burning",
+        "chance": 100
+      }
+    ]
+  },
+  "Feast of Plenty": {
+    "_note": "RAW ToC p.95: 2m is caster-to-feast (touch-cast on the meal), not a radius emanation. Diners gain 6d6 HP + all crits treated + Poison/Disease cured.",
+    "areaShape": "none",
+    "heal": {
+      "amount": "6d6",
+      "per": "cast",
+      "chargesCrit": 1,
+      "cureConditions": [
+        "poisoned",
+        "disease"
+      ]
+    }
+  },
+  "Adenydd": {
+    "_note": "Core p.103: Active (2 STA) glide; bespoke fall-glide mechanic.",
+    "narrative": true
+  },
+  "Aerokinesis": {
+    "_note": "ToC p.75 Magical Gift — telekinesis 5 ENC @ 8m. Bespoke.",
+    "narrative": true,
+    "range": "8m"
+  },
+  "Afan's Mirror": {
+    "_note": "Core p.102 + errata p.4: 1d10 illusory copies, Active (2 STA). Bespoke illusion/summon.",
+    "narrative": true
+  },
+  "Aine Verseos": {
+    "_note": "Description explicitly: 'a 4m radius centered on the caster' — caster-anchored. | range '4m Radius' → shape/size. | Core p.104: Active (2 STA) bright light. Bespoke lighting.",
+    "narrative": true,
+    "areaShape": "radius",
+    "areaSize": 4,
+    "areaAnchor": "caster"
+  },
+  "Air Pocket": {
+    "_note": "Placed at a chosen point within 12m — NOT caster-anchored. | range '1m radius' → shape/size (breathable-air bubble). | Core p.103: bespoke breathable-air bubble.",
+    "narrative": true,
+    "areaShape": "radius",
+    "areaSize": 1,
+    "areaAnchor": "free"
+  },
+  "Alchemical Recovery": {
+    "_note": "ToC p.82: crafting recovery utility. Bespoke.",
+    "narrative": true
+  },
+  "Animate Armor": {
+    "_note": "ToC p.103 ritual — bespoke construct summon.",
+    "narrative": true
+  },
+  "Artifact Compression": {
+    "_note": "Core p.119 master ritual — bespoke shrink-to-jade.",
+    "narrative": true
+  },
+  "Aurora's Breath": {
+    "_note": "ToC p.84: bespoke water-breathing utility.",
+    "narrative": true
+  },
+  "Beacon of the Unnatural": {
+    "_note": "ToC p.103 ritual — bespoke monster lure.",
+    "narrative": true
+  },
+  "Bigelow's Befoulment": {
+    "_note": "Cube encloses chosen food/drink up to 4m away — placed. | range '2m cube' → shape/size (tainted food volume). | ToC p.97: incorporeal disease/poison via tainted food; tangible false.",
+    "tangible": false,
+    "narrative": true,
+    "areaShape": "cube",
+    "areaSize": 2,
+    "areaAnchor": "free"
+  },
+  "Blemish": {
+    "_note": "ToC p.82: illusory Cha/Sed/Ldr debuff; tangible false.",
+    "tangible": false,
+    "narrative": true
+  },
+  "Blessed Herd": {
+    "_note": "Bespoke horse summon + rider buff. castsAuthoredAE doesn't fit because the buff targets riders chosen out-of-band, not cast targets. Keep narrative; drop the misapplied AE clone flag. | ToC p.94 Arch Priest of Epona — bespoke horse summon. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "narrative": true,
+    "castsAuthoredAE": false
+  },
+  "Blessed Weapon": {
+    "_note": "AE would apply to the WEAPON, not an actor. castsAuthoredAE only clones onto actors — flag is wrong here. Keep narrative for GM to attach Balanced Effect to the touched weapon. | ToC p.92: bespoke weapon Balanced-effect grant. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "narrative": true,
+    "castsAuthoredAE": false
+  },
+  "Blessing of Abundance": {
+    "_note": "ToC p.93: bespoke loot-roll advantage.",
+    "narrative": true
+  },
+  "Blessing of Death": {
+    "_note": "Core p.114: bespoke Death State trigger + First Aid revive.",
+    "narrative": true
+  },
+  "Blessing of Fortune": {
+    "_note": "Errata p.5: defense is None (stored []); grants LUCK by margin over DC:12, cap 5. Bespoke LUCK grant.",
+    "narrative": true
+  },
+  "Blessing of Healing": {
+    "_note": "Heal 3 HP/round is a heal.per:round pattern (Wave 4 dependency). Not an AE-clone. Keep narrative until Wave 4; drop misapplied castsAuthoredAE. | Core p.111 druid inv.: 3 HP/round maintained, chargers criticals. Bespoke per-round heal. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "narrative": true,
+    "castsAuthoredAE": false
+  },
+  "Blessing of Love": {
+    "_note": "+3 Charisma, +3 Seduction self-buff for 1d10 rounds. Perfect fit for castsAuthoredAE clone onto the caster. Un-narrative so the AE clones. | Core p.112: +3 Cha & Sed for 1d10 rounds. Bespoke buff. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "narrative": false,
+    "castsAuthoredAE": true
+  },
+  "Blinding Dust": {
+    "_note": "Core p.102: MISSING RIDER — target blinded for 1d10 rounds on fail. Errata p.4 confirms Block & Dodge.",
+    "statusRiders": [
+      {
+        "statusId": "blinded",
+        "chance": 100,
+        "mode": "onHit",
+        "duration": {
+          "value": "1d10",
+          "unit": "rounds"
+        }
+      }
+    ]
+  },
+  "Blood of the Berserker": {
+    "_note": "ToC p.94 Arch Priest of Svalblod — Great Bear transform. Bespoke.",
+    "narrative": true
+  },
+  "Blood of the Mountain": {
+    "_note": "Buff target: ignore parries, double gear ablation, knockdown immunity, 10 minutes. Fits castsAuthoredAE clone onto target. Un-narrative so the AE clones. | ToC p.98: bespoke unparriable-melee + gear-ablation buff. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "narrative": false,
+    "castsAuthoredAE": true
+  },
+  "Boiling Blood": {
+    "_note": "Errata p.4: defense is Creature's WILL×3, not GM. Bespoke charm-animal effect.",
+    "defense": [
+      "stat:will*3"
+    ],
+    "narrative": true
+  },
+  "Bones of Glass": {
+    "_note": "Core p.106 hex — stored defense is a raw string (invalid) and duration unit 'lifted' is not a valid enum; hex is bespoke critical-wound remap.",
+    "defense": [],
+    "duration": {
+      "value": "",
+      "unit": "permanent"
+    },
+    "narrative": true
+  },
+  "Brand of Withering": {
+    "_note": "Blocks all healing for 1 week — this is a status-clause / handler pattern, not a straight AE change. Keep narrative until we author a heal-block handler. Drop misapplied castsAuthoredAE. | ToC p.93: bespoke heal-block (all healing blocked for 1 week). AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "narrative": true,
+    "castsAuthoredAE": false
+  },
+  "Cadfan's Grasp": {
+    "_note": "Errata p.104: two modes (drop-or-2d6-limb OR heat-own-weapon +2d6+50% ignite). Multi-mode not encoded — narrative.",
+    "narrative": true
+  },
+  "Cadfan's Synthesis": {
+    "_note": "ToC p.132 necromancy ritual — bespoke amalgam.",
+    "narrative": true
+  },
+  "Calm Animals": {
+    "_note": "ToC p.74 Magical Gift — bespoke beast pacify.",
+    "narrative": true
+  },
+  "Champion of The River": {
+    "_note": "Resistance to all + +5 all rolls, maintained. AE clone onto touched target fits. Un-narrative so the AE clones. | ToC p.94 Arch Priest of Veyopatis — Resistance to all + +5 all rolls; Active (5). Bespoke buff. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "narrative": false,
+    "duration": {
+      "value": "",
+      "unit": "permanent"
+    },
+    "castsAuthoredAE": true
+  },
+  "Cleansing Ritual": {
+    "_note": "Core p.118 ritual — bespoke poison/disease cleanse.",
+    "narrative": true
+  },
+  "Cloak": {
+    "_note": "Invisibility: +10 Stealth, +5 Attack/Defense self-buff, ends on hit. AE clone onto caster fits. Un-narrative so the AE clones. The 'ends on hit' hook is a handler concern (Wave 6). | ToC p.85: Active (2 STA), not fixed 2-round duration. Bespoke invisibility buff. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "duration": {
+      "value": "",
+      "unit": "permanent"
+    },
+    "narrative": false,
+    "castsAuthoredAE": true
+  },
+  "Coating of Fire": {
+    "_note": "ToC p.84: triggered discharge on flame contact — encode triggerCondition.",
+    "triggerCondition": {
+      "event": "flame",
+      "chargesConsumed": 1
+    },
+    "narrative": true
+  },
+  "Consecrate": {
+    "_note": "range '10m radius' → shape/size (ward circle). | Core p.118 ritual — bespoke monster-repel circle.",
+    "narrative": true,
+    "areaShape": "radius",
+    "areaSize": 10,
+    "areaAnchor": "free"
+  },
+  "Conspiracy of the Mother": {
+    "_note": "ToC p.100 Hierophant invocation — bespoke crow bond.",
+    "narrative": true
+  },
+  "Control Water": {
+    "_note": "Errata p.4 confirms 'DC set by GM' (stored ['gm']). Bespoke water control.",
+    "narrative": true
+  },
+  "Controlled Summoning": {
+    "_note": "ToC p.142 goetia ritual — bespoke demon summon.",
+    "narrative": true
+  },
+  "Corpse Restoration": {
+    "_note": "ToC p.132 necromancy — bespoke illusory-body reveal.",
+    "narrative": true
+  },
+  "Create Crystal Skull": {
+    "_note": "ToC p.103 ritual — bespoke item craft.",
+    "narrative": true
+  },
+  "Create Place of Power": {
+    "_note": "range '6m radius' → shape/size. | ToC p.104 master ritual — bespoke world alteration.",
+    "narrative": true,
+    "areaShape": "radius",
+    "areaSize": 6,
+    "areaAnchor": "free"
+  },
+  "Create Soul Beacon": {
+    "_note": "ToC p.132 necromancy ritual — bespoke totem.",
+    "narrative": true
+  },
+  "Cryfhau": {
+    "_note": "Targets a 2m cube of existing cover within 2m — placed at the cover. | range '2m cube' → shape/size (2m cube of cover). | +5 SP to cover. Target is cover (terrain), not an actor. castsAuthoredAE doesn't apply here. Keep narrative; drop the flag. | ToC p.83: +5 SP to cover, permanent. Bespoke. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "narrative": true,
+    "castsAuthoredAE": false,
+    "areaShape": "cube",
+    "areaSize": 2,
+    "areaAnchor": "free"
+  },
+  "Cryokinesis": {
+    "_note": "ToC p.75 Magical Gift — bespoke freeze.",
+    "narrative": true
+  },
+  "Crystal Stasis": {
+    "_note": "ToC p.89: three-round escalating stasis, Dispel-only escape. Bespoke.",
+    "areaAnchor": "free",
+    "narrative": true
+  },
+  "Curse of Temperance": {
+    "_note": "ToC p.106 hex — normalize stored string defense and invalid duration unit. Bespoke intoxication trigger.",
+    "defense": [],
+    "duration": {
+      "value": "",
+      "unit": "permanent"
+    },
+    "narrative": true
+  },
+  "Cursed Illness": {
+    "_note": "Core p.111: three STA tiers (2/4/6) → staggered/stunned/disease-poison. Encode variableTiers. Incorporeal disease.",
+    "tangible": false,
+    "variableTiers": [
+      {
+        "staMin": 2,
+        "label": "Staggered",
+        "damageFormula": "",
+        "statusRiders": [
+          {
+            "statusId": "staggered",
+            "chance": 100
+          }
+        ]
+      },
+      {
+        "staMin": 4,
+        "label": "Stunned",
+        "damageFormula": "",
+        "statusRiders": [
+          {
+            "statusId": "stunned",
+            "chance": 100
+          }
+        ]
+      },
+      {
+        "staMin": 6,
+        "label": "Disease (treated as poison)",
+        "damageFormula": "",
+        "statusRiders": [
+          {
+            "statusId": "poisoned",
+            "chance": 100
+          }
+        ]
+      }
+    ]
+  },
+  "De Claudine's Substitution": {
+    "_note": "A Book of Tales p.166: bespoke alchemical-substance swap.",
+    "narrative": true
+  },
+  "Demetia's Crest Surge": {
+    "_note": "Core p.107: Active (4 STA) fire barrier — bespoke defensive shield.",
+    "duration": {
+      "value": "",
+      "unit": "permanent"
+    },
+    "narrative": true
+  },
+  "Dervish": {
+    "_note": "Active 2m radius aura spinning around the caster (Core p.108) — caster-anchored. | range '2m Radius' → shape/size (caster-anchored spinning aura). | Core p.108: Active (6 STA) caster-anchored 2m radius aura. Bespoke complex aura.",
+    "areaAnchor": "caster",
+    "duration": {
+      "value": "",
+      "unit": "permanent"
+    },
+    "narrative": true,
+    "areaShape": "radius",
+    "areaSize": 2
+  },
+  "Detect Ley Line": {
+    "_note": "ToC p.82: bespoke divination utility.",
+    "narrative": true
+  },
+  "Detect Poison": {
+    "_note": "ToC p.75 Magical Gift — bespoke sniff test.",
+    "narrative": true
+  },
+  "Diagnostic Spell": {
+    "_note": "Core p.102: bespoke medical scan.",
+    "narrative": true
+  },
+  "Dispel": {
+    "_note": "Errata p.4 confirms Spell Casting defense (stored correct). Bespoke half-STA counterspell.",
+    "narrative": true
+  },
+  "Disrupt Focus": {
+    "_note": "ToC p.85: bespoke Focus-item disable.",
+    "narrative": true
+  },
+  "Divine Inspiration": {
+    "_note": "+2 to one skill for 10 min. Skill picker is bespoke — the AE needs to target a specific skill chosen at cast. castsAuthoredAE clones a FIXED authored AE and doesn't support the picker. Keep narrative; drop the flag. | ToC p.92: +2 to one skill 10 min. Bespoke buff. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "narrative": true,
+    "castsAuthoredAE": false
+  },
+  "Divine Portal": {
+    "_note": "Core p.113: 1-round portal like Standing Portal. Bespoke teleport.",
+    "narrative": true
+  },
+  "Divine Wisdom": {
+    "_note": "Core p.113: augury with GM-set DC, Active (5). Bespoke.",
+    "narrative": true
+  },
+  "Dormyn's Chamber": {
+    "_note": "ToC p.85: bubble prison, 40 HP, one round; free-placed. Bespoke prison.",
+    "areaAnchor": "free",
+    "narrative": true
+  },
+  "Dormyn's Fog": {
+    "_note": "Fog forms around the caster (Core p.105 Active spell) — caster-anchored. | range '10m Radius' → shape/size (caster-anchored fog). | Core p.105: Active (2 STA) caster-anchored fog, -3 Awareness & 4m vision. Bespoke.",
+    "areaAnchor": "caster",
+    "narrative": true,
+    "areaShape": "radius",
+    "areaSize": 10
+  },
+  "Downpour": {
+    "_note": "range '10m radius' → shape/size (free-placed rain). | Core p.105: Active (2 STA) 10m-radius rain; extinguishes fire, counteracts fire spells. Bespoke.",
+    "areaAnchor": "free",
+    "narrative": true,
+    "areaShape": "radius",
+    "areaSize": 10
+  },
+  "Druidic Totem": {
+    "_note": "ToC p.98: bespoke terrain-specific totem with 8 biome branches.",
+    "narrative": true
+  },
+  "Duplicitous Darkness": {
+    "_note": "+2 Deceit + magic-truth immunity + telepathy-block, self. AE clone onto caster fits. Un-narrative so the AE clones. | ToC p.92: +2 Deceit, truth/telepathy immunity. Bespoke buff. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "narrative": false,
+    "castsAuthoredAE": true
+  },
+  "Enchant Amulet": {
+    "_note": "RAW ToC p.105: 'STA Cost: Variable' — cost sums per imbued spell (one Perfect Gemstone each).",
+    "variableCost": true
+  },
+  "Empower": {
+    "_note": "RAW ToC p.85: bespoke — buffs the next cast (100%-effect / +2 roll / +2d6 dmg / 1-fumbles-as-10). Handler ID 'empower'.",
+    "mechanicHandler": "empower"
+  },
+  "Fear Aura": {
+    "_note": "RAW ToC p.74: 'DC:12 Resist Magic check or be frightened.'",
+    "defense": [
+      "resistmagic"
+    ]
+  },
+  "Fleet of Foot": {
+    "_note": "RAW ToC p.74: 'for 1 Round.' AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "duration": {
+      "value": "1",
+      "unit": "rounds"
+    },
+    "castsAuthoredAE": true
+  },
+  "Freshen Air": {
+    "_note": "RAW Core p.104: 4m radius centred on caster, maintained (Active 2 STA). Persistent zone that includes the caster.",
+    "duration": {
+      "value": "",
+      "unit": "rounds"
+    },
+    "areaShape": "radius",
+    "areaSize": 4,
+    "areaAnchor": "caster",
+    "areaPersist": true,
+    "areaExcludeCaster": false
+  },
+  "Freya's Bravery": {
+    "_note": "RAW Core p.114: 20m radius emanation grants +25 temp HP + fear immunity for the duration. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "areaShape": "radius",
+    "areaSize": 20,
+    "areaAnchor": "caster",
+    "areaPersist": true,
+    "areaExcludeCaster": false,
+    "grantsTempHp": "25",
+    "castsAuthoredAE": true
+  },
+  "Friend to Wild Kind": {
+    "_note": "Errata p.101 defense list: 'Creature's WILLx3' (calm-animal application).",
+    "defense": [
+      "stat:will*3"
+    ]
+  },
+  "Gwynt Troelli": {
+    "_note": "RAW Core p.107: 10m Radius zone around the caster.",
+    "areaShape": "radius",
+    "areaSize": 10,
+    "areaAnchor": "caster",
+    "areaExcludeCaster": false
+  },
+  "Hand of the Tempest": {
+    "_note": "Base cone comes from caster's outstretched hand — caster-anchored. | range/desc mentions '14m cone' (gust mode). Base areaShape/size set; modes[] refines. | RAW ToC p.90: three cast-time modes — updraft (7d6 fall + prone), gust (14m cone knockback + ramming), carry (utility).",
+    "modes": [
+      {
+        "id": "updraft",
+        "label": "Updraft",
+        "description": "Target failing Reposition (or ≤1000kg object) is flung 14m up, falls at end of its next turn for 7d6 bludgeoning to torso + prone; anything struck on the way down also takes 7d6 and is knocked prone.",
+        "damageFormula": "7d6",
+        "damageElement": "physical",
+        "damageType": "hp",
+        "defense": [
+          "dodge"
+        ],
+        "statusRiders": [
+          {
+            "statusId": "prone",
+            "chance": 100
+          }
+        ]
+      },
+      {
+        "id": "gust",
+        "label": "Gust",
+        "description": "14m cone of wind; targets failing Reposition or unable to escape are blown 14m back and take ramming damage on impact.",
+        "areaShape": "cone",
+        "areaSize": 14,
+        "defense": [
+          "dodge"
+        ]
+      },
+      {
+        "id": "carry",
+        "label": "Carry",
+        "description": "Manipulate one object up to 1000kg as though holding it in your hand.",
+        "defense": []
+      }
+    ],
+    "areaShape": "cone",
+    "areaSize": 14,
+    "areaAnchor": "caster"
+  },
+  "Hex of Forgetfulness": {
+    "_note": "Schema expects defense[] not a string; RAW: subject rolls DC:20 Resist Magic once per day.",
+    "defense": [
+      "resistmagic"
+    ]
+  },
+  "Ice Slick": {
+    "_note": "RAW Core p.105: 2m-square ice patch persisting 2d10 rounds; anyone crossing rolls Athletics vs Spell Casting or trips (falls prone).",
+    "areaShape": "cube",
+    "areaSize": 2,
+    "areaAnchor": "free",
+    "areaPersist": true,
+    "statusRiders": [
+      {
+        "statusId": "prone",
+        "chance": 100,
+        "mode": "onEnter"
+      }
+    ]
+  },
+  "Magnify Odor": {
+    "_note": "RAW ToC p.84: 6m cube; on-enter Endurance vs Spell Casting → Nauseated 1 minute.",
+    "areaShape": "cube",
+    "areaSize": 6,
+    "areaAnchor": "free",
+    "areaPersist": true,
+    "statusRiders": [
+      {
+        "statusId": "nausea",
+        "chance": 100,
+        "duration": {
+          "value": "1",
+          "unit": "minutes"
+        },
+        "mode": "onEnter"
+      }
+    ]
+  },
+  "Miracle of Lebioda": {
+    "_note": "RAW ToC p.95: fully heals one critical wound OR removes lingering penalty — including regrowing limbs / restoring eyes.",
+    "heal": {
+      "chargesCrit": 1,
+      "regrowLimb": true
+    }
+  },
+  "Omen of Misfortune": {
+    "_note": "RAW ToC p.95 (Nehaleni's 'Omens of the Future'): bespoke divination — three recorded d10 values trigger a forced fumble on target's roll. GM-adjudicated.",
+    "narrative": true
+  },
+  "Oneiromancy": {
+    "_note": "RAW Core p.119: divination ritual glimpsing past / present events. GM-adjudicated.",
+    "narrative": true
+  },
+  "Polymorphism": {
+    "_note": "RAW Core p.108: caster becomes serpent/cat/bird/dog. No fixed target actor uuids in RAW; narrative until form actors are authored.",
+    "narrative": true
+  },
+  "Primal Reservoir": {
+    "_note": "RAW Core p.111: +2 Melee Damage, -2 INT for 2d6 rounds. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "grants": [
+      {
+        "path": "system.stats.int.current",
+        "delta": -2
+      },
+      {
+        "path": "system.derivedStats.meleeBonus.current",
+        "delta": 2
+      }
+    ],
+    "castsAuthoredAE": true
+  },
+  "Quill of the Divine": {
+    "_note": "Master invocation ATOC p.101 — bespoke tier picker (14 STA seals memories vs 16 STA implants fabricated) with +5 to resist on first implant. Not a schema case; GM adjudicates memory rewrite.",
+    "narrative": true
+  },
+  "Raise Flame": {
+    "_note": "Errata p.4: defense None (already []). Sustained utility spell — no schema mechanics, GM adjudicates fire manipulation.",
+    "narrative": true
+  },
+  "Reanimate Corpse": {
+    "_note": "ATOC p.133 ritual — GM adjudicates corpse Q&A with organ/brain requirements and -3 Resist Coercion penalty. Bespoke narrative ritual.",
+    "narrative": true
+  },
+  "Reopen Portal": {
+    "_note": "Core p.108 utility spell — variable DC 16 (Permanent Portal) or 20 (Standing Portal), no mechanical output beyond re-enabling a prior portal.",
+    "narrative": true
+  },
+  "Retribution of the Raven": {
+    "_note": "ATOC p.95 master invocation — nullifies magic in area (anti-magic zone); bespoke GM adjudication. Duration 5 rounds, 20m radius (area is not a placed template but a domain-wide effect).",
+    "narrative": true
+  },
+  "Rhewi": {
+    "_note": "Errata p.4 lists defense as Dodge (already correct). Encases target and applies frozen for duration; add frozen rider tied to spell duration.",
+    "damageFormula": "",
+    "damageType": "none",
+    "statusRiders": [
+      {
+        "statusId": "frozen",
+        "chance": 100,
+        "mode": "onHit",
+        "duration": {
+          "value": "1d10",
+          "unit": "rounds"
+        }
+      }
+    ]
+  },
+  "Rhwystr Graig": {
+    "_note": "Errata p.4 defense None (already []); errata p.4 also updates wall placement to 20m range (matches stored). Raises 30 SP rock wall — narrative/GM adjudication for wall placement.",
+    "narrative": true
+  },
+  "Ritual of Binding": {
+    "_note": "ATOC p.144 goetic ritual — GM adjudicates demon binding, 2-week Resist Magic escape attempts, DC 27 for greater demons. Bespoke.",
+    "narrative": true
+  },
+  "Ritual of Life": {
+    "_note": "Core p.118 healing circle — heals 3 HP/round while target stands within, 10 rounds. Mechanical heal per round; encode as heal.",
+    "heal": {
+      "amount": "3",
+      "per": "round"
+    },
+    "areaShape": "radius",
+    "areaSize": 2,
+    "areaAnchor": "free",
+    "areaPersist": true,
+    "areaExcludeCaster": false,
+    "duration": {
+      "value": "10",
+      "unit": "rounds"
+    }
+  },
+  "Ritual of Magic": {
+    "_note": "Core p.118 — Vigor Threshold bonus of half caster Ritual Crafting for 5h, or consume for 1d6/2 Fifth Essence. Bespoke buff; GM adjudicates threshold delta.",
+    "narrative": true
+  },
+  "Ritual of Naming": {
+    "_note": "ATOC p.143 goetic ritual — DC 24 for greater demons, failure brands caster with Lucifuge sigil. Bespoke, GM adjudicates.",
+    "narrative": true
+  },
+  "Ritual of the Goat Skin": {
+    "_note": "ATOC p.146 — produces one Goat Skin Mantle item after 14 days fasting. Crafting ritual, no mechanical output at cast; item creation is narrative.",
+    "narrative": true
+  },
+  "Rusting": {
+    "_note": "ATOC p.88 — multi-mode ablation (armor 2d6 + -2 REF/DEX/SPD to wearer; weapon 2d6 reliability + -2 to attacks; shield 2d6 reliability). Encode as multi-mode ablation spell.",
+    "damageFormula": "2d6",
+    "damageElement": "none",
+    "damageType": "ablation",
+    "ablationScope": "choose",
+    "modes": [
+      {
+        "id": "armor",
+        "label": "Vs armor",
+        "damageFormula": "2d6",
+        "damageType": "ablation"
+      },
+      {
+        "id": "weapon",
+        "label": "Vs weapon",
+        "damageFormula": "2d6",
+        "damageType": "ablation"
+      },
+      {
+        "id": "shield",
+        "label": "Vs shield (block)",
+        "damageFormula": "2d6",
+        "damageType": "ablation"
+      }
+    ]
+  },
+  "Sanctuary of the Black Grove": {
+    "_note": "ATOC p.100 master invocation bound to Caed Myrkvid — tree-scrying + tree-portal network in a 1-mile radius. Fully bespoke narrative.",
+    "narrative": true
+  },
+  "Savolla's Method": {
+    "_note": "ATOC p.83 — separates mutagen in corpse (extraction via DC:14 Alchemy/Witcher Training). Utility only; no combat mechanics.",
+    "narrative": true
+  },
+  "See Aura": {
+    "_note": "ATOC p.75 Magical Gift — perceive Vigor Threshold of every target within 8m. Info-only; no mechanical output.",
+    "narrative": true
+  },
+  "Seek the Seekers": {
+    "_note": "ATOC p.93 divination detector — alerts on divination targeting caster or nearby, DC:20 Education/Magic Training for spy to slip past. Utility.",
+    "narrative": true
+  },
+  "Seirff Haul": {
+    "_note": "Errata p.4 defense Dodge (already correct). Grapples + sets ablaze; escape via Dodge/Escape opposed by Spell Casting, DC drifts +1/round. Encode burning rider + escape check + escalation.",
+    "damageFormula": "",
+    "damageElement": "fire",
+    "damageType": "none",
+    "statusRiders": [
+      {
+        "statusId": "grappled",
+        "chance": 100,
+        "mode": "onHit",
+        "stripOnExit": false,
+        "duration": {
+          "value": "2d10",
+          "unit": "rounds"
+        }
+      },
+      {
+        "statusId": "burning",
+        "chance": 100,
+        "mode": "onHit",
+        "stripOnExit": false,
+        "duration": {
+          "value": "2d10",
+          "unit": "rounds"
+        }
+      }
+    ],
+    "escapeCheck": {
+      "skill": "dodge",
+      "dcSource": "castRoll",
+      "dcDrift": 1,
+      "cadence": "round",
+      "consumesAction": true
+    },
+    "escalationPerRound": {
+      "attribute": "dc",
+      "delta": 1
+    }
+  },
+  "Shape Nature": {
+    "_note": "Errata p.4 defense None (already []). Turns tree into golem for spell duration. Golem body is a summon; encode as summon (actorUuid left blank — GM picks stat block).",
+    "summon": {
+      "actorUuid": "",
+      "count": "1",
+      "controlled": true,
+      "durationOnCasterDeath": "dismiss"
+    },
+    "narrative": true
+  },
+  "Sharpen Senses": {
+    "_note": "+2 Awareness + Night Vision + Scent Tracking. AE clone onto caster fits. Un-narrative so the AE clones. The 'staggered on loud noise / bright light' downside is a Wave-6 conditional predicate; documented in the effect text. | Core p.104 buff — Night Vision + Scent Tracking + +2 Awareness for 30 min; downside is bright light/loud noise = Staggered. Multi-flag buff, best narrative. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "grants": [
+      {
+        "path": "system.stats.awareness.bonus",
+        "delta": 2,
+        "condition": ""
+      }
+    ],
+    "narrative": false,
+    "castsAuthoredAE": true
+  },
+  "Sigil of the Hidden": {
+    "_note": "Errata p.4 defense None (already []). Cloaks 3m area in cover: +5 Stealth, immobilized inside, clears at 10 HP damage. Bespoke visual cover mechanic.",
+    "areaShape": "radius",
+    "areaSize": 3,
+    "areaAnchor": "caster",
+    "areaPersist": true,
+    "areaExcludeCaster": false,
+    "narrative": true
+  },
+  "Silverlight": {
+    "_note": "Blessed take no wound-threshold penalties + hold at 1 HP once. Bespoke logic (KO-immunity trigger). Keep narrative; drop misapplied castsAuthoredAE. | ATOC p.95 master invocation bound to Lilvani — blessed take no wound-threshold penalties and hold at 1 HP once. Bespoke buff. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "narrative": true,
+    "castsAuthoredAE": false
+  },
+  "Smith's Touch": {
+    "_note": "ATOC p.87 — reshape metal by hand + Brawling attack deals 3d6 ablation to armor or weapon reliability. Bespoke: 3d6 ablation via brawling. Defense stays Dodge per stored (matches contact/brawling mechanic).",
+    "damageFormula": "3d6",
+    "damageElement": "none",
+    "damageType": "ablation",
+    "ablationScope": "choose"
+  },
+  "Soften Earth": {
+    "_note": "Turns 6m cube of ground into bog: -2 Dodge/Escape and Athletics inside. Persistent zone rider.",
+    "areaShape": "cube",
+    "areaSize": 6,
+    "areaAnchor": "free",
+    "areaPersist": true,
+    "areaExcludeCaster": false,
+    "statusRiders": [
+      {
+        "statusId": "soften-earth",
+        "chance": 100,
+        "mode": "zone",
+        "stripOnExit": true,
+        "duration": {
+          "value": "2d10",
+          "unit": "rounds"
+        }
+      }
+    ]
+  },
+  "Song of the Sky": {
+    "_note": "Errata p.5: 35% chance of lightning strike (updates original description). Errata p.4 defense None (already []). Multi-mode weather picker (clear/cloudy/rain/wind/lightning) with 35% per turn lightning like Lightning Storm.",
+    "modes": [
+      {
+        "id": "clear",
+        "label": "Clear sky"
+      },
+      {
+        "id": "cloudy",
+        "label": "Cloudy (dim sun)"
+      },
+      {
+        "id": "rain",
+        "label": "Rainstorm (douses fire)"
+      },
+      {
+        "id": "wind",
+        "label": "Windstorm (-2 DEX ranged)"
+      },
+      {
+        "id": "lightning",
+        "label": "Lightning storm (35%/turn strike)"
+      }
+    ]
+  },
+  "Spectral Tether": {
+    "_note": "ATOC p.85 — anti-teleport/invisibility/incorporeal binding; target retries Resist Magic each round vs Spell Casting.",
+    "escapeCheck": {
+      "skill": "resistmagic",
+      "dcSource": "castRoll",
+      "dcDrift": 0,
+      "cadence": "round",
+      "consumesAction": true
+    }
+  },
+  "Spell Jar": {
+    "_note": "Core p.119 — captures a spell vortex; on shatter (1d6 days) rolls 1d10/2 to pick from Talfryn's Prison / Zephyr / Tanio Ilchar / Dormyn's Fog / Static Storm. Bespoke random release.",
+    "narrative": true
+  },
+  "Spirit Seance": {
+    "_note": "Core p.119 — summons dead spirit at grave; may pull in bloodline relatives within 20m. Full GM adjudication.",
+    "narrative": true
+  },
+  "Stammelford's Earthquake": {
+    "_note": "Errata p.4 defense Dodge (already correct). Core p.106: shattered terrain -2 REF, -3 SPD, 10% small structures fall, Athletics or swallowed+suffocating each round. Persistent zone with movement penalties.",
+    "areaShape": "radius",
+    "areaSize": 5,
+    "areaAnchor": "free",
+    "areaPersist": true,
+    "areaExcludeCaster": false,
+    "statusRiders": [
+      {
+        "statusId": "earthquake-zone",
+        "chance": 100,
+        "mode": "zone",
+        "stripOnExit": true,
+        "duration": {
+          "value": "1d10",
+          "unit": "rounds"
+        }
+      }
+    ]
+  },
+  "Standing Portal": {
+    "_note": "Errata p.4 defense None (already []). Core p.108 teleport portal + dismemberment crit if it shuts mid-transit. Bespoke.",
+    "narrative": true
+  },
+  "Steal Spell": {
+    "_note": "ATOC p.89 master spell — reactive interrupt/redirect of any sub-Master spell via contested Spell Casting. Bespoke; mechanicHandler for the redirect flow.",
+    "mechanicHandler": "steal-spell",
+    "narrative": true
+  },
+  "Talfryn's Prison": {
+    "_note": "Errata p.4 defense Dodge (already correct). Core p.104 — roots grapple; escape via Dodge/Escape opposed by original Spell Casting, OR deal 15 damage. Add grappled rider + escape check.",
+    "statusRiders": [
+      {
+        "statusId": "grappled",
+        "chance": 100,
+        "mode": "onHit",
+        "stripOnExit": false,
+        "duration": {
+          "value": "",
+          "unit": "permanent"
+        }
+      }
+    ],
+    "escapeCheck": {
+      "skill": "dodge",
+      "dcSource": "castRoll",
+      "dcDrift": 0,
+      "cadence": "round",
+      "consumesAction": true
+    }
+  },
+  "Telecommunication": {
+    "_note": "Ritual — long-distance voice via matched telecommunicators. Utility only. Errata p.5 notes telecommunicator components aren't consumed on failure.",
+    "narrative": true
+  },
+  "Telekinesis": {
+    "_note": "Errata p.4 defense None (already []). Core p.104 lift/manipulate up to 5 ENC per Spell Casting point. Utility with upkeep.",
+    "narrative": true
+  },
+  "Telepathy": {
+    "_note": "Errata p.4 defense None (already []). Core p.103 — mind-to-mind, crosses language. Utility only.",
+    "narrative": true
+  },
+  "Teleportation": {
+    "_note": "Errata p.4 defense None (already []). Core p.106 — DC:15 Spell Casting; failure lands 1d6 miles off. Bespoke.",
+    "narrative": true
+  },
+  "The Devil's Luck": {
+    "_note": "Core p.121 hex — fumble on 1 or 2 in high-stress/DC>15 tasks. Persistent trait modifier; GM adjudicates.",
+    "narrative": true
+  },
+  "The Eternal Itch": {
+    "_note": "Core p.121 hex — -1 all tasks + -5 Seduction in the bedroom. Persistent trait modifier.",
+    "narrative": true
+  },
+  "The Evil Eye": {
+    "_note": "Core p.121 hex — reroll fumbles take worse, GM picks target for random effects. Meta/table-side hex.",
+    "narrative": true
+  },
+  "The Hex of Shadows": {
+    "_note": "Core p.121 hex — random Awareness checks for phantom sightings. Pure GM narrative.",
+    "narrative": true
+  },
+  "The Hex of the Beast": {
+    "_note": "Core p.122 hex — -3 Wilderness Survival for animal handling + 50% chance animals attack within 10m. Bespoke behavioral hex.",
+    "narrative": true
+  },
+  "The Nightmare": {
+    "_note": "Core p.122 hex — nightly Resist Coercion vs Hex Weaving DC; 3 failures halves STA and -2 all actions. Per-night check with drift, best narrative.",
+    "narrative": true
+  },
+  "The Odious Hex": {
+    "_note": "ATOC p.105 hex — Social Standing reads one rung lower to own race. Pure social narrative.",
+    "narrative": true
+  },
+  "The Pesta's Kiss": {
+    "_note": "Core p.122 hex — 75% catch-disease on contact + DC:16 Endurance vs nausea on foul smells. Bespoke ongoing hex.",
+    "narrative": true
+  },
+  "Threads of Life": {
+    "_note": "Errata p.4 defense None (already []). Core p.111 — shows current HP + critical wounds; upkeep 2 STA. Utility info spell.",
+    "narrative": true
+  },
+  "Touch of Lightning": {
+    "_note": "ATOC p.87 — charge an object; up to 8d6 by holding grip and paying STA per extra round; detection DC:20 Perception. Trigger-on-touch trap.",
+    "damageFormula": "1d6",
+    "damageElement": "electrical",
+    "damageType": "hp",
+    "triggerCondition": {
+      "event": "touch",
+      "chargesConsumed": 1
+    }
+  },
+  "Transmutation": {
+    "_note": "Errata p.4 defense None (already []). Core p.108 — turn one unit of metal to any other. Dimeritium immune. Utility only.",
+    "narrative": true
+  },
+  "Trap Portal": {
+    "_note": "ATOC p.86 — reroute a portal within 1 mile; DC:16 Magic Training or DC:20 Education to detect; consumed on first transit. Trigger-on-portal-transit.",
+    "triggerCondition": {
+      "event": "portal-transit",
+      "chargesConsumed": 1
+    },
+    "narrative": true
+  },
+  "Tyromancy": {
+    "_note": "ATOC divination — GM secretly rolls 1d6 to shift DC:13 up/down. Bespoke divination.",
+    "narrative": true
+  },
+  "Uncontrolled Summoning": {
+    "_note": "ATOC p.144 goetic ritual — summons a random uncontrolled demon; deadliest of the goetic rites. Fully GM adjudicated summon.",
+    "narrative": true
+  },
+  "Unending Need": {
+    "_note": "Hex — needs 10h sleep or -3 penalty; 5 meals/day or STA halved next day. Persistent lifestyle hex.",
+    "narrative": true
+  },
+  "Urien's Shelter": {
+    "_note": "Errata p.4 defense None (already []). Core p.104 — 8m radius suppresses extreme heat/cold/rain/snow. Utility environmental buff.",
+    "areaShape": "radius",
+    "areaSize": 8,
+    "areaAnchor": "caster",
+    "areaPersist": true,
+    "areaExcludeCaster": false,
+    "narrative": true
+  },
+  "Vaults of Knowledge": {
+    "_note": "Errata p.4 defense None (already []). Recall any prior memory. Utility only.",
+    "narrative": true
+  },
+  "Voice of the Counselor": {
+    "_note": "Invocation — voice projection + +4 Leadership for 10 min. Buff spell. AE-authored buff — GM attaches the AE on the item's Effects tab; cast clones it to targets/caster with the spell's duration.",
+    "grants": [
+      {
+        "path": "system.skills.emp.leadership.bonus",
+        "delta": 4,
+        "condition": ""
+      }
+    ],
+    "castsAuthoredAE": true
+  },
+  "Wagerer's Pendant": {
+    "_note": "ATOC p.103 ritual — worn pendant smothers hexes for 1 week; on expiry bursts and applies random hexes to wearer + 2m. Bespoke; GM picks the burst hexes.",
+    "narrative": true
+  },
+  "Waters of Clearance": {
+    "_note": "Errata p.4 defense Resist Magic (already correct). Instantly sobers target from alcohol/intoxication.",
+    "narrative": true
+  },
+  "Weapon Honing": {
+    "_note": "ATOC p.75 Magical Gift — full-round to grant a weapon 25% Bleed chance. Buff for weapon; narrative for weapon-tag.",
+    "narrative": true
+  },
+  "Web of Ice": {
+    "_note": "Novice water spell — fragile ice + duplicate; touch shatters both. Trigger-on-touch trap.",
+    "triggerCondition": {
+      "event": "touch",
+      "chargesConsumed": 1
+    },
+    "narrative": true
+  },
+  "Web of Roots": {
+    "_note": "ATOC p.97 — tree-based grapple/trip/disarm at will; escape via Dodge/Escape vs fresh Spell Casting or 15 dmg to roots.",
+    "modes": [
+      {
+        "id": "grapple",
+        "label": "Grapple",
+        "statusRiders": [
+          {
+            "statusId": "grappled",
+            "chance": 100
+          }
+        ]
+      },
+      {
+        "id": "trip",
+        "label": "Trip",
+        "statusRiders": [
+          {
+            "statusId": "prone",
+            "chance": 100
+          }
+        ]
+      },
+      {
+        "id": "disarm",
+        "label": "Disarm",
+        "statusRiders": [
+          {
+            "statusId": "disarmed",
+            "chance": 100
+          }
+        ]
+      }
+    ],
+    "escapeCheck": {
+      "skill": "dodge",
+      "dcSource": "castRoll",
+      "dcDrift": 0,
+      "cadence": "round",
+      "consumesAction": true
+    }
+  },
+  "Well of Knowledge": {
+    "_note": "ATOC p.100 master invocation bound to Gedyneith — 20 drinkers gain +4 Init/Awareness, immunity to Stagger/Stun/Hallucination, illusion sight, and Vigor +4 with Resist Magic -4. Complex conditional buff — narrative.",
+    "narrative": true
+  },
+  "White Flame": {
+    "_note": "Errata p.4 defense Resist Magic (already correct). Core p.114 — 10m radius bright light, thaws all, unravels water spells. Bespoke domain effect.",
+    "areaShape": "radius",
+    "areaSize": 10,
+    "areaAnchor": "caster",
+    "areaPersist": true,
+    "areaExcludeCaster": false,
+    "narrative": true
+  },
+  "Winds of the Taiga": {
+    "_note": "ATOC p.100 master invocation bound to Gwyn Carn — 1-mile blizzard + freeze bonus on named allies' attacks. Bespoke area-wide.",
+    "narrative": true
+  },
+  "Word of Summoning": {
+    "_note": "Invocation with STA tier picker: 2 STA small animal, 5 STA medium, 10 STA large; once/day/area. Summon with tier picker.",
+    "summon": {
+      "actorUuid": "",
+      "count": "1",
+      "controlled": true,
+      "durationOnCasterDeath": "dismiss"
+    },
+    "variableTiers": [
+      {
+        "staMin": 2,
+        "label": "Small animal (bird, serpent, cat)"
+      },
+      {
+        "staMin": 5,
+        "label": "Medium animal (wolf, panther, boar)"
+      },
+      {
+        "staMin": 10,
+        "label": "Large animal (bear, ox, horse)"
+      }
+    ],
+    "narrative": true
+  },
+  "Wrath of Nature": {
+    "_note": "Description explicitly: '60m radius centered on you'. Caster-anchored — earlier fix wrongly set free. | range '60m radius' → shape/size (master invocation domain). | Master invocation with 8 biome-driven modes; each 3d6-6d6 with distinct defense + status. Handler + modes.",
+    "mechanicHandler": "wrath-of-nature",
+    "modes": [
+      {
+        "id": "fields",
+        "label": "Fields (tornado)"
+      },
+      {
+        "id": "mountains",
+        "label": "Mountains (lightning)"
+      },
+      {
+        "id": "underground",
+        "label": "Underground (stone spikes)"
+      },
+      {
+        "id": "forest",
+        "label": "Forest (roots)"
+      },
+      {
+        "id": "swamp",
+        "label": "Swamp (gas cloud)"
+      },
+      {
+        "id": "shore",
+        "label": "Shore (waterspout)"
+      },
+      {
+        "id": "desert",
+        "label": "Desert (burning sand)"
+      },
+      {
+        "id": "tundra",
+        "label": "Tundra (ice)"
+      }
+    ],
+    "areaShape": "radius",
+    "areaSize": 60,
+    "areaAnchor": "caster"
+  },
+  "Dust Coating": {
+    "_note": "10m cube of dust placed within 20m range — placed. | range '10m cube' → shape/size.",
+    "areaShape": "cube",
+    "areaSize": 10,
+    "areaAnchor": "free"
+  },
+  "Earthen Pillar": {
+    "_note": "range '2m cube' → shape/size (raised earthen cover).",
+    "areaShape": "cube",
+    "areaSize": 2,
+    "areaAnchor": "free"
+  },
+  "Geokinesis": {
+    "_note": "Description explicitly: '8m radius centered on yourself'. Caster-anchored — earlier fix wrongly set free. | range '8m radius' → shape/size.",
+    "areaShape": "radius",
+    "areaSize": 8,
+    "areaAnchor": "caster"
+  },
+  "Gwyntog": {
+    "_note": "range '40m radius' → shape/size.",
+    "areaShape": "radius",
+    "areaSize": 40,
+    "areaAnchor": "free"
+  },
+  "Harmless Fire": {
+    "_note": "range '2m cube' → shape/size.",
+    "areaShape": "cube",
+    "areaSize": 2,
+    "areaAnchor": "free"
+  },
+  "Interactive Illusion": {
+    "_note": "range '20m radius' → shape/size.",
+    "areaShape": "radius",
+    "areaSize": 20,
+    "areaAnchor": "free"
+  },
+  "Invaerne": {
+    "_note": "range '30m radius' → shape/size (frost domain).",
+    "areaShape": "radius",
+    "areaSize": 30,
+    "areaAnchor": "free"
+  },
+  "Magic Screen": {
+    "_note": "range '2m cube' → shape/size (illusion cube).",
+    "areaShape": "cube",
+    "areaSize": 2,
+    "areaAnchor": "free"
+  },
+  "Minuscule Illusion": {
+    "_note": "range '1m cube' → shape/size.",
+    "areaShape": "cube",
+    "areaSize": 1,
+    "areaAnchor": "free"
+  },
+  "Part Water": {
+    "_note": "range '10m Radius' → shape/size.",
+    "areaShape": "radius",
+    "areaSize": 10,
+    "areaAnchor": "free"
+  },
+  "Pigment": {
+    "_note": "range '4m radius' → shape/size.",
+    "areaShape": "radius",
+    "areaSize": 4,
+    "areaAnchor": "free"
+  },
+  "Shade of Bleobheris": {
+    "_note": "range '50m Radius' → shape/size.",
+    "areaShape": "radius",
+    "areaSize": 50,
+    "areaAnchor": "free"
+  },
+  "Shape Earth": {
+    "_note": "range '20m cube' → shape/size.",
+    "areaShape": "cube",
+    "areaSize": 20,
+    "areaAnchor": "free"
+  },
+  "Axii": {
+    "_note": "Stunned rider correct (100%, permanent — status's own endCheck.stunSave handles the release). The -1 penalty to the stun save (and +1 DC per 2 STA past the first) is bespoke — noted in effect text, not schema-encoded. | Description promises 'Stuns one foe until they pass a Stun save at -1'. Adding stunned rider 100% onHit. Persistent until Stun save passes — duration handled by the status's own clearOnHit / stunSave endCheck in statusClauses.",
+    "statusRiders": [
+      {
+        "statusId": "stunned",
+        "chance": 100,
+        "mode": "onHit",
+        "stripOnExit": false,
+        "duration": {
+          "value": "",
+          "unit": "permanent"
+        }
+      }
+    ]
+  },
+  "Supirre": {
+    "_note": "Bespoke remote-listening utility scaling range with STA. No combat mechanics; narrative flag so the sheet stays clean and the cast just posts the description.",
+    "narrative": true
+  }
+}

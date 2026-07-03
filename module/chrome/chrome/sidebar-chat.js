@@ -15,6 +15,7 @@
 
 import { MODULE_ID } from "../setup/settings.js";
 
+import { t, tFormat } from "../lib/i18n.js";
 /* -------------------------------------------------------------------------- */
 /*  Header                                                                    */
 /* -------------------------------------------------------------------------- */
@@ -145,7 +146,7 @@ function installModeHook() {
       // explicitly, build the message ourselves and halt default processing.
       const speaker = chatData.speaker ?? ChatMessage.implementation.getSpeaker();
       if (!speaker?.actor && !speaker?.token) {
-        ui.notifications?.warn("Witcher Overhaul UI | Cannot chat IC without a selected token or assigned character.");
+        ui.notifications?.warn(t("WITCHER.Notify.Chat.NoSpeaker", "Witcher Overhaul UI | Cannot chat IC without a selected token or assigned character."));
         return false;
       }
       const ic = { ...chatData, speaker, content: message.replace(/\n/g, "<br>"), style: CONST.CHAT_MESSAGE_STYLES.IC };

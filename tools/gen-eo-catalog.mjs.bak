@@ -1,0 +1,1808 @@
+/**
+ * gen-eo-catalog.mjs — emits the full Equipment Overhaul catalog as JSON
+ * files in packs-src/.
+ *
+ * Item-data tables are inline below (one object per row, transcribed from
+ * "Equipment for the Witcher v1.04" by J. Obadiah Ridinger). The
+ * generator writes:
+ *
+ *   packs-src/eo-armor/<slug>.json           every armor piece
+ *   packs-src/eo-weapons/<slug>.json         every weapon
+ *   packs-src/eo-shields/<slug>.json         every shield
+ *   packs-src/eo-ammunition/<slug>.json      every ammo type
+ *   packs-src/eo-armor-enhancements/<slug>.json     glyphs + armor mods
+ *   packs-src/eo-diagrams/<slug>.json        crafting diagrams (1 per item)
+ *
+ * Run via `node tools/gen-eo-catalog.mjs` then `node tools/build-packs.mjs`.
+ *
+ * IDs are deterministic 16-char strings derived from name+kind so re-runs
+ * produce the same _id for the same item (idempotent).
+ *
+ * Inconsistencies & ambiguities are collected in INCONSISTENCIES at the
+ * top of the file and printed at the end of a run.
+ */
+
+import { writeFileSync, mkdirSync, existsSync, rmSync, readdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+const SRC  = join(ROOT, "packs-src");
+
+const INCONSISTENCIES = [];
+
+/* Stable 16-char alphanumeric ID derived from a string. */
+function makeId(name, kind) {
+    const h = createHash("md5").update(`${kind}:${name}`).digest("hex");
+    // 16-char alphanumeric; foundry needs A-Za-z0-9 only.
+    return h.slice(0, 16);
+}
+
+const slugify = (s) => s.toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 60);
+
+/* ── Icon selection ─────────────────────────────────────────────────
+ *
+ * Pick a representative Foundry-bundled icon for each item based on its
+ * category / location / ammo type. The default icons that came with the
+ * generator (all weapons → sword, all armor → breastplate) were a
+ * one-size-fits-all band-aid; each category now has a curated icon. */
+
+const WEAPON_ICON_BY_CATEGORY = {
+    swordsmanship: "icons/weapons/swords/sword-guard-engraved-gold.webp",
+    smallBlades:   "icons/weapons/daggers/dagger-jeweled-purple.webp",
+    melee:         "icons/weapons/axes/axe-battle-black.webp",
+    staffSpear:    "icons/weapons/polearms/spear-ornate-gold.webp",
+    brawling:      "icons/weapons/fist/fist-brass-knuckles-spiked.webp",
+    bow:           "icons/weapons/bows/bow-recurve-yellow.webp",
+    crossbow:      "icons/weapons/crossbows/crossbow-yellow.webp",
+    sling:         "icons/weapons/slings/sling-leather-tan.webp",
+    thrown:        "icons/weapons/thrown/throwing-knife-brown.webp"
+};
+function weaponIconFor(w) {
+    /* Two-handed swords get a distinct greatsword icon. */
+    if (w.category === "swordsmanship" && w.hands === "two") {
+        return "icons/weapons/swords/greatsword-crossguard-flanged-purple.webp";
+    }
+    /* Hammers/maces aren't a separate category — detect by name keyword. */
+    if (w.category === "melee" && /hammer|maul|mace/i.test(w.name)) {
+        return "icons/weapons/hammers/hammer-double-engraved-gold.webp";
+    }
+    return WEAPON_ICON_BY_CATEGORY[w.category] ?? "icons/weapons/swords/sword-guard-steel-worn.webp";
+}
+
+/* Armor icons by primary location + weight. */
+function armorIconFor(a) {
+    const loc = a.cover;
+    const t   = a.type;          /* light / medium / heavy */
+    if (loc === "head") {
+        if (t === "heavy")  return "icons/equipment/head/helm-barbute-gold.webp";
+        if (t === "medium") return "icons/equipment/head/helm-barbute-grey.webp";
+        return "icons/equipment/head/hood-simple-leather-brown.webp";
+    }
+    if (loc === "arms") {
+        if (t === "heavy")  return "icons/equipment/hand/gauntlet-armored-steel-blue.webp";
+        return "icons/equipment/hand/glove-leather-brown.webp";
+    }
+    if (loc === "legs") {
+        if (t === "heavy")  return "icons/equipment/leg/greaves-steel-grey.webp";
+        return "icons/equipment/leg/pants-cuffed-brown.webp";
+    }
+    if (loc === "torso" || loc === "torso+arms") {
+        if (t === "heavy")  return "icons/equipment/chest/breastplate-cuirass-steel-grey.webp";
+        if (t === "medium") return "icons/equipment/chest/breastplate-banded-steel-grey.webp";
+        return "icons/equipment/chest/shirt-collared-tan.webp";
+    }
+    if (loc === "full") {
+        if (t === "heavy")  return "icons/equipment/chest/breastplate-cuirass-steel-grey.webp";
+        if (t === "medium") return "icons/equipment/chest/breastplate-banded-leather-brown.webp";
+        return "icons/equipment/chest/coat-leather-brown.webp";
+    }
+    return "icons/equipment/chest/shirt-simple-grey.webp";
+}
+
+/* Shield icons keyed on CV (cover value tracks shield size). */
+function shieldIconFor(s) {
+    if (s.cv <= 1) return "icons/equipment/shield/buckler-wooden-boss-steel.webp";
+    if (s.cv >= 5) return "icons/equipment/shield/heater-steel-tower.webp";
+    return "icons/equipment/shield/heater-steel-worn.webp";
+}
+
+/* Ammo icons by ammoType. */
+function ammoIconFor(a) {
+    const t = a.subtype;
+    if (t === "bolt")        return "icons/weapons/ammunition/arrow-bodkin-iron.webp";
+    if (t === "slingBullet") return "icons/weapons/ammunition/ammo-piercing-blue.webp";
+    return "icons/weapons/ammunition/arrow-broadhead-iron.webp";
+}
+
+/* Enhancement (glyph / armor mod) icons by subtype. */
+function enhancementIconFor(e) {
+    if (e.subType === "glyph") return "icons/sundries/gaming/rune-stone-blue.webp";
+    return "icons/equipment/chest/breastplate-cuirass-steel-grey.webp";
+}
+
+/* Default per-location stopping schema piece (all zeroes). */
+const ZERO_STOPPING = {
+    headStopping: 0, headMaxStopping: 0,
+    torsoStopping: 0, torsoMaxStopping: 0,
+    leftArmStopping: 0, leftArmMaxStopping: 0,
+    rightArmStopping: 0, rightArmMaxStopping: 0,
+    leftLegStopping: 0, leftLegMaxStopping: 0,
+    rightLegStopping: 0, rightLegMaxStopping: 0
+};
+
+/* Cover → location enum + per-location SP fill helper. */
+function fillStopping(sp, cover) {
+    const out = { ...ZERO_STOPPING };
+    const setLoc = (loc) => { out[`${loc}Stopping`] = sp; out[`${loc}MaxStopping`] = sp; };
+    const covers = cover.split("+");
+    for (const c of covers) setLoc(c);
+    return out;
+}
+
+/* Cover names → schema `location` enum + the body slots to fill. */
+const COVER = {
+    "head":       { location: "head",  slots: ["head"] },
+    "torso":      { location: "torso", slots: ["torso"] },
+    "arms":       { location: "arms",  slots: ["leftArm", "rightArm"] },
+    "legs":       { location: "legs",  slots: ["leftLeg", "rightLeg"] },
+    "torso+arms": { location: "torso", slots: ["torso", "leftArm", "rightArm"] },
+    "full":       { location: "full",  slots: ["torso", "leftArm", "rightArm", "leftLeg", "rightLeg"] },
+    "fullbody":   { location: "full",  slots: ["torso", "leftArm", "rightArm", "leftLeg", "rightLeg", "head"] }
+};
+const AVAIL = { E: "everywhere", C: "common", P: "poor", R: "rare" };
+
+/* Resist code → boolean fields. EO uses S (Slashing), P (Piercing), B
+ * (Bludgeoning); combinations like "S/B", "S/P", "S/P/B". */
+function parseResist(code) {
+    const out = { slashing: false, piercing: false, bludgeoning: false };
+    if (!code || code === "―" || code === "-" || code === "") return out;
+    if (code.includes("S")) out.slashing = true;
+    if (code.includes("P")) out.piercing = true;
+    if (code.includes("B")) out.bludgeoning = true;
+    return out;
+}
+
+/* ── ARMOR catalog (EO p.4 onwards). Stat columns from the tables.
+ *
+ *  sp        : stopping power
+ *  ev        : encumbrance value
+ *  resist    : EO resist code ("S", "P", "B", "S/B", "S/P", "S/P/B", "")
+ *  cover     : COVER key
+ *  ae        : per-location AE counts (object) OR a number — if number,
+ *              it's spread across primary slots
+ *  en        : enhancement (glyph) total
+ *  wt        : weight kg
+ *  cost      : crowns
+ *  av        : availability code (E/C/P/R)
+ *  type      : armorType enum (light/medium/heavy)
+ *  qualities : array of armor-quality catalog keys
+ *  effects   : narrative HTML (description appendix from the PDF)
+ *  difficult : Difficult flag
+ *  jack      : armingJackKind ("none"/"jack"/"superiorSuit")
+ *  upgrade   : armoredArmingJackUpgrade
+ *  description : top-level item description (from the PDF text)
+ * ────────────────────────────────────────────────────────────────── */
+
+const ARMOR = [
+    /* ── Arming jacks ─────────────────────────────────────────── */
+    { name: "Arming Jack", sp: 0, ev: 1, resist: "", cover: "torso", ae: 0, en: 0,
+      wt: 1, cost: 50, av: "C", type: "light", jack: "jack",
+      description: "<p>A padded garment worn under heavy armor. Required to equip Difficult armor pieces.</p>" },
+
+    { name: "Superior Arming Suit", sp: 0, ev: 1, resist: "", cover: "torso", ae: 0, en: 0,
+      wt: 2.5, cost: 500, av: "P", type: "light", jack: "superiorSuit",
+      description: "<p>A high-end padded suit. Acts as an Arming Jack and reduces the EV of each worn Difficult armor piece by 1.</p>" },
+
+    /* ── Basic Light Armor (EO p.13) ──────────────────────────── */
+    /* Hats & Hoods */
+    { name: "Aketon Coif",    sp: 6, ev: 0, resist: "",  cover: "head", ae: 0, en: 0, wt: 0.5, cost: 56,  av: "E", type: "light",
+      description: "<p>Padded cloth head covering.</p>" },
+    { name: "Buff Leather Cap", sp: 8, ev: 0, resist: "", cover: "head", ae: 0, en: 0, wt: 1,   cost: 83,  av: "E", type: "light",
+      description: "<p>Thick buff-leather cap.</p>" },
+    { name: "Mail Coif",      sp: 8, ev: 0, resist: "S", cover: "head", ae: 0, en: 0, wt: 2,   cost: 184, av: "C", type: "light",
+      description: "<p>Mail hood covering the head and neck.</p>" },
+    { name: "Double Woven Hood", sp: 8, ev: 0, resist: "P", cover: "head", ae: 0, en: 0, wt: 1, cost: 205, av: "P", type: "light",
+      description: "<p>Hood of double-woven linen — naturally resists piercing.</p>" },
+    /* Jacks & Coats */
+    { name: "Cold Weather Clothing", sp: 2, ev: 1, resist: "", cover: "full", ae: 0, en: 0, wt: 0, cost: 0, av: "E", type: "light",
+      description: "<p>Heavy cold-weather garb (Core p.93). Counts as a layer of armor when worn.</p>" },
+    { name: "Aketon Doublet", sp: 6, ev: 1, resist: "", cover: "torso+arms", ae: 0, en: 1, wt: 2, cost: 154, av: "E", type: "light",
+      description: "<p>A quilted doublet covering torso and arms. <em>Options (EV -1)</em>. Can be upgraded (+100c) to function as an Arming Jack; an Aketon Doublet + Aketon Trousers can together (+750c set) function as a Superior Arming Suit when both worn.</p>" },
+    { name: "Buff Leather Coat", sp: 8, ev: 2, resist: "", cover: "full", ae: 0, en: 1, wt: 5, cost: 217, av: "E", type: "light",
+      description: "<p>Heavy buff-leather coat covering torso, arms, and legs. <em>Options (EV -1)</em>.</p>" },
+    { name: "Mail Byrnie",    sp: 8, ev: 1, resist: "S", cover: "torso+arms", ae: 0, en: 1, wt: 8, cost: 459, av: "C", type: "light",
+      description: "<p>Short mail shirt covering torso and arms. <em>Options (EV -1)</em>.</p>" },
+    { name: "Double Woven Gambeson", sp: 8, ev: 1, resist: "P", cover: "torso+arms", ae: 0, en: 1, wt: 5, cost: 1023, av: "P", type: "light",
+      description: "<p>Thickly layered linen gambeson — naturally resists piercing. <em>Options (EV -1)</em>.</p>" },
+    /* Limb Armor */
+    { name: "Mail Sleeves",   sp: 8, ev: 1, resist: "S", cover: "arms", ae: 0, en: 0, wt: 3,   cost: 251, av: "C", type: "light",
+      description: "<p>Mail sleeves protecting the arms.</p>" },
+    { name: "Aketon Trousers", sp: 6, ev: 1, resist: "", cover: "legs", ae: 0, en: 0, wt: 1.4, cost: 99,  av: "C", type: "light",
+      description: "<p>Quilted leg coverings. Pair with Aketon Doublet for the Superior Arming Suit upgrade.</p>" },
+    { name: "Cavalry Trousers", sp: 8, ev: 1, resist: "", cover: "legs", ae: 0, en: 0, wt: 2, cost: 132, av: "C", type: "light",
+      description: "<p>Reinforced riding trousers.</p>" },
+    { name: "Mail Chausses",  sp: 8, ev: 1, resist: "S", cover: "legs", ae: 0, en: 0, wt: 5, cost: 263, av: "C", type: "light",
+      description: "<p>Mail leg coverings.</p>" },
+    { name: "Double Woven Chausses", sp: 8, ev: 1, resist: "P", cover: "legs", ae: 0, en: 0, wt: 3, cost: 614, av: "P", type: "light",
+      description: "<p>Double-woven linen leg coverings.</p>" },
+
+    /* ── Basic Medium Armor (EO p.14) ─────────────────────────── */
+    /* Helmets */
+    { name: "Cuir Bouilli Cap", sp: 12, ev: 0, resist: "", cover: "head", ae: { head: 1 }, en: 0, wt: 1, cost: 208, av: "C", type: "medium",
+      description: "<p>Hardened leather cap.</p>" },
+    { name: "Iron Cap",         sp: 16, ev: 1, resist: "", cover: "head", ae: { head: 1 }, en: 0, wt: 1.5, cost: 209, av: "E", type: "medium",
+      description: "<p>Simple iron skullcap.</p>" },
+    { name: "Kettle Helmet",    sp: 16, ev: 1, resist: "", cover: "head", ae: { head: 1 }, en: 0, wt: 2, cost: 254, av: "C", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Wide-brimmed iron helm. <strong>Stifling</strong>; reduces Bright Light penalties by 2.</p>" },
+    { name: "Spectacle Helmet", sp: 16, ev: 1, resist: "P", cover: "head", ae: { head: 1 }, en: 0, wt: 2.5, cost: 328, av: "C", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Iron helm with a perforated face plate. <strong>Stifling</strong>.</p>" },
+    { name: "Bascinet or Sallet", sp: 16, ev: 1, resist: "S", cover: "head", ae: { head: 2 }, en: 0, wt: 2.5, cost: 330, av: "P", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Iron helm with neck guard. <strong>Stifling</strong>.</p>" },
+    /* Corslets */
+    { name: "Cuirass",          sp: 12, ev: 1, resist: "", cover: "torso", ae: { torso: 1 }, en: 1, wt: 3, cost: 559, av: "C", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Hardened leather torso protection. <strong>Stifling</strong>.</p>" },
+    { name: "Mail Hauberk",     sp: 12, ev: 2, resist: "S", cover: "full", ae: 0, en: 0, wt: 18, cost: 903, av: "C", type: "medium",
+      qualities: ["options"], qualityValues: { options: "EV -1" },
+      description: "<p>Full-body mail covering torso, arms, and legs. <em>Options (EV -1)</em>.</p>" },
+    { name: "Brigandine",       sp: 16, ev: 1, resist: "S", cover: "torso", ae: { torso: 1 }, en: 1, wt: 7, cost: 607, av: "C", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Cloth garment lined with riveted metal plates. <strong>Stifling</strong>.</p>" },
+    /* Spaulders */
+    { name: "Cuir Bouilli Vambraces", sp: 10, ev: 1, resist: "", cover: "arms", ae: { leftArm: 1, rightArm: 0 }, en: 0, wt: 2, cost: 346, av: "P", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Hardened leather arm protection. <strong>Stifling</strong>.</p>" },
+    { name: "Plated Vambraces", sp: 12, ev: 2, resist: "", cover: "arms", ae: { leftArm: 1, rightArm: 0 }, en: 0, wt: 6, cost: 388, av: "P", type: "medium",
+      qualities: ["difficult", "stifling", "rangedPenalty"], difficult: true,
+      description: "<p>Plated arm guards. <strong>Difficult</strong>, <strong>Stifling</strong>; <strong>Ranged -1</strong>.</p>" },
+    /* Greaves & Chausses */
+    { name: "Cuir Bouilli Greaves", sp: 10, ev: 1, resist: "", cover: "legs", ae: { leftLeg: 1, rightLeg: 0 }, en: 0, wt: 3, cost: 418, av: "P", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Hardened leather leg armor. <strong>Stifling</strong>.</p>" },
+    { name: "Plated Greaves",   sp: 12, ev: 2, resist: "", cover: "legs", ae: { leftLeg: 1, rightLeg: 0 }, en: 0, wt: 7, cost: 438, av: "P", type: "medium",
+      qualities: ["difficult", "stifling", "spdPenalty"], difficult: true,
+      description: "<p>Plated leg armor. <strong>Difficult</strong>, <strong>Stifling</strong>; <strong>SPD -1</strong>.</p>" },
+
+    /* ── Basic Heavy Armor (EO p.14-15) ───────────────────────── */
+    { name: "Barbute",           sp: 18, ev: 2, resist: "S/B", cover: "head", ae: { head: 1 }, en: 0, wt: 3, cost: 404, av: "P", type: "heavy",
+      qualities: ["stifling", "restrictedVision"],
+      description: "<p>Iron face-covering helm. <strong>Stifling, Restricted Vision</strong>.</p>" },
+    { name: "Great Helm",        sp: 24, ev: 2, resist: "S/P", cover: "head", ae: 0, en: 0, wt: 4, cost: 493, av: "P", type: "heavy",
+      qualities: ["stifling", "poorVision"],
+      description: "<p>Heavy enclosed helm. <strong>Stifling, Poor Vision</strong>.</p>" },
+    { name: "Armet",             sp: 24, ev: 1, resist: "S/P/B", cover: "head", ae: 0, en: 0, wt: 2, cost: 547, av: "R", type: "heavy",
+      qualities: ["stifling", "poorVision"],
+      description: "<p>Articulated helm with hinged faceguard. <strong>Stifling*, Poor Vision (can be opened)</strong>.</p>" },
+
+    /* Heavy Breastplates & Harnisses (Basic Heavy, EO p.15) */
+    { name: "Iron Breastplate",   sp: 24, ev: 2, resist: "S", cover: "torso", ae: { torso: 1 }, en: 1, wt: 5, cost: 803, av: "P", type: "heavy",
+      qualities: ["difficult", "stifling"], difficult: true,
+      description: "<p>Iron breastplate. <strong>Difficult, Stifling</strong>.</p>" },
+    { name: "Steel Breastplate",  sp: 28, ev: 2, resist: "S/B", cover: "torso", ae: { torso: 1 }, en: 1, wt: 6, cost: 1102, av: "P", type: "heavy",
+      qualities: ["difficult", "stifling"], difficult: true,
+      description: "<p>Steel breastplate. <strong>Difficult, Stifling</strong>.</p>" },
+    { name: "Iron Arm Harnisse",  sp: 20, ev: 3, resist: "S", cover: "arms", ae: { leftArm: 1 }, en: 0, wt: 3, cost: 612, av: "P", type: "heavy",
+      qualities: ["difficult", "stifling", "rangedPenalty"], qualityValues: { rangedPenalty: "2" }, difficult: true,
+      description: "<p>Iron arm harnisse. <strong>Difficult, Stifling, Ranged -2</strong>.</p>" },
+    { name: "Steel Arm Harnisse", sp: 24, ev: 3, resist: "S/B", cover: "arms", ae: { leftArm: 1 }, en: 0, wt: 3.5, cost: 879, av: "P", type: "heavy",
+      qualities: ["difficult", "stifling", "rangedPenalty"], qualityValues: { rangedPenalty: "2" }, difficult: true,
+      description: "<p>Steel arm harnisse. <strong>Difficult, Stifling, Ranged -2</strong>.</p>" },
+    { name: "Iron Leg Harnisse",  sp: 20, ev: 3, resist: "S", cover: "legs", ae: { leftLeg: 1 }, en: 0, wt: 5, cost: 779, av: "P", type: "heavy",
+      qualities: ["difficult", "stifling", "spdPenalty"], qualityValues: { spdPenalty: "2" }, difficult: true,
+      description: "<p>Iron leg harnisse. <strong>Difficult, Stifling, SPD -2</strong>.</p>" },
+    { name: "Steel Leg Harnisse", sp: 24, ev: 3, resist: "S/B", cover: "legs", ae: { leftLeg: 1 }, en: 0, wt: 6, cost: 1051, av: "P", type: "heavy",
+      qualities: ["difficult", "stifling", "spdPenalty"], qualityValues: { spdPenalty: "2" }, difficult: true,
+      description: "<p>Steel leg harnisse. <strong>Difficult, Stifling, SPD -2</strong>.</p>" },
+
+    /* ── Quality Northern Armor (EO p.18-19) ────────────────────── */
+    /* Verden Hunter's Set */
+    { name: "Verden Hunter's Hood",  sp: 2,  ev: 0, resist: "",   cover: "head",  ae: 0, en: 0, wt: 0.5, cost: 138,  av: "P", type: "light",
+      description: "<p>Verden hunter's hood. <em>Set Bonus</em>.</p>" },
+    { name: "Verden Hunter's Cloak", sp: 2,  ev: 0, resist: "",   cover: "full",  ae: 0, en: 1, wt: 1,   cost: 317,  av: "P", type: "light",
+      description: "<p>Verden hunter's cloak. <em>Set Bonus</em>.</p>" },
+    /* Special Forces Set */
+    { name: "Special Forces Hood",     sp: 8,  ev: 0, resist: "P", cover: "head",        ae: { head: 1 },   en: 0, wt: 1, cost: 297, av: "R", type: "light",
+      description: "<p>Special Forces hood. <em>Set Bonus</em>.</p>" },
+    { name: "Special Forces Jack",     sp: 8,  ev: 1, resist: "P", cover: "torso+arms",  ae: { torso: 1 },  en: 0, wt: 4, cost: 937, av: "R", type: "light",
+      description: "<p>Special Forces jack. <em>Options (EV-1); Set Bonus</em>.</p>" },
+    { name: "Special Forces Trousers", sp: 8,  ev: 1, resist: "P", cover: "legs",        ae: { leftLeg: 1 }, en: 0, wt: 3, cost: 750, av: "R", type: "light",
+      description: "<p>Special Forces trousers. <em>Set Bonus</em>.</p>" },
+    /* Lyrian Set (medium) */
+    { name: "Lyrian Helmet",   sp: 16, ev: 1, resist: "B", cover: "head", ae: { head: 1 }, en: 0, wt: 1.5, cost: 302, av: "P", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Lyrian iron helm. <strong>Stifling</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Lyrian Cuirass",  sp: 16, ev: 1, resist: "B", cover: "torso", ae: { torso: 1 }, en: 1, wt: 4, cost: 827, av: "P", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Lyrian cuirass. <strong>Stifling</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Lyrian Vambraces", sp: 12, ev: 2, resist: "B", cover: "arms", ae: { leftArm: 1 }, en: 0, wt: 2, cost: 482, av: "P", type: "medium",
+      qualities: ["stifling", "rangedPenalty"], qualityValues: { rangedPenalty: "1" },
+      description: "<p>Lyrian arm guards. <strong>Stifling, Ranged -1</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Lyrian Greaves",  sp: 12, ev: 2, resist: "B", cover: "legs", ae: { leftLeg: 1 }, en: 0, wt: 3, cost: 584, av: "P", type: "medium",
+      qualities: ["stifling", "spdPenalty"], qualityValues: { spdPenalty: "1" },
+      description: "<p>Lyrian leg armor. <strong>Stifling, SPD -1</strong>; <em>Set Bonus</em>.</p>" },
+    /* Special Forces medium (EO p.19 — pairs with the Special Forces light set) */
+    { name: "Special Forces Bascinet",   sp: 16, ev: 1, resist: "S", cover: "head", ae: { head: 2 },    en: 0, wt: 2, cost: 319, av: "R", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Special Forces medium helm. <strong>Stifling</strong>; <em>Set Bonus*</em>.</p>" },
+    { name: "Special Forces Brigandine", sp: 16, ev: 1, resist: "S", cover: "torso", ae: { torso: 2 }, en: 0, wt: 5, cost: 846, av: "R", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Special Forces brigandine. <strong>Stifling</strong>; <em>Set Bonus*</em>.</p>" },
+    { name: "Special Forces Vambraces",  sp: 12, ev: 1, resist: "S", cover: "arms", ae: { leftArm: 2 }, en: 0, wt: 3, cost: 485, av: "R", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Special Forces arm guards. <strong>Stifling</strong>; <em>Set Bonus*</em>.</p>" },
+    { name: "Special Forces Greaves",    sp: 12, ev: 1, resist: "S", cover: "legs", ae: { leftLeg: 2 }, en: 0, wt: 4, cost: 588, av: "R", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Special Forces leg armor. <strong>Stifling</strong>; <em>Set Bonus*</em>.</p>" },
+    /* Tretagor heavy (Difficult set) */
+    { name: "Tretagor Great Bascinet", sp: 30, ev: 2, resist: "S/P/B", cover: "head", ae: { head: 1 }, en: 0, wt: 3, cost: 610, av: "R", type: "heavy",
+      qualities: ["stifling", "poorVision"],
+      description: "<p>Tretagor knightly bascinet. <strong>Stifling, Poor Vision (can be opened)</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Tretagor White Breastplate", sp: 30, ev: 2, resist: "S/B", cover: "torso", ae: { torso: 1 }, en: 2, wt: 6, cost: 1167, av: "R", type: "heavy",
+      qualities: ["stifling", "lanceRest"], difficult: true,
+      description: "<p>Tretagor knight's white breastplate. <strong>Difficult, Stifling, Lance Rest</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Tretagor Arm Harnisse", sp: 24, ev: 3, resist: "S", cover: "arms", ae: { leftArm: 1 }, en: 0, wt: 4, cost: 833, av: "R", type: "heavy",
+      qualities: ["stifling", "rangedPenalty"], qualityValues: { rangedPenalty: "2" }, difficult: true,
+      description: "<p>Tretagor knight's arm harnisse. <strong>Difficult, Stifling, Ranged -2</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Tretagor Leg Harnisse", sp: 24, ev: 3, resist: "S", cover: "legs", ae: { leftLeg: 1 }, en: 0, wt: 6, cost: 1034, av: "R", type: "heavy",
+      qualities: ["stifling", "spdPenalty"], qualityValues: { spdPenalty: "2" }, difficult: true,
+      description: "<p>Tretagor knight's leg harnisse. <strong>Difficult, Stifling, SPD -2</strong>; <em>Set Bonus</em>.</p>" },
+    /* Hindarsfjall Raider — heavy Skellige set */
+    { name: "Hindarsfjall Masked Helm", sp: 24, ev: 1, resist: "S/P", cover: "head", ae: { head: 3 }, en: 0, wt: 3, cost: 726, av: "R", type: "heavy",
+      qualities: ["stifling", "restrictedVision"],
+      description: "<p>Skellige raider's masked great helm. <strong>Stifling, Restricted Vision (can be opened)</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Hindarsfjall Brigandine", sp: 24, ev: 2, resist: "S", cover: "torso", ae: { torso: 3 }, en: 2, wt: 8, cost: 1333, av: "R", type: "heavy",
+      qualities: ["stifling"],
+      description: "<p>Skellige raider's brigandine. <strong>Stifling</strong>; <em>Set Bonus</em>.</p>" },
+
+    /* ── Fine Southern Armor (EO p.22) ──────────────────────────── */
+    /* Black Army light */
+    { name: "Black Army Coif",       sp: 10, ev: 1, resist: "S", cover: "head",        ae: 0, en: 0, wt: 1.5, cost: 256,  av: "P", type: "light",
+      description: "<p>Black Army (Nilfgaardian) infantry coif. <em>Set Bonus</em>.</p>" },
+    { name: "Black Army Haubergeon", sp: 10, ev: 1, resist: "S", cover: "torso+arms",  ae: 0, en: 0, wt: 5,   cost: 789,  av: "P", type: "light",
+      description: "<p>Black Army haubergeon. <em>Options (EV-1); Set Bonus</em>.</p>" },
+    { name: "Black Army Chausses",   sp: 10, ev: 1, resist: "S", cover: "legs",        ae: 0, en: 0, wt: 4,   cost: 553,  av: "P", type: "light",
+      description: "<p>Black Army chausses. <em>Set Bonus</em>.</p>" },
+    /* Markee Rider set */
+    { name: "Markee Riding Cap",      sp: 8, ev: 0, resist: "P", cover: "head",       ae: { head: 1 }, en: 0, wt: 0.5, cost: 404,  av: "R", type: "light",
+      description: "<p>Mettinese rider's cap. <em>Set Bonus</em>.</p>" },
+    { name: "Markee Riding Coat",     sp: 8, ev: 0, resist: "P", cover: "torso+arms", ae: { torso: 1 }, en: 0, wt: 3, cost: 1338, av: "R", type: "light",
+      description: "<p>Mettinese riding coat. <em>Set Bonus</em>.</p>" },
+    { name: "Markee Riding Trousers", sp: 8, ev: 0, resist: "P", cover: "legs",       ae: { leftLeg: 1 }, en: 0, wt: 2, cost: 1063, av: "R", type: "light",
+      description: "<p>Mettinese riding trousers. <em>Set Bonus</em>.</p>" },
+    /* Black Army medium */
+    { name: "Black Army Sallet",      sp: 20, ev: 1, resist: "S/B", cover: "head",  ae: 0, en: 0, wt: 2.5, cost: 364,  av: "P", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Black Army sallet. <strong>Stifling</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Black Army Brigandine",  sp: 20, ev: 1, resist: "S/B", cover: "torso", ae: 0, en: 1, wt: 8,   cost: 821,  av: "P", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Black Army brigandine. <strong>Stifling</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Black Army Vambraces",   sp: 14, ev: 2, resist: "S",   cover: "arms",  ae: 0, en: 0, wt: 5,   cost: 547,  av: "P", type: "medium",
+      qualities: ["stifling", "rangedPenalty"],
+      description: "<p>Black Army arm guards. <strong>Stifling, Ranged -1</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Black Army Greaves",     sp: 14, ev: 2, resist: "S",   cover: "legs",  ae: 0, en: 0, wt: 7,   cost: 665,  av: "P", type: "medium",
+      qualities: ["stifling", "spdPenalty"],
+      description: "<p>Black Army greaves. <strong>Stifling, SPD -1</strong>; <em>Set Bonus</em>.</p>" },
+    /* Pacifier set (medium) */
+    { name: "Pacifier Morion",        sp: 20, ev: 1, resist: "",    cover: "head",  ae: { head: 1 }, en: 0, wt: 2, cost: 435, av: "R", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Pacifier morion. <strong>Stifling</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Pacifier Breastplate",   sp: 20, ev: 1, resist: "",    cover: "torso", ae: { torso: 1 }, en: 1, wt: 4, cost: 1070, av: "R", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Pacifier breastplate. <strong>Stifling</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Pacifier Vambraces",     sp: 14, ev: 2, resist: "",    cover: "arms",  ae: { leftArm: 1 }, en: 0, wt: 4, cost: 551, av: "R", type: "medium",
+      qualities: ["stifling", "rangedPenalty"],
+      description: "<p>Pacifier vambraces. <strong>Stifling, Ranged -1</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Pacifier Greaves",       sp: 14, ev: 2, resist: "",    cover: "legs",  ae: { leftLeg: 1 }, en: 0, wt: 4, cost: 884, av: "R", type: "medium",
+      qualities: ["stifling", "spdPenalty"],
+      description: "<p>Pacifier greaves. <strong>Stifling, SPD -1</strong>; <em>Set Bonus</em>.</p>" },
+    /* Nilfgaardian heavy (Difficult set) */
+    { name: "Nilfgaardian Sallet",        sp: 24, ev: 2, resist: "S",   cover: "head",  ae: { head: 3 }, en: 0, wt: 2, cost: 645, av: "R", type: "heavy",
+      qualities: ["stifling"],
+      description: "<p>Nilfgaardian heavy sallet. <strong>Stifling</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Nilfgaardian Breastplate",   sp: 30, ev: 2, resist: "S/B", cover: "torso", ae: { torso: 2 }, en: 1, wt: 5, cost: 1193, av: "R", type: "heavy",
+      qualities: ["stifling"], difficult: true,
+      description: "<p>Nilfgaardian breastplate. <strong>Difficult, Stifling</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Nilfgaardian Arm Harnisse",  sp: 24, ev: 3, resist: "S",   cover: "arms",  ae: { leftArm: 2 }, en: 0, wt: 3, cost: 861, av: "R", type: "heavy",
+      qualities: ["stifling", "rangedPenalty"], difficult: true,
+      description: "<p>Nilfgaardian arm harnisse. <strong>Difficult, Stifling, Ranged -2</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Nilfgaardian Leg Harnisse",  sp: 24, ev: 3, resist: "S",   cover: "legs",  ae: { leftLeg: 2 }, en: 0, wt: 5, cost: 1097, av: "R", type: "heavy",
+      qualities: ["stifling", "spdPenalty"], difficult: true,
+      description: "<p>Nilfgaardian leg harnisse. <strong>Difficult, Stifling, SPD -2</strong>; <em>Set Bonus</em>.</p>" },
+    /* Ducal Knight (Difficult, heavy, +Lance Rest) */
+    { name: "Ducal Knight Helm",          sp: 36, ev: 3, resist: "S/P/B", cover: "head",  ae: 0, en: 0, wt: 5, cost: 910, av: "R", type: "heavy",
+      qualities: ["stifling", "restrictedVision"],
+      description: "<p>Ducal knight's great helm. <strong>Stifling, Restricted Vision (can be opened)</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Ducal Knight Breastplate",   sp: 36, ev: 3, resist: "S/P/B", cover: "torso", ae: 0, en: 2, wt: 10, cost: 1695, av: "R", type: "heavy",
+      qualities: ["stifling", "superiorLanceRest"], difficult: true,
+      description: "<p>Ducal knight's breastplate. <strong>Difficult, Stifling, Superior Lance Rest</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Ducal Knight Arm Harnisse",  sp: 32, ev: 3, resist: "S/P/B", cover: "arms",  ae: 0, en: 0, wt: 6,  cost: 1163, av: "R", type: "heavy",
+      qualities: ["stifling", "rangedPenalty"], difficult: true,
+      description: "<p>Ducal knight's arm harnisse. <strong>Difficult, Stifling, Ranged -3</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Ducal Knight Leg Harnisse",  sp: 32, ev: 3, resist: "S/P/B", cover: "legs",  ae: 0, en: 0, wt: 8,  cost: 1415, av: "R", type: "heavy",
+      qualities: ["stifling", "spdPenalty"], difficult: true,
+      description: "<p>Ducal knight's leg harnisse. <strong>Difficult, Stifling, SPD -3</strong>; <em>Set Bonus</em>.</p>" },
+
+    /* ── Exotic Armor (EO p.25) ─────────────────────────────────── */
+    /* Steppe Warrior set */
+    { name: "Steppe Warrior Cap",      sp: 6,  ev: 0, resist: "P", cover: "head",        ae: 0, en: 0, wt: 1, cost: 355, av: "P", type: "light",
+      qualities: ["bleedResistance"],
+      description: "<p>Steppe Warrior cap. <strong>Resistance to Bleeding</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Steppe Warrior Coat",     sp: 6,  ev: 1, resist: "P", cover: "torso+arms",  ae: 0, en: 0, wt: 3, cost: 888, av: "P", type: "light",
+      qualities: ["bleedResistance"],
+      description: "<p>Steppe Warrior coat. <strong>Resistance to Bleeding</strong>; <em>Options (EV-1); Set Bonus</em>.</p>" },
+    { name: "Steppe Warrior Trousers", sp: 6,  ev: 1, resist: "P", cover: "legs",        ae: 0, en: 0, wt: 2, cost: 533, av: "P", type: "light",
+      qualities: ["bleedResistance"],
+      description: "<p>Steppe Warrior trousers. <strong>Resistance to Bleeding</strong>; <em>Set Bonus</em>.</p>" },
+    /* Drake Leather set */
+    { name: "Drake Leather Cap",       sp: 8,  ev: 0, resist: "",  cover: "head",        ae: { head: 1 },    en: 0, wt: 1, cost: 441, av: "R", type: "light",
+      qualities: ["fireproof"],
+      description: "<p>Drake-hide cap. <strong>Resistance to Fire</strong>.</p>" },
+    { name: "Drake Leather Coat",      sp: 8,  ev: 1, resist: "",  cover: "torso+arms",  ae: { torso: 1 },   en: 1, wt: 4, cost: 758, av: "R", type: "light",
+      qualities: ["fireproof"],
+      description: "<p>Drake-hide coat. <strong>Resistance to Fire</strong>; <em>Options (EV-1)</em>.</p>" },
+    { name: "Drake Leather Trousers",  sp: 8,  ev: 1, resist: "",  cover: "legs",        ae: { leftLeg: 1 }, en: 0, wt: 3, cost: 690, av: "R", type: "light",
+      qualities: ["fireproof"],
+      description: "<p>Drake-hide trousers. <strong>Resistance to Fire</strong>.</p>" },
+    /* Biraq Mail */
+    { name: "Biraq Mail Hood", sp: 12, ev: 0, resist: "S", cover: "head", ae: { head: 1 }, en: 0, wt: 2, cost: 464,  av: "R", type: "light",
+      description: "<p>Biraq mail hood.</p>" },
+    { name: "Biraq Mail Coat", sp: 12, ev: 2, resist: "S", cover: "full", ae: { torso: 1 }, en: 0, wt: 12, cost: 2167, av: "R", type: "heavy",
+      description: "<p>Biraq full-body mail. <em>Options (EV-1)</em>.</p>" },
+    /* Fāris (medium) */
+    { name: "Fāris Helmet",      sp: 16, ev: 0, resist: "", cover: "head",  ae: { head: 1 },  en: 0, wt: 1.5, cost: 465,  av: "R", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Fāris ceremonial helmet. <strong>Stifling</strong>.</p>" },
+    { name: "Fāris Breastplate", sp: 16, ev: 0, resist: "", cover: "torso", ae: { torso: 1 }, en: 2, wt: 6,   cost: 1116, av: "R", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Fāris breastplate. <strong>Stifling</strong>.</p>" },
+    /* Katafrakt set */
+    { name: "Katafrakt Dragon Helm", sp: 20, ev: 1, resist: "S", cover: "head", ae: { head: 1 }, en: 2, wt: 2, cost: 542, av: "R", type: "medium",
+      qualities: ["stifling"],
+      description: "<p>Katafrakt dragon-styled helm. <strong>Stifling</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Katafrakt Coat",        sp: 20, ev: 5, resist: "S", cover: "full", ae: { torso: 1 }, en: 0, wt: 16, cost: 2646, av: "R", type: "heavy",
+      qualities: ["stifling"],
+      description: "<p>Katafrakt full coat. <strong>Stifling, Options* (EV-2)</strong>; <em>Set Bonus</em>.</p>" },
+    /* Anusyia (Ofieri Immortals) */
+    { name: "Anusyia Helmet", sp: 20, ev: 1, resist: "S/P", cover: "head", ae: 0, en: 0, wt: 2,  cost: 572,  av: "R", type: "medium",
+      qualities: ["stifling", "restrictedVision"],
+      description: "<p>Anusyia helm. <strong>Stifling, Restricted Vision</strong>; <em>Set Bonus</em>.</p>" },
+    { name: "Anusyia Coat",   sp: 20, ev: 5, resist: "S/B", cover: "full", ae: 0, en: 2, wt: 16, cost: 3032, av: "R", type: "heavy",
+      qualities: ["stifling"],
+      description: "<p>Anusyia full-body coat. <strong>Stifling, Options* (EV-2)</strong>; <em>Set Bonus</em>.</p>" },
+
+    /* ── Witcher School Armor (EO p.31) ─────────────────────────── */
+    /* Light Armor schools */
+    { name: "Feline Hood",         sp: 8,  ev: 0, resist: "", cover: "head",       ae: { head: 2 },    en: 0, wt: 1, cost: 0, av: "R", type: "light",
+      qualities: ["meteorite", "silver", "monsterResistance"], qualityValues: { monsterResistance: "all monster sets" },
+      description: "<p>Cat School witcher hood. <strong>Meteorite, Silver, Monster Resistance</strong>.</p>" },
+    { name: "Feline Witcher Armor", sp: 8, ev: 0, resist: "", cover: "full",       ae: { torso: 2 },   en: 1, wt: 3, cost: 0, av: "R", type: "light",
+      qualities: ["meteorite", "silver", "monsterResistance"], qualityValues: { monsterResistance: "all monster sets" },
+      description: "<p>Cat School witcher armor. <strong>Set effects (Witcher only):</strong> (1) On a random hit location, you can also roll for location and choose to force the attack to use your result. (2) On a successful Dodge/Reposition you can spend 2 STA to stagger the attacker. (3) Extra-Action STA cost for Fast Strikes with swords/small blades is reduced from 3 to 1.</p>" },
+    { name: "Serpentine Witcher Hood", sp: 10, ev: 0, resist: "", cover: "head",   ae: { head: 2 },    en: 0, wt: 1, cost: 0, av: "R", type: "light",
+      qualities: ["meteorite", "silver", "monsterResistance"], qualityValues: { monsterResistance: "all monster sets" },
+      description: "<p>Viper School witcher hood. <strong>Meteorite, Silver, Monster Resistance</strong>.</p>" },
+    { name: "Serpentine Witcher Armor", sp: 10, ev: 0, resist: "", cover: "full",  ae: { torso: 2 },   en: 1, wt: 5, cost: 0, av: "R", type: "light",
+      qualities: ["meteorite", "silver", "monsterResistance"], qualityValues: { monsterResistance: "all monster sets" },
+      description: "<p>Viper School witcher armor. <strong>Set effects (Witcher only):</strong> (1) +2 Stealth. (2) When you hit an enemy with the right blade oil applied, they suffer poison even if normally immune. (3) Extra-Action STA cost for Joint Strikes with swords/small blades is reduced from 3 to 1.</p>" },
+    { name: "Manticore Witcher Hood", sp: 10, ev: 0, resist: "", cover: "head",    ae: { head: 2 },    en: 0, wt: 1.5, cost: 0, av: "R", type: "light",
+      qualities: ["meteorite", "silver", "monsterResistance"], qualityValues: { monsterResistance: "all monster sets" },
+      description: "<p>Manticore School witcher hood. <strong>Meteorite, Silver, Monster Resistance</strong>.</p>" },
+    { name: "Manticore Witcher Armor", sp: 10, ev: 0, resist: "", cover: "full",   ae: { torso: 2 },   en: 1, wt: 6, cost: 0, av: "R", type: "light",
+      qualities: ["meteorite", "silver", "monsterResistance"], qualityValues: { monsterResistance: "all monster sets" },
+      description: "<p>Manticore School witcher armor. <strong>Set effects (Witcher only):</strong> (1) Once per round, draw an item from the bandolier without spending an Action. (2) +2 Alchemy. (3) Ignore STA cost of Blocking with a shield.</p>" },
+
+    /* Medium Armor schools */
+    { name: "Wolven Witcher Hood", sp: 14, ev: 0, resist: "", cover: "head",       ae: { head: 2 },    en: 0, wt: 1.5, cost: 0, av: "R", type: "medium",
+      qualities: ["meteorite", "silver", "monsterResistance"], qualityValues: { monsterResistance: "all monster sets" },
+      description: "<p>Wolf School witcher hood. <strong>Meteorite, Silver, Monster Resistance</strong>.</p>" },
+    { name: "Wolven Witcher Armor", sp: 14, ev: 2, resist: "", cover: "full",      ae: { torso: 2 },   en: 1, wt: 8.5, cost: 0, av: "R", type: "medium",
+      qualities: ["meteorite", "silver", "monsterResistance"], qualityValues: { monsterResistance: "all monster sets" },
+      description: "<p>Wolf School witcher armor. <strong>Set effects (Witcher only):</strong> (1) Armor EV does not apply to Dodge/Escape. (2) Ignore STA cost of Blocking with a sword. (3) Extra-Action STA cost for Strong Strikes with swords is reduced from 3 to 1.</p>" },
+    { name: "Gryphon Witcher Helmet", sp: 16, ev: 0, resist: "", cover: "head",    ae: { head: 1 },    en: 0, wt: 2, cost: 0, av: "R", type: "medium",
+      qualities: ["meteorite", "silver", "monsterResistance", "stifling"], qualityValues: { monsterResistance: "all monster sets" },
+      description: "<p>Griffin School witcher helmet. <strong>Meteorite, Silver, Monster Resistance, Stifling</strong>.</p>" },
+    { name: "Gryphon Witcher Armor", sp: 16, ev: 4, resist: "", cover: "full",     ae: { torso: 1 },   en: 2, wt: 13, cost: 0, av: "R", type: "medium",
+      qualities: ["meteorite", "silver", "monsterResistance"], qualityValues: { monsterResistance: "all monster sets" },
+      description: "<p>Griffin School witcher armor. <strong>Set effects (Witcher only):</strong> (1) Armor EV does not affect Spell Casting. (2) Extra-Action STA cost for casting Signs is reduced from 3 to 1. (3) Halve all penalties for being ganged up on.</p>" },
+
+    /* Heavy Armor school */
+    { name: "Ursine Witcher Helm", sp: 20, ev: 0, resist: "", cover: "head",       ae: { head: 2 },    en: 0, wt: 3, cost: 0, av: "R", type: "heavy",
+      qualities: ["meteorite", "silver", "monsterResistance", "stifling"], qualityValues: { monsterResistance: "all monster sets" },
+      description: "<p>Bear School witcher helm. <strong>Meteorite, Silver, Monster Resistance, Stifling</strong>.</p>" },
+    { name: "Ursine Witcher Armor", sp: 20, ev: 6, resist: "", cover: "full",      ae: { torso: 2 },   en: 1, wt: 18, cost: 0, av: "R", type: "heavy",
+      qualities: ["meteorite", "silver", "monsterResistance"], qualityValues: { monsterResistance: "all monster sets" },
+      description: "<p>Bear School witcher armor. <strong>Set effects (Witcher only):</strong> (1) Armor EV does not apply to Endurance. (2) If an enemy strikes you for 0 damage you can spend 1 STA to stagger them. (3) When struck, treat the attack's crit threshold as 3 lower for the purposes of suffering critical wounds.</p>" }
+];
+
+/* ── SHIELDS (EO p.13: Basic Shields, columns CV Rel. Bash EV En.) ── */
+const SHIELDS = [
+    /* Basic Shields (EO p.13) — Small / Medium / Large per the table. */
+    { name: "Wood Buckler",     cv: 0, rel: 5,  bash: "1d6",    ev: 0, en: 0, wt: 0.5, cost: 13,  av: "E",
+      qualities: ["parryingShield"],
+      description: "<p>Wooden fist-shield. <strong>Parrying</strong>.</p>" },
+    { name: "Leather Buckler",  cv: 0, rel: 10, bash: "1d6",    ev: 0, en: 0, wt: 1,   cost: 52,  av: "E",
+      qualities: ["parryingShield"],
+      description: "<p>Hardened leather buckler. <strong>Parrying</strong>.</p>" },
+    { name: "Iron Buckler",     cv: 0, rel: 15, bash: "1d6",    ev: 0, en: 1, wt: 1,   cost: 94,  av: "C",
+      qualities: ["parryingShield"],
+      description: "<p>Iron-banded buckler. <strong>Parrying</strong>.</p>" },
+    { name: "Round Skjold",     cv: 3, rel: 12, bash: "1d6+4",  ev: 1, en: 1, wt: 1.5, cost: 141, av: "P",
+      description: "<p>Skellige round shield.</p>" },
+    { name: "Arming Shield",    cv: 2, rel: 16, bash: "1d6+4",  ev: 2, en: 1, wt: 2,   cost: 157, av: "C",
+      qualities: ["sturdyShield"],
+      description: "<p>Knight's arming shield. <strong>Sturdy</strong>.</p>" },
+    { name: "Heavy Shield",     cv: 2, rel: 20, bash: "1d6+4",  ev: 4, en: 1, wt: 3,   cost: 322, av: "P",
+      qualities: ["verySturdy"],
+      description: "<p>Heavy infantry shield. <strong>Very Sturdy</strong>.</p>" },
+    { name: "Horseman's Shield", cv: 4, rel: 12, bash: "1d6+8", ev: 3, en: 1, wt: 2.5, cost: 201, av: "C",
+      qualities: ["sturdyShield"],
+      description: "<p>Cavalry shield. <strong>Sturdy</strong>.</p>" },
+    { name: "Skyuto",           cv: 3, rel: 15, bash: "1d6+8",  ev: 5, en: 1, wt: 4,   cost: 399, av: "R",
+      qualities: ["verySturdy"],
+      description: "<p>Large Ofieri war shield. <strong>Very Sturdy</strong>.</p>" },
+    { name: "Pavise",           cv: 6, rel: 15, bash: "1d6+8",  ev: 8, en: 0, wt: 5,   cost: 500, av: "P",
+      qualities: ["sturdyShield", "deployable"],
+      description: "<p>Massive freestanding shield. CV 6 — full cover when deployed. <strong>Sturdy, Deployable</strong>.</p>" },
+
+    /* ── Quality Northern Shields (EO p.18) ─────────────────────── */
+    { name: "Temerian Target",   cv: 1, rel: 15, bash: "1d6",    ev: 0, en: 2, wt: 2,   cost: 266, av: "P",
+      qualities: ["sturdyShield"],
+      description: "<p>Strapped shoulder-shield (no hands). <strong>Sturdy</strong>. Use a weapon at -2 in the other hand alongside.</p>" },
+    { name: "Drakeskin Skjold",  cv: 3, rel: 12, bash: "1d6+4",  ev: 1, en: 1, wt: 3,   cost: 428, av: "R",
+      qualities: ["fireproof"],
+      description: "<p>Skellige drake-hide shield. <strong>Fireproof</strong>.</p>" },
+    { name: "Kaedweni Teardrop", cv: 4, rel: 18, bash: "1d6+8",  ev: 4, en: 1, wt: 3.5, cost: 337, av: "P",
+      qualities: ["verySturdy"],
+      description: "<p>Kaedweni teardrop war-shield. <strong>Very Sturdy</strong>.</p>" },
+
+    /* ── Fine Southern Shields (EO p.21) ────────────────────────── */
+    { name: "Terganian Buckler", cv: 0, rel: 10, bash: "1d6",    ev: 0, en: 1, wt: 1,   cost: 259, av: "P",
+      qualities: ["parryingShield", "bladeCatcherArmor"],
+      description: "<p>Notched parrying-buckler. <strong>Parrying, Blade Catcher</strong>. Catches use Melee instead of Small Blades.</p>" },
+    { name: "Etolian Rodella",   cv: 2, rel: 16, bash: "1d6+4",  ev: 3, en: 1, wt: 4,   cost: 601, av: "P",
+      qualities: ["verySturdy"],
+      description: "<p>Heavy round shield. <strong>Very Sturdy</strong>.</p>" },
+    { name: "Black Army Pavise", cv: 6, rel: 21, bash: "1d6+8",  ev: 8, en: 1, wt: 6,   cost: 790, av: "P",
+      qualities: ["verySturdy", "deployable"],
+      description: "<p>Nilfgaardian military pavise. <strong>Very Sturdy, Deployable</strong>.</p>" },
+
+    /* ── Exotic Shields (EO p.24) ───────────────────────────────── */
+    { name: "Bambai", cv: 1, rel: 10, bash: "1d6",   ev: 0, en: 0, wt: 1, cost: 73,  av: "R",
+      qualities: ["archeryShield"],
+      description: "<p>Haakish archer's shield. <strong>Archery Shield</strong>. Worn on forearm: -1 Block/Parry, allows bow/crossbow at no penalty.</p>" },
+    { name: "Derah",  cv: 2, rel: 20, bash: "1d6+4", ev: 2, en: 2, wt: 3, cost: 588, av: "R",
+      qualities: ["verySturdy"],
+      description: "<p>Ofieri round war-shield. <strong>Very Sturdy</strong>.</p>" },
+    { name: "Spara",  cv: 5, rel: 12, bash: "1d6+8", ev: 2, en: 0, wt: 2, cost: 141, av: "R",
+      qualities: ["deployable"],
+      description: "<p>Wicker freestanding shield. <strong>Deployable</strong>.</p>" },
+
+    /* ── Eldercraft Shields (EO p.26 — Mahakaman pavise) ────────── */
+    { name: "Mahakaman Pavise", cv: 5, rel: 24, bash: "1d6+8", ev: 6, en: 1, wt: 6, cost: 1210, av: "R",
+      qualities: ["verySturdy", "deployable"],
+      description: "<p>Dwarven master-crafted pavise. <strong>Very Sturdy, Deployable</strong>.</p>" },
+
+    /* ── Witcher School Shields (EO p.31) ───────────────────────── */
+    { name: "Manticore Shield", cv: 2, rel: 16, bash: "1d6+4", ev: 2, en: 2, wt: 2, cost: 0, av: "R",
+      qualities: ["sturdyShield", "meteorite", "silver"], qualityValues: { silver: "2d6" },
+      description: "<p>Manticore School round shield. <strong>Sturdy, Meteorite, Silver +2d6</strong>.</p>" }
+];
+
+/* ── WEAPONS (EO p.10-12: Basic Melee + Ranged) ─────────────────────
+ * Columns: WA, Dmg, Throw (range mult of BODY or N/A), Rl. (reliability),
+ *          En. (slot), effects (qualities), Cn. (conceal), Wt., Av., Price.
+ * `category` is the skill grouping: knives/swords1h/swords2h/melee1h/
+ *  melee2h/staff1h/staff2h/throwing/bows/crossbows1h/crossbows2h/etc.
+ * `damageType` is P/S/B/N etc. (EO uses combos like P/S, B/N for nonlethal).
+ *  Damage type codes: P=piercing, S=slashing, B=bludgeoning, N=non-lethal,
+ *  E=elemental. Translate to schema damageTypes array.
+ * `hands` is "one" or "two".
+ * ───────────────────────────────────────────────────────────────── */
+
+/* Helper: parse "P/S" → ["piercing","slashing"]. "B/N" → ["bludgeoning"] + nonLethal flag. */
+function parseDamageType(code) {
+    const types = [];
+    let nonLethal = false;
+    for (const c of code.split("/")) {
+        switch (c.trim()) {
+            case "P": types.push("piercing"); break;
+            case "S": types.push("slashing"); break;
+            case "B": types.push("bludgeoning"); break;
+            case "N": nonLethal = true; break;
+            case "E": types.push("elemental"); break;
+            default: INCONSISTENCIES.push(`Unknown damage-type code in weapon: "${c}"`);
+        }
+    }
+    return { types, nonLethal };
+}
+
+const WEAPONS = [
+    /* Knives & Daggers (Brawling / Small Blades, throwing-capable) */
+    { name: "Eating Knife",  wa: 0, dmg: "1d6",   dmgType: "P/S",   range: "BODY×3", rel: 2, en: 0, conceal: "T", wt: 0.1, cost: 51, av: "E", hands: "one", quick: true,
+      qualities: ["closeQuarters"], qualityValues: { closeQuarters: "+1 WA, +3 Dmg" },
+      category: "smallBlades", skill: "smallBlades",
+      description: "<p>A simple eating knife. Close Quarters: +1 WA, +3 Dmg.</p>" },
+    { name: "Work Knife",    wa: 0, dmg: "1d6+2", dmgType: "P/S",   range: "BODY×3", rel: 6, en: 0, conceal: "T", wt: 0.3, cost: 76, av: "E", hands: "one", quick: true,
+      qualities: ["nimble", "feeble", "bleeding", "foraging", "closeQuarters"],
+      qualityValues: { bleeding: "25", foraging: "carcasses", closeQuarters: "+1 WA, +1d6 Dmg" },
+      category: "smallBlades", skill: "smallBlades",
+      description: "<p>Versatile work knife. Used for skinning, dressing carcasses, and short-range combat.</p>" },
+    { name: "Throwing Knife", wa: 0, dmg: "1d6", dmgType: "P", range: "BODY×4", rel: 1, en: 0, conceal: "T", wt: 0.1, cost: 38, av: "E", hands: "one", quick: true,
+      qualities: ["feeble", "nimble", "concealment", "bleeding", "throwing"],
+      qualityValues: { bleeding: "25", throwing: "+1 WA, +1d6 Dmg" },
+      category: "smallBlades", skill: "smallBlades",
+      description: "<p>Balanced throwing knife.</p>" },
+    { name: "Dagger",         wa: 0, dmg: "1d6+2", dmgType: "P/S", range: "BODY×3", rel: 4, en: 0, conceal: "S", wt: 0.3, cost: 122, av: "E", hands: "one", quick: true,
+      qualities: ["feeble", "nimble", "balanced", "bleeding", "closeQuarters"],
+      qualityValues: { bleeding: "50", closeQuarters: "+2 WA, +1d6 Dmg" },
+      category: "smallBlades", skill: "smallBlades",
+      description: "<p>Standard fighting dagger. Excellent close-quarters bonus.</p>" },
+
+    /* Swordsmanship, One-Handed */
+    { name: "Iron Sword",    wa: 1, dmg: "2d6+3", dmgType: "P/S", range: "BODY×1", rel: 10, en: 0, conceal: "L", wt: 1.2, cost: 250, av: "E", hands: "one",
+      qualities: ["guard"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Basic iron sword. <strong>Guard</strong>.</p>" },
+    { name: "Steel Sword",   wa: 1, dmg: "3d6+2", dmgType: "P/S", range: "BODY×1", rel: 10, en: 1, conceal: "L", wt: 1.2, cost: 261, av: "C", hands: "one",
+      qualities: ["guard"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Quality steel sword. <strong>Guard</strong>.</p>" },
+    { name: "Longsword",     wa: 0, dmg: "3d6+4", dmgType: "P/S", range: "BODY×1", rel: 10, en: 1, conceal: "N/A", wt: 1.5, cost: 343, av: "P", hands: "one",
+      qualities: ["guard", "twoHand"], qualityValues: { twoHand: "+2 WA, Balanced" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Versatile hand-and-a-half sword. <strong>Guard</strong>; <strong>Two-Hand</strong>: +2 WA, Balanced.</p>" },
+
+    /* Melee, One-Handed (axes, picks, hammers) */
+    { name: "Throwing Axe",  wa: 0, dmg: "2d6", dmgType: "S", range: "BODY×2", rel: 4, en: 0, conceal: "S", wt: 0.6, cost: 65, av: "C", hands: "one",
+      qualities: ["throwing"], qualityValues: { throwing: "+2d6 Dmg" },
+      category: "melee", skill: "melee",
+      description: "<p>Balanced throwing axe.</p>" },
+    { name: "Mace",          wa: 0, dmg: "4d6", dmgType: "B", range: "BODY×1", rel: 10, en: 0, conceal: "L", wt: 1, cost: 256, av: "C", hands: "one",
+      qualities: ["ablating"],
+      category: "melee", skill: "melee",
+      description: "<p>Heavy single-handed mace. <strong>Ablating</strong>.</p>" },
+    { name: "Battle Axe",    wa: 0, dmg: "4d6", dmgType: "S", range: "BODY×1", rel: 8, en: 0, conceal: "L", wt: 1, cost: 260, av: "C", hands: "one",
+      qualities: ["ablating"],
+      category: "melee", skill: "melee",
+      description: "<p>Single-bit battle axe. <strong>Ablating</strong>.</p>" },
+    { name: "War Hammer",    wa: 0, dmg: "3d6+3", dmgType: "P/B", range: "BODY×1", rel: 10, en: 0, conceal: "N/A", wt: 1.5, cost: 329, av: "C", hands: "one",
+      qualities: ["hefty", "armorPiercing", "twoHand"], qualityValues: { twoHand: "+2d6 Dmg" },
+      category: "melee", skill: "melee",
+      description: "<p>Heavy war hammer. <strong>Hefty, Armor Piercing</strong>; <strong>Two-Hand</strong>: +2d6 Dmg.</p>" },
+
+    /* Melee, Two-Handed */
+    { name: "Infantry Mace", wa: 0, dmg: "5d6", dmgType: "B", range: "N/A", rel: 10, en: 0, conceal: "N/A", wt: 2, cost: 314, av: "C", hands: "two",
+      qualities: ["longReach", "sturdy", "ablating"],
+      category: "melee", skill: "melee",
+      description: "<p>Two-handed war mace. <strong>Long Reach, Sturdy, Ablating</strong>.</p>" },
+    { name: "War Cleaver",   wa: 0, dmg: "5d6", dmgType: "S", range: "N/A", rel: 10, en: 0, conceal: "N/A", wt: 1.8, cost: 314, av: "C", hands: "two",
+      qualities: ["hefty", "sturdy"],
+      category: "melee", skill: "melee",
+      description: "<p>Massive two-handed cleaver. <strong>Hefty, Sturdy</strong>.</p>" },
+    { name: "Great Axe",     wa: 0, dmg: "5d6+3", dmgType: "S", range: "N/A", rel: 10, en: 0, conceal: "N/A", wt: 1.6, cost: 339, av: "C", hands: "two",
+      qualities: ["longReach", "hefty", "ablating"],
+      category: "melee", skill: "melee",
+      description: "<p>Two-handed great axe. <strong>Long Reach, Hefty, Ablating</strong>.</p>" },
+
+    /* Staff/Spear, One-Handed */
+    { name: "Javelin",       wa: 0, dmg: "1d6+4", dmgType: "P", range: "BODY×5", rel: 4, en: 0, conceal: "L", wt: 0.5, cost: 62, av: "C", hands: "one",
+      qualities: ["throwing"], qualityValues: { throwing: "+1 WA, +2d6 Dmg" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Light throwing spear.</p>" },
+    { name: "Spear",         wa: 0, dmg: "3d6+4", dmgType: "P", range: "BODY×3", rel: 8, en: 1, conceal: "N/A", wt: 1.5, cost: 163, av: "E", hands: "one",
+      qualities: ["longReach", "footCharging", "twoHand"], qualityValues: { footCharging: "+2d6", twoHand: "+1 WA, Balanced" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Standard infantry spear. <strong>Long Reach</strong>; <strong>Charging</strong>: +2d6; <strong>Two-Hand</strong>: +1 WA, Balanced.</p>" },
+    { name: "Mage Crook",    wa: 0, dmg: "2d6", dmgType: "B/N", range: "N/A", rel: 4, en: 1, conceal: "N/A", wt: 1.5, cost: 364, av: "P", hands: "one",
+      qualities: ["longReach", "grappling", "focus", "twoHand"], qualityValues: { focus: "1", twoHand: "+2 Dmg" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Hooked walking staff carried by mages. <strong>Long Reach, Grappling, Focus (1)</strong>; <strong>Two-Hand</strong>: +2 Dmg.</p>" },
+    { name: "Wizard Staff",  wa: 0, dmg: "2d6", dmgType: "B/N", range: "N/A", rel: 4, en: 1, conceal: "N/A", wt: 1.5, cost: 392, av: "P", hands: "one",
+      qualities: ["longReach", "focus", "twoHand"], qualityValues: { focus: "1", twoHand: "+4 Dmg" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Wizard's staff. <strong>Long Reach, Focus (1)</strong>; <strong>Two-Hand</strong>: +4 Dmg.</p>" },
+
+    /* Staff/Spear, Two-Handed */
+    { name: "Pike",          wa: 0, dmg: "4d6", dmgType: "P", range: "N/A", rel: 6, en: 0, conceal: "N/A", wt: 3.3, cost: 185, av: "C", hands: "two",
+      qualities: ["superiorReach", "footCharging"], qualityValues: { footCharging: "+1d6" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Long infantry pike. <strong>Superior Reach</strong>; <strong>Charging</strong>: +1d6.</p>" },
+    { name: "Lance of Peace", wa: 0, dmg: "2d6+2", dmgType: "B/N", range: "N/A", rel: 10, en: 0, conceal: "N/A", wt: 4, cost: 302, av: "P", hands: "two",
+      qualities: ["longReach", "hefty", "cavalry", "physique", "footCharging"],
+      qualityValues: { physique: "13", footCharging: "+3d6" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Blunted tournament lance. <strong>Long Reach, Hefty, Cavalry, Physique (13)</strong>; <strong>Charging</strong>: +3d6.</p>" },
+    { name: "War Lance",     wa: 0, dmg: "2d6+2", dmgType: "P", range: "N/A", rel: 10, en: 0, conceal: "N/A", wt: 4, cost: 303, av: "P", hands: "two",
+      qualities: ["longReach", "hefty", "cavalry", "physique", "footCharging"],
+      qualityValues: { physique: "13", footCharging: "+5d6" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Heavy war lance. <strong>Long Reach, Hefty, Cavalry, Physique (13)</strong>; <strong>Charging</strong>: +5d6.</p>" },
+    { name: "Pole-Axe",      wa: 0, dmg: "6d6", dmgType: "P/S", range: "N/A", rel: 10, en: 0, conceal: "N/A", wt: 3.5, cost: 330, av: "C", hands: "two",
+      qualities: ["longReach", "hefty", "sturdy", "grappling"],
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Knight's pole-axe. <strong>Long Reach, Hefty, Sturdy, Grappling</strong>.</p>" },
+
+    /* ── Quality Northern Hand Weapons (EO p.17) ────────────────── */
+    { name: "Poniard", wa: 0, dmg: "2d6+3", dmgType: "P", range: "BODY×3", rel: 4, en: 1, conceal: "S", wt: 0.3, cost: 258, av: "P", hands: "one", quick: true,
+      qualities: ["nimble", "balanced", "bleeding", "closeQuarters"],
+      qualityValues: { bleeding: "75", closeQuarters: "+3 WA, +1d6 Dmg, Armor Piercing" },
+      category: "smallBlades", skill: "smallBlades",
+      description: "<p>Long Northern dagger of fine steel. <strong>Nimble, Balanced, Bleed 75%</strong>; <strong>Close Quarters</strong> +3 WA, +1d6 Dmg, Armor Piercing.</p>" },
+    { name: "Rondel Dagger", wa: 0, dmg: "2d6", dmgType: "P", range: "BODY×3", rel: 8, en: 1, conceal: "S", wt: 0.4, cost: 300, av: "P", hands: "one", quick: true,
+      qualities: ["nimble", "bleeding", "armorPiercing", "closeQuarters"],
+      qualityValues: { bleeding: "25", closeQuarters: "+2 WA, +1d6 Dmg, Improved Armor Piercing" },
+      category: "smallBlades", skill: "smallBlades",
+      description: "<p>Knight's mail-piercing dagger. <strong>Nimble, Bleed 25%, Armor Piercing</strong>; <strong>Close Quarters</strong> +2 WA, +1d6 Dmg, Improved Armor Piercing.</p>" },
+    { name: "Sword Catcher", wa: 0, dmg: "2d6", dmgType: "P/S", range: "BODY×2", rel: 10, en: 0, conceal: "S", wt: 0.5, cost: 379, av: "R", hands: "one", quick: true,
+      qualities: ["nimble", "bladeCatcher", "bleeding", "closeQuarters"],
+      qualityValues: { bleeding: "25", closeQuarters: "+1 WA, +1d6 Dmg" },
+      category: "smallBlades", skill: "smallBlades",
+      description: "<p>Curved parrying-dagger. <strong>Nimble, Blade Catcher, Bleed 25%</strong>; <strong>Close Quarters</strong> +1 WA, +1d6 Dmg.</p>" },
+    { name: "Tretagor Blade", wa: 1, dmg: "4d6", dmgType: "P/S", range: "BODY×1", rel: 15, en: 1, conceal: "L", wt: 1.3, cost: 605, av: "P", hands: "one",
+      qualities: ["guard", "balanced", "twoHand", "closeQuarters"],
+      qualityValues: { twoHand: "+1d6 Dmg", closeQuarters: "Armor Piercing" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Refined Tretagor knight's sword. <strong>Guard, Balanced</strong>; <strong>Two-Hand</strong>: +1d6 Dmg; <strong>Close Quarters</strong>: Armor Piercing.</p>" },
+    { name: "Krigssverd", wa: 1, dmg: "4d6+4", dmgType: "P/S", range: "BODY×1", rel: 10, en: 1, conceal: "L", wt: 1.3, cost: 620, av: "P", hands: "one",
+      qualities: ["balanced"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Heavy Skellige war-blade. <strong>Balanced</strong>.</p>" },
+    { name: "Kord", wa: 1, dmg: "4d6+4", dmgType: "P/S", range: "BODY×1", rel: 15, en: 1, conceal: "N/A", wt: 1.5, cost: 691, av: "R", hands: "one",
+      qualities: ["superiorGuard"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Master-forged Skellige longsword. <strong>Superior Guard</strong>.</p>" },
+    { name: "Dopplehander", wa: 0, dmg: "6d6", dmgType: "P/S", range: "BODY×1", rel: 20, en: 2, conceal: "N/A", wt: 3.5, cost: 1139, av: "R", hands: "two",
+      qualities: ["longReach", "superiorGuard", "hefty", "sturdy", "ablating"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Massive two-handed greatsword. <strong>Long Reach, Superior Guard, Hefty, Sturdy, Ablating</strong>.</p>" },
+    { name: "Francisca", wa: 0, dmg: "2d6", dmgType: "S", range: "BODY×3", rel: 10, en: 0, conceal: "L", wt: 1, cost: 184, av: "R", hands: "one",
+      qualities: ["throwing"], qualityValues: { throwing: "+3d6 Dmg, Armor Piercing" },
+      category: "melee", skill: "melee",
+      description: "<p>Frankish throwing axe. <strong>Throwing</strong>: +3d6 Dmg, Armor Piercing. If a thrown francisca misses, it bounces 1d6m in a random direction and may attack a nearby creature using 2d6 as its base.</p>" },
+    { name: "Lamia", wa: 0, dmg: "2d6", dmgType: "S/B", range: "N/A", rel: 5, en: 0, conceal: "N/A", wt: 1.5, cost: 387, av: "R", hands: "one",
+      qualities: ["bleeding", "indirect", "grappling"], qualityValues: { bleeding: "100" },
+      category: "melee", skill: "melee",
+      description: "<p>Hooked Indrun whip-flail. <strong>Bleed 100%, Indirect, Grappling</strong>.</p>" },
+    { name: "Jogar", wa: 0, dmg: "5d6", dmgType: "B", range: "BODY×1", rel: 20, en: 1, conceal: "L", wt: 1.5, cost: 460, av: "C", hands: "one",
+      qualities: ["ablating"],
+      category: "melee", skill: "melee",
+      description: "<p>Skellige war-club. <strong>Ablating</strong>.</p>" },
+    { name: "Skeggax", wa: 0, dmg: "5d6", dmgType: "S", range: "BODY×2", rel: 10, en: 1, conceal: "L", wt: 1.3, cost: 488, av: "C", hands: "one",
+      qualities: ["ablating"],
+      category: "melee", skill: "melee",
+      description: "<p>Bearded battle axe. <strong>Ablating</strong>.</p>" },
+    { name: "Berserkax", wa: 0, dmg: "6d6+4", dmgType: "S", range: "N/A", rel: 10, en: 1, conceal: "N/A", wt: 1.8, cost: 791, av: "R", hands: "two",
+      qualities: ["longReach", "sturdy", "ablating"],
+      category: "melee", skill: "melee",
+      description: "<p>Two-handed berserker's axe. <strong>Long Reach, Sturdy, Ablating</strong>.</p>" },
+    { name: "Martel à Bec", wa: -1, dmg: "6d6+4", dmgType: "P/B", range: "N/A", rel: 12, en: 1, conceal: "N/A", wt: 3, cost: 958, av: "P", hands: "two",
+      qualities: ["hefty", "sturdy", "ablating", "armorPiercing"],
+      category: "melee", skill: "melee",
+      description: "<p>Spike-tipped war hammer. <strong>Hefty, Sturdy, Ablating, Armor Piercing</strong>.</p>" },
+    { name: "Highland Mauler", wa: -1, dmg: "6d6+4", dmgType: "B", range: "N/A", rel: 10, en: 1, conceal: "N/A", wt: 3.5, cost: 1107, av: "R", hands: "two",
+      qualities: ["hefty", "sturdy", "stun"], qualityValues: { stun: "-2" },
+      category: "melee", skill: "melee",
+      description: "<p>Skellige greatmaul. <strong>Hefty, Sturdy, Stun (-2)</strong>.</p>" },
+    { name: "Doryo", wa: 0, dmg: "4d6+2", dmgType: "P", range: "BODY×2", rel: 10, en: 1, conceal: "N/A", wt: 2, cost: 525, av: "R", hands: "one",
+      qualities: ["longReach", "bleeding", "footCharging", "twoHand"],
+      qualityValues: { bleeding: "25", footCharging: "+2d6", twoHand: "+1 WA, +2 Dmg" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Verden hunting spear. <strong>Long Reach, Bleed 25%</strong>; <strong>Charging</strong>: +2d6; <strong>Two-Hand</strong>: +1 WA, +2 Dmg.</p>" },
+    { name: "Vingespyd", wa: 0, dmg: "4d6", dmgType: "P", range: "BODY×2", rel: 10, en: 1, conceal: "N/A", wt: 1.8, cost: 553, av: "P", hands: "one",
+      qualities: ["longReach", "footCharging", "twoHand"],
+      qualityValues: { footCharging: "+1d6", twoHand: "+2 WA, +1d6 Dmg, Guard" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Winged Skellige spear. <strong>Long Reach</strong>; <strong>Charging</strong>: +1d6; <strong>Two-Hand</strong>: +2 WA, +1d6 Dmg, Guard.</p>" },
+    { name: "Crystal Staff", wa: 0, dmg: "1d6", dmgType: "B/N", range: "N/A", rel: 5, en: 2, conceal: "N/A", wt: 2, cost: 1927, av: "R", hands: "two",
+      qualities: ["longReach", "focus", "greaterFocus"], qualityValues: { focus: "3" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Mage's crystal-headed staff. <strong>Long Reach, Focus (3), Greater Focus</strong>.</p>" },
+    { name: "Military Fork", wa: 0, dmg: "5d6+2", dmgType: "P", range: "BODY×1", rel: 12, en: 0, conceal: "N/A", wt: 2.5, cost: 529, av: "C", hands: "two",
+      qualities: ["longReach", "sturdy", "grappling", "bleeding", "footCharging"],
+      qualityValues: { bleeding: "50", footCharging: "+2d6" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Two-tined infantry fork. <strong>Long Reach, Sturdy, Grappling, Bleed 50%</strong>; <strong>Charging</strong>: +2d6.</p>" },
+    { name: "Redanian Halberd", wa: -1, dmg: "7d6", dmgType: "P/S", range: "N/A", rel: 10, en: 1, conceal: "N/A", wt: 4, cost: 1092, av: "P", hands: "two",
+      qualities: ["superiorReach", "hefty", "sturdy", "grappling", "ablating", "footCharging"],
+      qualityValues: { footCharging: "+1d6" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Redanian polearm. <strong>Superior Reach, Hefty, Sturdy, Grappling, Ablating</strong>; <strong>Charging</strong>: +1d6.</p>" },
+
+    /* ── Fine Southern (Viroledan) Hand Weapons (EO p.20-21) ────── */
+    { name: "Stiletto", wa: 0, dmg: "1d6", dmgType: "P", range: "BODY×3", rel: 2, en: 1, conceal: "T", wt: 0.2, cost: 232, av: "C", hands: "one", quick: true,
+      qualities: ["concealment", "feeble", "nimble", "bleeding", "closeQuarters"],
+      qualityValues: { bleeding: "50", closeQuarters: "+4 WA, +1d6 Dmg" },
+      category: "smallBlades", skill: "smallBlades",
+      description: "<p>Long narrow stabbing knife. <strong>Concealment, Feeble, Nimble, Bleed 50%</strong>; <strong>Close Quarters</strong>: +4 WA, +1d6 Dmg.</p>" },
+    { name: "Sinestro", wa: 0, dmg: "2d6", dmgType: "P/S", range: "BODY×2", rel: 10, en: 1, conceal: "S", wt: 0.5, cost: 380, av: "P", hands: "one", quick: true,
+      qualities: ["parrying", "nimble", "bleeding", "closeQuarters"],
+      qualityValues: { bleeding: "25", closeQuarters: "+1 WA, +1d6 Dmg" },
+      category: "smallBlades", skill: "smallBlades",
+      description: "<p>Viroledan parrying-dagger. <strong>Parrying, Nimble, Bleed 25%</strong>; <strong>Close Quarters</strong>: +1 WA, +1d6 Dmg.</p>" },
+    { name: "Esboda", wa: 1, dmg: "4d6+2", dmgType: "P/S", range: "BODY×1", rel: 15, en: 1, conceal: "L", wt: 1.4, cost: 688, av: "P", hands: "one",
+      qualities: ["guard", "cavalry"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Mettinese cavalry sword. <strong>Guard, Cavalry</strong>.</p>" },
+    { name: "Terganian Side Sword", wa: 2, dmg: "3d6+2", dmgType: "P/S", range: "BODY×1", rel: 10, en: 1, conceal: "N/A", wt: 1.4, cost: 723, av: "R", hands: "one",
+      qualities: ["superiorGuard", "balanced"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Viroledan side-sword. <strong>Superior Guard, Balanced</strong>.</p>" },
+    { name: "Estoc", wa: 0, dmg: "3d6+2", dmgType: "P", range: "BODY×1", rel: 10, en: 1, conceal: "L", wt: 1.5, cost: 791, av: "R", hands: "one",
+      qualities: ["guard", "armorPiercing", "twoHand", "closeQuarters"],
+      qualityValues: { twoHand: "+1 WA, +1d6 Dmg", closeQuarters: "Improved Armor Piercing" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Heavy-tipped thrusting sword. <strong>Guard, Armor Piercing</strong>; <strong>Two-Hand</strong>: +1 WA, +1d6 Dmg; <strong>Close Quarters</strong>: Improved Armor Piercing.</p>" },
+    { name: "Viroledan Longsword", wa: 1, dmg: "4d6", dmgType: "P/S", range: "BODY×1", rel: 10, en: 1, conceal: "L", wt: 1.6, cost: 879, av: "R", hands: "one",
+      qualities: ["guard", "balanced", "twoHand"], qualityValues: { twoHand: "+1 WA, +4 Dmg" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Master-smithed longsword. <strong>Guard, Balanced</strong>; <strong>Two-Hand</strong>: +1 WA, +4 Dmg.</p>" },
+    { name: "Vicovarian Blade", wa: 1, dmg: "5d6+2", dmgType: "P/S", range: "BODY×1", rel: 15, en: 1, conceal: "N/A", wt: 2.2, cost: 966, av: "R", hands: "two",
+      qualities: ["guard", "sturdy", "balanced"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Two-handed Vicovarian war-sword. <strong>Guard, Sturdy, Balanced</strong>.</p>" },
+    { name: "Torrwr", wa: 1, dmg: "6d6", dmgType: "P/S", range: "BODY×1", rel: 15, en: 2, conceal: "N/A", wt: 3, cost: 1130, av: "R", hands: "two",
+      qualities: ["longReach", "guard", "sturdy"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Massive elven-inspired greatsword. <strong>Long Reach, Guard, Sturdy</strong>.</p>" },
+    { name: "Flamberge", wa: 0, dmg: "6d6", dmgType: "P/S", range: "BODY×1", rel: 10, en: 2, conceal: "N/A", wt: 3.5, cost: 1180, av: "R", hands: "two",
+      qualities: ["longReach", "superiorGuard", "hefty", "sturdy", "bleeding"],
+      qualityValues: { bleeding: "50" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Wavy-bladed two-handed sword. <strong>Long Reach, Superior Guard, Hefty, Sturdy, Bleed 50%</strong>.</p>" },
+    { name: "Martello", wa: 0, dmg: "5d6+2", dmgType: "P/B", range: "BODY×1", rel: 10, en: 1, conceal: "L", wt: 1.2, cost: 540, av: "P", hands: "one",
+      qualities: ["cavalry"],
+      category: "melee", skill: "melee",
+      description: "<p>Heavy cavalry hammer. <strong>Cavalry</strong>.</p>" },
+    { name: "Ascia", wa: 0, dmg: "5d6+2", dmgType: "P/S", range: "BODY×1", rel: 10, en: 1, conceal: "L", wt: 1.2, cost: 547, av: "P", hands: "one",
+      qualities: ["cavalry"],
+      category: "melee", skill: "melee",
+      description: "<p>Cavalry pickaxe. <strong>Cavalry</strong>.</p>" },
+    { name: "Hache de Guerre", wa: 0, dmg: "6d6+4", dmgType: "P/S/B", range: "N/A", rel: 12, en: 1, conceal: "N/A", wt: 2.6, cost: 948, av: "P", hands: "two",
+      qualities: ["hefty", "sturdy", "armorPiercing"],
+      category: "melee", skill: "melee",
+      description: "<p>Mettinese war-axe. <strong>Hefty, Sturdy, Armor Piercing</strong>.</p>" },
+    { name: "Pilum", wa: 0, dmg: "4d6", dmgType: "P", range: "BODY×3", rel: 8, en: 1, conceal: "N/A", wt: 2, cost: 408, av: "P", hands: "one",
+      qualities: ["throwing"], qualityValues: { throwing: "+1 WA, Improved Armor Piercing" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Roman-style throwing spear. <strong>Throwing</strong>: +1 WA, Improved Armor Piercing.</p>" },
+    { name: "Spontoon", wa: 1, dmg: "4d6", dmgType: "P", range: "BODY×2", rel: 12, en: 1, conceal: "N/A", wt: 1.6, cost: 536, av: "C", hands: "one",
+      qualities: ["longReach", "footCharging", "twoHand"],
+      qualityValues: { footCharging: "+1d6", twoHand: "+1d6 Dmg, Guard, Balanced" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Officer's half-pike. <strong>Long Reach</strong>; <strong>Charging</strong>: +1d6; <strong>Two-Hand</strong>: +1d6 Dmg, Guard, Balanced.</p>" },
+    { name: "Mancatcher", wa: 0, dmg: "0", dmgType: "B", range: "N/A", rel: 10, en: 0, conceal: "N/A", wt: 3, cost: 328, av: "C", hands: "two",
+      qualities: ["longReach", "grappling"],
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Long polearm with two-pronged grappling head. <strong>Long Reach, Grappling</strong>. Used only for Grapple/Pin/Choke Hold/Disarm/Trip at +2; can deal 3d6 B/N forgoing the bonus.</p>" },
+    { name: "Partisan", wa: 1, dmg: "5d6+3", dmgType: "P/S", range: "BODY×2", rel: 12, en: 1, conceal: "N/A", wt: 2.4, cost: 777, av: "C", hands: "two",
+      qualities: ["longReach", "guard", "sturdy", "footCharging"], qualityValues: { footCharging: "+1d6" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Officer's polearm. <strong>Long Reach, Guard, Sturdy</strong>; <strong>Charging</strong>: +1d6.</p>" },
+    { name: "Valenkosa", wa: 0, dmg: "7d6+3", dmgType: "S", range: "N/A", rel: 10, en: 1, conceal: "N/A", wt: 3.5, cost: 1052, av: "C", hands: "two",
+      qualities: ["longReach", "hefty", "sturdy", "ablating", "bleeding"],
+      qualityValues: { bleeding: "50" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Cossack war-scythe. <strong>Long Reach, Hefty, Sturdy, Ablating, Bleed 50%</strong>.</p>" },
+    { name: "Iron Staff", wa: -2, dmg: "5d6", dmgType: "B", range: "N/A", rel: 25, en: 1, conceal: "N/A", wt: 5, cost: 1459, av: "R", hands: "two",
+      qualities: ["longReach", "hefty", "sturdy", "ablating", "focus"], qualityValues: { focus: "2" },
+      category: "staffSpear", skill: "staffSpear",
+      description: "<p>Iron-bound battle staff. <strong>Long Reach, Hefty, Sturdy, Ablating, Focus (2)</strong>. A mage can attune this staff for −1kg / +1 accuracy per 5 levels of Magical Training, costing 1 STA/round to maintain.</p>" }
+];
+
+/* ── RANGED WEAPONS (EO p.12-13) ──────────────────────────────── */
+const RANGED = [
+    /* Athletics (throwing) — already covered above (Javelin, Throwing Knife etc.) */
+    { name: "Dart", wa: 1, dmg: "3d6", dmgType: "P", range: "BODY×6", rel: 2, en: 0, conceal: "L", wt: 0.2, cost: 48, av: "C", hands: "one", quick: true,
+      qualities: ["feeble", "armorPiercing"],
+      category: "thrown", skill: "athletics",
+      description: "<p>Sharp throwing dart. <strong>Feeble, Armor Piercing</strong>.</p>" },
+    { name: "Weighted Net", wa: 0, dmg: "0", dmgType: "B", range: "4m", rel: 5, en: 0, conceal: "L", wt: 4, cost: 175, av: "E", hands: "two",
+      qualities: ["grappling", "entangling"],
+      category: "thrown", skill: "athletics",
+      description: "<p>Weighted entangling net. <strong>Grappling, Entangling</strong>. No damage.</p>" },
+    /* Sling */
+    { name: "Sling", wa: -1, dmg: "3d6", dmgType: "B", range: "100m", rel: 1, en: 0, conceal: "T", wt: 0.1, cost: 76, av: "E", hands: "one",
+      qualities: ["feeble", "concealment", "freeAmmunition"],
+      category: "sling", skill: "athletics",
+      description: "<p>Simple shepherd's sling. <strong>Feeble, Concealment, Free Ammunition</strong>.</p>" },
+    { name: "Staff-Sling", wa: -2, dmg: "3d6", dmgType: "B", range: "200m", rel: 4, en: 0, conceal: "N/A", wt: 1.2, cost: 167, av: "C", hands: "two",
+      qualities: ["freeAmmunition"],
+      category: "sling", skill: "athletics",
+      description: "<p>Staff-sling. <strong>Free Ammunition</strong>. Can use Staff/Spear in close combat (1d6+2 B/N).</p>" },
+    /* Bows */
+    { name: "Shortbow", wa: 0, dmg: "3d6+1", dmgType: "P", range: "150m", rel: 4, en: 1, conceal: "N/A", wt: 0.5, cost: 200, av: "C", hands: "two",
+      category: "bow", skill: "archery",
+      description: "<p>Compact recurve shortbow.</p>" },
+    { name: "Hunting Bow", wa: 0, dmg: "3d6+2", dmgType: "P", range: "200m", rel: 8, en: 1, conceal: "N/A", wt: 0.8, cost: 280, av: "C", hands: "two",
+      category: "bow", skill: "archery",
+      description: "<p>Hunter's medium bow.</p>" },
+    { name: "Longbow", wa: 0, dmg: "4d6", dmgType: "P", range: "350m", rel: 10, en: 1, conceal: "N/A", wt: 1.5, cost: 460, av: "P", hands: "two",
+      qualities: ["physique"], qualityValues: { physique: "12" },
+      category: "bow", skill: "archery",
+      description: "<p>Heavy longbow. <strong>Physique (12)</strong>.</p>" },
+    /* Crossbows */
+    { name: "Crossbow Pistol", wa: 1, dmg: "2d6+2", dmgType: "P", range: "50m", rel: 5, en: 0, conceal: "S", wt: 1, cost: 250, av: "C", hands: "one",
+      qualities: ["concealment"],
+      category: "crossbow", skill: "crossbow",
+      description: "<p>One-handed crossbow pistol. <strong>Concealment</strong>.</p>" },
+    { name: "Crossbow", wa: 1, dmg: "3d6+2", dmgType: "P", range: "200m", rel: 10, en: 1, conceal: "N/A", wt: 3, cost: 350, av: "C", hands: "two",
+      category: "crossbow", skill: "crossbow",
+      description: "<p>Standard crossbow.</p>" },
+    { name: "Heavy Crossbow", wa: 0, dmg: "4d6+2", dmgType: "P", range: "250m", rel: 10, en: 1, conceal: "N/A", wt: 5, cost: 500, av: "P", hands: "two",
+      qualities: ["armorPiercing"],
+      category: "crossbow", skill: "crossbow",
+      description: "<p>Heavy military crossbow. <strong>Armor Piercing</strong>.</p>" },
+
+    /* ── Quality Northern Ranged (EO p.17) ──────────────────────── */
+    { name: "Bone Bow", wa: 1, dmg: "3d6", dmgType: "P", range: "100m", rel: 2, en: 0, conceal: "L", wt: 0.5, cost: 299, av: "P", hands: "two",
+      qualities: ["feeble"],
+      category: "bow", skill: "archery",
+      description: "<p>Skellige bone-and-sinew bow. <strong>Feeble</strong>.</p>" },
+    { name: "Verden Longbow", wa: 1, dmg: "4d6+2", dmgType: "P", range: "200m", rel: 4, en: 1, conceal: "N/A", wt: 1, cost: 432, av: "R", hands: "two",
+      qualities: ["physique", "grounded"], qualityValues: { physique: "12" },
+      category: "bow", skill: "archery",
+      description: "<p>Verden master-archer's longbow. <strong>Physique (12), Grounded</strong>.</p>" },
+    { name: "Koviri Crossbow", wa: 2, dmg: "4d6", dmgType: "P", range: "50m", rel: 1, en: 1, conceal: "L", wt: 1, cost: 341, av: "P", hands: "one",
+      qualities: ["feeble", "stableAim", "slowReload"], qualityValues: { slowReload: "1" },
+      category: "crossbow", skill: "crossbow",
+      description: "<p>Koviri precision crossbow. <strong>Feeble, Stable Aim, Slow Reload (1)</strong>.</p>" },
+    { name: "Tretagor Arbalest", wa: 2, dmg: "8d6", dmgType: "P", range: "150m", rel: 5, en: 1, conceal: "N/A", wt: 4, cost: 1337, av: "P", hands: "two",
+      qualities: ["stableAim", "slowReload", "grounded"], qualityValues: { slowReload: "4" },
+      category: "crossbow", skill: "crossbow",
+      description: "<p>Heavy Tretagor arbalest. <strong>Stable Aim, Slow Reload (4), Grounded</strong>.</p>" },
+
+    /* ── Fine Southern Ranged (EO p.21) ─────────────────────────── */
+    { name: "Orion", wa: 2, dmg: "1d6", dmgType: "S", range: "BODY×4", rel: 1, en: 0, conceal: "T", wt: 0.1, cost: 46, av: "P", hands: "one", quick: true,
+      qualities: ["feeble", "nimble", "concealment"],
+      category: "thrown", skill: "athletics",
+      description: "<p>Star-shaped throwing blade. <strong>Feeble, Nimble, Concealment</strong>. Action to throw a handful (up to half Sleight of Hand) at -1 per extra; hits = margin of success.</p>" },
+    { name: "Markee Bow", wa: 1, dmg: "3d6+2", dmgType: "P", range: "150m", rel: 2, en: 1, conceal: "L", wt: 0.5, cost: 431, av: "R", hands: "two",
+      qualities: ["feeble", "balanced", "nimble"],
+      category: "bow", skill: "archery",
+      description: "<p>Mettinese precision bow. <strong>Feeble, Balanced, Nimble</strong>.</p>" },
+    { name: "Black Infantry Bow", wa: 0, dmg: "5d6+3", dmgType: "P", range: "250m", rel: 6, en: 1, conceal: "N/A", wt: 1.5, cost: 691, av: "P", hands: "two",
+      qualities: ["physique", "grounded"], qualityValues: { physique: "15" },
+      category: "bow", skill: "archery",
+      description: "<p>Nilfgaardian heavy infantry longbow. <strong>Physique (15), Grounded</strong>.</p>" },
+    { name: "Nilfgaardian Crossbow", wa: 2, dmg: "2d6+3", dmgType: "P", range: "30m", rel: 1, en: 1, conceal: "S", wt: 0.3, cost: 342, av: "R", hands: "one",
+      qualities: ["feeble", "nimble", "stableAim", "concealment"],
+      category: "crossbow", skill: "crossbow",
+      description: "<p>Nilfgaardian hand crossbow. <strong>Feeble, Nimble, Stable Aim, Concealment</strong>. Hand-spanned (no Slow Reload); can't make Strong Strikes.</p>" },
+
+    /* ── Exotic Imports — Ranged (EO p.24) ──────────────────────── */
+    { name: "Chakram", wa: 0, dmg: "3d6+4", dmgType: "S", range: "BODY×4", rel: 5, en: 1, conceal: "L", wt: 0.5, cost: 175, av: "R", hands: "one",
+      qualities: ["guard", "balanced", "bleeding"], qualityValues: { bleeding: "50" },
+      category: "thrown", skill: "athletics",
+      description: "<p>Indian throwing-disc. <strong>Guard, Balanced, Bleed 50%</strong>. Can be used in melee at -1 with Melee skill (loses Bleed/Balanced/AP).</p>" },
+    { name: "Jarid", wa: 1, dmg: "3d6+2", dmgType: "P", range: "BODY×6", rel: 3, en: 0, conceal: "S", wt: 0.7, cost: 186, av: "R", hands: "one", quick: true,
+      qualities: ["feeble", "balanced", "armorPiercing"],
+      category: "thrown", skill: "athletics",
+      description: "<p>Light throwing javelin. <strong>Feeble, Balanced, Armor Piercing</strong>.</p>" },
+    { name: "Kaman", wa: 1, dmg: "4d6+2", dmgType: "P", range: "200m", rel: 2, en: 2, conceal: "L", wt: 1, cost: 733, av: "R", hands: "two",
+      qualities: ["feeble", "balanced", "nimble"],
+      category: "bow", skill: "archery",
+      description: "<p>Ofieri recurve bow. <strong>Feeble, Balanced, Nimble</strong>.</p>" },
+    { name: "Mori Num", wa: 0, dmg: "6d6", dmgType: "P", range: "250m", rel: 2, en: 1, conceal: "L", wt: 1.5, cost: 1102, av: "R", hands: "two",
+      qualities: ["balanced", "physique"], qualityValues: { physique: "12" },
+      category: "bow", skill: "archery",
+      description: "<p>Zerrikanian war bow. <strong>Balanced, Physique (12)</strong>.</p>" },
+    { name: "Zerrikanian Zefhar", wa: 2, dmg: "5d6", dmgType: "P", range: "200m", rel: 2, en: 2, conceal: "L", wt: 1.5, cost: 1302, av: "R", hands: "two",
+      qualities: ["feeble", "balanced", "nimble"],
+      category: "bow", skill: "archery",
+      description: "<p>Master-crafted Zerrikanian bow. <strong>Feeble, Balanced, Nimble</strong>.</p>" },
+    { name: "Höl Num", wa: 0, dmg: "7d6", dmgType: "P", range: "300m", rel: 8, en: 1, conceal: "N/A", wt: 2.5, cost: 1584, av: "R", hands: "two",
+      qualities: ["physique", "grounded"], qualityValues: { physique: "15" },
+      category: "bow", skill: "archery",
+      description: "<p>Heavy Zerrikanian foot bow. <strong>Physique (15), Grounded</strong>.</p>" }
+];
+
+/* ── Exotic Hand Weapons (EO p.23-24) — added to main WEAPONS list ── */
+WEAPONS.push(
+    { name: "Bagh Nakh", wa: 0, dmg: "+1d6", dmgType: "S", range: "N/A", rel: 99, en: 0, conceal: "T", wt: 0.1, cost: 229, av: "R", hands: "one",
+      qualities: ["bleeding", "concealment", "closeQuarters"],
+      qualityValues: { bleeding: "75", closeQuarters: "+3 WA, +2d6 Dmg" },
+      category: "brawling", skill: "brawling",
+      description: "<p>Tiger-claw punching weapon. <strong>Brawling (Punch), Bleed 75%, Concealment</strong>; <strong>Close Quarters</strong>: +3 WA, +2d6 Dmg.</p>" },
+    { name: "Jambiya", wa: 0, dmg: "1d6", dmgType: "P", range: "BODY×2", rel: 4, en: 1, conceal: "T", wt: 0.3, cost: 494, av: "R", hands: "one", quick: true,
+      qualities: ["feeble", "nimble", "bleeding", "balanced", "closeQuarters"],
+      qualityValues: { bleeding: "100", closeQuarters: "+3 WA, +2d6 Dmg" },
+      category: "smallBlades", skill: "smallBlades",
+      description: "<p>Curved Ofieri ceremonial dagger. <strong>Feeble, Nimble, Bleed 100%, Balanced</strong>; <strong>Close Quarters</strong>: +3 WA, +2d6 Dmg.</p>" },
+    { name: "Katar", wa: 0, dmg: "3d6", dmgType: "P", range: "N/A", rel: 8, en: 1, conceal: "T", wt: 0.6, cost: 501, av: "R", hands: "one", quick: true,
+      qualities: ["feeble", "improvedArmorPiercing", "bleeding"], qualityValues: { bleeding: "25" },
+      category: "smallBlades", skill: "smallBlades",
+      description: "<p>Punching dagger. <strong>Feeble, Improved Armor Piercing, Bleed 25%</strong>.</p>" },
+    { name: "Kris", wa: 1, dmg: "2d6", dmgType: "P", range: "BODY×2", rel: 6, en: 2, conceal: "S", wt: 0.5, cost: 505, av: "R", hands: "one", quick: true,
+      qualities: ["nimble", "bleeding", "ablating", "closeQuarters"],
+      qualityValues: { bleeding: "100", closeQuarters: "+1 WA, +1d6 Dmg" },
+      category: "smallBlades", skill: "smallBlades",
+      description: "<p>Wavy-bladed Ofieri dagger. <strong>Nimble, Bleed 100%, Ablating</strong>; <strong>Close Quarters</strong>: +1 WA, +1d6 Dmg.</p>" },
+    { name: "Szabla", wa: 1, dmg: "3d6+2", dmgType: "S", range: "BODY×1", rel: 10, en: 0, conceal: "L", wt: 1, cost: 287, av: "C", hands: "one",
+      qualities: ["cavalry"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Curved cavalry sabre. <strong>Cavalry</strong>.</p>" },
+    { name: "Shafra", wa: 2, dmg: "3d6", dmgType: "S", range: "BODY×1", rel: 10, en: 0, conceal: "L", wt: 1.1, cost: 302, av: "P", hands: "one",
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Ofieri straight sword.</p>" },
+    { name: "Sa'if", wa: 2, dmg: "4d6", dmgType: "S", range: "BODY×1", rel: 10, en: 1, conceal: "L", wt: 1.1, cost: 707, av: "R", hands: "one",
+      qualities: ["balanced"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Ofieri sabre. <strong>Balanced</strong>.</p>" },
+    { name: "Shamshir", wa: 1, dmg: "4d6", dmgType: "S", range: "BODY×1", rel: 10, en: 1, conceal: "L", wt: 1.3, cost: 730, av: "R", hands: "one",
+      qualities: ["cavalry", "bleeding"], qualityValues: { bleeding: "75" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Deeply-curved Ofieri sabre. <strong>Cavalry, Bleed 75%</strong>.</p>" },
+    { name: "Kilij", wa: 1, dmg: "5d6", dmgType: "S", range: "BODY×1", rel: 10, en: 1, conceal: "N/A", wt: 1.3, cost: 791, av: "R", hands: "one",
+      qualities: ["bleeding"], qualityValues: { bleeding: "50" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Turkish flared-tip sabre. <strong>Bleed 50%</strong>.</p>" },
+    { name: "Shishpar", wa: 0, dmg: "5d6", dmgType: "B", range: "BODY×1", rel: 15, en: 1, conceal: "L", wt: 1.7, cost: 633, av: "R", hands: "one",
+      qualities: ["guard", "cavalry", "ablating"],
+      category: "melee", skill: "melee",
+      description: "<p>Flanged mace. <strong>Guard, Cavalry, Ablating</strong>.</p>" },
+    { name: "Tabarzin", wa: 0, dmg: "5d6", dmgType: "S", range: "BODY×1", rel: 15, en: 1, conceal: "L", wt: 1.6, cost: 653, av: "R", hands: "one",
+      qualities: ["guard", "cavalry", "ablating"],
+      category: "melee", skill: "melee",
+      description: "<p>Ofieri saddle axe. <strong>Guard, Cavalry, Ablating</strong>.</p>" },
+    { name: "Tabar", wa: 1, dmg: "6d6", dmgType: "S", range: "N/A", rel: 20, en: 2, conceal: "N/A", wt: 2.2, cost: 1179, av: "R", hands: "two",
+      qualities: ["sturdy", "ablating"],
+      category: "melee", skill: "melee",
+      description: "<p>Two-handed war axe. <strong>Sturdy, Ablating</strong>.</p>" }
+);
+
+/* ── Elderfolk Armory & Witcher Kit weapons (EO p.26-29) ──────── */
+WEAPONS.push(
+    /* Elderfolk knife & swords (signature blades) — stats per EO PDF */
+    { name: "Mahakaman Sihil", wa: 1, dmg: "4d6+4", dmgType: "P/S", range: "BODY×1", rel: 20, en: 2, conceal: "L", wt: 0.8, cost: 980, av: "R", hands: "one",
+      qualities: ["balanced", "armorPiercing", "meteorite", "twoHand"],
+      qualityValues: { twoHand: "+1 WA, +1d6 Dmg" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Meteorite-blade sword prized by Mahakamans. <strong>Balanced, Armor Piercing, Meteorite</strong>; <strong>Two-Hand</strong>: +1 WA, +1d6 Dmg. The impact-concentrated tip can easily reach around an enemy's guard.</p>" },
+    { name: "Gwyhyr", wa: 3, dmg: "4d6", dmgType: "P/S", range: "BODY×1", rel: 10, en: 2, conceal: "L", wt: 1.1, cost: 1432, av: "R", hands: "one",
+      qualities: ["guard", "balanced", "bleeding", "twoHand"],
+      qualityValues: { bleeding: "75", twoHand: "+1 WA, +2 Dmg" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Gnomish gwyhyr — the finest elven smithing of the continent. <strong>Guard, Balanced, Bleed 75%</strong>; <strong>Two-Hand</strong>: +1 WA, +2 Dmg.</p>" },
+    { name: "Elven Saber", wa: 2, dmg: "4d6+4", dmgType: "S", range: "BODY×1", rel: 12, en: 2, conceal: "L", wt: 1.1, cost: 1239, av: "R", hands: "one",
+      qualities: ["balanced", "bleeding", "cavalry"], qualityValues: { bleeding: "50" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Elven cavalry saber. <strong>Balanced, Bleed 50%, Cavalry</strong>.</p>" },
+    /* Witcher Kit signature: silver swords — stats per EO PDF Witcher Kit table */
+    { name: "Witcher Steel Sword", wa: 1, dmg: "4d6+2", dmgType: "P/S", range: "BODY×1", rel: 15, en: 2, conceal: "L", wt: 1, cost: 800, av: "R", hands: "one",
+      qualities: ["guard", "balanced", "meteorite", "twoHand"],
+      qualityValues: { twoHand: "+1 WA, +2 Dmg" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Witcher-forged steel sword. <strong>Guard, Balanced, Meteorite</strong>; <strong>Two-Hand</strong>: +1 WA, +2 Dmg.</p>" },
+    { name: "Witcher Silver Sword", wa: 1, dmg: "1d6+2", dmgType: "P/S", range: "BODY×1", rel: 5, en: 2, conceal: "L", wt: 1, cost: 1500, av: "R", hands: "one",
+      qualities: ["guard", "balanced", "silver", "twoHand"],
+      qualityValues: { silver: "3d6", twoHand: "+1 WA, +2 Dmg" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Witcher silver-edged sword for monsters. <strong>Guard, Balanced, Silver +3d6</strong>; <strong>Two-Hand</strong>: +1 WA, +2 Dmg.</p>" },
+    { name: "Silver Knuckles", wa: 0, dmg: "+0", dmgType: "B/N", range: "N/A", rel: 2, en: 0, conceal: "T", wt: 0.5, cost: 250, av: "P", hands: "one",
+      qualities: ["silver"], qualityValues: { silver: "2d6" },
+      category: "brawling", skill: "brawling",
+      description: "<p>Silver-tipped knuckle dusters for desperate measures. <strong>Brawling (Punch), Silver +2d6</strong>.</p>" },
+
+    /* ── Witcher School Weapons (EO p.31) ────────────────────────── */
+    { name: "Feline Steel Sword", wa: 3, dmg: "4d6+2", dmgType: "P/S", range: "BODY×1", rel: 15, en: 2, conceal: "L", wt: 0.7, cost: 0, av: "R", hands: "one",
+      qualities: ["guard", "balanced", "meteorite"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Cat School steel sword — extraordinarily nimble. <strong>Guard, Balanced, Meteorite</strong>.</p>" },
+    { name: "Feline Silver Sword", wa: 3, dmg: "1d6+2", dmgType: "P/S", range: "BODY×1", rel: 5, en: 2, conceal: "L", wt: 0.7, cost: 0, av: "R", hands: "one",
+      qualities: ["guard", "balanced", "silver"], qualityValues: { silver: "3d6" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Cat School silver sword. <strong>Guard, Balanced, Silver +3d6</strong>.</p>" },
+    { name: "Gryphon Steel Sword", wa: 2, dmg: "4d6+2", dmgType: "P/S", range: "BODY×1", rel: 15, en: 2, conceal: "L", wt: 0.9, cost: 0, av: "R", hands: "one",
+      qualities: ["guard", "balanced", "focus", "meteorite"], qualityValues: { focus: "1" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Griffin School steel sword. <strong>Guard, Balanced, Focus (1), Meteorite</strong>.</p>" },
+    { name: "Gryphon Silver Sword", wa: 2, dmg: "1d6+2", dmgType: "P/S", range: "BODY×1", rel: 5, en: 2, conceal: "L", wt: 0.9, cost: 0, av: "R", hands: "one",
+      qualities: ["guard", "balanced", "focus", "silver"], qualityValues: { focus: "1", silver: "3d6" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Griffin School silver sword. <strong>Guard, Balanced, Focus (1), Silver +3d6</strong>.</p>" },
+    { name: "Manticore Steel Sword", wa: 2, dmg: "4d6+2", dmgType: "P/S", range: "BODY×1", rel: 15, en: 2, conceal: "L", wt: 0.9, cost: 0, av: "R", hands: "one",
+      qualities: ["balanced", "armorPiercing", "meteorite"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Manticore School steel sword. <strong>Balanced, Armor Piercing, Meteorite</strong>.</p>" },
+    { name: "Manticore Silver Sword", wa: 2, dmg: "1d6+2", dmgType: "P/S", range: "BODY×1", rel: 5, en: 2, conceal: "L", wt: 0.9, cost: 0, av: "R", hands: "one",
+      qualities: ["balanced", "armorPiercing", "silver"], qualityValues: { silver: "3d6" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Manticore School silver sword. <strong>Balanced, Armor Piercing, Silver +3d6</strong>.</p>" },
+    { name: "Serpentine Sword", wa: 2, dmg: "4d6+2", dmgType: "P/S", range: "BODY×1", rel: 10, en: 2, conceal: "L", wt: 0.7, cost: 0, av: "R", hands: "one",
+      qualities: ["balanced", "bleeding", "meteorite", "silver"],
+      qualityValues: { bleeding: "75", silver: "3d6" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Viper School twin-blade. <strong>Balanced, Bleed 75%, Meteorite, Silver +3d6</strong>.</p>" },
+    { name: "Wolven Steel Sword", wa: 1, dmg: "4d6+2", dmgType: "P/S", range: "BODY×1", rel: 20, en: 2, conceal: "N/A", wt: 1, cost: 0, av: "R", hands: "one",
+      qualities: ["superiorGuard", "meteorite", "twoHand"],
+      qualityValues: { twoHand: "+1 WA, +2 Dmg, Balanced" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Wolf School steel sword. <strong>Superior Guard, Meteorite</strong>; <strong>Two-Hand</strong>: +1 WA, +2 Dmg, Balanced.</p>" },
+    { name: "Wolven Silver Sword", wa: 1, dmg: "1d6+2", dmgType: "P/S", range: "BODY×1", rel: 10, en: 2, conceal: "N/A", wt: 1, cost: 0, av: "R", hands: "one",
+      qualities: ["superiorGuard", "silver", "twoHand"],
+      qualityValues: { silver: "3d6", twoHand: "+1 WA, +2 Dmg, Balanced" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Wolf School silver sword. <strong>Superior Guard, Silver +3d6</strong>; <strong>Two-Hand</strong>: +1 WA, +2 Dmg, Balanced.</p>" },
+    { name: "Ursine Steel Sword", wa: 2, dmg: "5d6+2", dmgType: "P/S", range: "BODY×1", rel: 25, en: 2, conceal: "N/A", wt: 1.5, cost: 0, av: "R", hands: "two",
+      qualities: ["guard", "sturdy", "ablating", "armorPiercing", "meteorite"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Bear School two-handed steel sword. <strong>Guard, Sturdy, Ablating, Armor Piercing, Meteorite</strong>.</p>" },
+    { name: "Ursine Silver Sword", wa: 2, dmg: "2d6+2", dmgType: "P/S", range: "BODY×1", rel: 15, en: 2, conceal: "N/A", wt: 1.5, cost: 0, av: "R", hands: "two",
+      qualities: ["guard", "sturdy", "ablating", "armorPiercing", "silver"], qualityValues: { silver: "3d6" },
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Bear School two-handed silver sword. <strong>Guard, Sturdy, Ablating, Armor Piercing, Silver +3d6</strong>.</p>" },
+    { name: "Ballock Great Sword", wa: 1, dmg: "6d6", dmgType: "P/S", range: "BODY×1", rel: 25, en: 2, conceal: "N/A", wt: 2.5, cost: 0, av: "R", hands: "two",
+      qualities: ["guard", "sturdy", "meteorite"],
+      category: "swordsmanship", skill: "swordsmanship",
+      description: "<p>Massive two-handed witcher sword. <strong>Guard, Sturdy, Meteorite</strong>.</p>" },
+    { name: "Viper Fang", wa: 0, dmg: "1d6+2", dmgType: "P/S", range: "BODY×2", rel: 10, en: 1, conceal: "S", wt: 0.5, cost: 0, av: "R", hands: "one", quick: true,
+      qualities: ["nimble", "parrying", "bleeding", "meteorite", "silver", "closeQuarters"],
+      qualityValues: { bleeding: "75", silver: "3d6", closeQuarters: "+3 WA, +2d6 Dmg" },
+      category: "smallBlades", skill: "smallBlades",
+      description: "<p>Viper School fanged dagger. <strong>Nimble, Parrying, Bleed 75%, Meteorite, Silver +3d6</strong>; <strong>Close Quarters</strong>: +3 WA, +2d6 Dmg.</p>" },
+    { name: "Wolven Silver Chain", wa: 0, dmg: "1d6", dmgType: "B/N", range: "BODY×1", rel: 5, en: 0, conceal: "S", wt: 2, cost: 0, av: "R", hands: "two",
+      qualities: ["longReach", "indirect", "grappling", "entangling", "silver", "strangling"],
+      qualityValues: { silver: "2d6", strangling: "+1 WA, suffocation ×2" },
+      category: "melee", skill: "melee",
+      description: "<p>Wolf School weighted silver chain. <strong>Long Reach, Indirect, Grappling, Entangling, Silver +2d6</strong>; <strong>Strangling</strong>: +1 WA, ×2 suffocation.</p>" },
+    { name: "Feline Crossbow", wa: 2, dmg: "3d6+2", dmgType: "P", range: "50m", rel: 2, en: 1, conceal: "L", wt: 0.5, cost: 0, av: "R", hands: "one",
+      qualities: ["feeble", "nimble", "balanced", "stableAim", "slowReload"], qualityValues: { slowReload: "1" },
+      category: "crossbow", skill: "crossbow",
+      description: "<p>Cat School light crossbow. <strong>Feeble, Nimble, Balanced, Stable Aim, Slow Reload (1)</strong>.</p>" },
+    { name: "Gryphon Crossbow", wa: 1, dmg: "4d6+1", dmgType: "P", range: "50m", rel: 2, en: 2, conceal: "L", wt: 0.5, cost: 0, av: "R", hands: "one",
+      qualities: ["feeble", "nimble", "stableAim", "slowReload"], qualityValues: { slowReload: "1" },
+      category: "crossbow", skill: "crossbow",
+      description: "<p>Griffin School crossbow. <strong>Feeble, Nimble, Stable Aim, Slow Reload (1)</strong>.</p>" },
+    { name: "Ursine Crossbow", wa: 0, dmg: "5d6", dmgType: "P", range: "50m", rel: 4, en: 1, conceal: "L", wt: 1, cost: 0, av: "R", hands: "one",
+      qualities: ["feeble", "stableAim", "slowReload"], qualityValues: { slowReload: "1" },
+      category: "crossbow", skill: "crossbow",
+      description: "<p>Bear School heavy crossbow. <strong>Feeble, Stable Aim, Slow Reload (1)</strong>.</p>" }
+);
+
+/* ── AMMUNITION (EO p.13) ───────────────────────────────────────── */
+const AMMUNITION = [
+    /* EO ammunition is RIDER-only — no independent damage column. The
+     * weapon's base damage drives the shot; the ammo carries on-hit
+     * qualities. We leave `dmg` empty for that reason. */
+    { name: "Broadhead Arrow", subtype: "arrow", dmg: "0", dmgType: "S", qualities: ["bleeding"], qualityValues: { bleeding: "100" },
+      wt: 0.05, cost: 14, av: "C", description: "<p>Wide-cutting arrowhead. <strong>Bleeding 100%</strong>.</p>" },
+    { name: "Bodkin Arrow",    subtype: "arrow", dmg: "0", dmgType: "P", qualities: ["armorPiercing"],
+      wt: 0.05, cost: 15, av: "C", description: "<p>Narrow armor-piercing arrowhead. <strong>Armor Piercing</strong>.</p>" },
+    { name: "Blunt Arrow",     subtype: "arrow", dmg: "0", dmgType: "B", qualities: ["nonLethal"],
+      wt: 0.05, cost: 4,  av: "C", description: "<p>Blunt arrowhead — non-lethal.</p>" },
+    { name: "Flight Arrow",    subtype: "arrow", dmg: "0", dmgType: "P", qualities: ["improvedRange"],
+      wt: 0.04, cost: 6,  av: "C", description: "<p>Long-range flight arrow. <strong>Improved Range</strong>.</p>" },
+    { name: "Standard Arrow",  subtype: "arrow", dmg: "0", dmgType: "P", qualities: [],
+      wt: 0.05, cost: 5,  av: "E", description: "<p>Plain target / hunting arrow.</p>" },
+    { name: "Crossbow Bolt",   subtype: "bolt",  dmg: "0", dmgType: "P", qualities: [],
+      wt: 0.08, cost: 8,  av: "C", description: "<p>Standard crossbow bolt.</p>" },
+    { name: "Sling Bullet, Stone",  subtype: "slingBullet", dmg: "0", dmgType: "B", qualities: ["freeAmmunition"],
+      wt: 0.05, cost: 0, av: "E", description: "<p>Sling stone. <strong>Free Ammunition</strong>.</p>" },
+    { name: "Sling Bullet, Lead",   subtype: "slingBullet", dmg: "0", dmgType: "B", qualities: ["improvedRange", "concealment"],
+      wt: 0.07, cost: 8, av: "C", description: "<p>Lead sling bullet. +1 WA; <strong>Improved Range, Concealment</strong>.</p>" },
+
+    /* ── Quality Northern Ammunition (EO p.17) ──────────────────── */
+    { name: "Rivian Needle",   subtype: "arrow", dmg: "0", dmgType: "P",
+      qualities: ["improvedRange", "bleeding"], qualityValues: { bleeding: "50" },
+      wt: 0.5, cost: 26, av: "P", description: "<p>Long Rivian needle-arrow. <strong>Improved Range, Bleed 50%</strong>.</p>" },
+    { name: "Temerian Sheaf",  subtype: "arrow", dmg: "0", dmgType: "P",
+      qualities: ["improvedArmorPiercing"],
+      wt: 1, cost: 33, av: "P", description: "<p>Temerian heavy-shaft sheaf arrow. <strong>Improved Armor Piercing</strong>.</p>" },
+    { name: "Whistling Bullet",   subtype: "slingBullet", dmg: "0", dmgType: "B",
+      qualities: ["halfDamage", "reducedRange", "concealment"],
+      wt: 0.5, cost: 7, av: "C", description: "<p>Whistling sling bullet. <strong>Half Damage, Reduced Range, Concealment</strong>. Enemies within 10m of flight path beat DC:14 Courage or be Staggered.</p>" },
+    { name: "Dimeritium Bullet",  subtype: "slingBullet", dmg: "0", dmgType: "B",
+      qualities: [],
+      wt: 0.8, cost: 45, av: "R", description: "<p>Dimeritium-cored sling bullet. +1 WA; target is affected as if they touched dimeritium for 1 round.</p>" },
+
+    /* ── Fine Southern Ammunition (EO p.21) ─────────────────────── */
+    { name: "Markee Howler",        subtype: "arrow", dmg: "0", dmgType: "P",
+      qualities: ["halfDamage", "reducedRange"],
+      wt: 0.07, cost: 26, av: "R", description: "<p>Howling Mettinese arrow/bolt. <strong>Half Damage, Reduced Range</strong>. Enemies within 10m of flight path beat DC:14 Courage or be Staggered.</p>" },
+    { name: "Black Army Bodkin",    subtype: "arrow", dmg: "0", dmgType: "P",
+      qualities: ["ablating", "armorPiercing"],
+      wt: 0.9, cost: 29, av: "P", description: "<p>Nilfgaardian heavy bodkin. <strong>Ablating, Armor Piercing</strong>.</p>" },
+    { name: "Heavy Bullet",         subtype: "slingBullet", dmg: "0", dmgType: "B",
+      qualities: ["reducedRange", "ablating", "concealment"],
+      wt: 0.1, cost: 11, av: "C", description: "<p>Heavy lead bullet. +1 WA, <strong>Reduced Range, Ablating, Concealment</strong>.</p>" },
+    { name: "Incendiary Bullet",    subtype: "slingBullet", dmg: "0", dmgType: "B",
+      qualities: ["halfDamage", "fire", "concealment"], qualityValues: { fire: "25" },
+      wt: 0.05, cost: 26, av: "P", description: "<p>Incendiary pellet. <strong>Half Damage, Fire 25%, Concealment</strong>.</p>" }
+];
+
+/* ── ARMOR ENHANCEMENTS (Glyphs + physical mods, EO p.4 framework) ──
+ *
+ *   target  : "armor" — these all attach to armor (not weapons)
+ *   subType : "glyph" or "armor" (physical mod)
+ *   bonus   : SP, EV change, resistances, etc.
+ * ───────────────────────────────────────────────────────────────── */
+const ARMOR_ENHANCEMENTS = [
+    /* Glyphs (consume from En. pool) */
+    { name: "Glyph of Aard", subType: "glyph", stopping: 0, bludgeoning: true,
+      cost: 350, av: "P", description: "<p>Glyph of Aard. Grants bludgeoning resistance.</p>" },
+    { name: "Glyph of Igni", subType: "glyph", stopping: 0, qualities: ["fireproof"],
+      cost: 400, av: "P", description: "<p>Glyph of Igni. Grants fire resistance.</p>" },
+    { name: "Glyph of Yrden", subType: "glyph", stopping: 1,
+      cost: 380, av: "P", description: "<p>Glyph of Yrden. +1 SP to all covered locations.</p>" },
+    { name: "Glyph of Quen", subType: "glyph", stopping: 2,
+      cost: 600, av: "R", description: "<p>Glyph of Quen. +2 SP to all covered locations.</p>" },
+    /* Physical mods (consume from per-location AE pool) */
+    { name: "Reinforced Plating", subType: "armor", stopping: 2,
+      cost: 200, av: "C", description: "<p>Riveted reinforcement plate. +2 SP to the attached location.</p>" },
+    { name: "Hardened Lining", subType: "armor", stopping: 1, slashing: true,
+      cost: 150, av: "C", description: "<p>Hardened inner lining. +1 SP, +Slashing resist.</p>" },
+    { name: "Padded Lining", subType: "armor", stopping: 1, bludgeoning: true,
+      cost: 140, av: "C", description: "<p>Quilted padding. +1 SP, +Bludgeoning resist.</p>" },
+    { name: "Mail Lining", subType: "armor", stopping: 1, slashing: true, encumbranceMod: 1,
+      cost: 220, av: "P", description: "<p>Layered mail lining. +1 SP, +Slashing resist, +1 EV.</p>" },
+    { name: "Studded Hide", subType: "armor", stopping: 1, piercing: true,
+      cost: 160, av: "C", description: "<p>Studded hide layer. +1 SP, +Piercing resist.</p>" },
+    /* More glyphs (EO p.32-34 reference; representative subset) */
+    { name: "Lesser Glyph of Mending", subType: "glyph", stopping: 0,
+      cost: 200, av: "C", description: "<p>Self-mending glyph. Restores 1 reliability per long rest while worn.</p>" },
+    { name: "Greater Glyph of Quen", subType: "glyph", stopping: 3,
+      cost: 1100, av: "R", description: "<p>Greater protective glyph. +3 SP to all covered locations.</p>" },
+    { name: "Glyph of Warding", subType: "glyph", stopping: 0, qualities: ["fireproof"],
+      cost: 500, av: "R", description: "<p>Anti-elemental glyph. Grants fire and elemental resistance.</p>" },
+    /* More physical mods */
+    { name: "Hardened Bracing", subType: "armor", stopping: 2, encumbranceMod: 1,
+      cost: 280, av: "P", description: "<p>Heavy hardened bracing plate. +2 SP, +1 EV.</p>" },
+    { name: "Light Padded Trim", subType: "armor", stopping: 0, encumbranceMod: -1,
+      cost: 180, av: "C", description: "<p>Lightweight padding trim. -1 EV (minimum 0).</p>" },
+    { name: "Plated Underlay", subType: "armor", stopping: 3, encumbranceMod: 1, slashing: true,
+      cost: 380, av: "P", description: "<p>Layered plate underlay. +3 SP, +1 EV, +Slashing resist.</p>" }
+];
+
+/* ── Item builders ──────────────────────────────────────────────── */
+
+function aeSlotsFrom(input) {
+    /* Accepts an object map OR a number (spreads across primary covered slots). */
+    if (typeof input === "object" && input !== null) {
+        return {
+            head:     Number(input.head)     || 0,
+            torso:    Number(input.torso)    || 0,
+            leftArm:  Number(input.leftArm)  || 0,
+            rightArm: Number(input.rightArm) || 0,
+            leftLeg:  Number(input.leftLeg)  || 0,
+            rightLeg: Number(input.rightLeg) || 0
+        };
+    }
+    return { head: 0, torso: 0, leftArm: 0, rightArm: 0, leftLeg: 0, rightLeg: 0 };
+}
+
+function damageTypesFor(code) {
+    const { types, nonLethal } = parseDamageType(code);
+    return { types, nonLethal };
+}
+
+function buildArmorJSON(a, sort) {
+    const cv = COVER[a.cover];
+    if (!cv) {
+        INCONSISTENCIES.push(`Unknown armor cover code "${a.cover}" for "${a.name}"`);
+        return null;
+    }
+    const stopping = { ...ZERO_STOPPING };
+    for (const loc of cv.slots) {
+        stopping[`${loc}Stopping`]    = a.sp;
+        stopping[`${loc}MaxStopping`] = a.sp;
+    }
+    const resist = parseResist(a.resist);
+    const aeSlots = aeSlotsFrom(a.ae);
+    return {
+        _id: makeId(a.name, "armor"),
+        name: a.name,
+        type: "armor",
+        img: armorIconFor(a),
+        system: {
+            description: a.description ?? "",
+            weight: a.wt ?? 0,
+            quantity: 1,
+            cost: a.cost ?? 0,
+            availability: AVAIL[a.av] ?? "common",
+            armorType: a.type ?? "light",
+            location: cv.location,
+            encumbranceValue: a.ev ?? 0,
+            armorEnhancement: 0,
+            ...stopping,
+            ...resist,
+            reliability: { value: 0, max: 0 },
+            qualities: a.qualities ?? [],
+            qualityValues: a.qualityValues ?? {},
+            appliedEnhancements: [],
+            aeSlots,
+            enhancementSlots: a.en ?? 0,
+            armingJackKind: a.jack ?? "none",
+            armoredArmingJackUpgrade: a.upgrade ?? "none",
+            difficult: !!a.difficult,
+            effects: ""
+        },
+        effects: [],
+        folder: null, sort, ownership: { default: 0 }, flags: {}
+    };
+}
+
+function buildWeaponJSON(w, sort) {
+    const { types, nonLethal } = damageTypesFor(w.dmgType);
+    return {
+        _id: makeId(w.name, "weapon"),
+        name: w.name,
+        type: "weapon",
+        img: weaponIconFor(w),
+        system: {
+            description: w.description ?? "",
+            weight: w.wt ?? 0,
+            quantity: 1,
+            cost: w.cost ?? 0,
+            availability: AVAIL[w.av] ?? "common",
+            accuracy: w.wa ?? 0,
+            damage: w.dmg ?? "",
+            damageTypes: types,
+            range: w.range ?? "",
+            reliability: { value: w.rel ?? 0, max: w.rel ?? 0 },
+            weaponEnhancement: w.en ?? 0,
+            conceal: w.conceal ?? "L",
+            hands: w.hands ?? "one",
+            slot: w.hands === "two" ? "right" : "right",
+            quick: !!w.quick,
+            qualities: w.qualities ?? [],
+            qualityValues: w.qualityValues ?? {},
+            appliedEnhancements: [],
+            damageProperties: {
+                nonLethal,
+                deniesParry: (w.qualities ?? []).includes("hefty")
+            }
+        },
+        effects: [],
+        folder: null, sort, ownership: { default: 0 }, flags: {}
+    };
+}
+
+function buildShieldJSON(s, sort) {
+    return {
+        _id: makeId(s.name, "shield"),
+        name: s.name,
+        type: "shield",
+        img: shieldIconFor(s),
+        system: {
+            description: s.description ?? "",
+            weight: s.wt ?? 0,
+            quantity: 1,
+            cost: s.cost ?? 0,
+            availability: AVAIL[s.av] ?? "common",
+            coverValue: s.cv ?? 0,
+            reliability: { value: s.rel ?? 0, max: s.rel ?? 0 },
+            bashDamage: s.bash ?? "",
+            encumbranceValue: s.ev ?? 0,
+            armorEnhancement: s.en ?? 0,
+            qualities: s.qualities ?? [],
+            qualityValues: s.qualityValues ?? {},
+            appliedEnhancements: [],
+            hands: "one",
+            slot: "left",
+            location: "Shield"
+        },
+        effects: [],
+        folder: null, sort, ownership: { default: 0 }, flags: {}
+    };
+}
+
+function buildAmmoJSON(a, sort) {
+    const { types } = damageTypesFor(a.dmgType || "P");
+    /* Map subtype (EO: arrow / bolt / slingBullet) → schema's ammoType.
+     * sling bullets are handled at the weapon level (slings use them
+     * automatically via Free Ammunition), but we still tag them. */
+    const ammoType = a.subtype === "bolt" ? "bolt"
+                    : a.subtype === "slingBullet" ? "slingBullet"
+                    : "arrow";
+    return {
+        _id: makeId(a.name, "ammo"),
+        name: a.name,
+        type: "ammo",
+        img: ammoIconFor(a),
+        system: {
+            description: a.description ?? "",
+            weight: a.wt ?? 0.05,
+            quantity: 1,
+            cost: a.cost ?? 0,
+            availability: AVAIL[a.av] ?? "common",
+            ammoType,
+            damageTypes: types,
+            qualities: a.qualities ?? [],
+            qualityValues: a.qualityValues ?? {},
+            conceal: "N/A",
+            effects: ""
+        },
+        effects: [],
+        folder: null, sort, ownership: { default: 0 }, flags: {}
+    };
+}
+
+function buildEnhancementJSON(e, sort) {
+    return {
+        _id: makeId(e.name, "enhancement"),
+        name: e.name,
+        type: "enhancement",
+        img: enhancementIconFor(e),
+        system: {
+            description: e.description ?? "",
+            weight: 0,
+            quantity: 1,
+            cost: e.cost ?? 0,
+            availability: AVAIL[e.av] ?? "common",
+            type: e.subType,
+            target: "armor",
+            applied: false,
+            slotCost: 1,
+            attachedTo: "",
+            accuracyBonus: 0,
+            reliabilityBonus: 0,
+            damageBonus: "",
+            addedDamageTypes: [],
+            stopping:       e.stopping       ?? 0,
+            slashing:       !!e.slashing,
+            piercing:       !!e.piercing,
+            bludgeoning:    !!e.bludgeoning,
+            encumbranceMod: e.encumbranceMod ?? 0,
+            grantedQualities: e.qualities ?? [],
+            qualityValues: {},
+            effects: ""
+        },
+        effects: [],
+        folder: null, sort, ownership: { default: 0 }, flags: {}
+    };
+}
+
+/* Diagram for a given item (output linked by UUID). */
+function buildDiagramJSON(outputItem, kind, sort) {
+    const outputUuid = `Compendium.witcher-ttrpg-death-march.eo-${kind}.Item.${outputItem._id}`;
+    return {
+        _id: makeId(`Diagram: ${outputItem.name}`, "diagram"),
+        name: `Diagram: ${outputItem.name}`,
+        type: "diagrams",
+        img: "icons/sundries/scrolls/scroll-rolled-tan.webp",
+        system: {
+            description: `<p>Crafting blueprint for ${outputItem.name}.</p>`,
+            weight: 0.1, quantity: 1,
+            cost: Math.max(1, Math.floor((outputItem.system.cost ?? 0) * 0.5)),
+            availability: outputItem.system.availability ?? "common",
+            kind: "diagram",
+            level: "novice",
+            type: outputItem.type === "weapon" ? "weapon" : (outputItem.type === "armor" ? "armor" : "weapon"),
+            alchemyDC: 0,
+            craftingDC: 14,
+            requiresForge: false,
+            investment: Math.max(1, Math.floor((outputItem.system.cost ?? 0) * 0.45)),
+            learned: false,
+            craftingTime: "6 Hour",
+            craftingComponents: [],   /* component links — populated by a later pass */
+            alchemyComponents: {},
+            associatedItem: {
+                name: outputItem.name,
+                uuid: outputUuid,
+                img:  outputItem.img
+            },
+            outputEnhanced:  "",
+            outputSuperior:  "",
+            potencyNormal:   0,
+            potencyEnhanced: 0,
+            potencySuperior: 0,
+            memorizedFrom: ""
+        },
+        effects: [],
+        folder: null, sort, ownership: { default: 0 }, flags: {}
+    };
+}
+
+/* ── Origin / category classifiers (derive folder hierarchy from item name) ─ */
+
+/* Map a name prefix to an origin bucket. Order matters — first match wins.
+ * Names are checked against the START of the item's display name. */
+const ORIGIN_PATTERNS = [
+    { origin: "Arming Suits",  re: /^(Arming Jack|Superior Arming Suit|Aketon Doublet|Aketon Trousers|Aketon Coif|Cold Weather Clothing)\b/i },
+    { origin: "Witcher Kit",   re: /^(Witcher (Steel|Silver)|Silver Knuckles|Feline|Wolven|Gryphon|Manticore|Ursine|Serpentine|Viper Fang|Ballock)\b/i },
+    { origin: "Elderfolk",     re: /^(Mahakaman|Gwyhyr|Elven|Eldercraft|Protective Doublet|Gnomish|Scoia)\b/i },
+    { origin: "Exotic",        re: /^(Bagh Nakh|Jambiya|Katar\b|Kris\b|Szabla|Shafra|Talvara|Pata\b|Sa'if|Shamshir|Kilij|Kurra|Shishpar|Tabarzin|Tabar\b|Aršti|Tzad|Ofieri|Kontosa|Chakram|Jarid|Kaman|Mori Num|Zerrikanian|Höl Num|Steppe Warrior|Drake Leather|Biraq|Fāris|Katafrakt|Anusyia|Bambai|Derah|Spara)\b/i },
+    { origin: "Viroledan",     re: /^(Stiletto|Sinestro|Esboda|Terganian|Estoc|Viroledan|Vicovarian|Torrwr|Flamberge|Martello|Ascia|Hache de Guerre|Pilum|Spontoon|Mancatcher|Partisan|Valenkosa|Iron Staff|Black Army|Markee|Pacifier|Nilfgaardian|Ducal Knight|Heavy Bullet|Incendiary Bullet|Orion|Etolian|Markee Howler|Black Army Bodkin)\b/i },
+    { origin: "Northern",      re: /^(Verden|Special Forces|Lyrian|Tretagor|Hindarsfjall|Kaedweni|Temerian|Drakeskin|Bone Bow|Koviri|Krigssverd|Kord\b|Dopplehander|Berserkax|Highland Mauler|Vingespyd|Crystal Staff|Military Fork|Redanian Halberd|Francisca|Lamia|Jogar|Skeggax|Martel à Bec|Doryo|Poniard|Rondel Dagger|Sword Catcher|Whistling Bullet|Dimeritium Bullet|Rivian Needle|Temerian Sheaf)\b/i }
+];
+function originFor(name) {
+    for (const p of ORIGIN_PATTERNS) if (p.re.test(name)) return p.origin;
+    return "Basic";
+}
+
+/* For weapons, infer the skill bucket from `category` field (already set
+ * on each entry in WEAPONS/RANGED). Maps to display labels. */
+const SKILL_LABEL = {
+    swordsmanship: "Swordsmanship",
+    melee:         "Melee (axe / hammer / club)",
+    staffSpear:    "Staff & Spear",
+    smallBlades:   "Small Blades",
+    brawling:      "Brawling",
+    bow:           "Bows",
+    crossbow:      "Crossbows",
+    sling:         "Slings",
+    thrown:        "Thrown"
+};
+
+/* For armor, group by armorType (light/medium/heavy). */
+const ARMOR_TYPE_LABEL = {
+    light:  "Light Armor",
+    medium: "Medium Armor",
+    heavy:  "Heavy Armor"
+};
+
+/* ── Folder builders ─────────────────────────────────────────────── */
+
+/* A Folder document (Foundry compendium folder). 16-char _id derived from
+ * pack+path so re-runs are idempotent. */
+function makeFolder(packName, name, parent = "", sort = 0) {
+    const path = parent ? `${parent}/${name}` : name;
+    return {
+        _id: makeId(`${packName}::${path}`, "folder"),
+        name,
+        sorting: "a",
+        folder: parent || null,
+        description: "",
+        color: null,
+        sort,
+        flags: {},
+        type: "Item",
+        /* `_filename` is a hint to the build script — not persisted to the
+         * doc; build-packs strips it before writing to LevelDB. */
+        _filename: `_folder_${slugify(path)}`
+    };
+}
+
+/* ── Emit ───────────────────────────────────────────────────────── */
+
+function emit(packName, items, folders = []) {
+    const dir = join(SRC, packName);
+    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    let n = 0;
+    for (const f of folders) {
+        if (!f) continue;
+        const fn = f._filename ?? `_folder_${f._id}`;
+        const { _filename: _, ...persisted } = f;
+        writeFileSync(join(dir, `${fn}.json`), JSON.stringify(persisted, null, 2));
+    }
+    for (const item of items) {
+        if (!item) continue;
+        const slug = slugify(item.name);
+        writeFileSync(join(dir, `${slug}.json`), JSON.stringify(item, null, 2));
+        n++;
+    }
+    console.log(`  ${packName}: ${n} item(s), ${folders.length} folder(s)`);
+}
+
+/* ── Build raw item lists, tagging each with origin + classifier ── */
+
+const armorItems = ARMOR.map((a, i) => buildArmorJSON(a, (i + 1) * 100));
+const weaponItems = [...WEAPONS, ...RANGED].map((w, i) => buildWeaponJSON(w, (i + 1) * 100));
+const shieldItems = SHIELDS.map((s, i) => buildShieldJSON(s, (i + 1) * 100));
+const ammoItems = AMMUNITION.map((a, i) => buildAmmoJSON(a, (i + 1) * 100));
+const enhanceItems = ARMOR_ENHANCEMENTS.map((e, i) => buildEnhancementJSON(e, (i + 1) * 100));
+
+/* Memo classifiers on each item so the diagram emit can reuse them. */
+for (const it of armorItems) {
+    it._origin   = originFor(it.name);
+    it._weight   = it.system.armorType;
+}
+for (const it of shieldItems) {
+    it._origin   = originFor(it.name);
+}
+for (const it of weaponItems) {
+    it._origin   = originFor(it.name);
+    /* Find the matching source spec (WEAPONS/RANGED) to get category. */
+    const src = [...WEAPONS, ...RANGED].find(w => w.name === it.name);
+    it._category = src?.category ?? "melee";
+}
+for (const it of ammoItems) {
+    it._origin   = originFor(it.name);
+}
+
+/* ── eo-armor pack: armor pieces + shields, organized into folders ─── */
+{
+    const folders = [];
+    /* Top-level: Armor / Shields / Arming Suits */
+    const fArmor   = makeFolder("eo-armor", "Armor",         "", 100); folders.push(fArmor);
+    const fShields = makeFolder("eo-armor", "Shields",       "", 200); folders.push(fShields);
+    const fSuits   = makeFolder("eo-armor", "Arming Suits",  "", 300); folders.push(fSuits);
+
+    /* Armor sub-folders: per origin, per weight. */
+    const ORIGIN_ORDER = ["Basic", "Northern", "Viroledan", "Exotic", "Elderfolk", "Witcher Kit"];
+    const WEIGHT_ORDER = ["light", "medium", "heavy"];
+    const armorOriginFolders = {};
+    const armorBucketFolders = {};
+    let sortIdx = 100;
+    for (const o of ORIGIN_ORDER) {
+        const of_ = makeFolder("eo-armor", o, fArmor._id, sortIdx); sortIdx += 100;
+        folders.push(of_);
+        armorOriginFolders[o] = of_;
+        let ws = 100;
+        for (const w of WEIGHT_ORDER) {
+            const wf = makeFolder("eo-armor", ARMOR_TYPE_LABEL[w], of_._id, ws); ws += 100;
+            folders.push(wf);
+            armorBucketFolders[`${o}/${w}`] = wf;
+        }
+    }
+    /* Shield sub-folders: per origin. */
+    const shieldOriginFolders = {};
+    sortIdx = 100;
+    for (const o of ORIGIN_ORDER) {
+        const sf = makeFolder("eo-armor", o, fShields._id, sortIdx); sortIdx += 100;
+        folders.push(sf);
+        shieldOriginFolders[o] = sf;
+    }
+
+    /* Assign folders to items. Arming-suit items (jack/superior + aketon
+     * pieces flagged with armingJackKind upgrade) land in the Arming Suits
+     * folder. Everything else goes by origin/weight. */
+    for (const it of armorItems) {
+        if (it._origin === "Arming Suits") {
+            it.folder = fSuits._id;
+            continue;
+        }
+        const key = `${it._origin}/${it._weight}`;
+        it.folder = (armorBucketFolders[key] ?? armorOriginFolders[it._origin] ?? fArmor)._id;
+    }
+    for (const it of shieldItems) {
+        it.folder = (shieldOriginFolders[it._origin] ?? fShields)._id;
+    }
+
+    emit("eo-armor", [...armorItems, ...shieldItems], folders);
+}
+
+/* ── eo-weapons pack: weapons + ammunition, organized into folders ─── */
+{
+    const folders = [];
+    const fWeapons = makeFolder("eo-weapons", "Weapons",     "", 100); folders.push(fWeapons);
+    const fAmmo    = makeFolder("eo-weapons", "Ammunition",  "", 200); folders.push(fAmmo);
+
+    const ORIGIN_ORDER = ["Basic", "Northern", "Viroledan", "Exotic", "Elderfolk", "Witcher Kit"];
+    const SKILL_ORDER  = ["swordsmanship", "smallBlades", "melee", "staffSpear", "brawling", "bow", "crossbow", "thrown", "sling"];
+
+    const weaponOriginFolders = {};
+    const weaponSkillFolders  = {};
+    let sortIdx = 100;
+    for (const o of ORIGIN_ORDER) {
+        const of_ = makeFolder("eo-weapons", o, fWeapons._id, sortIdx); sortIdx += 100;
+        folders.push(of_);
+        weaponOriginFolders[o] = of_;
+        let ws = 100;
+        for (const s of SKILL_ORDER) {
+            const sf = makeFolder("eo-weapons", SKILL_LABEL[s], of_._id, ws); ws += 100;
+            folders.push(sf);
+            weaponSkillFolders[`${o}/${s}`] = sf;
+        }
+    }
+    /* Ammo: split first by AMMO TYPE (Arrows / Bolts / Sling Bullets)
+     * since each type is loaded into a different weapon class, then by
+     * origin within each type. */
+    const AMMO_TYPE_LABEL = {
+        arrow:        "Arrows",
+        bolt:         "Bolts",
+        slingBullet:  "Sling Bullets"
+    };
+    const AMMO_TYPE_ORDER = ["arrow", "bolt", "slingBullet"];
+    const ammoTypeFolders   = {};
+    const ammoBucketFolders = {};
+    sortIdx = 100;
+    for (const t of AMMO_TYPE_ORDER) {
+        const tf = makeFolder("eo-weapons", AMMO_TYPE_LABEL[t], fAmmo._id, sortIdx); sortIdx += 100;
+        folders.push(tf);
+        ammoTypeFolders[t] = tf;
+        let os = 100;
+        for (const o of ORIGIN_ORDER) {
+            const of_ = makeFolder("eo-weapons", o, tf._id, os); os += 100;
+            folders.push(of_);
+            ammoBucketFolders[`${t}/${o}`] = of_;
+        }
+    }
+
+    for (const it of weaponItems) {
+        const key = `${it._origin}/${it._category}`;
+        it.folder = (weaponSkillFolders[key] ?? weaponOriginFolders[it._origin] ?? fWeapons)._id;
+    }
+    for (const it of ammoItems) {
+        const t = it.system?.ammoType ?? "arrow";
+        const key = `${t}/${it._origin}`;
+        it.folder = (ammoBucketFolders[key] ?? ammoTypeFolders[t] ?? fAmmo)._id;
+    }
+
+    emit("eo-weapons", [...weaponItems, ...ammoItems], folders);
+}
+
+/* ── eo-armor-enhancements: split by subType (glyph vs armor mod) ─── */
+{
+    const folders = [];
+    const fGlyphs = makeFolder("eo-armor-enhancements", "Glyphs",        "", 100); folders.push(fGlyphs);
+    const fMods   = makeFolder("eo-armor-enhancements", "Physical Mods", "", 200); folders.push(fMods);
+    for (const it of enhanceItems) {
+        it.folder = (it.system.type === "glyph" ? fGlyphs : fMods)._id;
+    }
+    emit("eo-armor-enhancements", enhanceItems, folders);
+}
+
+/* ── eo-diagrams: mirror the structure of the source items' pack ─── */
+{
+    const folders = [];
+    /* Top-level mirrors: Armor diagrams / Shields diagrams / Weapons / Ammunition / Enhancements. */
+    const fArmDia  = makeFolder("eo-diagrams", "Armor Diagrams",         "", 100); folders.push(fArmDia);
+    const fShDia   = makeFolder("eo-diagrams", "Shield Diagrams",        "", 200); folders.push(fShDia);
+    const fWeapDia = makeFolder("eo-diagrams", "Weapon Diagrams",        "", 300); folders.push(fWeapDia);
+    const fAmmoDia = makeFolder("eo-diagrams", "Ammunition Diagrams",    "", 400); folders.push(fAmmoDia);
+    const fEnhDia  = makeFolder("eo-diagrams", "Enhancement Diagrams",   "", 500); folders.push(fEnhDia);
+
+    const ORIGIN_ORDER = ["Basic", "Northern", "Viroledan", "Exotic", "Elderfolk", "Witcher Kit"];
+    const armorDiaOriginF = {}, shieldDiaOriginF = {}, weaponDiaOriginF = {};
+    let sortIdx = 100;
+    for (const o of ORIGIN_ORDER) {
+        armorDiaOriginF[o]  = makeFolder("eo-diagrams", o, fArmDia._id,  sortIdx); folders.push(armorDiaOriginF[o]);
+        shieldDiaOriginF[o] = makeFolder("eo-diagrams", o, fShDia._id,   sortIdx); folders.push(shieldDiaOriginF[o]);
+        weaponDiaOriginF[o] = makeFolder("eo-diagrams", o, fWeapDia._id, sortIdx); folders.push(weaponDiaOriginF[o]);
+        sortIdx += 100;
+    }
+    /* Ammunition Diagrams: mirror the item-pack's Type → Origin split. */
+    const AMMO_TYPE_LABEL_DIA = { arrow: "Arrows", bolt: "Bolts", slingBullet: "Sling Bullets" };
+    const AMMO_TYPE_ORDER_DIA = ["arrow", "bolt", "slingBullet"];
+    const ammoDiaBucketF = {};
+    sortIdx = 100;
+    for (const t of AMMO_TYPE_ORDER_DIA) {
+        const tf = makeFolder("eo-diagrams", AMMO_TYPE_LABEL_DIA[t], fAmmoDia._id, sortIdx); sortIdx += 100;
+        folders.push(tf);
+        let os = 100;
+        for (const o of ORIGIN_ORDER) {
+            const of_ = makeFolder("eo-diagrams", o, tf._id, os); os += 100;
+            folders.push(of_);
+            ammoDiaBucketF[`${t}/${o}`] = of_;
+        }
+    }
+
+    const diagramItems = [];
+    let dsort = 100;
+    for (const it of armorItems)   { const d = buildDiagramJSON(it, "armor",   dsort); d.folder = (armorDiaOriginF[it._origin]  ?? fArmDia)._id;  diagramItems.push(d); dsort += 100; }
+    for (const it of shieldItems)  { const d = buildDiagramJSON(it, "armor",   dsort); d.folder = (shieldDiaOriginF[it._origin] ?? fShDia)._id;   diagramItems.push(d); dsort += 100; }
+    for (const it of weaponItems)  { const d = buildDiagramJSON(it, "weapons", dsort); d.folder = (weaponDiaOriginF[it._origin] ?? fWeapDia)._id; diagramItems.push(d); dsort += 100; }
+    for (const it of ammoItems)    {
+        const d = buildDiagramJSON(it, "weapons", dsort);
+        const t = it.system?.ammoType ?? "arrow";
+        d.folder = (ammoDiaBucketF[`${t}/${it._origin}`] ?? fAmmoDia)._id;
+        diagramItems.push(d); dsort += 100;
+    }
+    for (const it of enhanceItems) { const d = buildDiagramJSON(it, "armor-enhancements", dsort); d.folder = fEnhDia._id; diagramItems.push(d); dsort += 100; }
+
+    emit("eo-diagrams", diagramItems, folders);
+}
+
+/* Strip transient classifier fields from items (they're for build-time
+ * only). Already done — these keys (_origin/_weight/_category) live on
+ * the runtime object before emit(), but emit's JSON.stringify will
+ * persist them. Strip via a post-walk. */
+for (const dir of ["eo-armor", "eo-weapons"]) {
+    const dpath = join(SRC, dir);
+    if (!existsSync(dpath)) continue;
+    for (const f of readdirSync(dpath)) {
+        if (!f.endsWith(".json") || f.startsWith("_folder_")) continue;
+        const p = join(dpath, f);
+        const j = JSON.parse(readFileSync(p, "utf8"));
+        delete j._origin; delete j._weight; delete j._category;
+        writeFileSync(p, JSON.stringify(j, null, 2));
+    }
+}
+
+console.log("\nDone.");
+if (INCONSISTENCIES.length) {
+    console.log(`\nInconsistencies (${INCONSISTENCIES.length}):`);
+    for (const note of INCONSISTENCIES) console.log(`  - ${note}`);
+} else {
+    console.log("\nNo inconsistencies detected during emit.");
+}

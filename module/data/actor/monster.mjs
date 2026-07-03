@@ -18,6 +18,7 @@ import { skillsSchema }       from "./templates/skills.mjs";
 import { derivedStatsSchema } from "./templates/derivedStats.mjs";
 import { currencySchema, calcCurrencyWeight } from "./templates/currency.mjs";
 import { combatRoundSchema }  from "./templates/combatRound.mjs";
+import { guardSchema }        from "./templates/guard.mjs";
 import { applyConditionActions, applyEventLedger, DAMAGE_TYPES, defaultWeaponWeaknessFor } from "../../setup/config.mjs";
 
 const fields = foundry.data.fields;
@@ -38,6 +39,10 @@ export class MonsterData extends foundry.abstract.TypeDataModel {
             ...derivedStatsSchema(),
             ...currencySchema(),
             ...combatRoundSchema(),
+            // Combat Extended guard-stance state (gated on the
+            // extendedCombat homebrew toggle at runtime; schema present
+            // unconditionally so values survive a toggle flip).
+            ...guardSchema(),
 
             // Icons used for the remains (carcass) and trophy items generated
             // from this monster — configured via the monster sheet's icon
@@ -115,6 +120,16 @@ export class MonsterData extends foundry.abstract.TypeDataModel {
                     // skillMap key the to-hit roll uses (1d10 + that skill's
                     // total). Natural weapons default to Melee.
                     skill:  new fields.StringField({ initial: "melee" }),
+                    // Modern DLC stat blocks (Monsters on the Road, Lords &
+                    // Land, Easy Mode) print a single flat attack bonus
+                    // instead of breaking out Stat + Skill. When useFlatBonus
+                    // is true the to-hit becomes 1d10 + flatBonus, bypassing
+                    // skill/stat lookup. Wound/Death penalties still apply:
+                    // since the flat already bakes in full-health REF, we
+                    // subtract (sourceREF − currentREF) at roll time so the
+                    // halved-REF math matches what a skill roll would produce.
+                    useFlatBonus: new fields.BooleanField({ initial: false }),
+                    flatBonus:    new fields.NumberField({ initial: 0, integer: true }),
                     // Weapon Effects keys (WEAPON_QUALITIES) the attack carries
                     // — Silver, Bleeding, etc. Parameterized ones store their
                     // inline value (the % / dice / integer) in `qualityValues`,
@@ -264,6 +279,16 @@ export class MonsterData extends foundry.abstract.TypeDataModel {
         const dying   = hpMax > 0 && hpVal <= 0;
         const wounded = !dying && baseWoundThreshold > 0 && hpVal > 0 && hpVal < baseWoundThreshold;
         this.healthState = { wounded, dying, woundThreshold: baseWoundThreshold };
+
+        /* Snapshot the unmodified stat values BEFORE the wound/dying halving
+         * mutates them. monsterVirtualWeapon reads `refUnmodified` to compute
+         * the wound penalty on flat-bonus attacks (penalty = unmodified −
+         * current). Without this snapshot, the source value is only on
+         * `_source` which isn't reliably populated for synthetic actors. */
+        this.derivedStats.refUnmodified  = Number(this.stats?.ref?.value)  || 0;
+        this.derivedStats.dexUnmodified  = Number(this.stats?.dex?.value)  || 0;
+        this.derivedStats.intUnmodified  = Number(this.stats?.int?.value)  || 0;
+        this.derivedStats.willUnmodified = Number(this.stats?.will?.value) || 0;
 
         if (dying) {
             for (const k of ["int","ref","dex","body","spd","emp","cra","will","luck"]) {

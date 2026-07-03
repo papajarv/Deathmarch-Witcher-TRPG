@@ -14,13 +14,13 @@
   {{!-- ── HEADER ───────────────────────────────────────────────── --}}
   <header class="wdm-actor-header">
     <button type="button" class="wdm-remains-config" data-action="configRemainsIcon"
-            title="Configure the icons used for this monster's remains (carcass) and trophy items">
+            title="{{localize 'WITCHER.Sheet.Monster.Tooltip.ConfigureTheIconsUsedForThisMonsterSRema'}}">
       <i class="fa-solid fa-trophy"></i> Trophy/Remains Icons
     </button>
     <img class="wdm-portrait" src="{{actor.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Monster.EditImage'}}" />
 
     <div class="wdm-identity">
-      <input class="wdm-name" type="text" name="name" value="{{actor.name}}" placeholder="Monster name" />
+      <input class="wdm-name" type="text" name="name" value="{{actor.name}}" placeholder="{{localize 'WITCHER.Sheet.Monster.Hint.MonsterName'}}" />
       <div class="wdm-monster-taxonomy">
         <label>{{localize "WITCHER.Monster.Category"}}
           <select name="system.category">
@@ -68,7 +68,7 @@
           {{else}}
           <input type="number" name="system.derivedStats.hp.value" value="{{source.derivedStats.hp.value}}" />
           <span class="wdm-pool-slash">/</span>
-          <input type="number" class="wdm-pool-max" name="system.derivedStats.hp.max" value="{{source.derivedStats.hp.max}}" title="Manual — printed bestiary HP. Leave 0 on a new monster to auto-fill (BODY+WILL)/2 × 5" />
+          <input type="number" class="wdm-pool-max" name="system.derivedStats.hp.max" value="{{source.derivedStats.hp.max}}" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.ManualPrintedBestiaryHpLeave0OnANewMonst'}}" />
           {{/if}}
         </span>
       </div>
@@ -78,7 +78,7 @@
         <span class="wdm-pool-readout">
           <input type="number" name="system.derivedStats.sta.value" value="{{source.derivedStats.sta.value}}" />
           <span class="wdm-pool-slash">/</span>
-          <input type="number" class="wdm-pool-max" name="system.derivedStats.sta.max" value="{{source.derivedStats.sta.max}}" title="Manual — printed bestiary STA (0 = construct/never tires). Leave 0 on a new monster to auto-fill (BODY+WILL)/2 × 5" />
+          <input type="number" class="wdm-pool-max" name="system.derivedStats.sta.max" value="{{source.derivedStats.sta.max}}" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.ManualPrintedBestiarySta0ConstructNeverT'}}" />
         </span>
       </div>
     </div>
@@ -89,18 +89,18 @@
        stays identical. The death stepper mirrors the character HUD: each
        success adds −1 to the next death save (Core p.162). ──────────── --}}
   <section class="wdm-combat-actions">
-    <button type="button" class="wdm-pill" data-action="rollInitiative" title="Initiative — adds this monster to the encounter and rolls 1d10 + REF (Core p.151)">
-      <i class="fa-solid fa-user-ninja"></i><span>Initiative</span></button>
-    <button type="button" class="wdm-pill wdm-pill-stun" data-action="rollStunSave" title="Stun save — 1d10 &lt; Stun (Core p.152)">
-      <i class="fa-solid fa-face-dizzy"></i><span>Stun Save</span></button>
-    <button type="button" class="wdm-pill wdm-pill-death" data-action="rollDeathSave" title="Death save — 1d10 &lt; unmodified Stun (−1 per prior success); a fail is death (Core p.162)">
-      <i class="fa-solid fa-skull"></i><span>Death Save</span></button>
-    <button type="button" class="wdm-pill" data-action="rollFumble" title="Fumble — roll on the fumble table">
-      <i class="fa-solid fa-face-frown-open"></i><span>Fumble</span></button>
-    <button type="button" class="wdm-pill wdm-pill-crit" data-action="rollCrit" title="Critical — roll a critical wound and apply it to this monster">
-      <i class="fa-solid fa-burst"></i><span>Crit</span></button>
+    <button type="button" class="wdm-pill" data-action="rollInitiative" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.InitiativeAddsThisMonsterToTheEncounterA'}}">
+      <i class="fa-solid fa-user-ninja"></i><span>{{localize 'WITCHER.Sheet.Monster.Text.Initiative'}}</span></button>
+    <button type="button" class="wdm-pill wdm-pill-stun" data-action="rollStunSave" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.StunSave1d10StunCoreP152'}}">
+      <i class="fa-solid fa-face-dizzy"></i><span>{{localize 'WITCHER.Sheet.Monster.Text.StunSave'}}</span></button>
+    <button type="button" class="wdm-pill wdm-pill-death" data-action="rollDeathSave" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.DeathSave1d10UnmodifiedStun1PerPriorSucc'}}">
+      <i class="fa-solid fa-skull"></i><span>{{localize 'WITCHER.Sheet.Monster.Text.DeathSave'}}</span></button>
+    <button type="button" class="wdm-pill" data-action="rollFumble" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.FumbleRollOnTheFumbleTable'}}">
+      <i class="fa-solid fa-face-frown-open"></i><span>{{localize 'WITCHER.Sheet.Monster.Text.Fumble'}}</span></button>
+    <button type="button" class="wdm-pill wdm-pill-crit" data-action="rollCrit" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.CriticalRollACriticalWoundAndApplyItToTh'}}">
+      <i class="fa-solid fa-burst"></i><span>{{localize 'WITCHER.Sheet.Monster.Text.Crit'}}</span></button>
 
-    <span class="wdm-death-counter" title="Successful death saves — each adds −1 to the next (Core p.162)">
+    <span class="wdm-death-counter" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.SuccessfulDeathSavesEachAdds1ToTheNextCo'}}">
       <a data-action="adjustValue" data-target="system.deathSaves" data-delta="-1" data-min="0" title="−1"><i class="fa-solid fa-minus"></i></a>
       <i class="fa-solid fa-skull wdm-death-icon"></i>
       <span class="wdm-death-count">{{system.deathSaves}}</span>
@@ -110,7 +110,7 @@
 
   {{!-- ── STATS (always visible) ──────────────────────────────────── --}}
   <section class="wdm-section">
-    <h2>Attributes</h2>
+    <h2>{{localize 'WITCHER.Sheet.Monster.Text.Attributes'}}</h2>
     <div class="wdm-stats-grid">
       {{#each WITCHER.stats}}
         <div class="wdm-stat">
@@ -119,10 +119,10 @@
                  name="system.stats.{{this}}.value"
                  value="{{lookup (lookup ../source.stats this) 'value'}}"
                  min="1"
-                 title="Base — monsters may exceed 10 (large/supernatural creatures); mutations / AE push the modified higher" />
+                 title="{{localize 'WITCHER.Sheet.Monster.Tooltip.BaseMonstersMayExceed10LargeSupernatural'}}" />
           <span class="wdm-stat-arrow">→</span>
           <output class="wdm-stat-modified"
-                  title="Current with modifiers">{{lookup (lookup ../system.stats this) 'value'}}</output>
+                  title="{{localize 'WITCHER.Sheet.Monster.Tooltip.CurrentWithModifiers'}}">{{lookup (lookup ../system.stats this) 'value'}}</output>
         </div>
       {{/each}}
     </div>
@@ -131,35 +131,35 @@
   {{!-- ── DERIVED (always visible) — VIGOR replaces the character-only
        Toxicity track per RAW monster stat-blocks. ────────────────── --}}
   <section class="wdm-section">
-    <h2>Derived</h2>
+    <h2>{{localize 'WITCHER.Sheet.Monster.Text.Derived'}}</h2>
     <div class="wdm-numbers-grid">
       <div class="wdm-number"><span class="wdm-number-name">{{localize "WITCHER.Monster.Vigor"}}</span>
         <input class="wdm-number-value" type="number" name="system.derivedStats.vigor" value="{{source.derivedStats.vigor}}" min="0"
-               title="Spell/ability fuel (per-round ceiling)" />
+               title="{{localize 'WITCHER.Sheet.Monster.Tooltip.SpellAbilityFuelPerRoundCeiling'}}" />
       </div>
-      <div class="wdm-number is-derived"><span class="wdm-number-name">Encumb.</span>
-        <input class="wdm-number-value" type="number" value="{{system.derivedStats.enc}}" readonly title="BODY × 10" />
+      <div class="wdm-number is-derived"><span class="wdm-number-name">{{localize 'WITCHER.Sheet.Monster.Text.Encumb'}}</span>
+        <input class="wdm-number-value" type="number" value="{{system.derivedStats.enc}}" readonly title="{{localize 'WITCHER.Sheet.Monster.Tooltip.Body10'}}" />
       </div>
-      <div class="wdm-number"><span class="wdm-number-name">Recovery</span>
-        <input class="wdm-number-value" type="number" name="system.derivedStats.rec" value="{{source.derivedStats.rec}}" title="Manual — printed bestiary REC. Leave 0 on a new monster to auto-fill (BODY + WILL) / 2" />
+      <div class="wdm-number"><span class="wdm-number-name">{{localize 'WITCHER.Sheet.Monster.Text.Recovery'}}</span>
+        <input class="wdm-number-value" type="number" name="system.derivedStats.rec" value="{{source.derivedStats.rec}}" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.ManualPrintedBestiaryRecLeave0OnANewMons'}}" />
       </div>
-      <div class="wdm-number is-derived"><span class="wdm-number-name">Stun</span>
+      <div class="wdm-number is-derived"><span class="wdm-number-name">{{localize 'WITCHER.Sheet.Monster.Text.Stun'}}</span>
         <input class="wdm-number-value" type="number" value="{{system.derivedStats.stun}}" readonly title="clamp((BODY + WILL) / 2, 1-10)" />
       </div>
-      <div class="wdm-number is-derived"><span class="wdm-number-name">Wound Thr.</span>
+      <div class="wdm-number is-derived"><span class="wdm-number-name">{{localize 'WITCHER.Sheet.Monster.Text.WoundThr'}}</span>
         <input class="wdm-number-value" type="number" value="{{system.derivedStats.woundThreshold}}" readonly title="(BODY + WILL) / 2" />
       </div>
-      <div class="wdm-number is-derived"><span class="wdm-number-name">Run</span>
-        <input class="wdm-number-value" type="number" value="{{system.derivedStats.run}}" readonly title="SPD × 3" />
+      <div class="wdm-number is-derived"><span class="wdm-number-name">{{localize 'WITCHER.Sheet.Monster.Text.Run'}}</span>
+        <input class="wdm-number-value" type="number" value="{{system.derivedStats.run}}" readonly title="{{localize 'WITCHER.Sheet.Monster.Tooltip.Spd3'}}" />
       </div>
-      <div class="wdm-number is-derived"><span class="wdm-number-name">Leap</span>
-        <input class="wdm-number-value" type="number" value="{{system.derivedStats.leap}}" readonly title="Run / 5" />
+      <div class="wdm-number is-derived"><span class="wdm-number-name">{{localize 'WITCHER.Sheet.Monster.Text.Leap'}}</span>
+        <input class="wdm-number-value" type="number" value="{{system.derivedStats.leap}}" readonly title="{{localize 'WITCHER.Sheet.Monster.Tooltip.Run5'}}" />
       </div>
-      <div class="wdm-number is-derived"><span class="wdm-number-name">Punch</span>
-        <input class="wdm-number-value wdm-formula" type="text" value="{{system.derivedStats.punch}}" readonly title="BODY brawling table (Core p.48)" />
+      <div class="wdm-number is-derived"><span class="wdm-number-name">{{localize 'WITCHER.Sheet.Monster.Text.Punch'}}</span>
+        <input class="wdm-number-value wdm-formula" type="text" value="{{system.derivedStats.punch}}" readonly title="{{localize 'WITCHER.Sheet.Monster.Tooltip.BodyBrawlingTableCoreP48'}}" />
       </div>
-      <div class="wdm-number is-derived"><span class="wdm-number-name">Kick</span>
-        <input class="wdm-number-value wdm-formula" type="text" value="{{system.derivedStats.kick}}" readonly title="BODY brawling table (Core p.48)" />
+      <div class="wdm-number is-derived"><span class="wdm-number-name">{{localize 'WITCHER.Sheet.Monster.Text.Kick'}}</span>
+        <input class="wdm-number-value wdm-formula" type="text" value="{{system.derivedStats.kick}}" readonly title="{{localize 'WITCHER.Sheet.Monster.Tooltip.BodyBrawlingTableCoreP48'}}" />
       </div>
     </div>
     {{#if system.healthState.dying}}
@@ -187,7 +187,7 @@
       <label class="wdm-field">{{localize "WITCHER.Monster.Armor"}} (SP)
         <input type="number" name="system.combat.armor" value="{{system.combat.armor}}" min="0" />
       </label>
-      <label class="wdm-field" title="Optional weapon weakness (Core p.175). Stacks independently of the per-type Damage Profile below.">
+      <label class="wdm-field" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.OptionalWeaponWeaknessCoreP175StacksInde'}}">
         Weapon Weakness
         <select name="system.combat.weaponWeakness">
           {{#each weaponWeaknessOptions}}
@@ -201,12 +201,12 @@
       {{!-- Organ-crit immunity override (Core p.159). Tri-state:
             "auto" defers to category (elementa/specter → immune by
             default), "true" force-immune, "false" force-vulnerable. --}}
-      <label class="wdm-field" title="RAW Core p.159 — creatures without organs (elementa, specters, constructs) don't take organ-based critical wounds; they take a higher flat bonus instead (+5/+10/+15/+20 vs +3/+5/+8/+10). 'Auto' defers to category.">
+      <label class="wdm-field" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.RawCoreP159CreaturesWithoutOrgansElement'}}">
         Organ Crits
         <select name="system.combat.immuneToOrganCrits">
-          <option value="auto"  {{#if (eq system.combat.immuneToOrganCrits "auto")}}selected{{/if}}>Auto (by category)</option>
-          <option value="false" {{#if (eq system.combat.immuneToOrganCrits "false")}}selected{{/if}}>Takes organ crits</option>
-          <option value="true"  {{#if (eq system.combat.immuneToOrganCrits "true")}}selected{{/if}}>Immune (no organs)</option>
+          <option value="auto"  {{#if (eq system.combat.immuneToOrganCrits "auto")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Monster.Text.AutoByCategory'}}</option>
+          <option value="false" {{#if (eq system.combat.immuneToOrganCrits "false")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Monster.Text.TakesOrganCrits'}}</option>
+          <option value="true"  {{#if (eq system.combat.immuneToOrganCrits "true")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Monster.Text.ImmuneNoOrgans'}}</option>
         </select>
       </label>
     </div>
@@ -232,11 +232,11 @@
         {{#each attacks}}
         <div class="wdm-attack">
           <div class="wdm-row wdm-attack-main">
-            <input type="text" name="system.combat.attacks.{{index}}.name" value="{{name}}" placeholder="Claws" />
+            <input type="text" name="system.combat.attacks.{{index}}.name" value="{{name}}" placeholder="{{localize 'WITCHER.Sheet.Monster.Hint.Claws'}}" />
             <input type="text" name="system.combat.attacks.{{index}}.damage" value="{{damage}}" placeholder="3d6+2" />
-            <input type="text" name="system.combat.attacks.{{index}}.effect" value="{{effect}}" placeholder="Piercing; reach 10" />
+            <input type="text" name="system.combat.attacks.{{index}}.effect" value="{{effect}}" placeholder="{{localize 'WITCHER.Sheet.Monster.Hint.PiercingReach10'}}" />
             <input type="number" name="system.combat.attacks.{{index}}.rof" value="{{rof}}" min="1" />
-            <input type="number" name="system.combat.attacks.{{index}}.reliability" value="{{reliability}}" min="0" placeholder="—" title="Reliability (blank if none)" />
+            <input type="number" name="system.combat.attacks.{{index}}.reliability" value="{{reliability}}" min="0" placeholder="—" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.ReliabilityBlankIfNone'}}" />
             <span class="wdm-row-actions">
               <button type="button" class="wdm-attack-roll" data-action="rollMonsterAttack" data-index="{{index}}" title="{{localize 'WITCHER.Monster.RollAttack'}}">
                 <i class="fa-solid fa-dice-d10"></i>
@@ -250,7 +250,7 @@
                 reactions (resistant / vulnerable / immune). Checkboxes
                 use the array-field name convention so all checked values
                 are collected into system.combat.attacks[i].damageTypes. --}}
-          <div class="wdm-attack-dmgtypes" title="Damage types — target's reactions to these types apply">
+          <div class="wdm-attack-dmgtypes" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.DamageTypesTargetSReactionsToTheseTypesA'}}">
             {{#each damageTypeOptions}}
             <label class="wdm-dmgtype">
               <input type="checkbox" name="system.combat.attacks.{{../index}}.damageTypes" value="{{key}}" {{#if checked}}checked{{/if}} />
@@ -259,11 +259,15 @@
             {{/each}}
           </div>
           <div class="wdm-quality-line">
-            <label class="wdm-attack-skill" title="{{localize 'WITCHER.Monster.AttackSkillHint'}}">
-              <i class="fa-solid fa-crosshairs"></i>
-              <select name="system.combat.attacks.{{index}}.skill">
-                {{#each skillOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
-              </select>
+            {{!-- Monster attacks always roll 1d10 + this flat bonus (the
+                 modern Witcher TRPG stat-block convention — "Attack +X").
+                 Wound / dying state subtracts the REF the actor lost at
+                 roll time. The legacy skill picker and toggle were
+                 dropped: monster attacks no longer go through the skill
+                 lookup. --}}
+            <label class="wdm-attack-flat" title="{{localize 'WITCHER.Monster.AttackFlatHint'}}">
+              <span class="wdm-attack-flat-lbl">{{localize 'WITCHER.Sheet.Monster.Text.AttackBase'}}</span>
+              <input type="number" name="system.combat.attacks.{{index}}.flatBonus" value="{{flatBonus}}" step="1" />
             </label>
             {{#each qualities}}
             <span class="wdm-quality-chip" title="{{description}}">
@@ -370,14 +374,14 @@
       {{#each abilities}}
       <div class="wdm-ability-row">
         <div class="wdm-ability-head">
-          <input type="text" name="system.combat.specialAbilities.{{index}}.name" value="{{name}}" placeholder="Amphibious" />
+          <input type="text" name="system.combat.specialAbilities.{{index}}.name" value="{{name}}" placeholder="{{localize 'WITCHER.Sheet.Monster.Hint.Amphibious'}}" />
           <span class="wdm-row-actions">
             <button type="button" class="wdm-del" data-action="deleteRow" data-array="combat.specialAbilities" data-index="{{index}}">
               <i class="fa-solid fa-trash"></i>
             </button>
           </span>
         </div>
-        <textarea name="system.combat.specialAbilities.{{index}}.description" placeholder="What it does">{{description}}</textarea>
+        <textarea name="system.combat.specialAbilities.{{index}}.description" placeholder="{{localize 'WITCHER.Sheet.Monster.Hint.WhatItDoes'}}">{{description}}</textarea>
       </div>
       {{else}}<p class="wdm-empty">{{localize "WITCHER.Monster.NoneYet"}}</p>{{/each}}
     </div>
@@ -392,8 +396,8 @@
       </header>
       {{#each vulns}}
       <div class="wdm-row wdm-vuln-row">
-        <input type="text" name="system.combat.vulnerabilities.{{index}}.name" value="{{name}}" placeholder="Specter Oil" />
-        <input type="text" name="system.combat.vulnerabilities.{{index}}.note" value="{{note}}" placeholder="Note" />
+        <input type="text" name="system.combat.vulnerabilities.{{index}}.name" value="{{name}}" placeholder="{{localize 'WITCHER.Sheet.Monster.Hint.SpecterOil'}}" />
+        <input type="text" name="system.combat.vulnerabilities.{{index}}.note" value="{{note}}" placeholder="{{localize 'WITCHER.Sheet.Monster.Hint.Note'}}" />
         <span class="wdm-row-actions">
           <button type="button" class="wdm-del" data-action="deleteRow" data-array="combat.vulnerabilities" data-index="{{index}}">
             <i class="fa-solid fa-trash"></i>
@@ -426,14 +430,14 @@
           {{#each skills}}
             <div class="wdm-skill-row is-trained{{#if isDifficult}} is-difficult{{/if}}">
               <button type="button" class="wdm-skill-name" data-action="rollSkill" data-skill="{{key}}"
-                      {{#if isDifficult}}title="Difficult skill — costs ×2 IP per rank (Core p.49)"{{/if}}>
+                      {{#if isDifficult}}title="{{localize 'WITCHER.Sheet.Monster.Tooltip.DifficultSkillCosts2IpPerRankCoreP49'}}"{{/if}}>
                 {{label}}
               </button>
               <input class="wdm-skill-rank" type="number"
                      name="system.skills.{{statKey}}.{{key}}.value"
-                     value="{{value}}" min="0" title="Ranks (monsters uncapped; book bases can exceed 10)" />
-              <output class="wdm-skill-mod" title="Modifier from active effects + items">{{modifier}}</output>
-              <output class="wdm-skill-total" title="Total: stat + rank + modifier">{{total}}</output>
+                     value="{{value}}" min="0" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.RanksMonstersUncappedBookBasesCanExceed1'}}" />
+              <output class="wdm-skill-mod" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.ModifierFromActiveEffectsItems'}}">{{modifier}}</output>
+              <output class="wdm-skill-total" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.TotalStatRankModifier'}}">{{total}}</output>
               <button type="button" class="wdm-del" data-action="removeSkill" data-stat="{{statKey}}" data-skill="{{key}}"
                       title="{{localize 'WITCHER.Monster.RemoveSkill'}}">
                 <i class="fa-solid fa-trash"></i>
@@ -458,7 +462,7 @@
       {{#each knowledgeTiers}}
       <div class="wdm-knowledge-card">
         <div class="wdm-knowledge-head">
-          <input type="text" class="wdm-knowledge-label" name="system.knowledge.{{index}}.label" value="{{label}}" placeholder="Academic Knowledge" />
+          <input type="text" class="wdm-knowledge-label" name="system.knowledge.{{index}}.label" value="{{label}}" placeholder="{{localize 'WITCHER.Sheet.Monster.Hint.AcademicKnowledge'}}" />
           <label class="wdm-field">{{localize "WITCHER.Monster.Skill"}}
             <select name="system.knowledge.{{index}}.skill">
               {{#each skillOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
@@ -473,7 +477,7 @@
             </button>
           </span>
         </div>
-        <textarea name="system.knowledge.{{index}}.text" placeholder="Lore revealed at this tier">{{text}}</textarea>
+        <textarea name="system.knowledge.{{index}}.text" placeholder="{{localize 'WITCHER.Sheet.Monster.Hint.LoreRevealedAtThisTier'}}">{{text}}</textarea>
       </div>
       {{else}}<p class="wdm-empty">{{localize "WITCHER.Monster.NoneYet"}}</p>{{/each}}
     </div>
@@ -536,7 +540,7 @@
         </div>
         {{else}}
         <div class="wdm-row wdm-loot-row">
-          <input type="text" name="system.loot.{{index}}.name" value="{{name}}" placeholder="Drowner brain" />
+          <input type="text" name="system.loot.{{index}}.name" value="{{name}}" placeholder="{{localize 'WITCHER.Sheet.Monster.Hint.DrownerBrain'}}" />
           <input type="text" name="system.loot.{{index}}.qty" value="{{qty}}" placeholder="1 / 3d10" />
           <span class="wdm-row-actions">
             <button type="button" class="wdm-del" data-action="deleteRow" data-array="loot" data-index="{{index}}">
@@ -591,14 +595,14 @@
     </div>
 
     <section class="wdm-block">
-      <h3>Carried Coin</h3>
+      <h3>{{localize 'WITCHER.Sheet.Monster.Text.CarriedCoin'}}</h3>
       <div class="wdm-currency-rail">
-        <div class="wdm-coin"><span class="wdm-coin-name">Bizant</span><input type="number" name="system.currency.bizant" value="{{system.currency.bizant}}" /></div>
-        <div class="wdm-coin"><span class="wdm-coin-name">Ducat</span><input type="number" name="system.currency.ducat" value="{{system.currency.ducat}}" /></div>
-        <div class="wdm-coin"><span class="wdm-coin-name">Lintar</span><input type="number" name="system.currency.lintar" value="{{system.currency.lintar}}" /></div>
-        <div class="wdm-coin"><span class="wdm-coin-name">Floren</span><input type="number" name="system.currency.floren" value="{{system.currency.floren}}" /></div>
-        <div class="wdm-coin"><span class="wdm-coin-name">Crown</span><input type="number" name="system.currency.crown" value="{{system.currency.crown}}" /></div>
-        <div class="wdm-coin"><span class="wdm-coin-name">Oren</span><input type="number" name="system.currency.oren" value="{{system.currency.oren}}" /></div>
+        <div class="wdm-coin"><span class="wdm-coin-name">{{localize 'WITCHER.Sheet.Monster.Text.Bizant'}}</span><input type="number" name="system.currency.bizant" value="{{system.currency.bizant}}" /></div>
+        <div class="wdm-coin"><span class="wdm-coin-name">{{localize 'WITCHER.Sheet.Monster.Text.Ducat'}}</span><input type="number" name="system.currency.ducat" value="{{system.currency.ducat}}" /></div>
+        <div class="wdm-coin"><span class="wdm-coin-name">{{localize 'WITCHER.Sheet.Monster.Text.Lintar'}}</span><input type="number" name="system.currency.lintar" value="{{system.currency.lintar}}" /></div>
+        <div class="wdm-coin"><span class="wdm-coin-name">{{localize 'WITCHER.Sheet.Monster.Text.Floren'}}</span><input type="number" name="system.currency.floren" value="{{system.currency.floren}}" /></div>
+        <div class="wdm-coin"><span class="wdm-coin-name">{{localize 'WITCHER.Sheet.Monster.Text.Crown'}}</span><input type="number" name="system.currency.crown" value="{{system.currency.crown}}" /></div>
+        <div class="wdm-coin"><span class="wdm-coin-name">{{localize 'WITCHER.Sheet.Monster.Text.Oren'}}</span><input type="number" name="system.currency.oren" value="{{system.currency.oren}}" /></div>
       </div>
     </section>
   </section>
@@ -651,7 +655,7 @@
   <section class="wdm-tab-panel" data-tab="effects">
     <div class="wdm-block">
       <header class="wdm-block-head">
-        <h3>Active Effects</h3>
+        <h3>{{localize 'WITCHER.Sheet.Monster.Text.ActiveEffects'}}</h3>
         <button type="button" class="wdm-add" data-action="createEffect">
           <i class="fa-solid fa-plus"></i> Add Effect
         </button>
@@ -672,10 +676,10 @@
                     title="{{#if disabled}}Enable{{else}}Disable{{/if}}">
               <i class="fa-solid {{#if disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
             </button>
-            <button type="button" class="wdm-icon" data-action="editEffect" data-effect-id="{{id}}" title="Edit">
+            <button type="button" class="wdm-icon" data-action="editEffect" data-effect-id="{{id}}" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.Edit'}}">
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
-            <button type="button" class="wdm-del" data-action="deleteEffect" data-effect-id="{{id}}" title="Delete">
+            <button type="button" class="wdm-del" data-action="deleteEffect" data-effect-id="{{id}}" title="{{localize 'WITCHER.Sheet.Monster.Tooltip.Delete'}}">
               <i class="fa-solid fa-trash"></i>
             </button>
           </span>
@@ -683,7 +687,7 @@
         {{/each}}
       </div>
       {{else}}
-      <p class="wdm-empty">No active effects. Statuses and item-granted effects appear here.</p>
+      <p class="wdm-empty">{{localize 'WITCHER.Sheet.Monster.Text.NoActiveEffectsStatusesAndItemGrantedEff'}}</p>
       {{/if}}
     </div>
   </section>
@@ -691,7 +695,7 @@
   {{!-- ══ NOTES ═════════════════════════════════════════════════ --}}
   <section class="wdm-tab-panel" data-tab="notes">
     <div class="wdm-block">
-      <h3>Descriptors</h3>
+      <h3>{{localize 'WITCHER.Sheet.Monster.Text.Descriptors'}}</h3>
       <div class="wdm-descriptors-grid">
         <label class="wdm-field">{{localize "WITCHER.Monster.Height"}}
           <input type="text" name="system.descriptors.height" value="{{system.descriptors.height}}" />
@@ -712,7 +716,7 @@
     </div>
 
     <div class="wdm-block">
-      <h3>Mount</h3>
+      <h3>{{localize 'WITCHER.Sheet.Monster.Text.Mount'}}</h3>
       <div class="wdm-mount-row">
         <label class="wdm-mount-toggle">
           <input type="checkbox" name="system.mount.isMount" {{#if system.mount.isMount}}checked{{/if}} />

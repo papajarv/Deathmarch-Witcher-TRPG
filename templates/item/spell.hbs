@@ -38,31 +38,59 @@
       <ul class="wdm-w3-stats">
         <li class="wdm-w3-stat">
           <span class="val">{{source.castingTime}}</span>
-          <span class="lbl">Actions to Cast</span>
+          <span class="lbl">{{localize 'WITCHER.Sheet.Spell.Text.ActionsToCast'}}</span>
         </li>
         {{#if source.range}}
           <li class="wdm-w3-stat">
             <span class="val">{{source.range}}</span>
-            <span class="lbl">Range</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Spell.Text.Range'}}</span>
           </li>
         {{/if}}
         <li class="wdm-w3-stat">
           <span class="val">{{durationLabel}}</span>
-          <span class="lbl">Duration</span>
+          <span class="lbl">{{localize 'WITCHER.Sheet.Spell.Text.Duration'}}</span>
         </li>
         <li class="wdm-w3-stat">
           <span class="val">{{targetLabel}}</span>
-          <span class="lbl">Targeting</span>
+          <span class="lbl">{{localize 'WITCHER.Sheet.Spell.Text.Targeting'}}</span>
         </li>
+        {{#if damageLabel}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{damageLabel}}</span>
+            <span class="lbl">Damage</span>
+          </li>
+        {{/if}}
+        {{#if areaLabel}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{areaLabel}}</span>
+            <span class="lbl">Area</span>
+          </li>
+        {{/if}}
       </ul>
 
+      {{#if statusRiderRows.length}}
+        <div class="wdm-w3-section-label">On hit</div>
+        <ul class="wdm-w3-riders">
+          {{#each statusRiderRows}}
+            <li class="wdm-w3-rider">
+              <img src="{{this.icon}}" alt="" />
+              <span class="nm">{{this.label}}</span>
+              {{#if this.duration.value}}
+                <span class="dur">{{this.duration.value}} {{this.duration.unit}}</span>
+              {{/if}}
+              <span class="qt">{{this.chance}}%</span>
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
       {{#if source.effect}}
-        <div class="wdm-w3-section-label">Effect</div>
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Spell.Text.Effect'}}</div>
         <div class="wdm-w3-effects">{{{source.effect}}}</div>
       {{/if}}
 
       {{#if componentLinks.length}}
-        <div class="wdm-w3-section-label">Components</div>
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Spell.Text.Components'}}</div>
         <ul class="wdm-w3-ingredients">
           {{#each componentLinks}}
             <li class="wdm-w3-ingredient" data-component-index="{{this.index}}" data-uuid="{{this.uuid}}" data-action="openComponent">
@@ -84,55 +112,74 @@
     <div class="wdm-cfg-form">
 
       <div class="wdm-cfg-head">
-        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="Click to change icon" />
-        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="Spell name" />
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Spell.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Spell.Hint.SpellName'}}" />
       </div>
 
-      <div class="wdm-cfg-section">Casting</div>
+      {{!-- Narrative-only escape hatch — hides every mechanic section
+            below and treats the spell as pure description. --}}
+      <div class="wdm-cfg-section">Mechanic authoring</div>
       <div class="wdm-cfg-grid">
-        <label class="wdm-cfg-row"><span title="Stamina spent to cast the spell">STA Cost</span>
+        <label class="wdm-cfg-row is-checkbox" title="Narrative spells skip every mechanic: no target selection, no defense contest, no zone creation, no auto-apply. Only the spellcasting check rolls and the effect description posts to chat. Use for spells whose behavior can't be schema-authored (cross-scene scrying, memory manipulation, complex GM adjudication).">
+          <span>Narrative only</span>
+          <input type="checkbox" name="system.narrative" {{#if source.narrative}}checked{{/if}} />
+        </label>
+        <label class="wdm-cfg-row" title="Named entry in the SPELL_HANDLERS registry (module/mechanics/spellHandlers.mjs). When set, the cast flow invokes the handler at hook points so bespoke behavior can mutate the cast without schema-encoding it. Leave empty for pure schema.">
+          <span>Handler ID</span>
+          <input type="text" name="system.mechanicHandler" value="{{source.mechanicHandler}}" placeholder="e.g. empower, dispel, wrath-of-nature" />
+        </label>
+        <label class="wdm-cfg-row is-checkbox" title="When ON, the cast copies every AE authored on THIS item (via the Effects tab of the sheet, native Foundry authoring) onto each hit target — or onto the caster for self-buffs. The spell's duration is stamped on each cloned AE unless the AE has its own duration. Ideal for simple stat/skill buffs (Sharpen Senses, Glamour, Freya's Bravery). Leave OFF for zones (they build AEs dynamically from riders) and one-shot damage spells (no AE to apply).">
+          <span>Casts authored AEs</span>
+          <input type="checkbox" name="system.castsAuthoredAE" {{#if source.castsAuthoredAE}}checked{{/if}} />
+        </label>
+      </div>
+
+      {{#unless source.narrative}}
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Spell.Text.Casting'}}</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Spell.Tooltip.StaminaSpentToCastTheSpell'}}">STA Cost</span>
           <input type="number" min="0" name="system.staminaCost" value="{{source.staminaCost}}" />
         </label>
-        <label class="wdm-cfg-row is-checkbox"><span title="The cost scales with the cast — the flow prompts for it (e.g. Dispel)">Variable Cost</span>
+        <label class="wdm-cfg-row is-checkbox"><span title="The cost scales with the cast — the flow prompts for it (e.g. Dispel)">{{localize 'WITCHER.Sheet.Spell.Text.VariableCost'}}</span>
           <input type="checkbox" name="system.variableCost" {{#if source.variableCost}}checked{{/if}} />
         </label>
-        <label class="wdm-cfg-row"><span title="Number of actions the cast takes">Cast (actions)</span>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Spell.Tooltip.NumberOfActionsTheCastTakes'}}">Cast (actions)</span>
           <input type="number" min="0" name="system.castingTime" value="{{source.castingTime}}" />
         </label>
-        <label class="wdm-cfg-row"><span title="Spell / Witcher Sign / Priest Invocation">Form</span>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Spell.Tooltip.SpellWitcherSignPriestInvocation'}}">Form</span>
           <select name="system.spellForm">
             {{#each WITCHER.magic.forms}}
               <option value="{{@key}}" {{#if (eq @key ../source.spellForm)}}selected{{/if}}>{{localize this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>School</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Spell.Text.School'}}</span>
           <select name="system.school">
             {{#each WITCHER.magic.schools}}
               <option value="{{@key}}" {{#if (eq @key ../source.school)}}selected{{/if}}>{{localize this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span title="Novice / Journeyman / Master — gated by Magic Training rank">Tier</span>
+        <label class="wdm-cfg-row"><span title="Novice / Journeyman / Master — gated by Magic Training rank">{{localize 'WITCHER.Sheet.Spell.Text.Tier'}}</span>
           <select name="system.spellType">
             {{#each WITCHER.magic.tiers}}
               <option value="{{@key}}" {{#if (eq @key ../source.spellType)}}selected{{/if}}>{{localize this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span title="Direct / Area / Self — defines the defense roll (Core p.169)">Targeting</span>
+        <label class="wdm-cfg-row"><span title="Direct / Area / Self — defines the defense roll (Core p.169)">{{localize 'WITCHER.Sheet.Spell.Text.Targeting'}}</span>
           <select name="system.targetType">
             {{#each WITCHER.magic.targets}}
               <option value="{{@key}}" {{#if (eq @key ../source.targetType)}}selected{{/if}}>{{localize this}}</option>
             {{/each}}
           </select>
         </label>
-        <label class="wdm-cfg-row"><span>Range</span>
-          <input type="text" name="system.range" value="{{source.range}}" placeholder="Touch, 10m, Sight…" />
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Spell.Text.Range'}}</span>
+          <input type="text" name="system.range" value="{{source.range}}" placeholder="{{localize 'WITCHER.Sheet.Spell.Hint.Touch10mSight'}}" />
         </label>
       </div>
 
-      <div class="wdm-cfg-section">Defense <span class="wdm-cfg-sub">(how the target resists — pick any; none = auto-hit)</span></div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Spell.Text.Defense'}} <span class="wdm-cfg-sub">(how the target resists — pick any; none = auto-hit)</span></div>
       <div class="wdm-cfg-checkgrid">
         {{#each WITCHER.magic.defenses}}
           <label class="wdm-cfg-check">
@@ -144,14 +191,14 @@
         {{/each}}
       </div>
 
-      <div class="wdm-cfg-section">Duration</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Spell.Text.Duration'}}</div>
       <div class="wdm-cfg-grid">
         {{#unless (or (eq source.duration.unit "instant") (eq source.duration.unit "permanent"))}}
-          <label class="wdm-cfg-row"><span title="A fixed count or a dice formula, e.g. 5 or 1d10">Amount</span>
+          <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Spell.Tooltip.AFixedCountOrADiceFormulaEG5Or1d10'}}">Amount</span>
             <input type="text" name="system.duration.value" value="{{source.duration.value}}" placeholder="5 or 1d10" />
           </label>
         {{/unless}}
-        <label class="wdm-cfg-row"><span>Unit</span>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Spell.Text.Unit'}}</span>
           <select name="system.duration.unit">
             {{#each WITCHER.magic.durationUnits}}
               <option value="{{@key}}" {{#if (eq @key ../source.duration.unit)}}selected{{/if}}>{{localize this}}</option>
@@ -162,28 +209,132 @@
 
       {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
 
-      <div class="wdm-cfg-section">Effect</div>
-      <textarea class="wdm-cfg-textarea" name="system.effect" placeholder="Mechanical effect, damage formula, on-hit rules…">{{source.effect}}</textarea>
+      <div class="wdm-cfg-section">Damage <span class="wdm-cfg-sub">(structured — read by the cast flow, blank = non-damaging)</span></div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span title="Dice formula rolled on a successful cast — e.g. 5d6, 1d6+2. Placeholders: {sta} for per-STA scaling (Igni), {margin} for per-point-over-defense scaling (Cenlly Graig). Blank = non-damaging.">Formula</span>
+          <input type="text" name="system.damageFormula" value="{{source.damageFormula}}" placeholder="5d6 or {sta}d6" />
+        </label>
+        <label class="wdm-cfg-row"><span title="Element the damage carries — used for per-type resist / immunity lookups.">Element</span>
+          <select name="system.damageElement">
+            {{#each WITCHER.magic.damageElements}}
+              <option value="{{@key}}" {{#if (eq @key ../source.damageElement)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span title="What resource the damage drains — HP by default; STA drain, armor ablation, weapon reliability, or a shield HP pool for the special cases.">Type</span>
+          <select name="system.damageType">
+            {{#each WITCHER.magic.damageTypes}}
+              <option value="{{@key}}" {{#if (eq @key ../source.damageType)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row is-checkbox"><span title="Tangible casts (fire, rocks, lightning, ice, impact) are absorbed by Active Shield / Quen — damage drains the shield HP first, and status riders are blocked. Intangible casts (suffocation, noxious fumes, mental effects) bypass the shield entirely.">Tangible</span>
+          <input type="checkbox" name="system.tangible" {{#if source.tangible}}checked{{/if}} />
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">Area <span class="wdm-cfg-sub">(shape + size in meters)</span></div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span title="Geometry of the area of effect. 'None' = single target.">Shape</span>
+          <select name="system.areaShape">
+            {{#each WITCHER.magic.areaShapes}}
+              <option value="{{@key}}" {{#if (eq @key ../source.areaShape)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span title="Size in meters (radius, cone length, cube edge). 0 = single-target.">Size (m)</span>
+          <input type="number" min="0" step="0.5" name="system.areaSize" value="{{source.areaSize}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="Caster = template origin is locked to your token; you only aim the direction. Free = origin can be placed anywhere in line of sight.">Anchor</span>
+          <select name="system.areaAnchor">
+            {{#each WITCHER.magic.areaAnchors}}
+              <option value="{{@key}}" {{#if (eq @key ../source.areaAnchor)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row is-checkbox" title="TRUE = the placed template STAYS on the canvas for the spell's duration. Zone-mode riders apply as tokens enter; strip as they leave (per rider config); combat-round tick decrements the duration and deletes the template at expiry. Yrden, Static Storm, Consecrate, Blaze of the Korath, Freshen Air. Leave OFF for one-shot AoEs (Aard, Igni, Bekker's Rockslide).">
+          <span>Persistent zone</span>
+          <input type="checkbox" name="system.areaPersist" {{#if source.areaPersist}}checked{{/if}} />
+        </label>
+        <label class="wdm-cfg-row is-checkbox" title="Caster is immune to their own zone (won't take penalties/damage from standing in their own Yrden). Default TRUE — flip OFF for zones the caster is meant to also suffer from.">
+          <span>Exclude caster</span>
+          <input type="checkbox" name="system.areaExcludeCaster" {{#if source.areaExcludeCaster}}checked{{/if}} />
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">Status riders <span class="wdm-cfg-sub">(effects that fire on a successful cast)</span></div>
+      <div class="wdm-status-rider-list">
+        {{#each statusRiderRows}}
+          <div class="wdm-status-rider-row" data-status-rider-index="{{this.index}}">
+            <label class="wdm-cfg-row"><span>Status ID</span>
+              <input type="text" name="system.statusRiders.{{this.index}}.statusId" value="{{this.statusId}}" placeholder="burning" />
+            </label>
+            <label class="wdm-cfg-row"><span>Chance %</span>
+              <input type="number" min="0" max="100" step="1" name="system.statusRiders.{{this.index}}.chance" value="{{this.chance}}" />
+            </label>
+            <label class="wdm-cfg-row"><span>Duration</span>
+              <input type="text" name="system.statusRiders.{{this.index}}.duration.value" value="{{this.duration.value}}" placeholder="1d6 or 3" />
+            </label>
+            <label class="wdm-cfg-row"><span>Unit</span>
+              <select name="system.statusRiders.{{this.index}}.duration.unit">
+                {{#each WITCHER.magic.durationUnits}}
+                  <option value="{{@key}}" {{#if (eq @key ../this.duration.unit)}}selected{{/if}}>{{localize this}}</option>
+                {{/each}}
+              </select>
+            </label>
+            <label class="wdm-cfg-row" title="onHit = one-shot roll per hit target when the cast lands (fireball burning 75%). zone = applied when a token enters a persistent-area template, requires areaPersist ON (Yrden REF/DEX penalty). onTick = applied each round to tokens still inside (Blaze of Korath STA drain).">
+              <span>Mode</span>
+              <select name="system.statusRiders.{{this.index}}.mode">
+                <option value="onHit"  {{#if (eq this.mode 'onHit')}}selected{{/if}}>On hit</option>
+                <option value="zone"   {{#if (eq this.mode 'zone')}}selected{{/if}}>Zone (on enter)</option>
+                <option value="onTick" {{#if (eq this.mode 'onTick')}}selected{{/if}}>On tick (each round)</option>
+              </select>
+            </label>
+            <label class="wdm-cfg-row is-checkbox" title="Only meaningful when mode = 'zone'. TRUE = status is removed when the token walks OUT of the template (Yrden aura). FALSE = status persists for its own duration once applied (curse marker).">
+              <span>Strip on exit</span>
+              <input type="checkbox" name="system.statusRiders.{{this.index}}.stripOnExit" {{#if this.stripOnExit}}checked{{/if}} />
+            </label>
+            <label class="wdm-cfg-row" title="STA scaling. Formula: magnitude = offset * (1 + floor((sta - 1) / divisor)), clamped by cap. Errata Yrden { offset: -1, divisor: 2, cap: -4 }: at 1/3/5/7 STA → -1/-2/-3/-4. Sign follows offset (negative = penalty grows more negative; positive = bonus grows more positive). Leave 0/1/0 for no scaling (clause uses its static magnitude).">
+              <span>Scale offset (also per-step)</span>
+              <input type="number" step="1" name="system.statusRiders.{{this.index}}.staScale.offset" value="{{this.staScale.offset}}" />
+            </label>
+            <label class="wdm-cfg-row" title="Divisor: how many STA points between magnitude increments. Errata Yrden = 2 (every 2 extra STA past the first adds another offset step).">
+              <span>Scale /STA</span>
+              <input type="number" min="1" step="1" name="system.statusRiders.{{this.index}}.staScale.divisor" value="{{this.staScale.divisor}}" />
+            </label>
+            <label class="wdm-cfg-row" title="Cap on the final scaled magnitude (negative for penalties, positive for bonuses, 0 for no clamp). Errata Yrden = -4 (never worse than -4 to REF/DEX regardless of STA).">
+              <span>Scale cap</span>
+              <input type="number" step="1" name="system.statusRiders.{{this.index}}.staScale.cap" value="{{this.staScale.cap}}" />
+            </label>
+            <button type="button" class="wdm-link-remove" data-action="removeStatusRider" title="Remove"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        {{/each}}
+        <button type="button" class="wdm-drop-hint" data-action="addStatusRider"><i class="fa-solid fa-plus"></i> Add status rider</button>
+      </div>
+      {{/unless}}
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Spell.Text.Effect'}}</div>
+      <textarea class="wdm-cfg-textarea" name="system.effect" placeholder="{{localize 'WITCHER.Sheet.Spell.Hint.MechanicalEffectDamageFormulaOnHitRules'}}">{{source.effect}}</textarea>
 
       {{#if (eq source.spellForm "gift")}}
       <div class="wdm-cfg-section">{{localize "WITCHER.Item.Spell.SideEffect"}}</div>
-      <textarea class="wdm-cfg-textarea" name="system.sideEffect" placeholder="The gift's mandatory side-effect…">{{source.sideEffect}}</textarea>
+      <textarea class="wdm-cfg-textarea" name="system.sideEffect" placeholder="{{localize 'WITCHER.Sheet.Spell.Hint.TheGiftSMandatorySideEffect'}}">{{source.sideEffect}}</textarea>
       {{/if}}
 
-      <div class="wdm-cfg-section">Components</div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Spell.Text.Components'}}</div>
       <div class="wdm-drop-zone is-list" data-component-drop>
         {{#each componentLinks}}
           <div class="wdm-link-row" data-component-index="{{this.index}}" data-uuid="{{this.uuid}}">
             <img src="{{this.img}}" alt="" />
             <span class="wdm-link-name">{{this.name}}</span>
-            <input type="number" class="wdm-link-qty" data-component-qty min="1" value="{{this.qty}}" title="Quantity" />
-            <button type="button" class="wdm-link-remove" data-action="removeComponent" title="Remove"><i class="fa-solid fa-xmark"></i></button>
+            <input type="number" class="wdm-link-qty" data-component-qty min="1" value="{{this.qty}}" title="{{localize 'WITCHER.Sheet.Spell.Tooltip.Quantity'}}" />
+            <button type="button" class="wdm-link-remove" data-action="removeComponent" title="{{localize 'WITCHER.Sheet.Spell.Tooltip.Remove'}}"><i class="fa-solid fa-xmark"></i></button>
           </div>
         {{/each}}
-        <div class="wdm-drop-hint"><i class="fa-solid fa-plus"></i> Drop any item here as a component</div>
+        <div class="wdm-drop-hint"><i class="fa-solid fa-plus"></i> {{localize 'WITCHER.Sheet.Spell.Text.DropAnyItemHereAsAComponent'}}</div>
       </div>
 
-      <div class="wdm-cfg-section">Effects <span class="wdm-cfg-sub">(applied on a successful cast — not the caster)</span></div>
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Spell.Text.Effects'}} <span class="wdm-cfg-sub">(applied on a successful cast — not the caster)</span></div>
       <div class="wdm-cfg-effects">
         {{#if effects.length}}
           <ul class="wdm-effect-list">
@@ -196,14 +347,14 @@
                   <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
                     <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
                   </a>
-                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></a>
-                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="Delete"><i class="fa-solid fa-trash"></i></a>
+                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Spell.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Spell.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
                 </div>
               </li>
             {{/each}}
           </ul>
         {{else}}
-          <p class="wdm-empty">No effects configured.</p>
+          <p class="wdm-empty">{{localize 'WITCHER.Sheet.Spell.Text.NoEffectsConfigured'}}</p>
         {{/if}}
         <button type="button" class="wdm-add-effect" data-action="createEffect">
           <i class="fa-solid fa-plus"></i> Add Effect

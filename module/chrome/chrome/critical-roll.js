@@ -33,7 +33,13 @@
 
 import { isAdrenalineEnabled } from "../../api/adrenaline.mjs";
 import { appendAttackResult } from "../../documents/mixins/weaponAttackMixin.mjs";
+import { hasWRPerk, wrHeroic } from "../../api/witcherReborn.mjs";
 
+import { t, tFormat } from "../lib/i18n.js";
+
+/* Witchers Reborn — Bear · Perserver: adrenaline granted by severity.
+ * Deadly wounds function as normal (perk text) — no grant, no ignore. */
+const PERSERVER_AE = { simple: 1, difficult: 2, complex: 3 };
 /**
  * Scoring a critical banks 1 adrenaline for the attacker (RAW Core p.175-176:
  * one die per critical hit, pool capped at BODY). The crit macro is rolled by
@@ -49,7 +55,7 @@ async function grantCritAdrenaline(actor) {
     if (next === cur) return;                           // already at the BODY cap
     try {
         await actor.update({ "system.adrenaline.value": next });
-        ui.notifications?.info(`${actor.name} gains 1 adrenaline (${next}/${cap}).`);
+        ui.notifications?.info(tFormat("WITCHER.Notify.Crit.AdrenalineGained", { actor: actor.name, next: next, cap: cap }, "{actor} gains 1 adrenaline ({next}/{cap})."));
     } catch (err) {
         console.warn("witcher-ttrpg-death-march | crit adrenaline grant failed", err);
     }
@@ -111,12 +117,88 @@ const LOC_LABEL = {
    Dialog → roll → chat
    ============================================================================ */
 
+/** Detect a Balanced-quality weapon among the actor's equipped items.
+ *  Reads the active qualities catalog so a GM-authored quality that
+ *  carries the "balanced" keyword (key === "balanced") is picked up the
+ *  same way the built-in is. Returns `{ name, multiple }` for the dialog
+ *  hint, or null if none. `multiple === true` when the actor has more
+ *  than one equipped Balanced weapon (Joint Attack edge case — GM must
+ *  un-tick if the crit came from a non-Balanced off-hand). */
+function detectBalancedWeapon(actor) {
+    if (!actor) return null;
+    const hits = [];
+    for (const w of actor.items ?? []) {
+        if (w.type !== "weapon" || !w.system?.equipped) continue;
+        const qs = w.system?.effective?.qualities ?? w.system?.qualities ?? [];
+        if (qs.includes("balanced")) hits.push(w.name || "Balanced Weapon");
+    }
+    if (!hits.length) return null;
+    return { name: hits[0], multiple: hits.length > 1 || actor.items?.some(it => it.type === "weapon" && it.system?.equipped && !(it.system?.effective?.qualities ?? it.system?.qualities ?? []).includes("balanced")) };
+}
+
+/* ── Phase 7 — Stable Aim (EO p.7) ─────────────────────────────────────
+ * When the actor wields a weapon with `stableAim` AND has the Aim status
+ * active, the Aim bonus folds into the crit-severity roll on a confirmed
+ * critical. Returns the bonus number (0 when not applicable). */
+function detectStableAimBonus(actor) {
+    if (!actor) return 0;
+    let hasStableAim = false;
+    for (const w of actor.items ?? []) {
+        if (w.type !== "weapon" || !w.system?.equipped) continue;
+        const qs = w.system?.effective?.qualities ?? w.system?.qualities ?? [];
+        if (qs.includes("stableAim")) { hasStableAim = true; break; }
+    }
+    if (!hasStableAim) return 0;
+    // aimBonus getter on combatRoundMixin (Math.min(AIM_BONUS_CAP, aimRank))
+    return Number(actor?.aimBonus) || 0;
+}
+
+/* ── Phase 8 — Critical Decimation (EO p.8 / Witcher Tools) ───────────
+ * One tier of severity bump when the wearer's armor carries
+ * `criticalDecimation` AND the attack came from a witcher weapon
+ * (we can't detect the witcher-school flag without the source weapon —
+ * the dialog folds it in optimistically and lets the GM untick). */
+const SEVERITY_ORDER = ["simple", "complex", "difficult", "deadly"];
+function detectCriticalDecimation(actor) {
+    if (!actor) return false;
+    for (const a of actor.items ?? []) {
+        if (a.type !== "armor" || !a.system?.equipped) continue;
+        const qs = a.system?.effective?.qualities ?? a.system?.qualities ?? [];
+        if (qs.includes("criticalDecimation")) return true;
+    }
+    return false;
+}
+
 export async function openCriticalDialog(actor = null) {
     const DialogV2 = foundry.applications.api.DialogV2;
 
     const sevOpts = Object.entries(SEVERITY)
         .map(([k, v]) => `<option value="${k}">${v.label} — beat by ${v.beatBy}+ · +${v.bonus} bonus dmg</option>`)
         .join('');
+
+    /* Auto-tick "Balanced Weapon" when the actor wields one. The GM can
+     * un-tick if the crit didn't actually use that weapon (off-hand, etc.).
+     * The detected weapon's name shows in the label so the table sees
+     * where the bonus came from. When the actor has MORE THAN ONE equipped
+     * weapon (joint-attack scenario), surface a small warning so the GM
+     * remembers to un-tick if the crit was from the off-hand non-Balanced. */
+    const balancedMeta    = detectBalancedWeapon(actor);
+    const balancedChecked = balancedMeta ? "checked" : "";
+    const balancedHint    = balancedMeta ? ` <span style="opacity:0.7;font-size:0.6875rem;">— ${balancedMeta.name}</span>` : "";
+    const balancedWarn    = balancedMeta?.multiple
+        ? `<div style="margin-left:22px;opacity:0.7;font-size:0.625rem;color:#c8a878;">Multiple weapons equipped — verify the crit was from <em>${balancedMeta.name}</em> before rolling.</div>`
+        : "";
+
+    /* Phase 7 — Stable Aim: pre-tick when the actor is wielding a
+     * stableAim weapon AND has an active Aim rank. */
+    const stableAimBonus    = detectStableAimBonus(actor);
+    const stableAimChecked  = stableAimBonus > 0 ? "checked" : "";
+    const stableAimHint     = stableAimBonus > 0 ? ` <span style="opacity:0.7;font-size:0.6875rem;">(+${stableAimBonus})</span>` : "";
+    /* Phase 8 — Critical Decimation: pre-tick when worn armor carries it.
+     * GM unticks for off-school weapons. */
+    const decimationOn      = detectCriticalDecimation(actor);
+    const decimationChecked = decimationOn ? "checked" : "";
+    const decimationHint    = decimationOn ? ` <span style="opacity:0.7;font-size:0.6875rem;">— severity +1 tier</span>` : "";
 
     const locOpts = `
         <option value="head">Head</option>
@@ -138,12 +220,15 @@ export async function openCriticalDialog(actor = null) {
                 <label>Location</label>
                 <select name="location">${locOpts}</select>
             </div>
-            <label><input type="checkbox" name="balanced"> Balanced Weapon (+1 aimed / +2 unaimed)</label>
+            <label><input type="checkbox" name="balanced" ${balancedChecked}> Balanced Weapon (+1 aimed / +2 unaimed)${balancedHint}</label>
+            ${balancedWarn}
+            ${stableAimBonus > 0 ? `<label><input type="checkbox" name="stableAim" ${stableAimChecked} data-aim="${stableAimBonus}"> Stable Aim — add Aim bonus${stableAimHint}</label>` : ""}
+            ${decimationOn ? `<label><input type="checkbox" name="decimation" ${decimationChecked}> Critical Decimation${decimationHint}</label>` : ""}
         </form>
     `;
 
     const result = await DialogV2.prompt({
-        window: { title: 'Roll Critical Wound' },
+        window: { title: t("WITCHER.Dialog.Crit.Roll", 'Roll Critical Wound') },
         content,
         modal: true,
         ok: {
@@ -154,7 +239,9 @@ export async function openCriticalDialog(actor = null) {
                     aimed:    f.elements.aimed.checked,
                     severity: f.elements.severity.value,
                     location: f.elements.location.value,
-                    balanced: f.elements.balanced.checked
+                    balanced: f.elements.balanced.checked,
+                    stableAim:  !!f.elements.stableAim?.checked,
+                    decimation: !!f.elements.decimation?.checked
                 };
             }
         },
@@ -171,26 +258,35 @@ export async function openCriticalDialog(actor = null) {
 
     if (!result) return;
 
-    const { aimed, severity, location, balanced } = result;
-    const sev = SEVERITY[severity];
+    const { aimed, severity, location, balanced, stableAim, decimation } = result;
+    /* Phase 7 — Stable Aim bonus folds into the severity-region roll
+     * (the d6 / 2d6 that picks lesser vs greater + region). */
+    const aimAdd = stableAim ? (detectStableAimBonus(actor) || 0) : 0;
+    /* Phase 8 — Critical Decimation: bump severity up one tier. */
+    const sevKey = decimation
+        ? (SEVERITY_ORDER[Math.min(SEVERITY_ORDER.length - 1, SEVERITY_ORDER.indexOf(severity) + 1)] || severity)
+        : severity;
+    const sev = SEVERITY[sevKey];
 
     let rollFormula, rollText, variant = null, locationFinal;
     if (aimed) {
         locationFinal = location;
         const region = locRegion(location);
         if (region === 'head' || region === 'torso') {
-            const formula = balanced ? '1d6+1' : '1d6';
+            const base = balanced ? '1d6+1' : '1d6';
+            const formula = aimAdd > 0 ? `${base}+${aimAdd}` : base;
             const r = await new Roll(formula).evaluate();
             await game.dice3d?.showForRoll(r, game.user, true);
             variant = r.total >= 5 ? 'greater' : 'lesser';
             rollFormula = formula;
-            rollText = `${r.total} (raw ${r.dice[0].results.map(d => d.result).join('+')}${balanced ? '+1' : ''}) → ${variant}`;
+            rollText = `${r.total} (raw ${r.dice[0].results.map(d => d.result).join('+')}${balanced ? '+1' : ''}${aimAdd ? `+${aimAdd}` : ''}) → ${variant}`;
         } else {
             rollFormula = '—';
             rollText = `Aimed ${region}, no roll needed`;
         }
     } else {
-        const formula = balanced ? '2d6+2' : '2d6';
+        const base = balanced ? '2d6+2' : '2d6';
+        const formula = aimAdd > 0 ? `${base}+${aimAdd}` : base;
         const r = await new Roll(formula).evaluate();
         await game.dice3d?.showForRoll(r, game.user, true);
         const total = Math.min(12, r.total);
@@ -206,7 +302,7 @@ export async function openCriticalDialog(actor = null) {
         }
         variant = looked.variant;
         rollFormula = formula;
-        rollText = `${r.total} (raw ${r.dice[0].results.map(d => d.result).join('+')}${balanced ? '+2' : ''})${total !== r.total ? ` → clamped ${total}` : ''} → ${looked.location}`;
+        rollText = `${r.total} (raw ${r.dice[0].results.map(d => d.result).join('+')}${balanced ? '+2' : ''}${aimAdd ? `+${aimAdd}` : ''})${total !== r.total ? ` → clamped ${total}` : ''} → ${looked.location}`;
     }
 
     const lesser = variant === 'lesser';
@@ -236,9 +332,11 @@ export async function openCriticalDialog(actor = null) {
             <div><b>Beat defense by:</b> ${sev.beatBy}+</div>
             <div><b>Bonus damage:</b> +${sev.bonus}</div>
             <div><b>Roll:</b> ${rollFormula} → ${rollText}</div>
+            ${decimation ? `<div style="opacity:0.75;font-size:0.6875rem;color:#c8a878;"><i class="fa-solid fa-arrow-up"></i> Critical Decimation: ${severity} → <b>${sevKey}</b></div>` : ""}
+            ${stableAim && aimAdd > 0 ? `<div style="opacity:0.75;font-size:0.6875rem;color:#bdc878;"><i class="fa-solid fa-crosshairs"></i> Stable Aim: +${aimAdd} to crit-severity roll</div>` : ""}
             <button type="button" data-action="wou-apply-crit"
                     data-location="${locationFinal}"
-                    data-severity="${severity}"
+                    data-severity="${sevKey}"
                     data-lesser="${lesser}"
                     data-actor-uuid="${actor?.uuid ?? ''}"
                     style="margin-top:8px; padding:6px 12px; cursor:pointer; width:100%;">
@@ -250,7 +348,7 @@ export async function openCriticalDialog(actor = null) {
     await ChatMessage.create({
         speaker: actor ? ChatMessage.getSpeaker({ actor }) : ChatMessage.getSpeaker(),
         content: html,
-        flags: { 'witcher-ttrpg-death-march': { severity, location: locationFinal, variant } }
+        flags: { 'witcher-ttrpg-death-march': { severity: sevKey, location: locationFinal, variant } }
     });
 
     // Scoring the crit banks 1 adrenaline for the roller (optional rule).
@@ -273,7 +371,7 @@ async function applyCritFromButton(button) {
             .map(a => `<option value="${a.id}"${a.id === defaultId ? ' selected' : ''}>${a.name} <em>(${a.type})</em></option>`)
             .join('');
         const chosen = await DialogV2.prompt({
-            window: { title: 'Apply Critical To...' },
+            window: { title: t("WITCHER.Dialog.Crit.ApplyTo", 'Apply Critical To...') },
             content: `<form>
                 <div class="form-group">
                     <label>Target</label>
@@ -351,17 +449,17 @@ async function applyCritFromButton(button) {
         }
     }
     if (!actor) {
-        ui.notifications.error('No actor selected. Select a token or own an actor.');
+        ui.notifications.error(t("WITCHER.Notify.Crit.NoActor", 'No actor selected. Select a token or own an actor.'));
         return;
     }
 
     const { pack, entry } = await resolveWoundEntry(loc, sev, lesser);
     if (!pack) {
-        ui.notifications.error('No Critical Wounds compendium assigned — set one in the system settings.');
+        ui.notifications.error(t("WITCHER.Notify.Crit.NoPack", 'No Critical Wounds compendium assigned — set one in the system settings.'));
         return;
     }
     if (!entry) {
-        ui.notifications.error(`No ${sev} ${locRegion(loc)} wound found in "${pack.metadata.label}".`);
+        ui.notifications.error(tFormat("WITCHER.Notify.Crit.NoWoundFound", { sev: sev, region: locRegion(loc), pack: pack.metadata.label }, "No {sev} {region} wound found in \"{pack}\"."));
         return;
     }
     const doc = await pack.getDocument(entry._id);
@@ -377,7 +475,7 @@ async function applyCritFromButton(button) {
     data.system.lesserEffect = lesser;
 
     await actor.createEmbeddedDocuments('Item', [data]);
-    ui.notifications.info(`Applied "${entry.name}" to ${actor.name}.`);
+    ui.notifications.info(tFormat("WITCHER.Notify.Crit.Applied", { wound: entry.name, actor: actor.name }, "Applied \"{wound}\" to {actor}."));
 
     // Taking a Critical Wound forces a Stun save (Core p.159). Route through
     // the same prompt the dock / sheets use so it's one unified flow: it asks
@@ -404,7 +502,7 @@ function escWoundAttr(s) {
     return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
-export async function autoApplyCriticalWound({ actor, severity, locationKey, attackMessageUuid = null }) {
+export async function autoApplyCriticalWound({ actor, severity, locationKey, attackMessageUuid = null, suppressStunSave = false }) {
     if (!actor || !severity) return null;
     // Map ATTACK_LOCATIONS keys to wound-table region keys. Sided limbs
     // pass through; the wound's stored `location` keeps the side stamp.
@@ -422,7 +520,7 @@ export async function autoApplyCriticalWound({ actor, severity, locationKey, att
 
     const { pack, entry } = await resolveWoundEntry(loc, severity, lesser);
     if (!pack || !entry) {
-        ui.notifications?.warn(`No ${severity} ${region} wound found — set the Critical Wounds compendium in system settings.`);
+        ui.notifications?.warn(tFormat("WITCHER.Notify.Crit.NoWoundFallback", { severity: severity, region: region }, "No {severity} {region} wound found — set the Critical Wounds compendium in system settings."));
         return null;
     }
     const doc = await pack.getDocument(entry._id);
@@ -478,8 +576,69 @@ export async function autoApplyCriticalWound({ actor, severity, locationKey, att
     // rollStunSave directly (no interactive prompt) so the auto-flow
     // doesn't block — the save auto-applies Stunned on fail and clears
     // it on a pass. GM can re-roll with situational mod manually if needed.
-    try { await actor.rollStunSave?.({ modifier: 0 }); }
-    catch (err) { console.warn("witcher-ttrpg-death-march | crit-wound stun save failed", err); }
+    // Suppressed when this is a re-application from Deadly Focus (Cat
+    // heroic) upgrading an existing wound — the original apply already
+    // fired the save.
+    if (!suppressStunSave) {
+        try { await actor.rollStunSave?.({ modifier: 0 }); }
+        catch (err) { console.warn("witcher-ttrpg-death-march | crit-wound stun save failed", err); }
+    }
+
+    /* Witchers Reborn — Bear · Perserver: on receiving a critical wound
+     * in combat, grant adrenaline dice by severity (Simple 1 / Difficult
+     * 2 / Complex 3; Deadly excluded). Passive perk — no active spend,
+     * no ignore rider (that's the heroic action, not this). If the pool
+     * clips to BODY, the banner reports the actual delta plus a "capped"
+     * note so the discrepancy is legible instead of silent. */
+    try {
+        const aeGrant = PERSERVER_AE[String(severity ?? "").toLowerCase()] ?? 0;
+        if (aeGrant > 0 && hasWRPerk(actor, "perserver")) {
+            const cur = Number(actor.system?.adrenaline?.value) || 0;
+            const cap = Number(actor.system?.stats?.body?.value) || 0;
+            const next = Math.min(cur + aeGrant, cap);
+            if (next > cur) {
+                await actor.update({ "system.adrenaline.value": next });
+            }
+            /* Clamp gained to [0, aeGrant]. If the actor was already at or
+             * above BODY when the wound landed, `next - cur` goes negative;
+             * the banner should say "no gain" instead of e.g. "gains −2". */
+            const gained = Math.max(0, next - cur);
+            let messageText;
+            if (gained === 0) {
+                messageText = game.i18n.format("WITCHER.WR.Perserver.NoGain",
+                    { name: actor.name, grant: aeGrant, severity, cap });
+            } else if (gained < aeGrant) {
+                messageText = game.i18n.format("WITCHER.WR.Perserver.BannerCapped",
+                    { name: actor.name, gained, grant: aeGrant, severity, cap });
+            } else {
+                messageText = game.i18n.format("WITCHER.WR.Perserver.Banner",
+                    { name: actor.name, gained, severity });
+            }
+            const banner =
+                `<div class="wdm-attack-rider wdm-wr-rider" data-wr-rider="perserver">` +
+                    `<i class="fa-solid fa-shield-heart"></i> ` +
+                    `<strong>Perserver</strong> — ${escWoundAttr(messageText)}` +
+                `</div>`;
+            if (attackMsg) {
+                await appendAttackResult(attackMsg, { fragment: banner });
+            } else {
+                await ChatMessage.create({
+                    speaker: ChatMessage.getSpeaker({ actor }),
+                    content: banner,
+                    flags: { "witcher-ttrpg-death-march": { category: "combat" } }
+                });
+            }
+        }
+    } catch (err) {
+        console.warn("witcher-ttrpg-death-march | Perserver grant failed", err);
+    }
+
+    /* Deadly Focus (Cat, Witchers Reborn) is handled in the attack-flow
+     * verdict pass (weaponAttackMixin.mjs), NOT here. The upgrade must
+     * happen BEFORE the damage roll fires so the higher severity's +N
+     * crit bonus lands in the damage; upgrading after the wound is
+     * applied is too late. This function is kept intact for the manual
+     * "Apply Critical Wound" flow but does not emit the rider. */
 
     return created;
 }

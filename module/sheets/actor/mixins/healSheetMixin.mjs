@@ -21,6 +21,7 @@
 
 import { getStress, getWill, getStressPenalty } from "../../../mechanics/stress.mjs";
 
+import { t, tFormat } from "../../../chrome/lib/i18n.js";
 const SYSTEM_ID = "witcher-ttrpg-death-march";
 
 /**
@@ -91,7 +92,7 @@ export const healSheetMixin = (Base) => class extends Base {
         );
 
         const dialog = new foundry.applications.api.DialogV2({
-            window: { title: `Rest — ${actor.name}` },
+            window: { title: tFormat("WITCHER.Dialog.Rest.Title", { actor: actor.name }, "Rest — {actor}") },
             content,
             modal: false,
             buttons: [
@@ -134,7 +135,7 @@ export const healSheetMixin = (Base) => class extends Base {
             opts.healingHand = handEl?.checked ?? false;
             opts.healingTent = tentEl?.checked ?? false;
             const total = computeTotalRec(actor, opts);
-            readoutEl.textContent = `Total recover + ${total}`;
+            readoutEl.textContent = tFormat("WITCHER.Rest.TotalRecover", { total: total }, "Total recover + {total}");
             if (sterilizedInfoEl) {
                 sterilizedInfoEl.classList.toggle("invisible", !opts.sterilized);
             }

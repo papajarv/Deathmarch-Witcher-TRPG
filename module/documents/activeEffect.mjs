@@ -39,13 +39,29 @@ export class WitcherActiveEffect extends ActiveEffect {
      *  only apply while the wound is in that state — so the bearer's penalty
      *  swaps automatically as the wound is stabilized / treated. The flag is a
      *  live getter read, so a state change re-evaluates without any sync step;
-     *  Foundry re-runs the bearer's effect application on the item update. */
+     *  Foundry re-runs the bearer's effect application on the item update.
+     *
+     *  Homebrew gate — an AE tagged `flags.<sys>.wrGate = "<homebrewKey>"`
+     *  is suppressed whenever that homebrew setting is off. Used by the
+     *  Witchers Reborn race AEs so flipping the toggle really turns the
+     *  perks off, rather than leaving derived stats permanently boosted
+     *  on any character wearing the race item. */
     get isSuppressed() {
         if (super.isSuppressed) return true;
         const item = this.parent;
         if (item?.type === "criticalWound") {
             const tag = this.getFlag(SYSTEM_ID, "woundState") || "unstabilized";
             if (tag !== (item.system?.state || "unstabilized")) return true;
+        }
+        const wrGate = this.getFlag(SYSTEM_ID, "wrGate");
+        if (wrGate) {
+            try {
+                const on = game.settings?.get?.(SYSTEM_ID, `homebrew.${wrGate}`);
+                if (!on) return true;
+            } catch (_) {
+                /* Settings not registered yet — err on the side of applying
+                 * so a mid-init read doesn't strip perks the user expects. */
+            }
         }
         return false;
     }

@@ -24,6 +24,7 @@ import { WitcherActorSheet } from "./base.mjs";
 import { stockMerchant } from "../../merchant/stocking.mjs";
 import { snapshotUnitPrice, itemMarkupOf, ITEM_MARKUP_FLAG, NON_MERCHANT_TYPES, rarityOf } from "../../merchant/pricing.mjs";
 
+import { t, tFormat } from "../../chrome/lib/i18n.js";
 const SYSTEM_ID = "witcher-ttrpg-death-march";
 const DialogV2 = foundry.applications.api.DialogV2;
 
@@ -463,7 +464,7 @@ export class WitcherMerchantSheet extends WitcherActorSheet {
         const item = this.actor.items.get(id);
         if (!item) return;
         const ok = await DialogV2.confirm({
-            window: { title: "Remove Item" },
+            window: { title: t("WITCHER.Dialog.Merchant.RemoveItem", "Remove Item") },
             content: `<p>Remove <strong>${item.name}</strong> from inventory?</p>`,
             modal: true, rejectClose: false
         });
@@ -472,9 +473,9 @@ export class WitcherMerchantSheet extends WitcherActorSheet {
 
     static async _onClearStock(event, target) {
         const count = this.actor.items.size;
-        if (count === 0) return ui.notifications.info("Inventory is already empty.");
+        if (count === 0) return ui.notifications.info(t("WITCHER.Notify.Merchant.InventoryEmpty", "Inventory is already empty."));
         const ok = await DialogV2.confirm({
-            window: { title: "Clear Stock" },
+            window: { title: t("WITCHER.Dialog.Merchant.ClearStock", "Clear Stock") },
             content: `<p>Delete all <strong>${count}</strong> items from this merchant's inventory?</p><p>This cannot be undone.</p>`,
             modal: true, rejectClose: false
         });
@@ -491,7 +492,7 @@ export class WitcherMerchantSheet extends WitcherActorSheet {
         const currentPct = Math.round((itemMarkupOf(item) - 1) * 100);
 
         const result = await DialogV2.wait({
-            window: { title: `Markup: ${item.name}` },
+            window: { title: tFormat("WITCHER.Dialog.Merchant.Markup", { item: item.name }, "Markup: {item}") },
             content: `
                 <form class="markup-dialog">
                     <p style="opacity:0.7;font-size:0.85rem;margin:0 0 0.6rem 0;">Apply a custom per-item adjustment, applied <em>before</em> the merchant's base markup, personality modifier, and other price changes.</p>
@@ -535,23 +536,23 @@ export class WitcherMerchantSheet extends WitcherActorSheet {
         const denom = this.actor.system.shopDenom || "crown";
         const current = Number(this.actor.system.currency?.[denom]) || 0;
         const amount = await DialogV2.prompt({
-            window: { title: "Deposit Coin" },
+            window: { title: t("WITCHER.Dialog.Merchant.Deposit", "Deposit Coin") },
             content: `<form><p>Current reserve: <strong>${current} ${denom}</strong></p><div class="form-group"><label>Amount to deposit:</label><input type="number" name="amount" value="100" min="1" autofocus /></div></form>`,
             ok: { label: "Deposit", callback: (e, button) => Number(button.form.elements.amount.value) || 0 },
             modal: true, rejectClose: false
         }).catch(() => null);
         if (amount && amount > 0) {
             await this.actor.update({ [`system.currency.${denom}`]: current + amount });
-            ui.notifications.info(`Deposited ${amount} ${denom}. New reserve: ${current + amount}.`);
+            ui.notifications.info(tFormat("WITCHER.Notify.Merchant.Deposited", { amount: amount, denom: denom, reserve: current + amount }, "Deposited {amount} {denom}. New reserve: {reserve}."));
         }
     }
 
     static async _onWithdrawCoin(event, target) {
         const denom = this.actor.system.shopDenom || "crown";
         const current = Number(this.actor.system.currency?.[denom]) || 0;
-        if (current <= 0) return ui.notifications.warn("Coin reserve is empty.");
+        if (current <= 0) return ui.notifications.warn(t("WITCHER.Notify.Merchant.ReserveEmpty", "Coin reserve is empty."));
         const amount = await DialogV2.prompt({
-            window: { title: "Withdraw Coin" },
+            window: { title: t("WITCHER.Dialog.Merchant.Withdraw", "Withdraw Coin") },
             content: `<form><p>Current reserve: <strong>${current} ${denom}</strong></p><div class="form-group"><label>Amount to withdraw:</label><input type="number" name="amount" value="${Math.min(100, current)}" min="1" max="${current}" autofocus /></div></form>`,
             ok: { label: "Withdraw", callback: (e, button) => Number(button.form.elements.amount.value) || 0 },
             modal: true, rejectClose: false
@@ -559,7 +560,7 @@ export class WitcherMerchantSheet extends WitcherActorSheet {
         if (amount && amount > 0) {
             const taken = Math.min(amount, current);
             await this.actor.update({ [`system.currency.${denom}`]: current - taken });
-            ui.notifications.info(`Withdrew ${taken} ${denom}. New reserve: ${current - taken}.`);
+            ui.notifications.info(tFormat("WITCHER.Notify.Merchant.Withdrew", { taken: taken, denom: denom, reserve: current - taken }, "Withdrew {taken} {denom}. New reserve: {reserve}."));
         }
     }
 
@@ -585,12 +586,12 @@ export class WitcherMerchantSheet extends WitcherActorSheet {
     static async _onRunStocking(event, target) {
         await this._flushForm();
         if (!this.actor.system.stocking?.useItemPool && (this.actor.system.stocking?.sources ?? []).length === 0) {
-            return ui.notifications.warn("No compendium sources configured. Add a source, or switch to Item Pool mode.");
+            return ui.notifications.warn(t("WITCHER.Notify.Merchant.NoSources", "No compendium sources configured. Add a source, or switch to Item Pool mode."));
         }
         const count = this.actor.items.size;
         if (count > 0) {
             const proceed = await DialogV2.confirm({
-                window: { title: "Run Stocking" },
+                window: { title: t("WITCHER.Dialog.Merchant.RunStock", "Run Stocking") },
                 content: `<p>This will clear the current inventory (${count} items) and generate fresh stock. Continue?</p>`,
                 modal: true, rejectClose: false
             });
@@ -603,14 +604,14 @@ export class WitcherMerchantSheet extends WitcherActorSheet {
     static async _onRunRestock(event, target) {
         await this._flushForm();
         if ((this.actor.system.stocking?.lastStock ?? []).length === 0) {
-            return ui.notifications.warn("No previous stocking found. Run a full stock first.");
+            return ui.notifications.warn(t("WITCHER.Notify.Merchant.NoPreviousStock", "No previous stocking found. Run a full stock first."));
         }
         this._reportStock(await stockMerchant(this.actor, { isRestock: true }));
         this.render(false);
     }
 
     _reportStock(result) {
-        if (result.ok) return ui.notifications.info(`${result.count} items stocked.`);
+        if (result.ok) return ui.notifications.info(tFormat("WITCHER.Notify.Merchant.Stocked", { count: result.count }, "{count} items stocked."));
         const reasons = {
             noSources: "No compendium sources configured.",
             emptyPool: "Item pool is empty. Drop items onto Inventory, then Save as Pool.",
@@ -653,7 +654,7 @@ export class WitcherMerchantSheet extends WitcherActorSheet {
 
         const used = new Set(sources.map((s, i) => (i === existingIndex ? null : s.packId)).filter(Boolean));
         const available = allPacks.filter(p => !used.has(p.collection));
-        if (!existing && available.length === 0) return ui.notifications.info("All Item compendiums have already been added.");
+        if (!existing && available.length === 0) return ui.notifications.info(t("WITCHER.Notify.Merchant.AllAdded", "All Item compendiums have already been added."));
 
         const packOptions = available.map(p =>
             `<option value="${p.collection}" ${existing?.packId === p.collection ? "selected" : ""}>${p.metadata.label} (${p.metadata.packageName})</option>`
@@ -747,7 +748,7 @@ export class WitcherMerchantSheet extends WitcherActorSheet {
     static async _onSavePreset(event, target) {
         await this._flushForm();
         const name = await DialogV2.prompt({
-            window: { title: "Save Stocking Preset" },
+            window: { title: t("WITCHER.Dialog.Merchant.SavePreset", "Save Stocking Preset") },
             content: `<form><div class="form-group"><label>Preset name:</label><input type="text" name="name" placeholder="e.g. Frontier Blacksmith" autofocus /></div></form>`,
             ok: { label: "Save", callback: (e, button) => button.form.elements.name.value.trim() },
             modal: true, rejectClose: false
@@ -777,14 +778,14 @@ export class WitcherMerchantSheet extends WitcherActorSheet {
         });
         await this.actor.update({ "system.stocking.presets": presets });
         this.render(false);
-        ui.notifications.info(`Saved preset "${name}".`);
+        ui.notifications.info(tFormat("WITCHER.Notify.Merchant.PresetSaved", { name: name }, "Saved preset \"{name}\"."));
     }
 
     static async _onLoadPreset(event, target) {
         const preset = (this.actor.system.stocking?.presets ?? []).find(p => p.id === target.dataset.presetId);
         if (!preset) return;
         const ok = await DialogV2.confirm({
-            window: { title: "Load Preset" },
+            window: { title: t("WITCHER.Dialog.Merchant.LoadPreset", "Load Preset") },
             content: `<p>Load preset <strong>${preset.name}</strong> into this merchant?</p><p style="opacity:0.7;font-size:0.85rem;">This overwrites the current stocking configuration.</p>`,
             modal: true, rejectClose: false
         });
@@ -793,7 +794,7 @@ export class WitcherMerchantSheet extends WitcherActorSheet {
         for (const [k, v] of Object.entries(preset.config)) updates[`system.stocking.${k}`] = v;
         await this.actor.update(updates);
         this.render(false);
-        ui.notifications.info(`Loaded preset "${preset.name}".`);
+        ui.notifications.info(tFormat("WITCHER.Notify.Merchant.PresetLoaded", { name: preset.name }, "Loaded preset \"{name}\"."));
     }
 
     static async _onDeletePreset(event, target) {
@@ -801,7 +802,7 @@ export class WitcherMerchantSheet extends WitcherActorSheet {
         const idx = presets.findIndex(p => p.id === target.dataset.presetId);
         if (idx === -1) return;
         const ok = await DialogV2.confirm({
-            window: { title: "Delete Preset" },
+            window: { title: t("WITCHER.Dialog.Merchant.DeletePreset", "Delete Preset") },
             content: `<p>Delete preset <strong>${presets[idx].name}</strong>?</p>`,
             modal: true, rejectClose: false
         });
@@ -815,19 +816,19 @@ export class WitcherMerchantSheet extends WitcherActorSheet {
 
     static async _onSaveItemPool(event, target) {
         const items = this.actor.items.map(i => i.toObject());
-        if (items.length === 0) return ui.notifications.warn("No items in inventory to save. Drop items onto Inventory first.");
+        if (items.length === 0) return ui.notifications.warn(t("WITCHER.Notify.Merchant.NoItemsToSave", "No items in inventory to save. Drop items onto Inventory first."));
         await this.actor.update({ "system.itemPool": items });
-        ui.notifications.info(`Saved ${items.length} items as the item pool.`);
+        ui.notifications.info(tFormat("WITCHER.Notify.Merchant.PoolSaved", { n: items.length }, "Saved {n} items as the item pool."));
     }
 
     static async _onClearItemPool(event, target) {
         const ok = await DialogV2.confirm({
-            window: { title: "Clear Item Pool" },
+            window: { title: t("WITCHER.Dialog.Merchant.ClearPool", "Clear Item Pool") },
             content: `<p>Clear the saved item pool? This won't affect current inventory.</p>`,
             modal: true, rejectClose: false
         });
         if (!ok) return;
         await this.actor.update({ "system.itemPool": [] });
-        ui.notifications.info("Item pool cleared.");
+        ui.notifications.info(t("WITCHER.Notify.Merchant.PoolCleared", "Item pool cleared."));
     }
 }

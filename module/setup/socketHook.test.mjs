@@ -18,8 +18,15 @@ test("buildMonsterFlags reads damageProfile per-type into vulnerable / resist / 
   assert.match(src, /else if \(reaction === "immune"\)\s*flags\.immuneToTypes\.push/);
 });
 
-test("immuneToOrganCrits derived from category in {elementa, specter}", () => {
-  assert.match(src, /immuneToOrganCrits:\s*sys\.category === "elementa" \|\| sys\.category === "specter"/);
+test("immuneToOrganCrits derived from category in {elementa, specter}, with GM override", () => {
+  // Category fallback: elementa / specter monsters are immune by default.
+  assert.match(src, /sys\.category === "elementa" \|\| sys\.category === "specter"/);
+  // Per-monster override on combat.immuneToOrganCrits wins over the category
+  // default when set to "true" or "false"; "auto" / unset falls back to the
+  // category check.
+  assert.match(src, /sys\.combat\?\.immuneToOrganCrits/);
+  assert.match(src, /overrideOrgan === "true"\s*\?\s*true/);
+  assert.match(src, /overrideOrgan === "false"\s*\?\s*false/);
 });
 
 test("buildNaturalArmorShape uses combat.armor as SP across every location", () => {

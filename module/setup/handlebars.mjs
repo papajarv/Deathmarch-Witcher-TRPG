@@ -36,6 +36,9 @@ export function registerHandlebars() {
     if (!Handlebars.helpers.gte) {
         Handlebars.registerHelper("gte", (a, b) => Number(a) >= Number(b));
     }
+    if (!Handlebars.helpers.lte) {
+        Handlebars.registerHelper("lte", (a, b) => Number(a) <= Number(b));
+    }
     /* `includes arr item` — true if `arr` is an Array and contains
      * `item` (loose equality). Used by multi-checkbox templates to
      * decide the `checked` state of each option against a backing

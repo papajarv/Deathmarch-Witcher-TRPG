@@ -43,7 +43,13 @@ function playerOwnsActor(actor) {
 
 function takeControl(actor) {
     if (!actor) return;
-    setActorOverride(actor.id);
+    /* Pass the actor INSTANCE (not just the id) so setActorOverride can
+     * capture the token reference. Without this, unlinked-token combatants
+     * resolve back to the shared world actor on every dock interaction —
+     * three unlinked wolves would share one action budget, ROF, statuses,
+     * etc. The override now stores tokenId for synthetic actors, so each
+     * unlinked token keeps its own combat state. */
+    setActorOverride(actor);
 }
 
 /* ------------------------------------------------------------------ */
@@ -151,6 +157,16 @@ function onTurnChange(combat) {
 function registerAutoTurnHook() {
     Hooks.on("combatTurnChange", onTurnChange);
     Hooks.on("combatStart",      onTurnChange);
+    /* Refresh-survival: on a Foundry reload mid-combat, neither
+     * combatTurnChange nor combatStart fire for the current ongoing
+     * turn — the combat document was already updated before the page
+     * came back. Without a one-shot rerun, the GM had to untick + re-
+     * tick the checkbox to re-engage. `ready` fires after game.combat
+     * is hydrated, so apply the auto-take-control once. */
+    Hooks.once("ready", () => {
+        try { if (game.combat?.started) onTurnChange(game.combat); }
+        catch (err) { console.warn(`${SYSTEM_ID} | take-control on ready failed`, err); }
+    });
 }
 
 /* ------------------------------------------------------------------ */

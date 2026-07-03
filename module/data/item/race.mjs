@@ -45,7 +45,14 @@ export class RaceData extends foundry.abstract.TypeDataModel {
             // later behavior; the schema records intent.
             noMagicProfession: new fields.BooleanField({ initial: false }),
             potionImmune:      new fields.BooleanField({ initial: false }),
-            blueMutagenImmune: new fields.BooleanField({ initial: false })
+            blueMutagenImmune: new fields.BooleanField({ initial: false }),
+
+            // Race-level immunity to Food Sickness (the status applied when a
+            // character eats spoiled food and fails the Endurance hazard —
+            // mechanics/foodAndDrink.mjs). Ghouls, dwarves with iron guts,
+            // etc. Consulted BEFORE the roll: the hazard is skipped entirely,
+            // no chat card, no status effect.
+            foodSicknessImmune: new fields.BooleanField({ initial: false })
         };
     }
 

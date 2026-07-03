@@ -48,6 +48,7 @@ import { postNoteToScene } from "./parchments.js";
 import { isHomebrewEnabled } from "../../api/homebrew.mjs";
 import { registerItemAction, buildItemActionEntries, installSheetContextMenuExtra, installSheetContextMenuOverride } from "./context-menu-item.js";
 import { isBookCompleted } from "../sheets/valuable-study.js";
+import { ARMOR_LOCATION_COVERAGE } from "../../setup/config.mjs";
 import {
   getFreshnessState,
   getFreshnessDaysRemaining,
@@ -66,6 +67,7 @@ function ratioToState(ratio) {
 import { getAssignedActor, VIEWER_OVERRIDE_HOOK, isActorInActiveCombat } from "../lib/actor.js";
 import { renderViewAsPicker, wireViewAsPicker } from "../lib/view-as.js";
 import { describeDuration } from "./dock-statuses.js";
+import { t, tFormat } from "../lib/i18n.js";
 import {
   fitsInContainer, overflowWarning, getCapacityDisplay,
   hasSlotRows, buildSlotLayout, tilePlaceholderIcon, rowTooltip,
@@ -589,6 +591,15 @@ export function openContainerFloating(containerId, anchorEl) {
   `;
   document.body.appendChild(wrap);
   _floatPopupEl = wrap;
+  /* Stamp the popup-scale attribute BEFORE positioning so the CSS
+   * `transform: scale()` is already applied when getBoundingClientRect
+   * runs — dimensions come back scaled, and the clamp math uses the
+   * real visual footprint. Without this the position code sees the
+   * intrinsic (280×320) size and lets the popup drift off-screen at
+   * higher UI scales. The popup-scale hook's MutationObserver would
+   * also stamp it, but on a later microtask — too late for the sync
+   * measurement here. */
+  wrap.setAttribute("data-wdm-scaled", "1");
   positionFloatingContainer(anchorEl);
 
   // Mount popups omit the `.item` class on their slots (drag-only), so the
@@ -665,10 +676,14 @@ function positionFloatingContainer(anchorEl) {
   if (!_floatPopupEl) return;
   const W = window.innerWidth;
   const H = window.innerHeight;
-  const popupW = 280;
-  /* Force a layout read to get the real height — the rendered popup may be
-   * taller than the 320px fallback when many items are inside. */
-  const popupH = _floatPopupEl.getBoundingClientRect().height || 320;
+  /* getBoundingClientRect on a `transform: scale(N)` element returns the
+   * SCALED footprint, so once `data-wdm-scaled="1"` is stamped this
+   * gives us the true visual size the popup will occupy on-screen.
+   * That's what the viewport clamp math needs — the intrinsic 280×320
+   * would let a 1.5× scaled popup overflow the right / top edge. */
+  const rect = _floatPopupEl.getBoundingClientRect();
+  const popupW = rect.width  || 280;
+  const popupH = rect.height || 320;
 
   let left, top;
   if (anchorEl?.getBoundingClientRect) {
@@ -686,8 +701,8 @@ function positionFloatingContainer(anchorEl) {
   }
   _floatPopupEl.style.position = "fixed";
   _floatPopupEl.style.zIndex   = "9070";   /* above dock (9050) */
-  _floatPopupEl.style.left     = `${left}px`;
-  _floatPopupEl.style.top      = `${top}px`;
+  _floatPopupEl.style.left = `${left}px`;
+  _floatPopupEl.style.top  = `${top}px`;
 }
 
 /* =========================================================================
@@ -727,10 +742,10 @@ function positionBounds() {
   const left   = (leftOpen   && leftbar)? Math.max(0, leftbar.getBoundingClientRect().right) : 0;
   const right  = (rightOpen  && sidebar)? Math.max(0, W - sidebar.getBoundingClientRect().left) : 0;
 
-  invEl.style.top    = `${top}px`;
-  invEl.style.bottom = `${bottom}px`;
-  invEl.style.left   = `${left}px`;
-  invEl.style.right  = `${right}px`;
+  invEl.style.top = `calc(${top}px / var(--wdm-scale, 1))`;
+  invEl.style.bottom = `calc(${bottom}px / var(--wdm-scale, 1))`;
+  invEl.style.left = `calc(${left}px / var(--wdm-scale, 1))`;
+  invEl.style.right = `calc(${right}px / var(--wdm-scale, 1))`;
 
   // Pin the close-arrow X to the center of the topbar Inventory tab.
   // Stored as a CSS variable on invEl so styles can `left: var(--inv-close-x)`
@@ -739,7 +754,7 @@ function positionBounds() {
   if (tab) {
     const tabRect = tab.getBoundingClientRect();
     const tabCenterX = tabRect.left + tabRect.width / 2;
-    invEl.style.setProperty("--inv-close-x", `${tabCenterX - left}px`);
+    invEl.style.setProperty("--inv-close-x", `calc(${tabCenterX - left}px / var(--wdm-scale, 1))`);
   }
 }
 
@@ -907,6 +922,8 @@ async function refreshInspectionPanel() {
     let weaponQualityList = [];
     let armorQualityList  = [];
     let armorMeta         = null;
+    let shieldMeta        = null;
+    let shieldQualityList = [];
     let alchemyMeta       = null;
     let componentMeta     = null;
     let containerMeta     = null;
@@ -977,17 +994,86 @@ async function refreshInspectionPanel() {
             isShield:         true
           };
         } else {
-          const allRows = LOC_KEYS.map(buildRow).filter(r => r.max > 0);
-          const sorted  = [...allRows].sort((a, b) => b.value - a.value);
-          const chosen  = sorted[0];
+          /* Per-location SP rows, gated by the `location` enum so a
+           * Torso piece never shows arm rows even if a stale value sits
+           * in the document. Hero number is the highest current SP
+           * across covered slots. */
+          // Shared coverage map (config.mjs) so the inventory display
+          // always agrees with the sheet form and the combat derivation.
+          const loc = rawItem.system?.location;
+          const coveredKeys = ARMOR_LOCATION_COVERAGE[loc]
+            ?? [loc].filter(k => LOC_KEYS.includes(k));
+          const coveredRows = coveredKeys.map(buildRow);
+          const sorted = [...coveredRows].sort((a, b) => b.value - a.value);
           armorMeta = {
-            primarySP:        chosen?.value ?? 0,
-            primarySPMax:     chosen?.max   ?? 0,
+            primarySP:        sorted[0]?.value ?? 0,
+            primarySPMax:     sorted[0]?.max   ?? 0,
             primaryStatLabel: "STOPPING POWER",
-            coverageLabel:    allRows.map(r => r.label).join(" · "),
+            coverageLabel:    coveredRows.map(r => r.label).join(" · "),
+            multiLocation:    coveredRows.length > 1,
+            spLocations:      coveredRows.map(r => ({ label: r.label, value: r.value, max: r.max })),
             isShield:         false
           };
         }
+      }
+
+      if (item.type === "shield") {
+        // Shield inspection card: Reliability (blocks) as the hero
+        // number, Cover Value (CV) subline, category chip, EV, and
+        // the same enhancement-slot + quality-tag row layout the
+        // armor card uses. Mirrors WitcherShieldSheet's display —
+        // catalog is the ARMOR quality catalog filtered to shield-
+        // only entries via filterShieldQualities (same helper the
+        // item sheet uses).
+        const sys = rawItem.system ?? {};
+        const rel = sys.reliability ?? {};
+        const relCur = Number(rel.value) || 0;
+        const relMax = Number(rel.max)   || 0;
+        const cv     = Number(sys.coverValue) || 0;
+        const catLabel = ({ light: "Light", medium: "Medium", heavy: "Heavy" })[sys.category] ?? "Medium";
+        const subParts = [];
+        if (cv > 0) subParts.push(`CV ${cv}`);
+        subParts.push(catLabel);
+        shieldMeta = {
+          primarySP:        relCur,
+          primarySPMax:     relMax,
+          primaryStatLabel: "BLOCKS",
+          coverageLabel:    subParts.join(" · "),
+          coverValue:       cv,
+          category:         catLabel,
+          isFullCover:      cv >= 6,
+          effectHtml:       String(sys.effect ?? "")
+        };
+        /* Shield qualities live in the ARMOR quality catalog under a
+         * SHIELD-only filter (Sturdy shield, Parrying shield, Deployable,
+         * Blade Catcher, Archery Shield, Very Sturdy, deprecated Full
+         * Cover). Same helper the item sheet uses. */
+        const fullCatalog = cfgMod.getActiveArmorQualities?.() ?? cfgMod.ARMOR_QUALITIES ?? {};
+        const catalog     = cfgMod.filterShieldQualities?.(fullCatalog) ?? fullCatalog;
+        const defaults    = cfgMod.ARMOR_QUALITIES ?? {};
+        const values      = sys.qualityValues ?? {};
+        shieldQualityList = buildQualityList(sys.qualities ?? [], catalog, defaults, values);
+        // Enhancement slots (glyphs / armor mods) — shields host the
+        // same AE pool armor does.
+        effectiveMeta = item.system?.effective ?? null;
+        const applied = item.system?.appliedEnhancements ?? [];
+        const count   = Math.max(Number(item.system?.armorEnhancement) || 0, applied.length);
+        for (let i = 0; i < count; i++) {
+          const ref = applied[i];
+          if (ref?.uuid) {
+            let name = ref.name, img = ref.img;
+            try { const d = fromUuidSync(ref.uuid); if (d) { name = d.name; img = d.img; } } catch (_) { /* unresolved */ }
+            enhancementSlots.push({ filled: true, name: name || ref.name || "?", img: img || ref.img || "icons/svg/upgrade.svg" });
+          } else {
+            enhancementSlots.push({ filled: false });
+          }
+        }
+        const baseQ    = new Set(sys.qualities ?? []);
+        const effVals  = effectiveMeta?.qualityValues ?? values;
+        socketedQualityList = buildQualityList(
+          (effectiveMeta?.qualities ?? []).filter(k => !baseQ.has(k)),
+          catalog, defaults, effVals
+        );
       }
 
       if (item.type === "weapon" || item.type === "armor") {
@@ -1035,8 +1121,10 @@ async function refreshInspectionPanel() {
         const dmgTypes = cfgMod.DAMAGE_TYPES ?? CONFIG?.WITCHER?.damageTypes ?? {};
         const loc = (k, fb) => (k && game.i18n?.localize ? game.i18n.localize(k) : (fb ?? k));
         const isBomb      = type === "bomb";
+        const isOil       = type === "oil";
         const hasToxicity = type === "potion" || type === "decoction";
         const typeLabel   = loc(types[type], type);
+        const rebornOn = isHomebrewEnabled?.("alchemyPotency");
         let heroValue, heroLabel, heroSub = "";
         if (isBomb) {
           heroValue = sys.damage || "—";
@@ -1046,16 +1134,47 @@ async function refreshInspectionPanel() {
           heroValue = sys.toxicity ?? 0;
           heroLabel = "TOXICITY";
           heroSub   = sys.duration || "";
+        } else if (isOil) {
+          /* Oils: Reborn swaps the duration hero for a CHARGES hero so
+           * the inspect card reads the same as the item sheet display
+           * (which already has the toggle-aware swap). The free-text
+           * `sys.duration` is ignored for oils — structured fields
+           * (oilDuration / oilCharges) are the authoritative source. */
+          if (rebornOn) {
+            const charges = Number(sys.oilCharges) || 0;
+            heroValue = charges > 0 ? charges : "—";
+            heroLabel = "CHARGES";
+          } else {
+            const dv = Number(sys.oilDuration?.value) || 0;
+            const du = String(sys.oilDuration?.units || "");
+            heroValue = dv > 0 ? `${dv} ${du}` : typeLabel;
+            heroLabel = dv > 0 ? "DURATION" : "TYPE";
+          }
         } else {
           heroValue = sys.duration || typeLabel;
           heroLabel = sys.duration ? "DURATION" : "TYPE";
         }
-        alchemyMeta = { isBomb, hasToxicity, typeLabel, heroValue, heroLabel, heroSub };
+        /* Alchemy Reborn base summary — shown on the inspect card when the
+         * item is configured as a brew base. Resolved via the shared
+         * baseSummaryFor so the inspect line matches the item-sheet
+         * display line one-for-one ("Potion / Decoction · -2 DC"). Null
+         * when the toggle is off or no base is configured. */
+        let baseSummary = null;
+        if (rebornOn) {
+          try {
+            const api = game?.system?.api?.alchemy?.baseSummaryFor;
+            baseSummary = typeof api === "function" ? api(item) : null;
+          } catch (_) { /* api not wired yet — leave null */ }
+        }
+        alchemyMeta = { isBomb, hasToxicity, typeLabel, heroValue, heroLabel, heroSub, baseSummary };
       }
 
       if (item.type === "component") {
         // Mirror WitcherComponentSheet._prepareContext — substance hero when
         // the component yields one of the nine substances, else availability.
+        // Under Alchemy Reborn the hero block also surfaces the potency value
+        // so a player inspecting an Archespore Juice sees "+4 Potency" without
+        // opening the full sheet.
         const sys  = rawItem.system ?? {};
         const subs  = cfgMod.SUBSTANCES ?? CONFIG?.WITCHER?.alchemical?.substances ?? {};
         const art   = cfgMod.SUBSTANCE_ART ?? CONFIG?.WITCHER?.alchemical?.substanceArt ?? {};
@@ -1063,27 +1182,51 @@ async function refreshInspectionPanel() {
         const subKey   = (sys.substanceType ?? "").trim();
         const isSubstance = !!sys.isSubstance;
         const hasHero = isSubstance && !!subKey;
+        const rebornOn = isHomebrewEnabled?.("alchemyPotency");
+        const potency = Number(sys.potency) || 0;
         componentMeta = {
           isSubstance,
           hasHero,
           substanceKey:  hasHero ? subKey : "",
           substanceName: hasHero ? loc(subs[subKey], subKey) : "",
-          substanceArt:  hasHero ? (art[subKey] ?? "") : ""
+          substanceArt:  hasHero ? (art[subKey] ?? "") : "",
+          showPotency:   rebornOn && hasHero && potency > 0,
+          potency
         };
       }
 
       if (item.type === "mutagen") {
         // Mirror WitcherMutagenSheet — the "Effect" is the mutagen's Active-
         // Effect modifiers (e.g. "+3 Melee"), the same list its sheet shows.
+        // Alchemy Reborn additions: substance hero (mutagens carry a
+        // substance type just like components under Reborn) + a Potency
+        // badge so the inspect card matches the substance-component layout.
         let mods = [];
         try {
           const sheetMod = await import("/systems/witcher-ttrpg-death-march/module/sheets/item/base.mjs");
           mods = sheetMod.summarizeEffectModifiers?.(item) ?? [];
         } catch (_) { /* helper unavailable — skip the effect rows */ }
         const t = String(rawItem.system?.type ?? "");
+        const sys = rawItem.system ?? {};
+        const subs = cfgMod.SUBSTANCES ?? CONFIG?.WITCHER?.alchemical?.substances ?? {};
+        const art  = cfgMod.SUBSTANCE_ART ?? CONFIG?.WITCHER?.alchemical?.substanceArt ?? {};
+        const loc  = (k, fb) => (k && game.i18n?.localize ? game.i18n.localize(k) : (fb ?? k));
+        const subKey = String(sys.substanceType
+                           || sys.substance
+                           || item.flags?.["witcher-alchemy-craft"]?.substance
+                           || "").trim().toLowerCase();
+        const rebornOn = isHomebrewEnabled?.("alchemyPotency");
+        const hasSub = rebornOn && !!subKey;
+        const potency = Number(sys.potency) || 0;
         mutagenMeta = {
           typeLabel: t ? t.charAt(0).toUpperCase() + t.slice(1) : "",
-          modifiers: mods
+          modifiers: mods,
+          hasSubstance:  hasSub,
+          substanceKey:  hasSub ? subKey : "",
+          substanceName: hasSub ? loc(subs[subKey], subKey) : "",
+          substanceArt:  hasSub ? (art[subKey] ?? "") : "",
+          showPotency:   rebornOn && potency > 0,
+          potency
         };
       }
 
@@ -1241,6 +1384,18 @@ async function refreshInspectionPanel() {
           icon: FRESH_ICONS[freshState] ?? "fa-leaf",
           remaining: freshRemaining != null ? freshRemaining.toFixed(1) : ""
         };
+        /* Alchemy Reborn base summary — same shape as alchemyMeta.baseSummary
+         * so a single template branch renders it identically on either
+         * item type. Resolved via the shared API helper to keep the inspect
+         * line in lockstep with the food sheet display. */
+        const rebornOnFood = isHomebrewEnabled?.("alchemyPotency");
+        let baseSummaryFood = null;
+        if (rebornOnFood) {
+          try {
+            const api = game?.system?.api?.alchemy?.baseSummaryFor;
+            baseSummaryFood = typeof api === "function" ? api(item) : null;
+          } catch (_) { /* api not wired yet */ }
+        }
         foodMeta = {
           kind,
           kindLabel: KIND_LABELS[kind] ?? kind,
@@ -1254,7 +1409,8 @@ async function refreshInspectionPanel() {
           // Portion-scaled totals — what the carry tally actually counts.
           effectiveWeight: round2(w * unitMul),
           effectiveCost:   round2(c * unitMul),
-          freshness
+          freshness,
+          baseSummary: baseSummaryFood
         };
       }
 
@@ -1274,6 +1430,8 @@ async function refreshInspectionPanel() {
         weaponQualityList,
         armorQualityList,
         armorMeta,
+        shieldMeta,
+        shieldQualityList,
         alchemyMeta,
         componentMeta,
         containerMeta,
@@ -1319,7 +1477,10 @@ async function refreshInspectionPanel() {
    ========================================================================= */
 
 const QUALITIES_JOURNAL_NAME    = "Weapon and Armor Qualities";
-const QUALITIES_COMPENDIUM_PACK = "world.new-armor-and-weapons-rules";
+/* Empty by default. The open-category quality config dialog renders
+ * descriptions inline; this journal lookup is just the legacy hover-popup
+ * fallback. Set to a pack id like "world.<my-pack>" if you ship one. */
+const QUALITIES_COMPENDIUM_PACK = "";
 const QUALITY_TYPES             = ["weapon", "armor", "enhancement"];
 
 let _qualityCache = null;     // lowercase quality name → {name, description}
@@ -1481,6 +1642,170 @@ Hooks.on?.("preUpdateItem", (item, change, _options, userId) => {
   if (newQty !== undefined && Number(newQty) > 1) {
     if (!("system" in change)) change.system = {};
     change.system.quantity = 1;
+  }
+});
+
+/* EO un-equip gate: refuse to unequip the LAST worn arming-jack-class
+ * armor piece while the actor still has any Difficult piece equipped.
+ * Symmetric to the equip gate in splitOneAndEquip — that gate stops you
+ * donning Difficult armor without a jack; this one stops you stripping
+ * the jack while Difficult is still on (which would leave you "naked
+ * Difficult", a state EO p.4 doesn't allow). Only fires under the CE
+ * eoArmorModel toggle. */
+Hooks.on?.("preUpdateItem", (item, change, _options, userId) => {
+  try {
+    if (userId !== game.user?.id) return;
+    if (item?.type !== "armor") return;
+    const goingOff = change?.system && Object.prototype.hasOwnProperty.call(change.system, "equipped")
+                  && change.system.equipped === false;
+    if (!goingOff) return;
+    const actor = item.parent;
+    if (!actor?.items) return;
+    /* Lazy-load — keep this hook module loadable in tests without
+     * pulling in the mechanics chain. */
+    const eo = globalThis.WITCHER_EO ?? null;
+    const isJackLocal  = (a) => {
+      const k = String(a?.system?.armingJackKind ?? "none");
+      const u = String(a?.system?.armoredArmingJackUpgrade ?? "none");
+      return k === "jack" || k === "superiorSuit" || u === "jack" || u === "superiorSuit";
+    };
+    if (!isJackLocal(item)) return;
+    /* Only enforce when the toggle is on. The CE_SUBSYSTEM helper isn't
+     * accessible here without an import; do the read inline. */
+    let on = false;
+    try {
+      const sub = game.settings?.get?.("witcher-ttrpg-death-march", "combatExtendedSubsystems") ?? {};
+      const masterRaw = game.settings?.get?.("witcher-ttrpg-death-march", "homebrew.extendedCombat");
+      const master = masterRaw === true || masterRaw === "true" || masterRaw === 1;
+      const sysOn  = sub.eoArmorModel === undefined ? true : !!sub.eoArmorModel;
+      on = master && sysOn;
+    } catch (_) { /* settings unavailable — fail closed (don't block) */ }
+    if (!on) return;
+    const worn = (actor.items?.contents ?? actor.items ?? [])
+      .filter(i => i.type === "armor" && i.system?.equipped
+                && i.system?.location !== "Shield" && i.system?.armorType !== "shield");
+    /* Either the canonical boolean OR the `difficult` chip in the
+     * qualities array marks a piece as Difficult — keep the un-equip
+     * gate consistent with isDifficultArmor in mechanics/eoArmorModel. */
+    const hasDifficult = worn.some(p => {
+        if (p.system?.difficult) return true;
+        const qs = p.system?.effective?.qualities ?? p.system?.qualities ?? [];
+        return Array.isArray(qs) && qs.includes("difficult");
+    });
+    if (!hasDifficult) return;
+    /* Count OTHER worn jacks — the piece being unequipped is still in `worn`
+     * because the change hasn't applied yet. */
+    const otherJacks = worn.filter(p => p !== item && isJackLocal(p));
+    if (otherJacks.length === 0) {
+      ui?.notifications?.warn?.(
+        `Can't remove ${item.name} — you're still wearing Difficult armor that needs an arming jack. Take off the Difficult piece first.`
+      );
+      /* Veto the change: deleting equipped from the change object keeps
+       * the rest of the update (any other fields the caller wanted to
+       * change land); returning false would cancel the whole update,
+       * which is more aggressive than we need. */
+      delete change.system.equipped;
+    }
+  } catch (err) {
+    console.warn("witcher-ttrpg-death-march | EO un-equip gate failed", err);
+  }
+});
+
+/* EO equip gate (symmetric to the un-equip gate above): refuse to
+ * equip a Difficult armor piece unless the actor is wearing at least
+ * one arming jack OR superior arming suit. Covers every path that
+ * isn't the chrome's `splitOneAndEquip` (macros, system item-sheet
+ * checkbox, compendium drag-drop, Item.create with equipped:true,
+ * REST API calls). The chrome's own equip checks already reject
+ * before this hook fires; this is the catch-all.
+ *
+ * Only fires when the EO armor model toggle is on. */
+Hooks.on?.("preUpdateItem", (item, change, _options, userId) => {
+  try {
+    if (userId !== game.user?.id) return;
+    if (item?.type !== "armor") return;
+    const goingOn = change?.system && Object.prototype.hasOwnProperty.call(change.system, "equipped")
+                 && change.system.equipped === true;
+    if (!goingOn) return;
+    const actor = item.parent;
+    if (!actor?.items) return;
+    /* Same dual-read as isDifficultArmor — boolean OR chip. */
+    const isDifficult = (a) => {
+      if (a?.system?.difficult) return true;
+      const qs = a?.system?.effective?.qualities ?? a?.system?.qualities ?? [];
+      return Array.isArray(qs) && qs.includes("difficult");
+    };
+    if (!isDifficult(item)) return;
+    /* CE master + EO subsystem must both be on, same as the un-equip gate. */
+    let on = false;
+    try {
+      const sub = game.settings?.get?.("witcher-ttrpg-death-march", "combatExtendedSubsystems") ?? {};
+      const masterRaw = game.settings?.get?.("witcher-ttrpg-death-march", "homebrew.extendedCombat");
+      const master = masterRaw === true || masterRaw === "true" || masterRaw === 1;
+      const sysOn  = sub.eoArmorModel === undefined ? true : !!sub.eoArmorModel;
+      on = master && sysOn;
+    } catch (_) { /* fail open */ }
+    if (!on) return;
+    const isJack = (a) => {
+      const k = String(a?.system?.armingJackKind ?? "none");
+      const u = String(a?.system?.armoredArmingJackUpgrade ?? "none");
+      return k === "jack" || k === "superiorSuit" || u === "jack" || u === "superiorSuit";
+    };
+    const worn = (actor.items?.contents ?? actor.items ?? [])
+      .filter(i => i.type === "armor" && i.system?.equipped && i !== item);
+    const hasJack = worn.some(isJack);
+    if (!hasJack) {
+      ui?.notifications?.warn?.(
+        `Can't equip ${item.name} — Difficult armor requires an Arming Jack worn underneath. Equip a jack first.`
+      );
+      /* Veto only the equipped flip; let the rest of the update through. */
+      delete change.system.equipped;
+    }
+  } catch (err) {
+    console.warn("witcher-ttrpg-death-march | EO equip gate failed", err);
+  }
+});
+
+/* Same catch-all for items being CREATED on an actor with `equipped:true`
+ * — Item.create / compendium drag / macros. Mirrors the equip-gate
+ * decision above; on a violation, force equipped=false so the item still
+ * lands (the user can deal with it) but isn't worn. */
+Hooks.on?.("preCreateItem", (item, createData, _options, userId) => {
+  try {
+    if (userId !== game.user?.id) return;
+    if (item?.type !== "armor") return;
+    const willEquip = createData?.system?.equipped === true;
+    if (!willEquip) return;
+    const actor = item.parent;
+    if (!actor?.items) return;
+    const isDifficult = createData?.system?.difficult
+      || (Array.isArray(createData?.system?.qualities) && createData.system.qualities.includes("difficult"));
+    if (!isDifficult) return;
+    let on = false;
+    try {
+      const sub = game.settings?.get?.("witcher-ttrpg-death-march", "combatExtendedSubsystems") ?? {};
+      const masterRaw = game.settings?.get?.("witcher-ttrpg-death-march", "homebrew.extendedCombat");
+      const master = masterRaw === true || masterRaw === "true" || masterRaw === 1;
+      const sysOn  = sub.eoArmorModel === undefined ? true : !!sub.eoArmorModel;
+      on = master && sysOn;
+    } catch (_) { /* fail open */ }
+    if (!on) return;
+    const isJack = (a) => {
+      const k = String(a?.system?.armingJackKind ?? "none");
+      const u = String(a?.system?.armoredArmingJackUpgrade ?? "none");
+      return k === "jack" || k === "superiorSuit" || u === "jack" || u === "superiorSuit";
+    };
+    const worn = (actor.items?.contents ?? actor.items ?? [])
+      .filter(i => i.type === "armor" && i.system?.equipped);
+    const hasJack = worn.some(isJack);
+    if (!hasJack) {
+      ui?.notifications?.warn?.(
+        `${item.name} can't auto-equip — Difficult armor requires an Arming Jack worn underneath.`
+      );
+      item.updateSource({ "system.equipped": false });
+    }
+  } catch (err) {
+    console.warn("witcher-ttrpg-death-march | EO preCreate equip gate failed", err);
   }
 });
 
@@ -1647,7 +1972,13 @@ function appendAppliedOilSection(panel, item) {
   const { total, remaining, label } = describeDuration(oil.dur ?? {});
   const timed = total > 0;
   const pct   = timed ? Math.max(0, Math.min(100, Math.round((remaining / total) * 100))) : 100;
-  const mins  = timed ? label : "active";
+  /* Inspect chip: timed coatings show the remaining duration label
+   * ("12 min", "3 r"), Reborn charge coatings show the charge tag
+   * Read off oil.dur.label ("5/10 charges"), and "until cleansed"
+   * coatings (RAW with no duration authored) get a blank chip — the
+   * panel header already says "Applied Oil", a redundant "active"
+   * word added nothing. */
+  const chip  = timed ? label : (oil.dur?.label || "");
   const body = panel.querySelector(".wou-inspection-body");
   if (!body) return;
   body.insertAdjacentHTML("beforeend", `
@@ -1658,7 +1989,7 @@ function appendAppliedOilSection(panel, item) {
           <div class="wou-applied-oil-label">Applied Oil</div>
           <div class="wou-applied-oil-name">${escapeText(oil.name)}</div>
         </div>
-        <div class="wou-applied-oil-charges">${mins}</div>
+        <div class="wou-applied-oil-charges">${escapeText(chip)}</div>
       </div>
       <div class="wou-applied-oil-bar"><div class="fill" style="width:${pct}%"></div></div>
       ${oil.effect ? `<div class="wou-applied-oil-effect">${escapeText(oil.effect)}</div>` : ""}
@@ -1676,19 +2007,31 @@ function appendAppliedOilSection(panel, item) {
     const weapon = actor?.items?.get(btn.dataset.itemId);
     if (!weapon) return;
     try {
-      const ids = oilCoatingEffects(weapon).map(fx => fx.id);
-      if (ids.length) await weapon.deleteEmbeddedDocuments("ActiveEffect", ids);
+      /* Cleanse — clear the appliedOil snapshot. The legacy AE flow used
+       * to delete oilCoating-tagged ActiveEffects; the new schema stores
+       * the coating as a single structured field instead, so cleansing is
+       * a single update. */
+      await weapon.update({
+        "system.appliedOil": { id: "", name: "", img: "", oilTarget: "", oilBonusDamage: 0, appliedAt: 0, expireAt: 0, charges: 0, maxCharges: 0 }
+      });
     } catch (err) {
       console.warn(`${MODULE_ID} | failed to cleanse oil`, err);
     }
   });
 }
 
-/** World-time tick: patch only the oil-coating countdown labels in place —
- *  the grid/equip droplet badges and the inspect panel's Applied-Oil block —
+/** World-time tick: patch the oil-coating countdown labels in place —
+ *  inspect panel's Applied-Oil chip + the equip droplet's hover state —
  *  leaving the rest of the inventory DOM (and its scroll/hover state) alone.
  *  Applied / expired / cleansed coatings are structural and rebuild via the
- *  ActiveEffect create/delete hooks instead. */
+ *  appliedOil create/delete hooks instead.
+ *
+ *  Chip text mirrors readOilCoating / appendAppliedOilSection: timed
+ *  coatings show their duration label, Reborn charge coatings show
+ *  `oil.dur.label` ("5/10 charges"), "until cleansed" coatings show
+ *  blank. The old `"active"` literal is gone — it's the chip's job to
+ *  show DATA, and the "active" word is already implied by the section's
+ *  "Applied Oil" header. */
 function tickOilLabels() {
   if (!invEl || !isInventoryOpen()) return;
   const actor = getAssignedActor();
@@ -1698,13 +2041,16 @@ function tickOilLabels() {
     const coat = readOilCoating(it);
     if (!coat) continue;
     const { total, remaining, label } = describeDuration(coat.dur ?? {});
-    const timed     = total > 0;
-    const badgeText = timed ? (label || "0") : "∞";
-    const sel       = `[data-item-id="${CSS.escape(it.id)}"]`;
+    const timed = total > 0;
+    const chip  = timed ? (label || "") : (coat.dur?.label || "");
+    const sel   = `[data-item-id="${CSS.escape(it.id)}"]`;
 
-    /* Grid + equip droplet badges. */
+    /* The equip droplet badge no longer carries an inline label (we
+     * dropped the "∞" / minutes pair in favour of just the dollop —
+     * the hover tooltip carries the full detail). Any legacy span that
+     * survived a hot-reload gets cleared so it doesn't render stale text. */
     for (const span of invEl.querySelectorAll(`${sel} .oil-badge .oil-badge-label`)) {
-      if (span.textContent !== badgeText) span.textContent = badgeText;
+      if (span.textContent !== "") span.textContent = "";
     }
 
     /* Inspect panel Applied-Oil block (scoped by the cleanse button's id). */
@@ -1712,8 +2058,7 @@ function tickOilLabels() {
                        ?.closest(".wou-applied-oil");
     if (block) {
       const charges = block.querySelector(".wou-applied-oil-charges");
-      const mins    = timed ? label : "active";
-      if (charges && charges.textContent !== mins) charges.textContent = mins;
+      if (charges && charges.textContent !== chip) charges.textContent = chip;
       const fill = block.querySelector(".wou-applied-oil-bar .fill");
       if (fill && timed) {
         const pct = Math.max(0, Math.min(100, Math.round((remaining / total) * 100)));
@@ -2141,7 +2486,9 @@ function mountItemSlotHTML(item) {
   const badgeHTML = qty > 1 ? `<span class="count">${qty}</span>` : "";
   // Same substance (frame) + rarity (background) hooks as itemSlotHTML so the
   // mount interaction popup matches the main grid and container popups.
-  const element = (item.type === "component" && sys.substanceType) ? sys.substanceType : "";
+  // Reads via substanceElementOf so mutagens with a substance pick up the
+  // overlay too (Alchemy Reborn — mutagens act as ingredient picks).
+  const element = substanceElementOf(item);
   const elAttr  = element ? ` data-element="${escapeAttr(element)}"` : "";
   const rarity  = String(sys.availability ?? "").toLowerCase();
   const rarAttr = rarity ? ` data-rarity="${escapeAttr(rarity)}"` : "";
@@ -2353,6 +2700,26 @@ function substanceCornerHTML(element) {
   return `<img class="wou-slot-sub" src="${escapeAttr(src)}" alt="" draggable="false" />`;
 }
 
+/* Substance key for the slot's frame-color + corner-overlay. Components have
+ * always carried this; under Alchemy Reborn mutagens may also carry a
+ * substanceType (so they act as ingredient picks in the brew wheel) and the
+ * inventory should signal that the same way as substance components. Falls
+ * through to the legacy alchemy-craft flag so stock-pack mutagens authored
+ * before our schema field reach the wheel via the same fallback chain the
+ * brew wheel uses. */
+function substanceElementOf(item) {
+  const sys = item?.system;
+  if (item?.type === "component" && sys?.substanceType) return String(sys.substanceType).toLowerCase();
+  if (item?.type === "mutagen") {
+    const sub = sys?.substanceType
+             || sys?.substance
+             || item.flags?.["witcher-alchemy-craft"]?.substance
+             || "";
+    return String(sub).toLowerCase();
+  }
+  return "";
+}
+
 /** Tiny glyph pinned to a slot's top-left corner that tells the player what
  *  flavor of item it is at a glance:
  *    - Book valuables (`valuable` with system.type === "book") get the book glyph
@@ -2460,10 +2827,11 @@ function itemSlotHTML(item) {
     badgeHTML = `<span class="count">${qty}</span>`;
   }
 
-  // Component substances get a data-element hook so CSS can color the slot's
-  // frame line (border) in the element's color — substance is shown purely by
-  // frame line color now.
-  const element = (item.type === "component" && sys.substanceType) ? sys.substanceType : "";
+  // Substance-bearing items (components + Alchemy Reborn mutagens) get a
+  // data-element hook so CSS can colour the slot's frame in the substance
+  // colour. Resolved via the shared helper so the legacy alchemy-craft flag
+  // also feeds the overlay for stock-pack items.
+  const element = substanceElementOf(item);
   const elAttr  = element ? ` data-element="${escapeAttr(element)}"` : "";
 
   // Rarity hook drives the slot background gradient. Every item type stores
@@ -2494,17 +2862,22 @@ function weaponQuickCornerHTML(item) {
 }
 
 /** Top-left "oil applied" badge for weapons that carry a live oil coating.
- *  A droplet icon plus remaining minutes (or "∞" for a coating with no timed
- *  duration); the title carries the oil name + effect text. */
+ *  Just the droplet — no inline duration / charge count next to it on the
+ *  equip tile (was an icon + "∞" pair that read awkwardly when the oil
+ *  had no timed duration). The tooltip still carries the oil name +
+ *  effect text + duration so the player can hover for detail. */
 function oilBadgeHTML(item) {
   if (item.type !== "weapon") return "";
   const oil = readOilCoating(item);
   if (!oil) return "";
   const d = describeDuration(oil.dur ?? {});
   const timed = d.total > 0;
-  const label = timed ? (d.label || "0") : "∞";
-  const tip   = oil.effect ? `${oil.name} — ${oil.effect}` : oil.name;
-  return `<span class="oil-badge" title="${escapeAttr(tip)}"><i class="fa-solid fa-droplet"></i><span class="oil-badge-label">${label}</span></span>`;
+  const durLine = timed ? (d.label || "") : (oil.dur?.label || "");
+  const tipBits = [oil.name];
+  if (oil.effect) tipBits.push(oil.effect);
+  if (durLine) tipBits.push(durLine);
+  const tip = tipBits.join(" — ");
+  return `<span class="oil-badge" title="${escapeAttr(tip)}"><i class="fa-solid fa-droplet"></i></span>`;
 }
 
 /** Compose the chip row in the popup header: slot count, total stored
@@ -2824,9 +3197,9 @@ function equipSlotHTML(item, kind /* "armor" */) {
  * weapon occupies both Main and Off-hand (it appears in both, tagged "2H"); the
  * Quick slot shows a quick weapon or an equipped shield. */
 const HAND_SLOT_DEFS = [
-  { key: "right", short: "M", title: "Main hand — drag a one-handed weapon here" },
-  { key: "left",  short: "O", title: "Off-hand — drag a one-handed weapon here" },
-  { key: "quick", short: "Q", title: "Quick / off-hand — quick weapons & shields only" }
+  { key: "right", short: "M", title: t("WITCHER.Inv.Slot.MainHand", "Main hand — drag a one-handed weapon here") },
+  { key: "left",  short: "O", title: t("WITCHER.Inv.Slot.OffHand", "Off-hand — drag a one-handed weapon here") },
+  { key: "quick", short: "Q", title: t("WITCHER.Inv.Slot.Quick", "Quick / off-hand — quick weapons & shields only") }
 ];
 
 function renderWeaponHandSlotsHTML(actor) {
@@ -2848,36 +3221,163 @@ function renderWeaponHandSlotsHTML(actor) {
       weaponHandSlotHTML(byKey[key], key, short, title)).join("");
 }
 
-/* Switch-Hands toggle: swaps the Main and Off-hand weapons. Hidden when a
- * two-handed weapon is equipped (it fills both hands, nothing to swap) and
- * when neither Main nor Off-hand holds anything. Costs a combat action. */
-function renderSwitchHandsButtonHTML(actor) {
-  if (!actor) return "";
-  const eq = actor.items.filter(i => i.system?.equipped);
-  if (eq.some(i => occupancyOf(i) === "both")) return "";
-  const hasMain = eq.some(i => occupancyOf(i) === "right");
-  const hasOff  = eq.some(i => occupancyOf(i) === "left");
-  if (!hasMain && !hasOff) return "";
-  return `<button type="button" class="wou-switch-hands" data-action="switch-hands" title="Switch hands — swap Main and Off-hand (costs an action)"><i class="fa-solid fa-right-left"></i></button>`;
+/* Switch-hands button next to the equip rail. Three potential actions:
+ *   • swap        — exchange Main and Off-hand weapons (legacy)
+ *   • grip-to-2h  — re-grip a hybrid 1H weapon two-handed (EO Two-Hand)
+ *   • grip-to-1h  — re-grip a 2H-moded weapon back into one hand
+ *
+ * The button is shown if any of these are available. Multiple options
+ * are presented in a DialogV2 picker; a single option fires directly. */
+function _switchHandsOptions(actor) {
+  if (!actor) return [];
+  const eq = (actor.items?.contents ?? actor.items ?? []).filter(i => i.system?.equipped);
+
+  const opts = [];
+
+  const nativeTwoH = eq.find(i =>
+    (i.type === "weapon" || i.type === "shield") && i.system?.hands === "two");
+  const hybridInTwoH = eq.find(i =>
+    i.type === "weapon"
+    && i.system?.twoHandMode === true
+    && Array.isArray(i.system?.qualities)
+    && i.system.qualities.includes("twoHand"));
+
+  // Swap available iff no item claims both hands (native 2H or hybrid 2H mode)
+  // and at least one of Main/Off has something.
+  if (!nativeTwoH && !hybridInTwoH) {
+    const hasMain = eq.some(i => occupancyOf(i) === "right");
+    const hasOff  = eq.some(i => occupancyOf(i) === "left");
+    if (hasMain || hasOff) opts.push({ kind: "swap" });
+  }
+
+  // 1H → 2H: any equipped hybrid 1H weapon not already in 2H mode.
+  if (!nativeTwoH) {
+    for (const w of eq) {
+      if (w.type !== "weapon") continue;
+      if (w.system?.hands !== "one") continue;
+      if (!Array.isArray(w.system?.qualities) || !w.system.qualities.includes("twoHand")) continue;
+      if (w.system?.twoHandMode === true) continue;
+      opts.push({ kind: "grip-to-2h", item: w });
+    }
+  }
+
+  // 2H → 1H: the hybrid weapon currently in 2H mode (at most one).
+  if (hybridInTwoH) opts.push({ kind: "grip-to-1h", item: hybridInTwoH });
+
+  return opts;
 }
 
-/* Swap the Main-hand (right) and Off-hand (left) weapons. No-op with a
- * two-handed weapon equipped or with nothing in either hand. Costs one combat
- * action; both slot moves go in a single bypassed update (see preUpdateItem). */
-async function switchWeaponHands(actor) {
-  if (!actor) return;
-  const eq = actor.items.filter(i => i.system?.equipped);
-  if (eq.some(i => occupancyOf(i) === "both")) return;
+function renderSwitchHandsButtonHTML(actor) {
+  const opts = _switchHandsOptions(actor);
+  if (!opts.length) return "";
+  const title = opts.length === 1
+    ? (opts[0].kind === "swap"
+        ? "Switch hands — swap Main and Off-hand (costs an action)"
+        : opts[0].kind === "grip-to-2h"
+          ? `Switch grip — wield ${opts[0].item.name} two-handed (costs an action)`
+          : `Switch grip — wield ${opts[0].item.name} one-handed (costs an action)`)
+    : "Switch hands — choose swap or grip change (costs an action)";
+  return `<button type="button" class="wou-switch-hands" data-action="switch-hands" title="${escapeAttr(title)}"><i class="fa-solid fa-right-left"></i></button>`;
+}
+
+async function _doSwap(actor) {
+  const eq = (actor.items?.contents ?? actor.items ?? []).filter(i => i.system?.equipped);
   const main = eq.find(i => occupancyOf(i) === "right");
   const off  = eq.find(i => occupancyOf(i) === "left");
   if (!main && !off) return;
   if (!canSpendCombatAction(actor)) return;
-
   const updates = [];
   if (main) updates.push({ _id: main.id, "system.slot": "left"  });
   if (off)  updates.push({ _id: off.id,  "system.slot": "right" });
   await actor.updateEmbeddedDocuments("Item", updates, { wouSwapHands: true });
-  await chargeCombatAction(actor, "Switch hands");
+  await chargeCombatAction(actor, t("WITCHER.Inv.SwitchHands", "Switch hands"));
+}
+
+async function _doGripChange(actor, weapon, goingTwo) {
+  if (!actor || !weapon) return;
+  if (goingTwo) {
+    /* Off-hand-free precondition: only the OFF-HAND ("left") blocks
+     * switching to 2H grip. The Quick slot is the "rested while two-
+     * handed" carve-out that already coexists with natively 2H weapons
+     * (an equipped Quick alchemical or quick weapon stays in Quick when
+     * you draw a greatsword), so allow it here too. */
+    const eq = (actor.items?.contents ?? actor.items ?? []).filter(i => i.system?.equipped);
+    const blocker = eq.find(i => i !== weapon && occupancyOf(i) === "left");
+    if (blocker) {
+      ui?.notifications?.warn?.(`Can't wield ${weapon.name} two-handed — ${blocker.name} occupies the off-hand.`);
+      return;
+    }
+  }
+  if (!canSpendCombatAction(actor)) return;
+  await weapon.update({ "system.twoHandMode": goingTwo });
+  await chargeCombatAction(actor, goingTwo
+    ? `Switch grip: ${weapon.name} → two-handed`
+    : `Switch grip: ${weapon.name} → one-handed`);
+}
+
+async function switchWeaponHands(actor) {
+  if (!actor) return;
+  const opts = _switchHandsOptions(actor);
+  if (!opts.length) return;
+
+  // Single option — fire directly, no dialog.
+  if (opts.length === 1) {
+    const o = opts[0];
+    if (o.kind === "swap") return _doSwap(actor);
+    if (o.kind === "grip-to-2h") return _doGripChange(actor, o.item, true);
+    if (o.kind === "grip-to-1h") return _doGripChange(actor, o.item, false);
+    return;
+  }
+
+  // Multiple options — ask the user which action.
+  const DialogV2 = foundry?.applications?.api?.DialogV2;
+  if (!DialogV2) {
+    // No DialogV2 fallback: take the swap if present, else the first grip op.
+    const fallback = opts.find(o => o.kind === "swap") ?? opts[0];
+    if (fallback.kind === "swap") return _doSwap(actor);
+    return _doGripChange(actor, fallback.item, fallback.kind === "grip-to-2h");
+  }
+
+  const labelFor = (o) => o.kind === "swap"
+    ? "Swap Main and Off-hand"
+    : o.kind === "grip-to-2h"
+      ? `Wield ${o.item.name} two-handed`
+      : `Wield ${o.item.name} one-handed`;
+
+  const rows = opts.map((o, i) =>
+    `<label style="display:flex;align-items:center;gap:.5rem;padding:.25rem 0;">
+       <input type="radio" name="wou-switch-pick" value="${i}"${i === 0 ? " checked" : ""}>
+       <span>${escapeAttr(labelFor(o))}</span>
+     </label>`
+  ).join("");
+
+  const content = `<div style="display:flex;flex-direction:column;gap:.15rem;">${rows}</div>`;
+
+  const picked = await DialogV2.wait({
+    window: { title: t("WITCHER.Inv.SwitchHands", "Switch hands") },
+    content,
+    buttons: [
+      {
+        action: "go",
+        label: "Confirm",
+        default: true,
+        callback: (event, button) => {
+          const root = button.form ?? button.closest?.("form") ?? document;
+          const r = root.querySelector?.('input[name="wou-switch-pick"]:checked');
+          return r?.value ?? null;
+        }
+      },
+      { action: "cancel", label: "Cancel" }
+    ],
+    rejectClose: false
+  }).catch(() => null);
+
+  if (picked == null || picked === "cancel") return;
+  const idx = Number(picked);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= opts.length) return;
+  const o = opts[idx];
+  if (o.kind === "swap") return _doSwap(actor);
+  return _doGripChange(actor, o.item, o.kind === "grip-to-2h");
 }
 
 function weaponHandSlotHTML(item, slotKey, short, title) {
@@ -2911,6 +3411,15 @@ export function occupancyOf(item) {
   if (!item) return null;
   if (item.type === "weapon" || item.type === "shield") {
     if (item.system?.hands === "two") return "both";
+    /* Runtime two-hand wielding (EO Two-Hand quality on a 1H weapon).
+     * When the player toggles into 2H mode, the weapon claims BOTH
+     * hands the same way a baseline 2H weapon does — so the off-hand
+     * is gated and Quick items conflict the same way. */
+    if (item.type === "weapon" && item.system?.twoHandMode === true
+        && Array.isArray(item.system?.qualities)
+        && item.system.qualities.includes("twoHand")) {
+      return "both";
+    }
     const s = item.system?.slot;
     return ["right", "left", "quick"].includes(s) ? s : "right";
   }
@@ -3075,7 +3584,19 @@ function checkEquipConflicts(actor, itemId, targetHand, pending = [], ignoreIds 
   }
   if ((targetHand === "left"  && rightBusy && quickBusy) ||
       (targetHand === "right" && leftBusy  && quickBusy)) {
-    return { ok: false, reason: "quick-blocks-offhand", conflicts: [quickBusy] };
+    /* Manticore · Shield Mastery: a shield may still occupy a hand slot
+     * while a quick item is in the off-hand. Same relaxation as the
+     * quick-into-shield case above, but for the reverse ordering
+     * (weapon + quick already equipped, THEN equipping the shield).
+     * Read the target item; if it's a shield and combatMods.quickItemWithShield
+     * is >0, the guard passes and pairwise-conflict logic below still
+     * enforces genuine conflicts (e.g. same hand already busy). */
+    const targetItem = actor?.items?.get?.(itemId);
+    const targetIsShield = targetItem && isShieldItem(targetItem);
+    const quickWithShield = (Number(actor?.system?.combatMods?.quickItemWithShield) || 0) > 0;
+    if (!(targetIsShield && quickWithShield)) {
+      return { ok: false, reason: "quick-blocks-offhand", conflicts: [quickBusy] };
+    }
   }
   if (conflicts.length > 0) {
     return { ok: false, reason: "pairwise-conflict", conflicts };
@@ -3343,14 +3864,30 @@ function wireContainerRail(actor) {
     }
 
     // Internal drag from this overlay (grid / equip / another container).
-    const id     = ev.dataTransfer.getData("application/x-wou-item");
-    const source = ev.dataTransfer.getData("application/x-wou-source");
+    const id         = ev.dataTransfer.getData("application/x-wou-item");
+    const source     = ev.dataTransfer.getData("application/x-wou-source");
+    const srcActorId = ev.dataTransfer.getData("application/x-wou-source-actor") || owner.id;
     if (!id) return;
     if (id === containerId) return;
+    /* Cross-actor rail drop (character grid → mount container, or vice
+     * versa). The `owner` above is the container's owner; the item lives on
+     * `srcActor`. Route through transferAcrossActors — which detaches from
+     * the source container/equip, capacity-checks the destination, creates
+     * a fresh copy on the dest inside the target container, and deletes
+     * the source stack — instead of moveItemToContainer, which would
+     * silently no-op because owner.items.get(id) is undefined. */
+    if (srcActorId !== owner.id) {
+      const srcActor = game.actors?.get?.(srcActorId);
+      const srcItem  = srcActor?.items?.get(id);
+      if (!srcActor || !srcItem) return;
+      await transferAcrossActors(srcActor, srcItem, source, owner, containerId);
+      return;
+    }
     /* Dragging a CONTAINER onto an occupied slot equips it there (the
      * previously-occupying container falls back to the grid). */
     const dragged = owner.items.get(id);
-    if (dragged?.type === "container") {
+    if (!dragged) return;
+    if (dragged.type === "container") {
       const slotIdx = Number(slot.dataset.railSlot);
       if (Number.isFinite(slotIdx)) {
         if (!canSpendCombatAction(owner)) return;
@@ -3478,7 +4015,7 @@ async function openMountPicker(character) {
   `;
 
   const chosen = await DialogV2.wait({
-    window: { title: "Link Mount / Companion" },
+    window: { title: t("WITCHER.Dialog.LinkMount", "Link Mount / Companion") },
     content,
     buttons: [
       {
@@ -3542,7 +4079,7 @@ function positionMountPopup() {
   }
 
   popup.style.right = "";
-  popup.style.left  = `${left}px`;
+  popup.style.left = `calc(${left}px / var(--wdm-scale, 1))`;
   popup.style.top   = `${topVP - invRect.top}px`;
 }
 
@@ -3716,8 +4253,8 @@ function positionContainerPopup() {
   const top = topVP - invRect.top;
 
   popup.style.right = "";
-  popup.style.left  = `${left}px`;
-  popup.style.top   = `${top}px`;
+  popup.style.left = `calc(${left}px / var(--wdm-scale, 1))`;
+  popup.style.top = `calc(${top}px / var(--wdm-scale, 1))`;
 }
 
 function wireContainerPopup(character) {
@@ -3810,7 +4347,12 @@ function wireContainerPopup(character) {
 
     // Internal drag.
     const source      = ev.dataTransfer.getData("application/x-wou-source");
-    const srcActorId  = ev.dataTransfer.getData("application/x-wou-source-actor") || character.id;
+    /* Fall back to popupActor.id (the container's owner), NOT the visiting
+     * character.id — those diverge when the popup is a mount's container
+     * being viewed by a character. A missing source-actor tag would
+     * otherwise route through the same-actor branch and silently no-op
+     * because popupActor.items.get(id) returns undefined. */
+    const srcActorId  = ev.dataTransfer.getData("application/x-wou-source-actor") || popupActor.id;
     const id          = await maybeSplitForDrop(ev);
     if (!id) return;
 
@@ -3819,7 +4361,15 @@ function wireContainerPopup(character) {
       const srcActor = game.actors?.get?.(srcActorId);
       const srcItem  = srcActor?.items?.get(id);
       if (!srcActor || !srcItem) return;
-      await transferAcrossActors(srcActor, srcItem, source, popupActor, openContainerPopupId);
+      /* A container carries its own contents — the plain transfer only copies
+       * `system.content` UUID strings, which still point at the SOURCE actor's
+       * items and become dangling refs on the destination. Route through the
+       * container-aware transfer so the stored items travel too. */
+      if (srcItem.type === "container") {
+        await transferContainerAcrossActors(srcActor, srcItem, popupActor);
+      } else {
+        await transferAcrossActors(srcActor, srcItem, source, popupActor, openContainerPopupId);
+      }
       return;
     }
 
@@ -3863,6 +4413,10 @@ export async function moveItemToContainer(actor, itemId, containerId, source, { 
   const container = actor.items.get(containerId);
   const item      = actor.items.get(itemId);
   if (!container || !item) return;
+  // Refuse dropping a container into itself (or into any container it's
+  // an ancestor of) — that would create a UUID cycle and orphan its
+  // contents. Cheap depth-1 guard: item === container is the common case.
+  if (item.id === container.id) return;
   // Stowing is a combat action — block (and abort) when no slot is left.
   if (spendAction && !canSpendCombatAction(actor)) return;
   /* Reject if the container would overflow its capacity.  Done BEFORE
@@ -3873,14 +4427,28 @@ export async function moveItemToContainer(actor, itemId, containerId, source, { 
     return;
   }
   await removeItemFromSource(actor, item, source);
+  /* Stale-reference cleanup: if the item is referenced by OTHER containers
+   * on this actor, prune those references now. Prevents the "item appears
+   * in two bags" state that emerges when isStored+content get out of sync
+   * (e.g. old flag left over from a legacy drop, sheet edit, or import).
+   * Skip the destination container itself. */
+  for (const c of actor.items) {
+    if (c.type !== "container" || c.id === container.id) continue;
+    const refs = c.system?.content ?? [];
+    if (!refs.length) continue;
+    if (refs.includes(item.uuid) || refs.includes(item.id)) {
+      await c.update({ "system.content": refs.filter(u => u !== item.uuid && u !== item.id) });
+    }
+  }
   const content = container.system?.content ?? [];
   // Use UUID since that's the format ContainerData stores.
   if (!content.includes(item.uuid)) {
     await container.update({ "system.content": [...content, item.uuid] });
   }
-  if (!item.system?.isStored) {
-    await item.update({ "system.isStored": true });
-  }
+  const updates = {};
+  if (!item.system?.isStored) updates["system.isStored"] = true;
+  if (item.system?.equipped)  updates["system.equipped"] = false;
+  if (Object.keys(updates).length) await item.update(updates);
   if (spendAction) await chargeCombatAction(actor, `Stow: ${item.name}`);
 }
 
@@ -4002,6 +4570,32 @@ async function tryForeignItemDrop(ev, actor, accept = null) {
  */
 async function splitOneAndEquip(actor, sourceItem, preferredSlot = null) {
   if (!actor || !sourceItem) return null;
+
+  /* EO armor model gate: a Difficult armor piece can't be donned without
+   * a worn arming jack (or a piece with the +100/+750-crown armored
+   * upgrade). The check is no-op under RAW (toggle off). Done BEFORE the
+   * stack-split so we don't peel a copy onto the actor only to refuse.
+   * Imported lazily to keep the inventory module loadable in tests. */
+  if (sourceItem.type === "armor"
+      && sourceItem.system?.location !== "Shield"
+      && sourceItem.system?.armorType !== "shield") {
+    /* Shields (legacy armor-modeled OR dedicated shield type) skip the
+     * EO gate — Difficult is an armor-piece concept, not a shield one. */
+    try {
+      const eo = await import("../../mechanics/eoArmorModel.mjs");
+      const wornArmor = (actor.items?.contents ?? actor.items ?? [])
+        .filter(i => i.type === "armor" && i.system?.equipped
+                     && i.system?.location !== "Shield" && i.system?.armorType !== "shield");
+      if (!eo.canEquipUnderEoModel(sourceItem, wornArmor)) {
+        ui?.notifications?.warn?.(
+          `${sourceItem.name} is Difficult armor — you need a worn arming jack (or an armor piece with the arming-jack upgrade) before you can equip it.`
+        );
+        return null;
+      }
+    } catch (err) {
+      console.warn("witcher-ttrpg-death-march | EO equip gate failed", err);
+    }
+  }
 
   /* Armor stacks: peel one piece off rather than equipping the whole stack. */
   const qty = Number(sourceItem.system?.quantity) || 1;
@@ -4145,13 +4739,14 @@ async function transferContainerAcrossActors(srcActor, container, dstActor) {
   return newContainer;
 }
 
-/** True when the item carries an applied oil coating — a transient,
- *  per-copy effect (tagged flags.<MODULE_ID>.oilCoating) that makes that one
- *  instance unique.  Handles both live documents (effects = Collection of
- *  ActiveEffect) and raw data (effects = array of plain objects). Inherent
- *  item effects (a mutagen's mutation, a potion's buff — transfer:false,
- *  applied on use) are NOT coatings and don't block stacking. */
+/** True when the item carries an applied oil coating — read off the
+ *  formalised `system.appliedOil.name` field (a non-empty name = a live
+ *  coating). Used for stack-merge gating: a coated weapon shouldn't
+ *  merge with an uncoated stack of the same item. Legacy AE-tagged
+ *  coatings (flags.<MODULE_ID>.oilCoating) are also tolerated for
+ *  pre-migration items — covered by the second pass below. */
 function itemHasOilCoating(item) {
+  if (item?.system?.appliedOil?.name) return true;
   const effects = item?.effects;
   if (!effects) return false;
   for (const e of effects) {
@@ -4271,8 +4866,17 @@ async function tryMergeStacks(actor, ev, sourceId, sourceTag) {
   if (fromContainer && !canSpendCombatAction(actor)) return false;
   const sQty = Number(source.system?.quantity) || 1;
   const tQty = Number(target.system?.quantity) || 1;
+  /* Bump target quantity BEFORE deleting source — if target.update rejects
+   * (validation, permission, etc.) source.delete never runs and the stack
+   * survives. removeItemFromSource still runs first so a rejected merge
+   * doesn't leave stale container refs. */
   await removeItemFromSource(actor, source, sourceTag, { spendAction: fromContainer });
-  await target.update({ "system.quantity": tQty + sQty });
+  try {
+    await target.update({ "system.quantity": tQty + sQty });
+  } catch (err) {
+    console.warn("witcher-ttrpg-death-march | stack merge target update failed", err);
+    return false;
+  }
   await source.delete();
   return true;
 }
@@ -4287,7 +4891,14 @@ export async function removeItemFromSource(actor, item, source, { spendAction = 
     if (spendAction && !canSpendCombatAction(actor)) return;
     const content = (src.system?.content ?? []).filter(u => u !== item.uuid && u !== item.id);
     await src.update({ "system.content": content });
-    await item.update({ "system.isStored": false });
+    /* Clear BOTH flags in one update. A stored item shouldn't be equipped,
+     * but corrupted state (dual-flagged) can happen via legacy imports or
+     * sheet edits — leaving equipped=true after take-out lets a container
+     * item render as worn on the sheet. */
+    const updates = {};
+    if (item.system?.isStored) updates["system.isStored"] = false;
+    if (item.system?.equipped) updates["system.equipped"] = false;
+    if (Object.keys(updates).length) await item.update(updates);
     if (spendAction) await chargeCombatAction(actor, `Take out: ${item.name}`);
     return;
   }
@@ -4409,6 +5020,12 @@ function wireItemGrid(actor) {
     }
 
     if (!ev.dataTransfer.getData("application/x-wou-source")) {
+      /* Early action-slot gate — refuse foreign drops OUTRIGHT when the
+       * actor can't spend a combat action, before tryForeignItemDrop
+       * even runs. tryForeignItemDrop enforces the same gate, but
+       * doing it here means the user sees a single "No actions left"
+       * toast with zero item-creation flicker. */
+      if (!canSpendCombatAction(actor)) return;
       await tryForeignItemDrop(ev, actor);
       return;
     }
@@ -4564,6 +5181,14 @@ function wireEquipDrops(actor) {
             return;
           }
         }
+        /* Early action-slot gate — reject the drop OUTRIGHT if the actor
+         * can't spend a combat action right now, BEFORE the item is
+         * created. Without this, tryForeignItemDrop still refuses (its
+         * own canSpendCombatAction check catches the same case), but
+         * user-visible timing was "item briefly appears / then refused"
+         * on some UI rebuild orders. Doing the gate here makes the drop
+         * a pure no-op with a single "No actions left" toast. */
+        if (!canSpendCombatAction(actor)) return;
         const created = await tryForeignItemDrop(ev, actor);
         if (!created) return;
         if (!slotAccepts(expected, created.type)) {
@@ -4788,14 +5413,25 @@ function buildSidebarEquipEntry() {
       if (!item || !actor) return;
       // Pre-check using a synthetic id (the world item's id won't match
       // anything on the actor — checkEquipConflicts simply excludes the
-      // supplied id from its iteration). If we'd conflict, warn now and
-      // don't create the clone in the first place. Two-handed weapons take
-      // both hands; one-handed default to Right (auto-fallback happens after
-      // the clone exists, via drawWeapon → autoEquipSlot).
-      const targetHand = item.system?.hands === "two" ? "both" : "right";
-      const check = checkEquipConflicts(actor, "__pre_clone__", targetHand);
-      if (!check.ok) {
-        ui?.notifications?.warn?.(describeEquipFailure(item.name, check));
+      // supplied id from its iteration). Try EVERY slot the item could
+      // legitimately occupy: 2H → "both"; 1H → right/left, plus quick
+      // for a quick weapon. Only refuse when every candidate conflicts —
+      // otherwise autoEquipSlot inside drawWeapon will pick the winner
+      // once the clone exists. Fixes the case where a right-hand-busy
+      // actor couldn't equip a quick weapon off the floor even though
+      // the quick slot was free.
+      const candidateSlots = item.system?.hands === "two"
+        ? ["both"]
+        : (isQuickItem(item) ? ["right", "left", "quick"] : ["right", "left"]);
+      let firstCheck = null;
+      let anyOk = false;
+      for (const slot of candidateSlots) {
+        const check = checkEquipConflicts(actor, "__pre_clone__", slot);
+        if (!firstCheck) firstCheck = check;
+        if (check.ok) { anyOk = true; break; }
+      }
+      if (!anyOk) {
+        ui?.notifications?.warn?.(describeEquipFailure(item.name, firstCheck));
         return;
       }
       const cloned = await cloneItemToActor(actor, item);
@@ -5231,66 +5867,69 @@ function stripHtml(s) {
   return String(s ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-/* Every oil-coating effect on a weapon (incl. disabled), for find/wipe. */
-function oilCoatingEffects(weapon) {
-  return [...(weapon?.effects ?? [])].filter(e => !!e.getFlag?.(MODULE_ID, OIL_FLAG));
+/* Convert an oil item's structured oilDuration ({value, units}) into
+ * seconds. Returns Infinity when units is empty / unrecognised so the
+ * applyOilToWeapon flow can treat it as a "until cleansed" coating
+ * (no auto-expiry). Used by both RAW oil application and the source-info
+ * dialog summary. */
+function oilDurationSeconds(oil) {
+  const dur = oil?.system?.oilDuration ?? {};
+  const v = Number(dur.value) || 0;
+  if (v <= 0) return Infinity;
+  const u = String(dur.units || "").toLowerCase();
+  if (u === "seconds" || u === "second" || u === "s")  return v;
+  if (u === "minutes" || u === "minute" || u === "min" || u === "m") return v * 60;
+  if (u === "hours"   || u === "hour"   || u === "hr"  || u === "h") return v * 3600;
+  if (u === "days"    || u === "day"    || u === "d")  return v * 86400;
+  return Infinity;
 }
 
-/* Remaining/total seconds for a time-bounded effect; Infinity when the effect
- * has no seconds duration (treated as "never auto-expires"). */
-function effectRemaining(effect) {
-  const total = Number(effect?.duration?.seconds);
-  if (!(total > 0)) return { remaining: Infinity, total: Infinity };
-  // v14 computes secondsRemaining from start.time + value/units at prepare
-  // time; prefer it and fall back to total only if it isn't populated yet.
-  const rem = Number(effect?.duration?.secondsRemaining);
-  return { remaining: Number.isFinite(rem) ? rem : total, total };
-}
-
-/* Live coating on a weapon, or null when uncoated/expired. The representative
- * is the soonest-expiring active oil effect (drives the bar + worn-off check).
- * We carry that effect's live `duration` object out so the display can run it
- * through describeDuration — the SAME path potion badges use — instead of a
- * pre-reduced seconds value, so oils and potions read identically (rounds in
- * combat, wall clock out of it). Effect text is every description joined. */
+/* Live coating on a weapon, read off the formalised system.appliedOil
+ * SchemaField. Returns null when no oil is applied. Computes a synthesised
+ * `dur` object compatible with describeDuration so the existing potion-style
+ * display chip ("rounds in combat, wall clock out of it") works unchanged. */
 function readOilCoating(weapon) {
-  let repRem = Infinity, repDur = null, name = null, img = "";
-  const texts = [];
-  for (const e of oilCoatingEffects(weapon)) {
-    if (e.disabled) continue;
-    const { remaining } = effectRemaining(e);
-    if (Number.isFinite(remaining) && remaining <= 0) continue;   // worn off
-    const desc = stripHtml(e.description);
-    if (desc) texts.push(desc);
-    if (name == null || remaining < repRem) {
-      repRem = remaining; repDur = e.duration;
-      const flag = e.getFlag(MODULE_ID, OIL_FLAG) || {};
-      name = flag.oilName ?? e.name ?? "Oil";
-      img  = flag.oilImg ?? e.img ?? "";
-    }
+  const ao = weapon?.system?.appliedOil;
+  if (!ao || !ao.name) return null;
+  const now    = game.time?.worldTime ?? 0;
+  const exp    = Number(ao.expireAt) || 0;
+  const start  = Number(ao.appliedAt) || 0;
+  const charges = Number(ao.charges) || 0;
+  const effect = ao.oilTarget
+    ? `+${ao.oilBonusDamage || 0} vs ${ao.oilTarget}`
+    : `+${ao.oilBonusDamage || 0} damage`;
+  // Under Alchemy Reborn charges drive expiry; the duration chip shows
+  // the charge count instead of seconds-remaining.
+  if (charges > 0) {
+    const max = Number(ao.maxCharges) || charges;
+    return { name: ao.name, img: ao.img || "", effect, dur: { label: `${charges}/${max} charges` } };
   }
-  if (name == null) return null;
-  return { name, img, effect: texts.join(" · "), dur: repDur };
+  // RAW: time-based. exp = 0 → "until cleansed" (no auto-expiry).
+  if (exp > 0 && exp <= now) return null;  // worn off
+  if (exp <= 0) return { name: ao.name, img: ao.img || "", effect, dur: { label: "Until cleansed" } };
+  const total     = Math.max(1, exp - start);
+  const remaining = Math.max(0, exp - now);
+  return { name: ao.name, img: ao.img || "", effect, dur: { seconds: total, secondsRemaining: remaining } };
 }
 
-/* Source-side summary of an oil's configured effects (for the apply dialog):
- * whether it has any enabled effect, the longest-lasting effect's live duration
- * object (fed through describeDuration so the dialog reads the same as the
- * applied coating), and the joined description text. */
+/* Source-side summary of an oil for the apply dialog. Reads the new
+ * structured authoring fields directly off the oil item — no AEs to
+ * walk anymore. */
 function oilSourceInfo(oil) {
-  const effects = [...(oil?.effects ?? [])].filter(e => !e.disabled);
-  let best = -1, dur = null;
-  const texts = [];
-  for (const e of effects) {
-    const s = Number(e.duration?.seconds);
-    if (Number.isFinite(s) && s > best) { best = s; dur = e.duration; }
-    const d = stripHtml(e.description);
-    if (d) texts.push(d);
-  }
+  const sys = oil?.system ?? {};
+  const totalSecs = oilDurationSeconds(oil);
+  const target = String(sys.oilTarget || "").trim();
+  const bonus  = Number(sys.oilBonusDamage) || 0;
+  const parts = [];
+  if (bonus > 0) parts.push(target ? `+${bonus} vs ${target}` : `+${bonus} damage`);
   return {
-    hasEffect: effects.length > 0,
-    dur,
-    effectText: texts.join(" · ")
+    // RAW always has an "effect" — the bonus damage. Under Reborn the
+    // charges drive applicability, not authored AEs. So an oil is
+    // applyable as long as it's an oil-type alchemical, regardless of
+    // any AE configuration.
+    hasEffect:  true,
+    dur:        Number.isFinite(totalSecs) ? { seconds: totalSecs } : null,
+    effectText: parts.join(" · ")
   };
 }
 
@@ -5364,7 +6003,7 @@ async function openCoatWeaponDialog(actor, oil) {
   `;
 
   const weaponId = await DialogV2.wait({
-    window: { title: `Apply Oil: ${oil.name}` },
+    window: { title: tFormat("WITCHER.Dialog.ApplyOil", { oil: oil.name }, "Apply Oil: {oil}") },
     content,
     buttons: [
       {
@@ -5382,37 +6021,54 @@ async function openCoatWeaponDialog(actor, oil) {
   const weapon = actor.items.get(weaponId);
   if (!weapon) return;
   await applyOilToWeapon(weapon, oil);
+  /* Alchemy Reborn: applying an oil costs 1 action (per alch1 "Oil
+   * Rework" box: "They can be applied using a combat action"). The
+   * spendActionSlot helper short-circuits when no combat is active, so
+   * the action only consumes outside-combat → no-op, in-combat → ticks
+   * the budget. Skipped when the toggle is off so RAW worlds keep
+   * applying oil as a free narrative beat. */
+  if (isHomebrewEnabled?.("alchemyPotency")) {
+    const actionLabel = game.i18n.format("WITCHER.AlchemyReborn.Oil.ApplyAction", { oil: oil.name });
+    try { await actor.spendActionSlot?.(actionLabel); }
+    catch (err) { console.warn(`${MODULE_ID} | apply-oil action spend failed`, err); }
+  }
 }
 
+/* Alchemy Reborn — charges per coating come from the oil item's
+ * `system.oilCharges` field (authored per oil, install macro pre-fills
+ * Normal=5 / Enhanced=10 / Superior=15 per the source-sheet table).
+ * Default to 5 when the field is unset / zero so a freshly-authored oil
+ * doesn't deplete on the first hit. */
+const OIL_DEFAULT_CHARGES_REBORN = 5;
+
 async function applyOilToWeapon(weapon, oil) {
-  /* Copy the oil's enabled effects onto the weapon: display-only
-   * (transfer:false), duration re-anchored to now, tagged as an oil coating. */
+  /* No more AE-copy. The oil's authoring fields (oilTarget, oilBonusDamage,
+   * oilDuration) are stamped onto weapon.system.appliedOil as a snapshot;
+   * the combat damage flow reads them directly when resolving a hit and
+   * the inventory chip / dock display reads them for the badge. The
+   * source oil item still gets consumed (qty -1).
+   *
+   * Mode split:
+   *   Alchemy Reborn (alchemyPotency ON): charges authored on the oil
+   *   item itself (`system.oilCharges`) drive expiry. Deducted per
+   *   damaging hit by the socketHook handler. No time-based expiry;
+   *   expireAt = 0.
+   *
+   *   RAW (toggle off): time-based expiry only. expireAt = worldTime +
+   *   oilDuration seconds. Charges = 0 / maxCharges = 0 (charge path
+   *   skipped in handleApplyDamage). */
   const now = game.time?.worldTime ?? 0;
-  const sources = [...(oil.effects ?? [])]
-    .filter(e => !e.disabled)
-    .map(e => {
-      const data = e.toObject();
-      delete data._id;
-      data.transfer = false;
-      data.disabled = false;
-      data.origin   = weapon.uuid;
-      data.duration = { ...(data.duration ?? {}) };
-      // v14: an effect's start time lives at `start.time`, NOT
-      // `duration.startTime`. Re-anchor the coating to begin now so its
-      // remaining time counts from application (the oil item's template
-      // effect carries no/old start). `e.duration.seconds` is the prepared
-      // value derived from the source's {value, units}.
-      const durSecs = Number(e.duration?.seconds);
-      if (Number.isFinite(durSecs) && durSecs > 0) data.start = { time: now };
-      foundry.utils.setProperty(data, `flags.${MODULE_ID}.${OIL_FLAG}`, {
-        oilId: oil.id, oilName: oil.name, oilImg: oil.img
-      });
-      return data;
-    });
-  if (!sources.length) {
-    ui?.notifications?.warn?.(`${oil.name} has no effect configured — add one on the oil's Effects tab.`);
-    return;
-  }
+  const alchemyRebornOn = isHomebrewEnabled?.("alchemyPotency");
+  const sys = oil.system ?? {};
+  /* Reborn: charges authored on the oil item (per source-sheet table).
+   * RAW: no charges, duration drives expiry instead. */
+  const oilMaxCharges = alchemyRebornOn
+    ? (Math.max(1, Number(sys.oilCharges) || OIL_DEFAULT_CHARGES_REBORN))
+    : 0;
+  const oilTarget      = String(sys.oilTarget ?? "");
+  const oilBonusDamage = Number(sys.oilBonusDamage) || 0;
+  const durationSecs   = alchemyRebornOn ? 0 : oilDurationSeconds(oil);
+  const expireAt       = (durationSecs > 0 && Number.isFinite(durationSecs)) ? (now + durationSecs) : 0;
 
   /* Oiling makes a weapon one-of-a-kind. If it's part of a stack, peel ONE
    * unit off to receive the coating so the rest stay a plain (uncoated)
@@ -5430,38 +6086,50 @@ async function applyOilToWeapon(weapon, oil) {
     target = created;
   }
 
-  /* One coating at a time: wipe any prior oil before laying the new one on. */
-  const prior = oilCoatingEffects(target).map(e => e.id);
-  if (prior.length) await target.deleteEmbeddedDocuments("ActiveEffect", prior);
-  await target.createEmbeddedDocuments("ActiveEffect", sources);
+  /* Write the appliedOil snapshot. One coating at a time — overwriting
+   * the field replaces any prior oil (no second "wipe" pass needed).
+   * `appliedAt` records the worldTime second the coating started so the
+   * dock can render `(expireAt - now) / (expireAt - appliedAt)` for the
+   * progress bar. */
+  await target.update({
+    "system.appliedOil": {
+      id:             oil.id,
+      name:           oil.name,
+      img:            oil.img ?? "",
+      oilTarget,
+      oilBonusDamage,
+      appliedAt:      now,
+      expireAt,
+      charges:        oilMaxCharges,
+      maxCharges:     oilMaxCharges
+    }
+  });
 
   const qty = parseInt(oil.system.quantity) || 1;
   if (qty <= 1) await oil.delete();
   else await oil.update({ "system.quantity": qty - 1 });
 }
 
-/* GM-only world-time sweep: delete oil coatings whose duration has run out.
- * Oils expire on real (world) time — 30 game-minutes — not combat rounds, so
- * the round-based tick engine never sees them; this runs on updateWorldTime. */
+/* GM-only world-time sweep: clear expired oil coatings off weapons. The
+ * coating lives on `weapon.system.appliedOil`; expireAt is the worldTime
+ * second the coating ends. expireAt of 0 means no time-based expiry
+ * (Alchemy Reborn charges-mode, or RAW "until cleansed" with no duration
+ * authored), and is left alone. */
 export async function sweepExpiredOilCoatings() {
   if (!game.user?.isActiveGM) return;
+  const now = game.time?.worldTime ?? 0;
   for (const actor of game.actors ?? []) {
     for (const weapon of actor.items ?? []) {
       if (weapon.type !== "weapon") continue;
-      const expired = [];
-      for (const e of weapon.effects ?? []) {
-        if (!e.getFlag?.(MODULE_ID, OIL_FLAG)) continue;
-        const secs = Number(e.duration?.seconds);
-        if (!(secs > 0)) continue;   // no time duration → never auto-expires
-        // v14 computes `duration.expired`/`secondsRemaining` from start.time.
-        if (e.duration?.expired === true) { expired.push(e.id); continue; }
-        const rem = Number(e.duration?.secondsRemaining);
-        if (Number.isFinite(rem) && rem <= 0) expired.push(e.id);
-      }
-      if (expired.length) {
-        try { await weapon.deleteEmbeddedDocuments("ActiveEffect", expired); }
-        catch (err) { console.warn(`${MODULE_ID} | oil sweep delete failed`, err); }
-      }
+      const ao = weapon.system?.appliedOil;
+      if (!ao || !ao.name) continue;
+      const exp = Number(ao.expireAt) || 0;
+      if (exp <= 0 || exp > now) continue;
+      try {
+        await weapon.update({
+          "system.appliedOil": { id: "", name: "", img: "", oilTarget: "", oilBonusDamage: 0, appliedAt: 0, expireAt: 0, charges: 0, maxCharges: 0 }
+        });
+      } catch (err) { console.warn(`${MODULE_ID} | oil sweep clear failed`, err); }
     }
   }
 }
@@ -5530,7 +6198,7 @@ function buildStackAwareGift(baseGift, owner) {
       }
 
       const result = await DialogV2.wait({
-        window: { title: `Gift ${item.name}` },
+        window: { title: tFormat("WITCHER.Dialog.GiftItem", { item: item.name }, "Gift {item}") },
         content, buttons,
         rejectClose: false
       }).catch(() => null);
@@ -5596,7 +6264,7 @@ function buildSplitStackEntry(owner) {
         </div>
       `;
       const result = await DialogV2.wait({
-        window: { title: `Split ${item.name}` },
+        window: { title: tFormat("WITCHER.Dialog.SplitItem", { item: item.name }, "Split {item}") },
         content,
         buttons: [
           {
@@ -5650,7 +6318,7 @@ function buildStackAwareDelete(baseDelete, owner) {
         </div>
       `;
       const result = await DialogV2.wait({
-        window: { title: `Delete ${item.name}` },
+        window: { title: tFormat("WITCHER.Dialog.DeleteNamedItem", { item: item.name }, "Delete {item}") },
         content,
         buttons: [
           {
@@ -5753,7 +6421,22 @@ async function appendFoodAndDrinkEntries(helper, entries) {
  *     collapse animation finishes so the final position settles correctly.
  */
 function wireChromeObservers() {
-  const reposition = () => requestAnimationFrame(positionBounds);
+  /* Properly rAF-coalesced. `requestAnimationFrame(positionBounds)`
+   * queues a NEW callback every time it's called — so 4 back-to-back
+   * observer fires in one frame produce 4 positionBounds calls in the
+   * next frame, each doing 4 getBoundingClientRect reads. That's 16
+   * reads per frame during any transition and was the primary source
+   * of the "Forced reflow" spam when the left bar opened/closed.
+   * Guard so only ONE positionBounds fires per frame regardless of
+   * how many triggers land in the same tick. */
+  let _pending = 0;
+  const reposition = () => {
+    if (_pending) return;
+    _pending = requestAnimationFrame(() => {
+      _pending = 0;
+      positionBounds();
+    });
+  };
 
   if ("ResizeObserver" in window) {
     _chromeResizeObs = new ResizeObserver(reposition);

@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "build:packs": "node tools/build-packs.mjs",
+    "//build:eo": "Full EO pipeline — regenerate sources, populate diagram links, then compile. Run this after editing the EO content tables in tools/gen-eo-*.mjs.",
+    "build:eo": "node tools/gen-eo-components.mjs && node tools/gen-eo-catalog.mjs && node tools/gen-eo-witcher-kit.mjs && node tools/link-eo-diagrams.mjs && node tools/build-packs.mjs",
     "check:source": "node tools/check-source.mjs",
     "test:source": "node --test tools/check-source.test.mjs",
     "test:effects": "node tools/test-effects.mjs",

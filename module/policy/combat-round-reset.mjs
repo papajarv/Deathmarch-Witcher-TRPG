@@ -152,11 +152,15 @@ async function endCombatForActor(actor) {
     } catch (err) {
         console.warn("witcher-ttrpg-death-march | end-of-combat adrenaline reset failed", err);
     }
+
 }
 
 async function endCombatForAll(combat) {
     const actors = combat?.combatants?.map(cb => cb.actor) ?? [];
-    await Promise.all(actors.map(endCombatForActor));
+    await Promise.all(actors.map(async (actor) => {
+        await endCombatForActor(actor);
+        await resetGuardForActor(actor);
+    }));
 }
 
 /* combatMods.startingAdrenaline — schools that open a fight with adrenaline
@@ -173,10 +177,101 @@ async function applyStartingAdrenaline(combat) {
     }
 }
 
+/* Combat Extended — copy each combatant's preferred guard to current at
+ * combat start (rules1.png: actors enter combat in their chosen guard).
+ * No-op when CE is off, when the actor has no guard schema, or when this
+ * client doesn't own the actor write. Falls back to "balanced" when the
+ * preferred value is unset / invalid. */
+/* Apply an actor's preferred guard to their current. No-op when CE is
+ * off / actor lacks the guard schema / nothing would change. Shared
+ * between the combatStart path (whole combat) and the createCombatant
+ * path (single late-joining combatant). */
+async function applyPreferredGuardForActor(actor) {
+    let ceOn = false;
+    try {
+        const { isCombatExtendedEnabled } = await import("../api/homebrew.mjs");
+        ceOn = isCombatExtendedEnabled();
+    } catch (_) { return; }
+    if (!ceOn) return;
+    if (!actor?.system?.guard || !iShouldWrite(actor)) return;
+    const { GUARD_KEYS } = await import("../data/actor/templates/guard.mjs");
+    const pref = String(actor.system.guard.preferred ?? "balanced");
+    const next = GUARD_KEYS.includes(pref) ? pref : "balanced";
+    if (actor.system.guard.current === next) return;
+    try {
+        await actor.update({ "system.guard.current": next });
+    } catch (err) {
+        console.warn("witcher-ttrpg-death-march | preferred guard apply failed", err);
+    }
+}
+
+async function applyPreferredGuards(combat) {
+    for (const cb of combat?.combatants ?? []) {
+        await applyPreferredGuardForActor(cb.actor);
+    }
+}
+
+/* (Removed in the multi-use Special Action redesign.) The old single-use
+ * `lockedThisRound` lock-clear hook is unnecessary now — Special Actions
+ * are capped naturally by the existing action economy (movement / action /
+ * extra), which resets per turn via resetActor. The field still exists in
+ * the schema for backward compat but is no longer read or written. */
+
+/* Combat Extended — reset guard to balanced + clear the slot lock + drop
+ * any raised shield when a combat ends. Persisted preferred guard is left
+ * alone (it's the actor's default stance, not combat-only). Also clears
+ * the Restricted Vision status if it was applied by Raise Shield (the
+ * armor-quality path keeps the status as long as the visor is down). */
+async function resetGuardForActor(actor) {
+    let ceOn = false;
+    try {
+        const { isCombatExtendedEnabled } = await import("../api/homebrew.mjs");
+        ceOn = isCombatExtendedEnabled();
+    } catch (_) { return; }
+    if (!ceOn) return;
+    if (!actor?.system?.guard || !iShouldWrite(actor)) return;
+    const g = actor.system.guard;
+    const sr = g.shieldRaised ?? {};
+    const needsReset =
+        g.current !== "balanced" ||
+        !!sr.itemId ||
+        sr.coveredLocations?.length;
+    if (!needsReset) return;
+    try {
+        await actor.update({
+            "system.guard.current":                       "balanced",
+            "system.guard.shieldRaised.itemId":           "",
+            "system.guard.shieldRaised.coveredLocations": [],
+            "system.guard.shieldRaised.headCovered":      false
+        });
+    } catch (err) {
+        console.warn("witcher-ttrpg-death-march | guard end-of-combat reset failed", err);
+    }
+    /* If Raise Shield's head-cover applied Restricted Vision, lift it now.
+     * The status normally clears on `ownTurnStart`, but combat ending
+     * means the actor never gets another own turn — without this, the
+     * status sticks around out of combat.
+     *
+     * Caveat: the armor-quality (visor-down) path will also apply this
+     * status persistently. We can't reliably tell which path applied it
+     * from the status alone — the practical compromise is: if head was
+     * covered (i.e. Raise Shield is the most recent applier on THIS
+     * actor), clear the status. Visor-down GMs can re-apply if needed. */
+    if (sr.headCovered && actor.statuses?.has?.("restrictedVision")) {
+        try { await actor.toggleStatusEffect?.("restrictedVision", { active: false }); }
+        catch (err) { console.warn("witcher-ttrpg-death-march | restrictedVision lift at combat end failed", err); }
+    }
+}
+
 export function registerCombatRoundReset() {
     // Adrenaline bootstrap fires once at combat start (combatants are stable
     // at that point; we don't need the post-update state).
-    Hooks.on("combatStart", (combat) => { applyStartingAdrenaline(combat); });
+    Hooks.on("combatStart", (combat) => {
+        applyStartingAdrenaline(combat);
+        // Combat Extended — copy preferred guard to current for every
+        // combatant. No-op when CE is off; see policy/combat-round-reset.
+        applyPreferredGuards(combat);
+    });
     // combatTurnChange covers every turn transition (start, mid-round turn
     // advance, round rollover, manual jumps) and fires AFTER the combat
     // update is applied — so combat.combatant is already the new combatant.
@@ -186,7 +281,7 @@ export function registerCombatRoundReset() {
      * `combatRound` fires once per round transition (not per turn), so this
      * doesn't churn target state mid-round. Each client clears its OWN
      * targets only (a player can't release another player's targets). */
-    Hooks.on("combatRound", () => {
+    Hooks.on("combatRound", (combat) => {
         try {
             for (const t of [...(game.user?.targets ?? [])]) {
                 t.setTarget(false, { user: game.user, releaseOthers: false, groupSelection: false });
@@ -194,9 +289,26 @@ export function registerCombatRoundReset() {
         } catch (err) {
             console.warn("witcher-ttrpg-death-march | round target reset failed", err);
         }
+        /* The old per-round Special Action lock-clear used to live here;
+         * removed when Special Actions became multi-use (capped by the
+         * existing action economy). resetActor on each turn change handles
+         * per-turn slot reset already. */
     });
     // Combat ends → refund everyone's budget and clear combat-only statuses.
     Hooks.on("deleteCombat", (combat) => endCombatForAll(combat));
+    /* Combat Extended — a fighter added MID-combat should also enter in
+     * their preferred guard. combatStart already handles the at-the-start
+     * case; this picks up late joiners. Gated on combat.started so the
+     * combatStart pass doesn't double-apply (createCombatant also fires
+     * for the initial pre-start additions). */
+    Hooks.on("createCombatant", async (combatant) => {
+        try {
+            if (!combatant?.combat?.started) return;
+            await applyPreferredGuardForActor(combatant.actor);
+        } catch (err) {
+            console.warn("witcher-ttrpg-death-march | late-joiner guard apply failed", err);
+        }
+    });
     /* A single fighter removed from the tracker (or whose token was just
      * deleted) → ONLY refund their budget. We deliberately don't strip
      * stunned/fastDraw here: when Foundry auto-deletes a combatant

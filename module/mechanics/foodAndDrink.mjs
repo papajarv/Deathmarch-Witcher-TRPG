@@ -23,7 +23,7 @@
 
 import { isHomebrewEnabled } from "../api/homebrew.mjs";
 import { clauseFor, descriptionFor } from "./statusEngine.mjs";
-import { grantStress }       from "./stress.mjs";
+import { grantStress, getWill } from "./stress.mjs";
 import { getFoodAndDrinkConfig } from "../applications/foodAndDrinkConfig.mjs";
 
 const SYSTEM_ID = "witcher-ttrpg-death-march";
@@ -34,6 +34,64 @@ const PEAK_FLAG = "peakDrunkLevel";
 /* Hangover marker — the day-tick handler scans for this flag on AEs and
  * decrements daysRemaining each in-game date crossing. */
 const HANGOVER_FLAG = "hangover";
+/* Bland-diet stack tracker. The count lives ON an ActiveEffect attached
+ * to the actor so it's visible in the character-sheet effects bar — the AE
+ * name renders as e.g. "Bland Diet — 3/6 sittings" and updates each portion.
+ * Created on first POOR+blandFood portion, deleted when the count returns
+ * to 0 (either via a threshold-fire reset or enough non-bland meals). The
+ * AE carries NO stat changes — it's purely a tracker. Source of truth is
+ * the `flags.wdm.blandDietTracker` numeric value on the AE itself.
+ *
+ * Why an AE not an actor flag: players need to SEE the stack to play
+ * around it, and AEs surface naturally in every sheet's effect list. */
+const BLAND_AE_FLAG = "blandDietTracker";
+const BLAND_AE_ICON = "icons/consumables/food/bread-loaf-rustic-brown.webp";
+
+/** Read the current bland-stack value off the tracker AE (0 if absent). */
+function readBlandStack(actor) {
+    const ae = actor?.effects?.find?.(e => e.flags?.wdm?.[BLAND_AE_FLAG] !== undefined);
+    return ae ? (Number(ae.flags.wdm[BLAND_AE_FLAG]) || 0) : 0;
+}
+
+/** Create / update / delete the tracker AE to match the new count. */
+async function writeBlandStack(actor, count, will) {
+    if (!actor) return;
+    const ae = actor.effects?.find?.(e => e.flags?.wdm?.[BLAND_AE_FLAG] !== undefined);
+
+    if (count <= 0) {
+        // Stack cleared — remove the tracker.
+        if (ae) await safeDeleteEffects(actor, [ae.id]);
+        return;
+    }
+
+    const name = `Bland Diet — ${count}/${will} sittings`;
+    const flagPath = `flags.wdm.${BLAND_AE_FLAG}`;
+
+    if (ae) {
+        try {
+            await actor.updateEmbeddedDocuments("ActiveEffect", [{
+                _id: ae.id,
+                name,
+                [flagPath]: count
+            }]);
+        } catch (err) {
+            console.warn(`${SYSTEM_ID} | bland-diet AE update failed`, err);
+        }
+    } else {
+        try {
+            await actor.createEmbeddedDocuments("ActiveEffect", [{
+                name,
+                img: BLAND_AE_ICON,
+                disabled: false,
+                transfer: false,
+                changes: [],
+                flags: { wdm: { [BLAND_AE_FLAG]: count } }
+            }]);
+        } catch (err) {
+            console.warn(`${SYSTEM_ID} | bland-diet AE create failed`, err);
+        }
+    }
+}
 
 /* Bottom satiety value at which the actor is considered FAMISHED. Satiety
  * doesn't go below this — keeps the math honest and avoids runaway negatives. */
@@ -356,6 +414,16 @@ export async function applyDrunkLevel(actor, level, iconOverride = "", opts = {}
             // 1 in-game hour. When it expires, the worldTime sweep runs an
             // automatic sober check (1d10 < BODY) — pass drops the level by 1,
             // fail resets the duration for another hour.
+            //
+            // v14 stores the start anchor at `start.time` (not the v13
+            // `duration.startTime`). Writing `start: { time: X }` directly
+            // is risky because the `start` SchemaField has sibling fields
+            // (initiative/round/turn) that are required-and-non-nullable,
+            // and a partial object risks validation rejection. The robust
+            // path is to write the legacy `duration.startTime` shim —
+            // Foundry's BaseActiveEffect.migrateData converts it to
+            // `start.time` and fills the sibling defaults for us
+            // (common/documents/active-effect.mjs:192-198).
             duration:    { seconds: 3600, startTime: game.time?.worldTime ?? 0 },
             flags:       { [SYSTEM_ID]: { drunkLevel: level } }
         }], { wdmSkipOnApply: descending });
@@ -403,6 +471,7 @@ export async function handleEnduranceRoll(actor, cfg, itemName = "drink") {
 
     return ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
+        whisper: collectFoodAudience(actor),
         content: `<div style="border-left:3px solid #8b6f3a;padding:4px 8px">${flavor}${body}</div>`
     });
 }
@@ -425,6 +494,7 @@ export async function soberUp(actor) {
 
     return ChatMessage.create({
         speaker: ChatMessage.getSpeaker({ actor }),
+        whisper: collectFoodAudience(actor),
         content: `<div style="border-left:3px solid #6f8b3a;padding:4px 8px">
             <b>${actor.name}</b> sobers up.<br>
             Rolled <b>${roll.total}</b> vs BODY <b>${body}</b> — ${pass
@@ -493,43 +563,61 @@ export async function applyHangover(actor, peak, opts = {}) {
     // Wrapped in try/catch — same race-with-concurrent-worldTime-listeners
     // concern as the drunk AE create above. If a stale-id throw escapes from
     // somewhere in the validate/preCreate chain, log it instead of red-toasting.
-    try { await actor.createEmbeddedDocuments("ActiveEffect", [{
-        name:        def?.name || "Hangover",
-        img:         def?.img  || "systems/witcher-ttrpg-death-march/assets/icons/statuses/hangover.svg",
-        description: dynamicDesc,
-        disabled:    false,
-        statuses:    ["hangover"],
-        // Flat REC penalty applied to the displayed stat. REC lives in
-        // DERIVED_STAT_TARGETS → must land in the "final" phase so it folds
-        // ON TOP of the BODY/WILL baseline character.prepareDerived assigns
-        // (otherwise prepareDerived's write would clobber it).
-        changes: [{
-            key: "system.derivedStats.rec",
-            value: String(-recPenalty),
-            type: "add",
-            phase: "final",
-            priority: 0
-        }],
-        // Native Foundry duration in in-game seconds. The worldTime sweep
-        // deletes the AE once `remaining <= 0`, so the player sees the
-        // hangover wear off the morning of recovery automatically. Flags
-        // still record the source values for display / debugging.
-        //
-        // startTime uses the backdated anchor (see opts.soberAt above) when
-        // the cascade fires this from an auto-sober that crossed mid-skip,
-        // so the hangover's countdown reflects elapsed-since-sober rather
-        // than elapsed-since-cascade-finished.
-        duration: { seconds: days * secondsPerDay(), startTime },
-        flags: { [SYSTEM_ID]: {
-            [HANGOVER_FLAG]: true,
-            peak,
-            // Stored for telemetry / future macros; the actual penalty
-            // applies via the `changes` array above (flat AE on displayed REC).
-            recPenalty,
-            days
-        } }
-    }], { wdmSkipOnApply: true }); }   // hangover is not stress-bearing on apply
-    catch (err) { console.warn(`${SYSTEM_ID} | hangover AE create failed`, err); }
+    try {
+        const created = await actor.createEmbeddedDocuments("ActiveEffect", [{
+            name:        def?.name || "Hangover",
+            img:         def?.img  || "systems/witcher-ttrpg-death-march/assets/icons/statuses/hangover.svg",
+            description: dynamicDesc,
+            disabled:    false,
+            statuses:    ["hangover"],
+            // Flat REC penalty applied to the displayed stat. REC lives in
+            // DERIVED_STAT_TARGETS → must land in the "final" phase so it folds
+            // ON TOP of the BODY/WILL baseline character.prepareDerived assigns
+            // (otherwise prepareDerived's write would clobber it).
+            changes: [{
+                key: "system.derivedStats.rec",
+                value: String(-recPenalty),
+                type: "add",
+                phase: "final",
+                priority: 0
+            }],
+            // Native Foundry duration in in-game seconds. The worldTime sweep
+            // deletes the AE once it expires, so the player sees the hangover
+            // wear off the morning of recovery automatically. Flags still
+            // record the source values for display / debugging.
+            //
+            // v14 anchor: use the legacy `duration.startTime` shim — Foundry
+            // migrateData converts it to `start.time` and fills the sibling
+            // schema fields (initiative/round/turn) with defaults, which a
+            // partial `start: { time: X }` write would leave unset and risk
+            // schema rejection.
+            duration: { seconds: days * secondsPerDay(), startTime },
+            flags: { [SYSTEM_ID]: {
+                [HANGOVER_FLAG]: true,
+                peak,
+                // Stored for telemetry / future macros; the actual penalty
+                // applies via the `changes` array above (flat AE on displayed REC).
+                recPenalty,
+                days
+            } }
+        }], { wdmSkipOnApply: true });   // hangover is not stress-bearing on apply
+
+        /* Belt-and-braces: confirm the migration landed start.time where we
+         * asked. If a peer module's preCreate hook re-set it (or the legacy
+         * shim got skipped because the AE already had a `start` object),
+         * force the value via update. Update writes go directly to the
+         * schema field (no migration), so we target `start.time` here.
+         * Returns the AE so the cascade can do a final sanity-check pass. */
+        const ae = Array.isArray(created) ? created[0] : created;
+        if (ae && actor.effects?.get?.(ae.id)) {
+            const stored = Number(ae.start?.time);
+            if (!Number.isFinite(stored) || stored !== startTime) {
+                try { await ae.update({ "start.time": startTime }); }
+                catch (err) { console.warn(`${SYSTEM_ID} | hangover start.time re-anchor failed`, err); }
+            }
+        }
+        return ae;
+    } catch (err) { console.warn(`${SYSTEM_ID} | hangover AE create failed`, err); }
 }
 
 /**
@@ -574,7 +662,8 @@ async function onWorldTimeFoodDrinkSweep(worldTime, delta) {
                     for (const sid of (e.statuses ?? [])) {
                         const m = /^drunk-(\d+)$/.exec(sid);
                         if (!m) continue;
-                        const start = Number(e.duration?.startTime);
+                        // v14: start anchor lives at `start.time`.
+                        const start = Number(e.start?.time);
                         if (Number.isFinite(start) && (earliestDrunkStart === null || start < earliestDrunkStart)) {
                             earliestDrunkStart = start;
                             earliestDrunkLevel = Number(m[1]) || 0;
@@ -590,8 +679,14 @@ async function onWorldTimeFoodDrinkSweep(worldTime, delta) {
                         // tick engine, stamina regen) may have deleted the doc.
                         // Re-verify the live collection before touching anything.
                         if (!actor.effects.get(e.id)) continue;
-                        const remaining = Number(e.duration?.remaining);
-                        if (!Number.isFinite(remaining) || remaining > 0) continue;
+                        // v14: use secondsRemaining (start.time + seconds based),
+                        // or duration.expired short-circuit. `duration.remaining`
+                        // is a legacy v13 field and is undefined in v14.
+                        const expired = e.duration?.expired === true;
+                        const rem = Number(e.duration?.secondsRemaining);
+                        if (!expired) {
+                            if (!Number.isFinite(rem) || rem > 0) continue;
+                        }
 
                         // Hangover expiry — just delete (stale-safe).
                         if (e.getFlag(SYSTEM_ID, HANGOVER_FLAG)) {
@@ -618,23 +713,33 @@ async function onWorldTimeFoodDrinkSweep(worldTime, delta) {
                 // This catches the cascade case where runAutoSoberCheck's loop
                 // dropped the actor all the way to 0 but an internal throw
                 // somewhere before applyHangover prevented it from firing.
+                //   Whether the hangover already exists or not, force-set its
+                //   startTime to the optimistic sober anchor (earliestDrunkStart
+                //   + earliestDrunkLevel * 3600) — that closes the loophole
+                //   where applyHangover ran fine but with a missing soberAt
+                //   somewhere upstream.
                 try {
                     const peak = Number(actor.getFlag?.(SYSTEM_ID, PEAK_FLAG)) || 0;
                     if (peak >= 3 && getDrunkLevel(actor) === 0) {
-                        const hasHangover = actor.effects.some(e => e.getFlag(SYSTEM_ID, HANGOVER_FLAG));
+                        const backfillSoberAt = (earliestDrunkStart !== null && earliestDrunkLevel > 0)
+                            ? earliestDrunkStart + earliestDrunkLevel * 3600
+                            : undefined;
+                        const hasHangover = actor.effects.some(e =>
+                            e.statuses?.has?.("hangover") || e.getFlag(SYSTEM_ID, HANGOVER_FLAG));
                         if (!hasHangover) {
-                            // Use the captured earliest drunk start + the
-                            // hours it would have taken to fully sober as
-                            // the optimistic sober anchor. Without this,
-                            // the hangover would be created with startTime
-                            // = current worldTime (the END of a big skip),
-                            // even though the actor in-fiction sobered up
-                            // hours ago.
-                            const backfillSoberAt = (earliestDrunkStart !== null && earliestDrunkLevel > 0)
-                                ? earliestDrunkStart + earliestDrunkLevel * 3600
-                                : undefined;
                             await applyHangover(actor, peak, backfillSoberAt !== undefined ? { soberAt: backfillSoberAt } : {});
                             await actor.unsetFlag(SYSTEM_ID, PEAK_FLAG);
+                        } else if (backfillSoberAt !== undefined) {
+                            // Hangover already exists — force its startTime
+                            // to the computed sober moment regardless of
+                            // what's stored. This is the fix for "hangover
+                            // anchored to end-of-skip instead of mid-skip".
+                            const ae = actor.effects.find(e =>
+                                e.statuses?.has?.("hangover") || e.getFlag(SYSTEM_ID, HANGOVER_FLAG));
+                            if (ae && actor.effects.get(ae.id)) {
+                                try { await ae.update({ "start.time": backfillSoberAt }); }
+                                catch (err) { console.warn(`${SYSTEM_ID} | sweep hangover anchor fix failed`, err); }
+                            }
                         }
                     }
                 } catch (err) {
@@ -681,20 +786,26 @@ async function _runAutoSoberCheckImpl(actor, effect, startLevel) {
     // gone, there's nothing to update or roll against — bail silently.
     if (!actor.effects?.get?.(effect.id)) return;
 
-    const remaining = Number(effect.duration?.remaining);
+    // v14: `duration.secondsRemaining` is the live counter (negative when
+    // overdue). `duration.remaining` is a v13 alias and is undefined in v14.
+    const remaining = Number(effect.duration?.secondsRemaining);
     // 1 roll for the just-expired hour, plus one per full additional hour
     // the worldTime advanced past expiry. Clamp upward sanity at 24 (a full
     // day) so a year-long skip can't lock the game in a roll loop.
     const overdue   = Number.isFinite(remaining) ? Math.max(0, -remaining) : 0;
     const hoursToProcess = Math.min(24, 1 + Math.floor(overdue / 3600));
 
-    // Capture the ORIGINAL drunk AE's startTime — used to backdate the
+    // Capture the ORIGINAL drunk AE's start anchor — used to backdate the
     // hangover when the actor sobers mid-cascade. Each sober roll
     // conceptually consumes the in-game hour FROM that anchor, so a player
     // who got drunk at midnight and sobered after 5 hours of rolls during
     // a 24-hour skip should see their hangover starting at 5am, not at the
     // 24-hour end of the skip.
-    const originalStartTime = Number(effect.duration?.startTime) || (game.time?.worldTime ?? 0);
+    //   v14 stores the anchor at `start.time`. The v13 `duration.startTime`
+    //   field is dead in v14 — reading it returned undefined and we fell
+    //   back to "now" (== end of skip), which was the canonical bug.
+    const rawStart  = Number(effect.start?.time);
+    const originalStartTime = Number.isFinite(rawStart) ? rawStart : (Number(game.time?.worldTime) || 0);
 
     let level = startLevel;
     const rollLog = [];
@@ -724,23 +835,22 @@ async function _runAutoSoberCheckImpl(actor, effect, startLevel) {
         // Failure simply consumes the hour — `level` and the effect stay.
     }
 
-    // Belt-and-braces backdate. The cascade above threads soberAt into
-    // applyHangover at create-time, so the hangover SHOULD already be
-    // anchored correctly. This block only fixes things up if a throw inside
-    // applyDrunkLevel skipped the threaded path AND a hangover still landed
-    // through the outer sweep's backfill — in that case it was created with
-    // a default startTime (current worldTime) and we patch it down here.
-    if (soberAt !== null && soberAt < (game.time?.worldTime ?? 0)) {
-        const hangoverAE = actor.effects.find(e => e.getFlag(SYSTEM_ID, HANGOVER_FLAG));
-        const currentStart = Number(hangoverAE?.duration?.startTime);
-        if (hangoverAE && Number.isFinite(currentStart) && currentStart > soberAt) {
-            try {
-                if (actor.effects?.get?.(hangoverAE.id)) {
-                    await hangoverAE.update({ "duration.startTime": soberAt });
-                }
-            } catch (err) {
-                console.warn("witcher-ttrpg-death-march | hangover backdate failed", err);
-            }
+    // Belt-and-braces backdate — AUTHORITATIVE. The cascade threads
+    // soberAt into applyHangover at create-time, but a thrown applyDrunk-
+    // Level can leave the hangover anchored to nowWT (end of skip) via
+    // the outer-sweep backfill OR via applyHangover's own fallback. To
+    // make the timer behaviour deterministic, force-set the startTime
+    // here whenever the cascade reached drunk-0 AND a hangover exists.
+    // Match by status first (more reliable than the flag), fall back to
+    // the flag. No `currentStart > soberAt` gate: we always overwrite,
+    // because the cascade owns the anchor calculation.
+    if (soberAt !== null) {
+        const hangoverAE = actor.effects.find(e => e.statuses?.has?.("hangover"))
+                        ?? actor.effects.find(e => e.getFlag(SYSTEM_ID, HANGOVER_FLAG));
+        if (hangoverAE && actor.effects?.get?.(hangoverAE.id)) {
+            // v14: start anchor lives at `start.time`.
+            try { await hangoverAE.update({ "start.time": soberAt }); }
+            catch (err) { console.warn("witcher-ttrpg-death-march | hangover backdate failed", err); }
         }
     }
 
@@ -757,9 +867,14 @@ async function _runAutoSoberCheckImpl(actor, effect, startLevel) {
             return; // doc gone — nothing to reset, no error to surface
         }
         try {
+            // v14: start anchor lives at `start.time`; duration uses
+            // {value, units} (the v13 `duration.seconds` is a shim with
+            // a getter only — direct update writes to it are silently
+            // dropped at schema validation).
             await effect.update({
-                "duration.startTime": Number(game.time?.worldTime) || 0,
-                "duration.seconds":   3600
+                "start.time":         Number(game.time?.worldTime) || 0,
+                "duration.value":     3600,
+                "duration.units":     "seconds"
             });
         } catch (err) { console.warn("witcher-ttrpg-death-march | auto sober reset failed", err); }
     }
@@ -776,6 +891,7 @@ async function _runAutoSoberCheckImpl(actor, effect, startLevel) {
                 : `<b style="color:#8b0000">still Drunk ${roman(level)}. Riding it out.</b>`;
         await ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ actor }),
+            whisper: collectFoodAudience(actor),
             content: `<div style="border-left:3px solid #6f8b3a;padding:4px 8px">
                 <b>${actor.name}</b> — automatic sober roll${hoursToProcess > 1 ? `s × ${hoursToProcess}` : ""} vs BODY <b>${body}</b>.<br>
                 ${passes} pass${passes === 1 ? "" : "es"} / ${fails} fail${fails === 1 ? "" : "s"} — ${verdict}
@@ -941,6 +1057,7 @@ async function applyFamishedDepthStress(actor, prev, next) {
         const sign  = ascending ? ""                            : "+";
         await ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ actor }),
+            whisper: collectFoodAudience(actor),
             content: `<div style="border-left:3px solid ${color};padding:4px 8px">
                 <b>${actor.name}</b> — ${verb} (satiety now <b>${Math.round(next)}</b>).
                 <b>${sign}${delta} stress</b>.
@@ -1005,6 +1122,7 @@ async function applyIntermediateTierStress(actor, prev, next) {
         }).join(", ");
         await ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ actor }),
+            whisper: collectFoodAudience(actor),
             content: `<div style="border-left:3px solid ${color};padding:4px 8px">
                 <b>${actor.name}</b> — passed through ${list}.
                 <b>${sign}${stressDelta} stress</b>.
@@ -1131,9 +1249,61 @@ async function onWorldTimeHourTick(worldTime, delta) {
     for (const actor of game.actors) {
         if (actor.type !== "character") continue;
         if (actor.statuses?.has?.("dead")) continue;
+        /* Per-actor opt-in. Default off unless a player owns the actor.
+         * NPC "character" actors stay silent unless the GM turns hunger
+         * on for them explicitly. */
+        if (!isHungerActive(actor)) continue;
         const loss = hourlySatietyLoss(actor) * hours;
         await adjustSatiety(actor, -loss);
     }
+}
+
+/** Whether hourly hunger applies to this actor.
+ *
+ *  Semantics:
+ *    - Explicit flag `true`   → always on
+ *    - Explicit flag `false`  → always off
+ *    - Flag absent (default)  → on iff any non-GM user owns the actor
+ *
+ *  So new player characters auto-tick; NPC-shaped "character" actors
+ *  stay silent unless the GM opts them in. */
+export function isHungerActive(actor) {
+    const flag = actor?.getFlag?.(SYSTEM_ID, "hungerActive");
+    if (flag === true)  return true;
+    if (flag === false) return false;
+    return !!actor?.hasPlayerOwner;
+}
+
+/** GM writes the per-actor hunger toggle. Explicitly persisted so an
+ *  actor's state doesn't flip when a player is later assigned or
+ *  unassigned. */
+export async function setHungerActive(actor, active) {
+    if (!actor) return false;
+    await actor.setFlag(SYSTEM_ID, "hungerActive", !!active);
+    return !!active;
+}
+
+/** True iff any race item on the actor sets `foodSicknessImmune`. Ghouls,
+ *  iron-gutted dwarves, and any bespoke race the GM authored can opt in
+ *  via the race sheet checkbox. Consulted BEFORE the Endurance roll in
+ *  applySpoiledHazard so immune actors skip the hazard silently. */
+export function hasFoodSicknessImmunity(actor) {
+    const races = actor?.items?.filter?.(i => i.type === "race") ?? [];
+    return races.some(r => r?.system?.foodSicknessImmune === true);
+}
+
+/** Audience for a food/drink/hunger chat message: every user with OWNER
+ *  permission on the actor, plus all GMs. Other players don't see
+ *  someone else's PC becoming hungry, drunk, or hungover. Fed into
+ *  ChatMessage.create's `whisper` field on every food/drink event. */
+export function collectFoodAudience(actor) {
+    const ids = new Set();
+    const users = game.users?.contents ?? [];
+    for (const u of users) {
+        if (u.isGM) { ids.add(u.id); continue; }
+        if (actor?.testUserPermission?.(u, "OWNER")) ids.add(u.id);
+    }
+    return [...ids];
 }
 
 /* Spoilage transition detector. Freshness state is derived from worldTime,
@@ -1173,6 +1343,7 @@ async function onWorldTimeFreshnessSweep(worldTime, delta) {
             const lines = justSpoiled.map(it => `<li><b>${it.name}</b></li>`).join("");
             await ChatMessage.create({
                 speaker: ChatMessage.getSpeaker({ actor }),
+                whisper: collectFoodAudience(actor),
                 content: `<div style="border-left:3px solid #a83232;padding:4px 8px">
                     <b>${actor.name}</b> — food has spoiled:
                     <ul style="margin:4px 0 0 14px;padding:0;">${lines}</ul>
@@ -1195,7 +1366,7 @@ export const FRESHNESS_STALE_THRESHOLD = 0.75;
 /* Hazard the actor rolls against when consuming spoiled food. Fail =
  * Food Sickness status for the duration below. Hardcoded for v1; promote
  * to FoodAndDrinkConfig if GMs want to tune. */
-const SPOILED_HAZARD_DC      = 14;
+const SPOILED_HAZARD_DC      = 16;
 const FOOD_SICKNESS_DAYS     = 1;
 
 /**
@@ -1283,46 +1454,199 @@ async function stampFreshnessAnchor(item) {
  * Posted as a chat message either way so the table sees the outcome.
  */
 async function applySpoiledHazard(actor, itemName) {
-    if (!actor) return;
+    if (!actor) {
+        console.warn(`${SYSTEM_ID} | applySpoiledHazard called with no actor — bailing`);
+        return;
+    }
+    /* Race-level immunity (race.system.foodSicknessImmune). Skip the roll
+     * entirely, skip the chat card — for immune races the spoiled state
+     * is a flavor cue for the player, not a mechanical event. */
+    if (hasFoodSicknessImmunity(actor)) return;
+    console.log(`${SYSTEM_ID} | applySpoiledHazard fired for ${actor.name} eating ${itemName}`);
     const dc = SPOILED_HAZARD_DC;
-    let total;
+    // Endurance roll with a safe-zero fallback. If the actor sheet hasn't
+    // populated the skill yet (sheet never opened on a freshly imported
+    // monster, etc.), `_readSkillValues` returns null and we roll plain
+    // 1d10. The roll evaluate itself is also caught so a broken Foundry
+    // dice config doesn't make the whole hazard go silent — we keep
+    // going with total=1 (worst case for the eater) and post the chat
+    // so the table at least SEES the consume attempt.
+    let total = 1;
     try {
         const v = actor._readSkillValues?.("endurance");
         const formula = v ? `1d10 + ${v.total}` : "1d10";
         total = (await new Roll(formula).evaluate()).total;
     } catch (err) {
-        console.warn(`${SYSTEM_ID} | spoiled-food endurance roll failed`, err);
-        return;
+        console.warn(`${SYSTEM_ID} | spoiled-food endurance roll failed — defaulting to 1`, err);
     }
     const pass = total >= dc;
     const flavor = pass
         ? `<b style="color:#4a7c59">stomach holds.</b>`
         : `<b style="color:#8b0000">food sickness sets in.</b>`;
-    await ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ actor }),
-        content: `<div style="border-left:3px solid #6b3f3f;padding:4px 8px">
-            <b>${actor.name}</b> swallowed spoiled <b>${itemName}</b>.<br>
-            Endurance ${total} vs DC ${dc} — ${flavor}
-        </div>`
-    });
+    try {
+        await ChatMessage.create({
+            speaker: ChatMessage.getSpeaker({ actor }),
+            whisper: collectFoodAudience(actor),
+            content: `<div style="border-left:3px solid #6b3f3f;padding:4px 8px">
+                <b>${actor.name}</b> swallowed spoiled <b>${itemName}</b>.<br>
+                Endurance ${total} vs DC ${dc} — ${flavor}
+            </div>`
+        });
+    } catch (err) {
+        console.warn(`${SYSTEM_ID} | spoiled-food chat post failed`, err);
+    }
     if (pass) return;
 
     // Fail: apply Food Sickness AE for FOOD_SICKNESS_DAYS in-game days.
+    // Wrap BOTH the existing-wipe and the create in try/catch — without
+    // this, a stale-id throw from safeDeleteEffects would skip the
+    // create entirely and the AE would never land. The result was a
+    // visible chat ("food sickness sets in") with no actual effect on
+    // the actor — the classic "food sickness isn't really working".
     const def = (CONFIG.statusEffects ?? []).find(s => s.id === "food-sickness");
-    const existing = actor.effects.filter(e => e.statuses?.has?.("food-sickness"));
-    await safeDeleteEffects(actor, existing.map(e => e.id));
     try {
-        await actor.createEmbeddedDocuments("ActiveEffect", [{
+        const existing = actor.effects.filter(e => e.statuses?.has?.("food-sickness"));
+        if (existing.length) await safeDeleteEffects(actor, existing.map(e => e.id));
+    } catch (err) {
+        console.warn(`${SYSTEM_ID} | food-sickness pre-clear failed (continuing to create)`, err);
+    }
+    try {
+        const created = await actor.createEmbeddedDocuments("ActiveEffect", [{
             name:        def?.name || "Food Sickness",
             img:         def?.img  || "systems/witcher-ttrpg-death-march/assets/icons/statuses/food-sickness.svg",
             description: descriptionFor("food-sickness") || def?.description || "Food sickness from spoiled food.",
             disabled:    false,
             statuses:    ["food-sickness"],
             changes:     def?.changes ?? [],
-            duration:    { seconds: FOOD_SICKNESS_DAYS * secondsPerDay(), startTime: Number(game.time?.worldTime) || 0 }
+            // v14 anchor: legacy `duration.startTime` shim, which Foundry
+            // migrates to `start.time` while filling the required sibling
+            // fields with their schema defaults (initiative/round/turn).
+            // A partial `start: { time }` would risk validation rejection.
+            duration:    { seconds: FOOD_SICKNESS_DAYS * secondsPerDay(),
+                           startTime: Number(game.time?.worldTime) || 0 }
         }]);
+        console.log(`${SYSTEM_ID} | food-sickness AE created`, created?.[0]?.id, "on", actor.name);
     } catch (err) {
         console.warn(`${SYSTEM_ID} | food-sickness AE create failed`, err);
+    }
+}
+
+/* ─────────── Diet tier / bland-stack mechanic ────────────────────────────── */
+
+/**
+ * Bland-diet stack accounting. Runs ONCE per consumed portion, after satiety
+ * is adjusted and before the item's authored AE blob is copied to the actor.
+ *
+ *   POOR  + blandFood:true  → stacks += 1. If stacks ≥ WILL, fires +1 stress
+ *                              via grantStress() and resets stacks to 0.
+ *   POOR  + blandFood:false → no-op (foraged berries, hand-cakes, ritual
+ *                              offerings — narratively not "a bad meal").
+ *   MEDIUM                  → stacks = max(0, stacks - 1). No bonus AE.
+ *   GOOD                    → stacks = max(0, stacks - 2). Authored AE
+ *                              applies via the copy step below.
+ *   LAVISH                  → stacks = max(0, stacks - 3) + grantStress(-1)
+ *                              at consume. Authored AE also applies.
+ *
+ * Gated on the `stress` homebrew toggle — same as the famished-depth and
+ * intermediate-tier stress mechanics already in this file. If stress is off,
+ * the stack still moves (for save-data consistency) but no stress is granted.
+ *
+ * Players-only: NPCs / monsters don't accumulate diet stress.
+ */
+async function applyDietTierMechanics(item) {
+    const actor = item?.actor;
+    if (!actor || actor.type !== "character") return;
+    if (item?.type !== "food") return;
+
+    const tier = String(item.system?.tier || "medium").toLowerCase();
+    const blandFood = item.system?.blandFood !== false;   // default true
+    const itemName = item.name;
+    const stressOn = isHomebrewEnabled("stress");
+
+    // WILL is needed for both threshold check and the AE label ("3/6
+    // sittings"). Compute once up front so the same value is used everywhere.
+    const will = Math.max(1, Number(getWill(actor)) || 1);
+    const current = readBlandStack(actor);
+    let next = current;
+    let stressFired = 0;
+    let stressNote = "";
+
+    const isDrink = item.system?.kind === "drink";
+
+    if (isDrink) {
+        // Drinks bypass the bland-stack mechanic entirely — drinking isn't
+        // bland eating. The drunk-level mechanic (handleEnduranceRoll above)
+        // IS the drink-specific consequence. The one exception: LAVISH-tier
+        // drinks still grant the consume-time stress relief (a fine wine
+        // lifts the mood), to match the LAVISH-meal stress relief.
+        if (tier !== "lavish") return;
+        stressFired = -1;
+        stressNote = `A truly fine drink — ${itemName}`;
+        // next === current — no stack change
+    } else if (tier === "poor") {
+        if (!blandFood) {
+            // No-op for POOR forage / sweet / ritual items — they don't
+            // contribute to bland accumulation.
+            return;
+        }
+        next = current + 1;
+        if (next >= will) {
+            stressFired = 1;
+            stressNote = `Bland diet — ${will} sittings of poor food caught up with ${actor.name}`;
+            next = 0;
+        }
+    } else if (tier === "medium") {
+        next = Math.max(0, current - 1);
+    } else if (tier === "good") {
+        next = Math.max(0, current - 2);
+    } else if (tier === "lavish") {
+        next = Math.max(0, current - 3);
+        stressFired = -1;
+        stressNote = `A truly fine meal — ${itemName}`;
+    } else {
+        return;   // unknown tier, leave stacks untouched
+    }
+
+    if (next !== current) {
+        await writeBlandStack(actor, next, will);
+    }
+
+    if (stressFired !== 0 && stressOn) {
+        try {
+            await grantStress(actor, stressFired, { reason: stressNote });
+        } catch (err) {
+            console.warn(`${SYSTEM_ID} | diet-tier stress grant failed`, err);
+        }
+    }
+
+    // Chat ping summarising the stack change. Keep terse so the consume flow
+    // (taste, satiety, AE) doesn't drown the chat log. Match the sheet badge
+    // wording so "Bland meal" on the sheet corresponds to "Bland meal" in chat.
+    const delta = next - current;
+    const tierLabel = { poor: "Bland", medium: "Modest", good: "Good", lavish: "Lavish" }[tier];
+    const consumeVerb = isDrink ? "drink" : "meal";
+    // The stress lines only render when stress homebrew is actually on —
+    // otherwise grantStress() was a no-op and the chat would lie about
+    // a state change that didn't happen.
+    if (delta !== 0 || (stressFired !== 0 && stressOn)) {
+        const sign  = delta > 0 ? "+" : "";
+        const color = delta > 0 ? "#6b3f3f" : (delta < 0 ? "#4a7c59" : "#8b6f3a");
+        const stressLine = (stressFired > 0 && stressOn)
+            ? `<div style="margin-top:4px;color:#6b3f3f"><b>+1 stress</b> — bland diet caught up.</div>`
+            : (stressFired < 0 && stressOn)
+                ? `<div style="margin-top:4px;color:#4a7c59"><b>−1 stress</b> — a fine meal lifts the spirit.</div>`
+                : "";
+        try {
+            await ChatMessage.create({
+                speaker: ChatMessage.getSpeaker({ actor }),
+                whisper: collectFoodAudience(actor),
+                content: `<div style="border-left:3px solid ${color};padding:4px 8px;color:${color}">
+                    <b>${actor.name}</b> — ${tierLabel} ${consumeVerb}${delta !== 0 ? ` (bland count: <b>${sign}${delta}</b>, now <b>${next}</b>)` : ""}.${stressLine}
+                </div>`
+            });
+        } catch (err) {
+            console.warn(`${SYSTEM_ID} | diet chat ping failed`, err);
+        }
     }
 }
 
@@ -1359,6 +1683,7 @@ export async function onConsume(item) {
         if (isIngredient) {
             const edible    = !!item.system?.ingredient?.edible;
             const makesSick = !!item.system?.ingredient?.makesSick;
+            console.log(`${SYSTEM_ID} | ingredient consume: ${item.name} edible=${edible} makesSick=${makesSick} actor=${item.actor?.name ?? "<none>"}`);
             if (!edible && !makesSick) {
                 ui?.notifications?.info?.(
                     `${item.name} is a raw ingredient — not for eating as-is.`
@@ -1376,12 +1701,28 @@ export async function onConsume(item) {
         }
         // Spoilage gate. Fresh & stale items proceed as normal (stale just
         // appends a heads-up chip in the chat line further down). Spoiled
-        // items zero out satiety, skip the taste line + alcohol roll, and
-        // route the eater through the spoiled-food hazard. Charge tick still
-        // runs so the spoiled portion is consumed (it has to go SOMEWHERE).
+        // items STILL restore satiety, just halved — the actor physically
+        // ate real calories even if they're rolling against food sickness
+        // — but skip the taste line, the diet-tier + AE copies, and the
+        // alcohol roll (spoiled meals don't confer their authored
+        // effects). Charge tick runs so the spoiled portion is consumed.
         const freshState = getFreshnessState(item);
+        const shelfLifeDays = Number(item.system?.freshness?.shelfLifeDays) || 0;
+        const anchorTime    = item.system?.freshness?.anchorTime;
+        console.log(`${SYSTEM_ID} | consume freshness check: ${item.name} state=${freshState} shelfLife=${shelfLifeDays}d anchor=${anchorTime} now=${game.time?.worldTime} actor=${item.actor?.name ?? "<none>"}`);
         if (freshState === "spoiled" && item.actor) {
             await applySpoiledHazard(item.actor, item.name);
+            /* Half-satiety restore. Rounded down so a 1-point scrap
+             * gives nothing after halving. Skips the already-full
+             * guard on purpose — the spoiled swallow always goes
+             * down (you can't turn down what you already committed
+             * to eating), and adjustSatiety clamps at the ceiling
+             * regardless. */
+            const restore = Number(item.system?.satietyRestore) || 0;
+            if (restore > 0 && item.actor.type === "character") {
+                const halved = Math.floor(restore / 2);
+                if (halved > 0) await adjustSatiety(item.actor, halved);
+            }
             if (isCharged(item)) {
                 await consumeOneCharge(item);
                 handled = true;
@@ -1408,6 +1749,7 @@ export async function onConsume(item) {
                 );
                 await ChatMessage.create({
                     speaker: ChatMessage.getSpeaker({ actor: item.actor }),
+                    whisper: collectFoodAudience(item.actor),
                     content: `<div style="border-left:3px solid #8b6f3a;padding:4px 8px">
                         <b>${item.actor.name}</b> is too stuffed for ${more} of <b>${item.name}</b>.
                     </div>`
@@ -1427,6 +1769,7 @@ export async function onConsume(item) {
                 : "";
             await ChatMessage.create({
                 speaker: ChatMessage.getSpeaker({ actor: item.actor }),
+                whisper: collectFoodAudience(item.actor),
                 content: `<div style="border-left:3px solid #8b6f3a;padding:4px 8px">
                     <b>${item.actor?.name ?? "Someone"}</b> eats <b>${item.name}</b>.<br>
                     <i>${taste}</i>${staleLine}
@@ -1434,15 +1777,29 @@ export async function onConsume(item) {
             });
         }
         if (restore > 0 && item.actor?.type === "character") {
+            /* Fresh/stale path — spoiled food is handled earlier with
+             * its own halved-satiety branch, so this only sees full
+             * satiety values. */
             await adjustSatiety(item.actor, restore);
         }
+        // Diet-tier mechanic: bland-stack accounting + LAVISH stress relief.
+        // Runs once per consumed portion, after satiety, before AE copy.
+        // Players-only and homebrew-gated inside the function.
+        await applyDietTierMechanics(item);
         // Copy any authored ActiveEffects onto the consumer. Mirrors the
         // alchemical consumable pattern — effects live dormant on the item
         // (transfer:false from WitcherFoodSheet) and only apply on use.
         // Each copy is independent (no link back) so it lingers on its own
         // duration / persists indefinitely if no duration was authored.
+        //
+        // Axis-aware refresh: if a new AE carries a `flags.wdm.foodAxis`
+        // tag and the actor already has an AE with the same axis (e.g.
+        // two GOOD meat dishes → two "stamax-good" AEs), the existing AE's
+        // duration is reset instead of stacking a duplicate. Cross-axis
+        // bonuses (meat + fish) still stack because their axes differ.
         if (item.actor?.documentName === "Actor" && item.effects?.size) {
             const lingering = [];
+            const refresh = [];
             for (const eff of item.effects) {
                 if (eff.disabled) continue;
                 const data = eff.toObject();
@@ -1457,7 +1814,39 @@ export async function onConsume(item) {
                 // effect. Strip that auto-default down to a neutral fallback
                 // — the GM can rename on the food sheet to anything else.
                 if (data.name === item.name) data.name = "Effect";
+
+                // Axis-aware refresh check.
+                const axis = data.flags?.wdm?.foodAxis;
+                if (axis) {
+                    const existing = item.actor.effects.find(e =>
+                        e.flags?.wdm?.foodAxis === axis);
+                    if (existing) {
+                        // Partial duration shape — Foundry's updateEmbeddedDocuments
+                        // recursive-merges into the existing duration object, so
+                        // we don't need to spread existing.duration (doing so risks
+                        // mixing legacy startTime with v14's start.time sibling and
+                        // tripping validation). Just write the new seconds (carries
+                        // the authored 24h window forward) and reset startTime to
+                        // "now" so the duration window resets.
+                        refresh.push({
+                            _id: existing.id,
+                            duration: {
+                                seconds: data.duration?.seconds
+                                      ?? existing.duration?.seconds,
+                                startTime: Number(game.time?.worldTime) || 0
+                            }
+                        });
+                        continue;
+                    }
+                }
                 lingering.push(data);
+            }
+            if (refresh.length) {
+                try {
+                    await item.actor.updateEmbeddedDocuments("ActiveEffect", refresh);
+                } catch (err) {
+                    console.warn("witcher-ttrpg-death-march | food AE refresh failed", err);
+                }
             }
             if (lingering.length) {
                 try {
@@ -1539,6 +1928,7 @@ async function onCreateActiveEffectClearHangover(effect /*, options, userId */) 
     try {
         await ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ actor }),
+            whisper: collectFoodAudience(actor),
             content: `<div style="border-left:3px solid #4a7c59;padding:4px 8px">
                 <b>${actor.name}</b> shakes off the hangover. (<i>${effect.name}</i> clears it.)
             </div>`

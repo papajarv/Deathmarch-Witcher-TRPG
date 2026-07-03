@@ -17,17 +17,42 @@ const esc = (s) => String(s ?? "")
 const RENDER = {
     shield:                 (s) => li(`Quen shield drained <b>${s.drained}</b> (<i>${s.before} → ${s.before - s.drained}</i>); ${s.shieldRemaining} remaining.`),
     activeShield:           (s) => li(`Active Shield drained <b>${s.drained}</b> (<i>${s.before} → ${s.before - s.drained}</i>); ${s.hpRemaining} remaining.`),
-    sp: (s) => s.soakedAll
-        ? li(`Armor SP <b>${s.sp}</b> fully soaked <i>${s.before}</i> &mdash; no penetration.`)
-        : li(`Armor SP <b>${s.sp}</b> subtracted (<i>${s.before} → ${s.after}</i>)${s.ablated ? ", armor ablated &minus;1 SP." : "."}`),
+    sp: (s) => {
+        if (s.soakedAll) return li(`Armor SP <b>${s.sp}</b> fully soaked <i>${s.before}</i> &mdash; no penetration.`);
+        if (!s.spChipped) return li(`Armor SP <b>${s.sp}</b> subtracted (<i>${s.before} → ${s.after}</i>).`);
+        const baseChip = Number(s.baseChip) || 1;
+        const ablating = Number(s.ablatingChip) || 0;
+        const total    = Math.abs(Number(s.spDelta) || (baseChip + ablating));
+        const breakdown = ablating > 0
+            ? ` &mdash; base &minus;${baseChip}${baseChip === 2 ? " (Crushing Force)" : ""} + Ablating &minus;${ablating} (rolled)`
+            : (baseChip === 2 ? " &mdash; doubled by Crushing Force" : "");
+        return li(`Armor SP <b>${s.sp}</b> subtracted (<i>${s.before} → ${s.after}</i>), armor ablated &minus;${total} SP${breakdown}.`);
+    },
     "blocked-by-sp":        () => li(`Hit fully blocked by armor SP.`),
-    dr:                     (s) => li(`Damage Resistance halved (<i>${s.before} → ${s.after}</i>).`),
-    monsterImmune:          (s) => li(`Target is <b>immune</b> to this damage type &mdash; weapon damage zeroed (<i>${s.before} → 0</i>).`),
-    monsterTypeResist:      (s) => li(`Target resists this damage type &mdash; halved (<i>${s.before} → ${s.after}</i>).`),
-    monsterResist:          (s) => li(`Non-silver resist halved damage (<i>${s.before} → ${s.after}</i>).`),
-    monsterMeteoriteResist: (s) => li(`Non-meteorite resist halved damage (<i>${s.before} → ${s.after}</i>).`),
-    vulnerability:          (s) => li(`Target is <b>vulnerable</b> &mdash; doubled (<i>${s.before} → ${s.after}</i>).`),
-    critBonus:              (s) => li(`Crit bonus <b>+${s.added}</b> added (weapon ${s.weaponDamage} + crit ${s.added} = ${s.total}).`),
+    dr:                     (s) => li(`Armor resists this damage type &mdash; incoming damage halved (<i>${s.before} &rarr; ${s.after}</i>).`),
+    monsterImmune:          (s) => li(`Target is <b>immune</b> to this damage type &mdash; incoming damage reduced to 0 (<i>${s.before} &rarr; 0</i>).`),
+    monsterTypeResist:      (s) => li(`Target resists this damage type &mdash; incoming damage halved (<i>${s.before} &rarr; ${s.after}</i>).`),
+    monsterResist:          (s) => Number(s.silverAdded) > 0
+        ? li(`Non-silver resistance &mdash; base incoming damage halved (<i>${s.before} &rarr; ${s.halvedBase}</i>), silver portion <b>+${s.silverAdded}</b> added &rArr; ${s.after}.`)
+        : li(`Non-silver resistance &mdash; incoming damage halved (<i>${s.before} &rarr; ${s.after}</i>).`),
+    monsterMeteoriteResist: (s) => li(`Non-meteorite resistance &mdash; incoming damage halved (<i>${s.before} &rarr; ${s.after}</i>).`),
+    vulnerability:          (s) => li(`Target is <b>vulnerable</b> to this damage type &mdash; incoming damage doubled (<i>${s.before} &rarr; ${s.after}</i>).`),
+    "crit-monsterImmune":     (s) => li(`Crit bonus zeroed &mdash; target immune to this damage type (<i>${s.before} &rarr; 0</i>).`),
+    "crit-monsterTypeResist": (s) => li(`Crit bonus halved &mdash; target resists this damage type (<i>${s.before} &rarr; ${s.after}</i>).`),
+    "crit-monsterResist":     (s) => li(`Crit bonus halved &mdash; target resists non-silver damage (<i>${s.before} &rarr; ${s.after}</i>).`),
+    "crit-monsterMeteoriteResist": (s) => li(`Crit bonus halved &mdash; target resists non-meteorite damage (<i>${s.before} &rarr; ${s.after}</i>).`),
+    "crit-vulnerability":     (s) => li(`Crit bonus doubled &mdash; target vulnerable to this damage type (<i>${s.before} &rarr; ${s.after}</i>).`),
+    critBonus:              (s) => li(`Crit bonus <b>+${s.added}</b> added past armor (weapon ${s.weaponDamage} + crit ${s.added} = ${s.total}).`),
+    /* Oil bonus — pushed in by socketHook.handleApplyDamage when the
+     * weapon's appliedOil matched the target's monster category. The
+     * fold happens upstream of the calculator (the combined number is
+     * what every other stage sees), so this line is the audit trail
+     * that explains where the extra came from. */
+    oilBonus:               (s) => {
+        const targetText = s.targetLabel ? ` vs ${esc(s.targetLabel)}` : "";
+        const oilText    = s.oilName ? ` (${esc(s.oilName)})` : "";
+        return li(`Oil bonus${oilText} <b>+${s.added}</b>${targetText} (weapon ${s.baseWeapon} + oil ${s.added} = ${s.combined}).`);
+    },
     location:               (s) => li(`Location ×<b>${s.mult}</b>${s.label ? ` (${esc(s.label)})` : ""} (<i>${s.before} → ${s.after}</i>).`)
 };
 

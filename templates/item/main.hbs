@@ -13,28 +13,28 @@
   {{!-- ── HEADER ───────────────────────────────────────────────── --}}
   <header class="wdm-item-header">
     <img class="wdm-portrait" src="{{item.img}}" data-edit="img" alt="" />
-    <input class="wdm-name" type="text" name="name" value="{{item.name}}" placeholder="Item name" />
+    <input class="wdm-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Main.Hint.ItemName'}}" />
     <span class="wdm-type">{{item.type}}</span>
   </header>
 
   {{!-- ── BASE FIELDS ─────────────────────────────────────────── --}}
   <section class="wdm-item-section">
-    <h2>Properties</h2>
+    <h2>{{localize 'WITCHER.Sheet.Main.Text.Properties'}}</h2>
     <div class="wdm-item-base-grid">
       <div class="wdm-item-field">
-        <label>Weight (kg)</label>
+        <label>{{localize 'WITCHER.Sheet.Main.Text.WeightKg'}}</label>
         <input type="number" step="0.01" min="0" name="system.weight" value="{{system.weight}}" />
       </div>
       <div class="wdm-item-field">
-        <label>Quantity</label>
+        <label>{{localize 'WITCHER.Sheet.Main.Text.Quantity'}}</label>
         <input type="number" min="0" name="system.quantity" value="{{system.quantity}}" />
       </div>
       <div class="wdm-item-field">
-        <label>Encumb.</label>
+        <label>{{localize 'WITCHER.Sheet.Main.Text.Encumb'}}</label>
         <input type="number" step="0.01" name="system.encumb" value="{{system.encumb}}" />
       </div>
       <div class="wdm-item-field">
-        <label>Class</label>
+        <label>{{localize 'WITCHER.Sheet.Main.Text.Class'}}</label>
         <input type="text" name="system.class" value="{{system.class}}" />
       </div>
       <div class="wdm-item-field">
@@ -43,11 +43,11 @@
                placeholder="{{localize "WITCHER.Item.SourcePlaceholder"}}" />
       </div>
       <div class="wdm-item-field is-checkbox">
-        <label>Equipped</label>
+        <label>{{localize 'WITCHER.Sheet.Main.Text.Equipped'}}</label>
         <input type="checkbox" name="system.equipped" {{#if system.equipped}}checked{{/if}} />
       </div>
       <div class="wdm-item-field is-checkbox">
-        <label>Stored</label>
+        <label>{{localize 'WITCHER.Sheet.Main.Text.Stored'}}</label>
         <input type="checkbox" name="system.isStored" {{#if system.isStored}}checked{{/if}} />
       </div>
     </div>
@@ -55,8 +55,8 @@
 
   {{!-- ── DESCRIPTION ─────────────────────────────────────────── --}}
   <section class="wdm-item-section wdm-item-description">
-    <h2>Description</h2>
-    <textarea name="system.description" placeholder="Item description, lore, mechanical notes…">{{system.description}}</textarea>
+    <h2>{{localize 'WITCHER.Sheet.Main.Text.Description'}}</h2>
+    <textarea name="system.description" placeholder="{{localize 'WITCHER.Sheet.Main.Hint.ItemDescriptionLoreMechanicalNotes'}}">{{system.description}}</textarea>
   </section>
 
 </div>

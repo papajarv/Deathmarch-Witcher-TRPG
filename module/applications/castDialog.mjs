@@ -7,6 +7,11 @@
  * field, a live roll total, and an info box describing how the target resists,
  * the range, duration, components and (for hexes) danger.
  *
+ * Damage section: shows the item's structured damageFormula + damageElement
+ * (both read-only by default). For variableCost items, BOTH fields become
+ * editable so the caster can retune the payload per cast. Non-damaging
+ * (empty formula, non-variable) items skip the section entirely.
+ *
  * Rituals are DC-based (Ritual Crafting vs a difficulty) rather than an
  * opposed cast, so they show a DC field + preparation time instead of STA.
  *
@@ -17,8 +22,11 @@
 import {
     SPELL_DEFENSES, HEX_DEFENSES, HEX_DANGER,
     SPELL_DURATION_UNITS, HEX_DURATION_UNITS,
-    RITUAL_DURATION_UNITS, RITUAL_TIME_UNITS
+    RITUAL_DURATION_UNITS, RITUAL_TIME_UNITS,
+    SPELL_DAMAGE_ELEMENTS, SPELL_DAMAGE_TYPES, SPELL_AREA_SHAPES
 } from "../setup/config.mjs";
+import { isAdrenalineEnabled, adrenalineStaPerDie } from "../api/adrenaline.mjs";
+import { hasWRPerk } from "../api/witcherReborn.mjs";
 
 const esc = (s) => Handlebars.escapeExpression(String(s ?? ""));
 const L   = (k) => game.i18n.localize(k);
@@ -53,6 +61,26 @@ function defenseLabels(item) {
     }
     const arr = Array.isArray(item.system?.defense) ? item.system.defense : [];
     return arr.filter(d => d && d !== "none").map(d => L(SPELL_DEFENSES[d] ?? d));
+}
+
+/** Parse the item's free-form range string into a maximum distance in
+ *  metres. Returns:
+ *    - a positive number for numeric ranges ("10m", "20 metres")
+ *    - 0 for "Touch" / "Self" (adjacent only — a 1-tile check happens
+ *      at cast time via the caster's SPD/reach; the dialog treats these
+ *      as "you must be next to the target")
+ *    - Infinity for "Sight" / anything unbounded
+ *    - null when the field is empty or the string has no parseable range
+ *      (fall back to "any distance" — the GM adjudicates) */
+function parseRangeMeters(item) {
+    const raw = String(item?.system?.range ?? "").trim();
+    if (!raw) return null;
+    if (/self/i.test(raw))  return 0;
+    if (/touch/i.test(raw)) return 0;
+    if (/sight|line of sight|unlimited/i.test(raw)) return Infinity;
+    const m = raw.match(/(\d+(?:\.\d+)?)\s*(m|metres?|meters?)?/i);
+    if (m) return Number(m[1]);
+    return null;
 }
 
 /** Human-readable duration ("3 Rounds", "Permanent", "Until Lifted"). */
@@ -95,10 +123,15 @@ function buildContent(ctx) {
         <div class="wdm-atk-field">
             <label>${esc(L("WITCHER.Cast.DC"))}</label>
             <input type="number" name="dc" step="1" value="${esc(Number(sys.difficulty) || 0)}" ${sys.variableDC ? "" : ""}/>
+        </div>` : sys.variableCost ? `
+        <div class="wdm-atk-field">
+            <label>${esc(L("WITCHER.Cast.StaCost"))} (${esc(L("WITCHER.Cast.Variable"))})${isSign ? ` — ${esc(L("WITCHER.Cast.SignCapHint"))}` : ""} ${vigorHelpIcon()}</label>
+            <input type="number" name="sta" step="1" min="${staFloor}" ${isSign ? `max="${SIGN_STA_CAP}"` : ""} value="${esc(staDefault)}"/>
         </div>` : `
         <div class="wdm-atk-field">
-            <label>${esc(L("WITCHER.Cast.StaCost"))}${sys.variableCost ? ` (${esc(L("WITCHER.Cast.Variable"))})` : isSign ? ` (${esc(L("WITCHER.Cast.SignCapHint"))})` : ""} ${vigorHelpIcon()}</label>
-            <input type="number" name="sta" step="1" min="${staFloor}" ${isSign ? `max="${SIGN_STA_CAP}"` : ""} value="${esc(staDefault)}"/>
+            <label>${esc(L("WITCHER.Cast.StaCost"))} ${vigorHelpIcon()}</label>
+            <div class="wdm-atk-readonly">${esc(staDefault)}</div>
+            <input type="hidden" name="sta" value="${esc(staDefault)}"/>
         </div>`;
 
     const focusField = (!isRitual && focus > 0) ? `
@@ -111,6 +144,121 @@ function buildContent(ctx) {
         <div class="wdm-atk-field">
             <label>${esc(L("WITCHER.Cast.OtherMod"))}</label>
             <input type="number" name="otherMod" step="1" value="0"/>
+        </div>`;
+
+    /* Adrenaline dice — each die adds +1d6 to the cast's damage roll.
+     * STA/die cost is `adrenalineStaPerDie()` (RAW default 4), HALVED
+     * when the caster owns the Griffin Combat Meditation perk. Only
+     * shown when the actor has a pool AND the cast is damaging (empty
+     * formula = utility spell; adrenaline wouldn't do anything). The
+     * live readout under the field echoes dice + total STA cost. */
+    const actor = ctx.actor;
+    const adrPool = (!isRitual && isAdrenalineEnabled())
+        ? Math.max(0, Number(actor?.system?.adrenaline?.value) || 0)
+        : 0;
+    /* Base STA/die comes from the system setting (`adrenalineStaPerDie`),
+     * same source the weapon attacks use — one canonical number for the
+     * whole system. Griffin's Combat Meditation halves it (rounded down,
+     * floored at 1) so the perk text stays "half stamina cost" rather
+     * than a magic number. */
+    const hasCM = actor ? hasWRPerk(actor, "combatMeditation") : false;
+    const adrStaBase = adrenalineStaPerDie();
+    const adrStaPerDie = hasCM ? Math.max(1, Math.floor(adrStaBase / 2)) : adrStaBase;
+    const hasDamage = String(sys.damageFormula ?? "").trim() !== "" || !!sys.variableCost;
+    const adrenalineField = (adrPool > 0 && hasDamage) ? `
+        <div class="wdm-atk-field">
+            <label>Adrenaline dice ${hasCM ? '<span class="wdm-atk-perk">(Combat Meditation: −½ STA)</span>' : ''}</label>
+            <input type="number" name="adrenaline" step="1" min="0" max="${adrPool}" value="0"
+                   data-adr-max="${adrPool}" data-adr-sta="${adrStaPerDie}" />
+            <div class="wdm-atk-readout" data-adr-readout></div>
+        </div>` : "";
+
+    /* Damage section — always read-only. The formula / element / type
+     * are properties of the spell itself (authored on the item), not
+     * caster choices. `variableCost` toggles the STA slider (a caster
+     * can pour more or less into a scaling formula via `{sta}`), NOT
+     * the formula shape. Non-damaging items (empty formula, non-
+     * variable) skip the section entirely.
+     *
+     * Narrative-only spells hide the damage/area/rider blocks — a
+     * narrative spell rolls the spellcasting check and posts the
+     * effect description; no damage / area / rider metadata is
+     * meaningful because nothing auto-applies. */
+    const isNarrative = sys.narrative === true;
+    const dmgFormula = String(sys.damageFormula ?? "");
+    const dmgElement = String(sys.damageElement ?? "none");
+    const dmgType    = String(sys.damageType    ?? "none");
+    const showDamage = !isRitual && !isNarrative && dmgFormula;
+    const damageEditable = false;
+    const damageSection = !showDamage ? "" : `
+        <div class="wdm-atk-grid" data-cast-damage>
+            <div class="wdm-atk-field">
+                <label>Damage formula</label>
+                ${damageEditable
+                    ? `<input type="text" name="damageFormula" value="${esc(dmgFormula)}" placeholder="5d6 or {sta}d6" />`
+                    : `<div class="wdm-atk-readonly">${esc(dmgFormula || "—")}</div>`}
+            </div>
+            <div class="wdm-atk-field">
+                <label>Element</label>
+                ${damageEditable
+                    ? `<select name="damageElement">${
+                        Object.entries(SPELL_DAMAGE_ELEMENTS).map(([k, key]) =>
+                            `<option value="${esc(k)}" ${k === dmgElement ? "selected" : ""}>${esc(L(key))}</option>`
+                        ).join("")
+                      }</select>`
+                    : `<div class="wdm-atk-readonly">${esc(L(SPELL_DAMAGE_ELEMENTS[dmgElement] ?? dmgElement))}</div>`}
+            </div>
+            <div class="wdm-atk-field">
+                <label>Type</label>
+                ${damageEditable
+                    ? `<select name="damageType">${
+                        Object.entries(SPELL_DAMAGE_TYPES).map(([k, key]) =>
+                            `<option value="${esc(k)}" ${k === dmgType ? "selected" : ""}>${esc(L(key))}</option>`
+                        ).join("")
+                      }</select>`
+                    : `<div class="wdm-atk-readonly">${esc(L(SPELL_DAMAGE_TYPES[dmgType] ?? dmgType))}</div>`}
+            </div>
+        </div>`;
+
+    /* Area + status-rider preview — read-only. Both stay hidden when
+     * their field is at its "none" default so the dialog stays lean on
+     * simple casts. Riders show one row per authored effect with the
+     * chance % and (if present) duration. */
+    const aShape = String(sys.areaShape ?? "none");
+    const aSize  = Number(sys.areaSize) || 0;
+    const aAnchor = String(sys.areaAnchor ?? "caster");
+    const aPersist = sys.areaPersist === true;
+    const anchorBadge = aShape === "none" || item.type === "ritual" ? "" :
+        aAnchor === "free"
+            ? ` — <span class="wdm-cast-anchor" style="opacity:0.7">free-placed</span>`
+            : ` — <span class="wdm-cast-anchor" style="opacity:0.7">from you (aim)</span>`;
+    const persistBadge = aPersist
+        ? ` — <span class="wdm-cast-anchor" style="opacity:0.7;color:#c8a878;">persistent</span>`
+        : "";
+    const areaSection = (aShape === "none" || isNarrative) ? "" : `
+        <div class="wdm-atk-note" data-cast-area>
+            <i class="fa-solid fa-vector-square"></i>
+            Area: <b>${esc(L(SPELL_AREA_SHAPES[aShape] ?? aShape))}</b>${aSize > 0 ? ` — <b>${esc(aSize)}m</b>` : ""}${anchorBadge}${persistBadge}
+        </div>`;
+    /* Tangibility badge — only surface when the cast is INTANGIBLE, so
+     * the caster sees a "phases through shields" note. Tangible casts
+     * (the majority) don't need the badge — that's the assumed default. */
+    const tangibleSection = (item.type !== "ritual" && sys.tangible === false) ? `
+        <div class="wdm-atk-note" data-cast-intangible>
+            <i class="fa-solid fa-ghost"></i>
+            <b>Intangible</b> — bypasses Active Shield / Quen entirely.
+        </div>` : "";
+    const riders = Array.isArray(sys.statusRiders) ? sys.statusRiders : [];
+    const ridersSection = (riders.length === 0 || isNarrative) ? "" : `
+        <div class="wdm-atk-note" data-cast-riders>
+            <i class="fa-solid fa-bolt"></i>
+            <b>On hit:</b>
+            ${riders.map(r => {
+                const durVal = String(r?.duration?.value ?? "").trim();
+                const durUnit = String(r?.duration?.unit ?? "instant");
+                const dur = durVal ? ` (${esc(durVal)} ${esc(durUnit)})` : "";
+                return `<span class="wdm-cast-rider">${esc(r?.statusId ?? "")} <em>${esc(r?.chance ?? 100)}%</em>${dur}</span>`;
+            }).join(", ")}
         </div>`;
 
     // Info box — the same per-action explanation pattern the brawl/attack
@@ -157,7 +305,12 @@ function buildContent(ctx) {
             ${costField}
             ${focusField}
             ${otherModField}
+            ${adrenalineField}
         </div>
+        ${damageSection}
+        ${areaSection}
+        ${tangibleSection}
+        ${ridersSection}
         ${warnBlock}
         ${infoBox}
         ${totalBlock}
@@ -188,8 +341,39 @@ function collect(root, ctx) {
     if (otherMod) chips.push({ label: L("WITCHER.Cast.OtherMod"), value: otherMod });
     if (!isRitual && staSpend) chips.push({ label: L("WITCHER.Cast.StaCost"), value: staSpend });
 
+    /* Damage — pick up the (possibly-edited) formula + element. Falls
+     * back to the item defaults when the dialog didn't expose the fields
+     * (non-variable, non-damaging spells + rituals). Empty formula means
+     * the cast doesn't deal HP damage — riders can still add damage via
+     * addDamage(). */
+    const damageFormula = String(
+        q('[name="damageFormula"]')?.value
+        ?? item.system?.damageFormula
+        ?? ""
+    ).trim();
+    const damageElement = String(
+        q('[name="damageElement"]')?.value
+        ?? item.system?.damageElement
+        ?? "none"
+    );
+
+    /* Adrenaline dice — clamped to the pool. STA cost per die is
+     * pre-computed at build time (halved for Combat Meditation holders)
+     * and lives on the input's dataset. */
+    const adrInput = q('[name="adrenaline"]');
+    const adrPool = Number(adrInput?.dataset?.adrMax) || 0;
+    const adrStaPerDie = Number(adrInput?.dataset?.adrSta) || 0;
+    const adrenalineDice = Math.min(adrPool, Math.max(0, Math.round(Number(adrInput?.value) || 0)));
+    const adrenalineStaCost = adrenalineDice * adrStaPerDie;
+    /* Adrenaline dice do NOT feed the cast roll — they only add damage.
+     * Deliberately NOT pushed into `chips` (the modifier chip row
+     * displays to-hit mods only). The live readout under the input
+     * echoes "+Nd6 damage · N STA" for the caster's benefit. */
+
     return {
         item, staSpend, dc, otherMod, signCapped,
+        damageFormula, damageElement,
+        adrenalineDice, adrenalineStaCost, adrStaPerDie,
         chips,
         grandMod: (ctx.base?.total ?? 0) + extraPenalty + otherMod
     };
@@ -205,6 +389,20 @@ function refresh(root, ctx) {
     const r = collect(root, ctx);
     const totalEl = root.querySelector("[data-total]");
     if (totalEl) totalEl.textContent = r.grandMod ? `1d10 ${signed(r.grandMod)}` : "1d10";
+
+    /* Adrenaline readout — echoes the picked dice + total STA cost. Clamps
+     * the input to the pool if the user typed a bigger number. */
+    const adrInput = root.querySelector('[name="adrenaline"]');
+    if (adrInput) {
+        const max = Number(adrInput.dataset.adrMax) || 0;
+        const v = Math.max(0, Math.min(max, Math.round(Number(adrInput.value) || 0)));
+        if (String(v) !== adrInput.value) adrInput.value = String(v);
+        const ro = root.querySelector("[data-adr-readout]");
+        if (ro) {
+            const sta = v * (Number(adrInput.dataset.adrSta) || 0);
+            ro.textContent = v > 0 ? `+${v}d6 damage · ${sta} STA` : "";
+        }
+    }
 
     const bdEl = root.querySelector("[data-breakdown]");
     if (bdEl) {
@@ -236,7 +434,15 @@ function refresh(root, ctx) {
             warnEl.innerHTML = "";
         }
     }
+
 }
+
+/* Exported so castSpellMixin can enforce the range gate AFTER the
+ * dialog closes but BEFORE any action / STA is spent — matching how the
+ * attack flow handles out-of-range throws (ui.notifications warn +
+ * return null). Not in the dialog itself per user spec: no in-dialog
+ * warning card, no disabled Cast button. */
+export { parseRangeMeters };
 
 /* ── Public entry ──────────────────────────────────────────────────────── */
 
@@ -259,11 +465,45 @@ export async function openCastDialog(actor, item, opts = {}) {
                : item.type === "ritual" ? "fa-solid fa-book-skull"
                : "fa-solid fa-wand-sparkles";
 
+    /* Caster → target distance in metres. Mirrors the attack-dialog
+     * measurement: prefer canvas.grid.measureDistance, fall back to
+     * pixel-hypotenuse math. Null when either side is tokenless
+     * (theatre-of-mind) or no target is set. Used by the range gate. */
+    let targetDistanceMeters = null;
+    try {
+        const aTok = actor?.getActiveTokens?.()?.[0] ?? null;
+        let dTok = Array.from(game.user?.targets ?? [])[0] ?? null;
+        if (!dTok) {
+            const uuid = game.user?.getFlag?.("witcher-ttrpg-death-march", "actorTargetUuid");
+            if (uuid) {
+                const tActor = await fromUuid(uuid).catch(() => null);
+                dTok = tActor?.getActiveTokens?.()?.[0] ?? null;
+            }
+        }
+        if (aTok && dTok && canvas?.grid) {
+            /* Chebyshev-in-meters: diagonal-adjacent = 2 m at a 1.5 m/tile
+             * grid (matches the mixin's range gate). measureDistance is
+             * skipped because it respects the scene's diagonal setting
+             * (5-10-5 / Euclidean) and would misreport the diagonal. */
+            const a = aTok.center ?? aTok;
+            const b = dTok.center ?? dTok;
+            const ax = Number(a?.x), ay = Number(a?.y);
+            const bx = Number(b?.x), by = Number(b?.y);
+            if (Number.isFinite(ax) && Number.isFinite(bx)) {
+                const chebyPx = Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+                const sz = Number(canvas?.scene?.grid?.size)     || 100;
+                const gd = Number(canvas?.scene?.grid?.distance) || 1.5;
+                targetDistanceMeters = (chebyPx / sz) * gd;
+            }
+        }
+    } catch (_) { targetDistanceMeters = null; }
+
     const ctx = {
         actor, item,
         base: opts.base ?? { total: 0, chips: [] },
         focus: Math.max(0, Number(opts.focus) || 0),
-        extraPenalty: Number(opts.extraPenalty) || 0
+        extraPenalty: Number(opts.extraPenalty) || 0,
+        targetDistanceMeters
     };
 
     const result = await foundry.applications.api.DialogV2.wait({

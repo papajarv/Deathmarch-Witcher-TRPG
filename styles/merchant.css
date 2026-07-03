@@ -9,7 +9,7 @@
 .wdm-merchant {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 0.625rem;
     height: 100%;
     font-family: var(--wdm-font-body);
 }
@@ -17,7 +17,7 @@
 /* ── Tab nav ───────────────────────────────────────────────── */
 .wdm-merchant-tabs {
     display: flex;
-    gap: 2px;
+    gap: 0.125rem;
     border-bottom: 1px solid var(--wdm-rule-1);
 }
 .wdm-merchant-tabs .wdm-tab {
@@ -25,8 +25,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 8px 6px;
+    gap: 0.375rem;
+    padding: 0.5rem 0.375rem;
     background: transparent;
     border: none;
     border-bottom: 2px solid transparent;
@@ -42,8 +42,8 @@
 }
 
 /* ── Panels: show only the active tab ──────────────────────── */
-.wdm-merchant-panels { flex: 1 1 auto; overflow-y: auto; padding: 2px; }
-.wdm-merchant .wdm-panel { display: none; flex-direction: column; gap: 12px; }
+.wdm-merchant-panels { flex: 1 1 auto; overflow-y: auto; padding: 0.125rem; }
+.wdm-merchant .wdm-panel { display: none; flex-direction: column; gap: 0.75rem; }
 .wdm-merchant[data-active-tab="general"]       .wdm-panel[data-tab="general"],
 .wdm-merchant[data-active-tab="pricing"]       .wdm-panel[data-tab="pricing"],
 .wdm-merchant[data-active-tab="inventory"]     .wdm-panel[data-tab="inventory"],
@@ -59,18 +59,18 @@
     border: 1px solid var(--wdm-rule-1);
     border-radius: var(--wdm-radius-xs);
     color: var(--wdm-ink-bright);
-    padding: 4px 6px;
+    padding: 0.25rem 0.375rem;
 }
-.wdm-merchant textarea { min-height: 90px; resize: vertical; }
+.wdm-merchant textarea { min-height: 5.625rem; resize: vertical; }
 
 /* ── Negotiation dialogs (shared by net.mjs) ───────────────── */
-.wdm-neg { display: flex; flex-direction: column; gap: 10px; }
-.wdm-neg-header { display: flex; align-items: center; gap: 10px; }
-.wdm-neg-header img { width: 40px; height: 40px; object-fit: cover; border-radius: var(--wdm-radius-xs); }
+.wdm-neg { display: flex; flex-direction: column; gap: 0.625rem; }
+.wdm-neg-header { display: flex; align-items: center; gap: 0.625rem; }
+.wdm-neg-header img { width: 2.5rem; height: 2.5rem; object-fit: cover; border-radius: var(--wdm-radius-xs); }
 .wdm-neg-item { font-family: var(--wdm-font-display); color: var(--wdm-ink-bright); }
 .wdm-neg-meta { font-size: 0.78rem; color: var(--wdm-ink-faint); }
 .wdm-neg-warn { color: var(--wdm-red-bright); font-size: 0.82rem; }
-.wdm-neg-history { border-top: 1px solid var(--wdm-rule-1); padding-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+.wdm-neg-history { border-top: 1px solid var(--wdm-rule-1); padding-top: 0.375rem; display: flex; flex-direction: column; gap: 0.125rem; }
 .wdm-neg-row { font-size: 0.82rem; color: var(--wdm-ink-dim); }
 .wdm-neg-from { color: var(--wdm-gilt-hi); }
 .wdm-neg-round { color: var(--wdm-ink-faint); font-size: 0.72rem; }
@@ -104,9 +104,9 @@
     border-bottom: 2px solid rgba(184, 134, 11, 0.3);
 }
 .bs-portrait {
-    width: 64px;
-    height: 64px;
-    border-radius: 4px;
+    width: 4rem;
+    height: 4rem;
+    border-radius: 0.25rem;
     border: 2px solid rgba(184, 134, 11, 0.5);
     object-fit: cover;
 }
@@ -115,7 +115,7 @@
 .bs-merchant-name { font-size: 0.8rem; opacity: 0.6; font-style: italic; }
 .bs-personality { font-size: 0.75rem; opacity: 0.55; margin-top: 0.2rem; text-transform: capitalize; }
 .bs-buyer-info { text-align: right; }
-.bs-buyer-label { font-size: 0.7rem; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.5px; }
+.bs-buyer-label { font-size: 0.7rem; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.03125rem; }
 .bs-buyer-name { font-size: 0.85rem; font-weight: bold; color: #aed581; }
 .bs-buyer-warn { font-size: 0.78rem; color: #ffb74d; }
 
@@ -161,7 +161,7 @@
 .bs-group {
     background: rgba(0, 0, 0, 0.15);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 4px;
+    border-radius: 0.25rem;
     overflow: hidden;
 }
 .bs-group-header {
@@ -196,19 +196,19 @@
     flex-direction: column;
     background: rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 4px;
+    border-radius: 0.25rem;
     transition: background 0.15s, border-color 0.15s;
 }
 .bs-item-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem; }
 .bs-item:hover { background: rgba(255, 255, 255, 0.04); border-color: rgba(184, 134, 11, 0.3); }
-.bs-item.is-pinned { border-left: 3px solid #d4a847; }
+.bs-item.is-pinned { border-left: 0.1875rem solid #d4a847; }
 
 /* The clickable name/img area that toggles description expansion */
 .bs-item-clickable { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0.6rem; cursor: pointer; user-select: none; }
 .bs-item-chevron {
     font-size: 0.7rem;
     color: #d4a847;
-    width: 12px;
+    width: 0.75rem;
     text-align: center;
     transition: transform 0.18s ease;
     flex-shrink: 0;
@@ -235,24 +235,24 @@
    Used by the buy/sell list thumbnails and the GM inventory table image cell. */
 .bs-item-slot {
     position: relative;
-    width: 40px; height: 40px;
+    width: 2.5rem; height: 2.5rem;
     flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
     border: 1px solid rgba(140, 133, 121, 0.22);
-    border-radius: var(--wdm-radius-sm, 3px);
+    border-radius: var(--wdm-radius-sm, 0.1875rem);
     overflow: hidden;
     background:
         radial-gradient(circle at 50% 25%, rgba(184, 148, 100, 0.04), transparent 65%),
         linear-gradient(180deg, var(--wdm-bg-lifted, #14110d), var(--wdm-bg-deep, #050402));
 }
 .bs-item-slot::before {
-    content: ''; position: absolute; inset: 2px;
+    content: ''; position: absolute; inset: 0.125rem;
     border: 1px solid rgba(140, 133, 121, 0.08);
     pointer-events: none;
 }
 .bs-item-slot::after {
     content: ''; position: absolute; inset: 0;
-    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.55);
+    box-shadow: inset 0 0 0.625rem rgba(0, 0, 0, 0.55);
     pointer-events: none;
 }
 .bs-item-slot img {
@@ -260,7 +260,7 @@
     object-fit: contain;
     border-radius: 0;
     position: relative; z-index: 1;
-    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.85));
+    filter: drop-shadow(0 0.0625rem 0.0625rem rgba(0, 0, 0, 0.85));
 }
 /* Availability tiers — mirror of .wou-slot[data-rarity] using --wdm-rarity-*.
    "everywhere"/"na" carry no tier and keep the plain slot background. */
@@ -284,11 +284,11 @@
 
 .bs-rarity {
     padding: 0.05rem 0.4rem;
-    border-radius: 8px;
+    border-radius: 0.5rem;
     font-weight: bold;
     font-size: 0.65rem;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.03125rem;
 }
 .bs-rarity[class*="rarity-"] {
     --wdm-rar: var(--wdm-ink, #b0a994);
@@ -300,7 +300,7 @@
 .bs-rarity.rarity-rare    { --wdm-rar: var(--wdm-rarity-rare); }
 .bs-rarity.rarity-witcher { --wdm-rar: var(--wdm-rarity-witcher); }
 
-.bs-item-price { text-align: right; min-width: 80px; }
+.bs-item-price { text-align: right; min-width: 5rem; }
 .bs-price-display { font-size: 1.05rem; font-weight: bold; }
 .bs-price-amount { color: #d4a847; }
 .bs-price-currency { font-size: 0.72rem; opacity: 0.6; font-weight: normal; margin-left: 0.2rem; }
@@ -312,7 +312,7 @@
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
     color: #ddd;
-    border-radius: 3px;
+    border-radius: 0.1875rem;
     cursor: pointer;
     font-size: 0.78rem;
     transition: all 0.15s;
@@ -350,7 +350,7 @@
 /* Drag strip covers the portrait region (framed plate: 8px..220px in PIXI coords). */
 .wdm-card-drag {
     position: absolute; left: 0; top: 0; right: 0;
-    height: calc(216px * var(--card-scale, 1));
+    height: calc(13.5rem * var(--card-scale, 1));
     pointer-events: auto;
     cursor: move;
 }
@@ -360,10 +360,10 @@
    band height 22). The visible "BROWSE SHOP" band/text is PIXI; this is the target. */
 .wdm-card-browse {
     position: absolute; left: 50%;
-    top: calc(218px * var(--card-scale, 1));
+    top: calc(13.625rem * var(--card-scale, 1));
     transform: translateX(-50%);
-    width: calc(160px * var(--card-scale, 1));
-    height: calc(28px * var(--card-scale, 1));
+    width: calc(10rem * var(--card-scale, 1));
+    height: calc(1.75rem * var(--card-scale, 1));
     background: transparent;
     border: none;
     color: transparent;
@@ -375,24 +375,24 @@
 }
 .wdm-card-browse:hover {
     background: rgba(184, 148, 100, 0.18);
-    border-radius: calc(3px * var(--card-scale, 1));
+    border-radius: calc(0.1875rem * var(--card-scale, 1));
 }
 
 /* GM controls — stacked, revealed on hover. */
 .wdm-card-gm {
     position: absolute;
-    top: calc(8px * var(--card-scale, 1));
-    right: calc(8px * var(--card-scale, 1));
+    top: calc(0.5rem * var(--card-scale, 1));
+    right: calc(0.5rem * var(--card-scale, 1));
     display: flex; flex-direction: column;
-    gap: calc(2px * var(--card-scale, 1));
+    gap: calc(0.125rem * var(--card-scale, 1));
     opacity: 0;
     transition: opacity 0.15s;
     pointer-events: auto;
 }
 .wdm-card-overlay:hover .wdm-card-gm { opacity: 1; }
 .wdm-card-gm-btn {
-    width: calc(22px * var(--card-scale, 1));
-    height: calc(22px * var(--card-scale, 1));
+    width: calc(1.375rem * var(--card-scale, 1));
+    height: calc(1.375rem * var(--card-scale, 1));
     display: flex; align-items: center; justify-content: center;
     background: rgba(5, 4, 2, 0.8);
     border: 1px solid var(--wdm-amber-dim, #6e5224);
@@ -449,9 +449,9 @@
 }
 
 .merchant-sheet .header-left .profile-img {
-  width: 64px;
-  height: 64px;
-  border-radius: 4px;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 0.25rem;
   border: 2px solid var(--merchant-accent, #b8860b);
   object-fit: cover;
   cursor: pointer;
@@ -493,7 +493,7 @@
 .merchant-sheet .header-fields label {
   font-size: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.03125rem;
   opacity: 0.6;
   white-space: nowrap;
   min-width: fit-content;
@@ -543,7 +543,7 @@
 .summary-card {
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   padding: 0.6rem;
   text-align: center;
 }
@@ -551,7 +551,7 @@
 .card-label {
   font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.0625rem;
   opacity: 0.5;
   margin-bottom: 0.25rem;
 }
@@ -574,14 +574,14 @@
 }
 
 .coin-input {
-  width: 80px;
+  width: 5rem;
   text-align: center;
   font-size: 1.15rem;
   font-weight: bold;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: var(--merchant-accent, #b8860b);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   padding: 0.1rem 0.3rem;
 }
 
@@ -590,19 +590,19 @@
   display: block;
   font-size: 0.75rem;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.0625rem;
   opacity: 0.5;
   margin-bottom: 0.3rem;
 }
 
 .description-section textarea {
   width: 100%;
-  min-height: 80px;
+  min-height: 5rem;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: inherit;
   padding: 0.5rem;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   font-family: inherit;
   resize: vertical;
 }
@@ -635,7 +635,7 @@
   border: 1px solid var(--merchant-accent, #b8860b);
   color: var(--merchant-accent, #b8860b);
   padding: 0.15rem 0.5rem;
-  border-radius: 12px;
+  border-radius: 0.75rem;
   font-size: 0.8rem;
 }
 
@@ -644,7 +644,7 @@
 .pricing-block {
   background: rgba(0, 0, 0, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   padding: 0.75rem;
 }
 
@@ -662,30 +662,30 @@
 
 .slider-row input[type='range'] {
   flex: 1;
-  height: 6px;
+  height: 0.375rem;
   -webkit-appearance: none;
   appearance: none;
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   outline: none;
 }
 
 .slider-row input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 1rem;
+  height: 1rem;
   border-radius: 50%;
   background: var(--merchant-accent, #b8860b);
   cursor: pointer;
 }
 
 .slider-readout {
-  min-width: 65px;
+  min-width: 4.0625rem;
   text-align: center;
   font-size: 1.1rem;
   font-weight: bold;
   padding: 0.2rem 0.5rem;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   background: rgba(0, 0, 0, 0.3);
 }
 
@@ -715,12 +715,12 @@
 }
 
 .threshold-input {
-  width: 60px;
+  width: 3.75rem;
   padding: 0.3rem 0.5rem;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: inherit;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   text-align: center;
   font-size: 1rem;
 }
@@ -754,7 +754,7 @@
 .inventory-topbar {
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   padding: 0.5rem 0.75rem;
   display: flex;
   justify-content: space-between;
@@ -803,7 +803,7 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: inherit;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -836,7 +836,7 @@
   padding: 0.4rem 0.5rem;
   font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.03125rem;
   opacity: 0.4;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   user-select: none;
@@ -857,18 +857,18 @@
   font-size: 0.65rem;
 }
 
-.inv-table .col-expand { width: 28px; text-align: center; }
-.inv-table .col-img { width: 40px; }
-.inv-table .col-type { width: 70px; }
-.inv-table .col-price { width: 55px; text-align: right; }
-.inv-table .col-qty { width: 50px; text-align: center; }
+.inv-table .col-expand { width: 1.75rem; text-align: center; }
+.inv-table .col-img { width: 2.5rem; }
+.inv-table .col-type { width: 4.375rem; }
+.inv-table .col-price { width: 3.4375rem; text-align: right; }
+.inv-table .col-qty { width: 3.125rem; text-align: center; }
 
 .inv-table .qty-edit {
-  width: 42px;
+  width: 2.625rem;
   text-align: center;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   color: inherit;
   padding: 0.15rem 0.2rem;
   font-size: 0.82rem;
@@ -883,8 +883,8 @@
   border-color: var(--merchant-accent, #b8860b);
   outline: none;
 }
-.inv-table .col-weight { width: 45px; text-align: right; }
-.inv-table .col-actions { width: 30px; text-align: center; }
+.inv-table .col-weight { width: 2.8125rem; text-align: right; }
+.inv-table .col-actions { width: 1.875rem; text-align: center; }
 
 .inv-row td {
   padding: 0.35rem 0.5rem;
@@ -897,8 +897,8 @@
 }
 
 .inv-row .col-img .bs-item-slot {
-  width: 34px;
-  height: 34px;
+  width: 2.125rem;
+  height: 2.125rem;
 }
 
 .inv-row .col-expand a,
@@ -922,7 +922,7 @@
 .type-badge {
   font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.03125rem;
   opacity: 0.5;
 }
 
@@ -971,7 +971,7 @@
   padding: 0.6rem 0.75rem;
   background: rgba(184, 134, 11, 0.08);
   border: 1px solid rgba(184, 134, 11, 0.2);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   font-size: 0.85rem;
   opacity: 0.8;
 }
@@ -984,7 +984,7 @@
 .vision-block {
   background: rgba(0, 0, 0, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   padding: 0.65rem 0.75rem;
 }
 
@@ -1010,7 +1010,7 @@
   gap: 1rem;
   padding: 0.5rem 0.75rem;
   background: rgba(0, 0, 0, 0.15);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   margin-bottom: 0.3rem;
 }
 
@@ -1028,7 +1028,7 @@
 .relation-label {
   font-size: 0.8rem;
   opacity: 0.5;
-  min-width: 90px;
+  min-width: 5.625rem;
   text-align: right;
 }
 
@@ -1081,22 +1081,22 @@
 
 .precision-slider {
   flex: 1;
-  height: 6px;
+  height: 0.375rem;
   -webkit-appearance: none;
   appearance: none;
   background: linear-gradient(to right,
     rgba(255, 255, 255, 0.08) 0%,
     rgba(255, 255, 255, 0.15) 50%,
     rgba(255, 255, 255, 0.08) 100%);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   outline: none;
   cursor: pointer;
 }
 
 .precision-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 0.875rem;
+  height: 0.875rem;
   border-radius: 50%;
   background: var(--merchant-accent, #b8860b);
   border: 2px solid rgba(0, 0, 0, 0.4);
@@ -1128,8 +1128,8 @@
 .relation-card {
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-left: 3px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+  border-left: 0.1875rem solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.25rem;
   padding: 0.65rem;
   display: flex;
   flex-direction: column;
@@ -1149,9 +1149,9 @@
 }
 
 .relation-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 4px;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.25rem;
   object-fit: cover;
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
@@ -1182,7 +1182,7 @@
 .relation-score {
   background: rgba(0, 0, 0, 0.3);
   padding: 0.05rem 0.4rem;
-  border-radius: 10px;
+  border-radius: 0.625rem;
   color: var(--merchant-accent, #b8860b);
   font-weight: bold;
 }
@@ -1200,18 +1200,18 @@
 
 .relation-slider {
   width: 100%;
-  height: 6px;
+  height: 0.375rem;
   -webkit-appearance: none;
   appearance: none;
   background: linear-gradient(to right, #e57373 0%, #ccc 50%, #81c784 100%);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   outline: none;
 }
 
 .relation-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 1rem;
+  height: 1rem;
   border-radius: 50%;
   background: white;
   border: 2px solid var(--merchant-accent, #b8860b);
@@ -1230,9 +1230,9 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: inherit;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   cursor: pointer;
-  min-width: 32px;
+  min-width: 2rem;
 }
 
 .relation-btn:hover {
@@ -1250,9 +1250,9 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: inherit;
   padding: 0.4rem;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   resize: vertical;
-  min-height: 40px;
+  min-height: 2.5rem;
   font-family: inherit;
   font-size: 0.8rem;
 }
@@ -1269,7 +1269,7 @@
   align-items: center;
   background: rgba(184, 134, 11, 0.08);
   border: 1px solid rgba(184, 134, 11, 0.25);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   padding: 0.5rem 0.75rem;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -1298,7 +1298,7 @@
 .stocking-section {
   background: rgba(0, 0, 0, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 4px;
+  border-radius: 0.25rem;
   padding: 0.75rem;
 }
 
@@ -1347,8 +1347,8 @@
 .source-row {
   background: rgba(0, 0, 0, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-left: 3px solid rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
+  border-left: 0.1875rem solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.1875rem;
   padding: 0.5rem 0.6rem;
 }
 
@@ -1416,7 +1416,7 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: inherit;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   cursor: pointer;
   font-size: 0.78rem;
 }
@@ -1437,7 +1437,7 @@
 }
 
 .source-readout {
-  min-width: 50px;
+  min-width: 3.125rem;
   text-align: right;
   font-size: 0.85rem;
   font-weight: bold;
@@ -1480,12 +1480,12 @@
 }
 
 .qty-input-row input[type='number'] {
-  width: 70px;
+  width: 4.375rem;
   padding: 0.25rem 0.4rem;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: inherit;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   text-align: center;
 }
 
@@ -1523,12 +1523,12 @@
 }
 
 .stack-field input[type='number'] {
-  width: 60px;
+  width: 3.75rem;
   padding: 0.2rem 0.4rem;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: inherit;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
 }
 
 /* Rarity */
@@ -1547,7 +1547,7 @@
   padding: 0.2rem 0.5rem;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
 }
 
 .rarity-toggle:hover {
@@ -1557,10 +1557,10 @@
 .rarity-badge {
   font-size: 0.75rem;
   padding: 0.1rem 0.5rem;
-  border-radius: 10px;
+  border-radius: 0.625rem;
   font-weight: bold;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.03125rem;
 }
 
 .rarity-badge.everywhere { background: rgba(150, 150, 150, 0.2); color: #aaa; }
@@ -1584,7 +1584,7 @@
 }
 
 .rarity-weight-row .rarity-badge {
-  min-width: 80px;
+  min-width: 5rem;
   text-align: center;
 }
 
@@ -1603,7 +1603,7 @@
   padding: 0.4rem 0.6rem;
   background: rgba(0, 0, 0, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
 }
 
 .preset-info {
@@ -1631,7 +1631,7 @@
 
 .markup-labels {
   position: relative;
-  height: 16px;
+  height: 1rem;
   margin-top: 0.3rem;
 }
 
@@ -1652,12 +1652,12 @@
 }
 
 .slider-numeric {
-  width: 50px;
+  width: 3.125rem;
   padding: 0.2rem 0.3rem;
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: inherit;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   text-align: center;
   font-size: 0.85rem;
 }
@@ -1665,7 +1665,7 @@
 .stack-explanation {
   background: rgba(184, 134, 11, 0.06);
   border: 1px solid rgba(184, 134, 11, 0.2);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   padding: 0.6rem 0.75rem;
   margin: 0.5rem 0;
   font-size: 0.8rem;
@@ -1711,7 +1711,7 @@
 .slider-labels.markup-labels {
   display: block !important;
   position: relative;
-  height: 16px;
+  height: 1rem;
   margin-top: 0.3rem;
 }
 
@@ -1732,7 +1732,7 @@
 .filter-badge {
   font-size: 0.72rem;
   padding: 0.1rem 0.45rem;
-  border-radius: 10px;
+  border-radius: 0.625rem;
   font-weight: bold;
   display: inline-flex;
   align-items: center;
@@ -1800,7 +1800,7 @@
   font-size: 0.65rem;
   font-weight: bold;
   padding: 0 0.3rem;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   white-space: nowrap;
 }
 
@@ -1815,7 +1815,7 @@
 }
 
 .col-actions {
-  width: 50px !important;
+  width: 3.125rem !important;
   text-align: right !important;
 }
 
@@ -1836,11 +1836,11 @@
 /* ==================== FOLDER CHECKBOX TREE ==================== */
 
 .folder-picker {
-  max-height: 250px;
+  max-height: 15.625rem;
   overflow-y: auto;
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  border-radius: 0.1875rem;
   padding: 0.3rem;
 }
 
@@ -1903,7 +1903,7 @@
 .folder-chip {
   font-size: 0.72rem;
   padding: 0.1rem 0.45rem;
-  border-radius: 10px;
+  border-radius: 0.625rem;
   background: rgba(100, 181, 246, 0.12);
   color: #90caf9;
   border: 1px solid rgba(100, 181, 246, 0.25);
@@ -1936,11 +1936,11 @@
 .witcher-ttrpg-death-march.merchant .window-content,
 .witcher-ttrpg-death-march.merchant .window-content {
   background:
-    radial-gradient(ellipse 900px 600px at 50% 50%, rgba(26,22,18,0.55), transparent 70%),
-    radial-gradient(ellipse 1400px 900px at 50% 50%, transparent 40%, rgba(0,0,0,0.85) 92%),
+    radial-gradient(ellipse 56.25rem 37.5rem at 50% 50%, rgba(26,22,18,0.55), transparent 70%),
+    radial-gradient(ellipse 87.5rem 56.25rem at 50% 50%, transparent 40%, rgba(0,0,0,0.85) 92%),
     var(--v-bg);
   border: 1px solid var(--v-amber-dim);
-  box-shadow: 0 12px 48px rgba(0,0,0,0.85),
+  box-shadow: 0 0.75rem 3rem rgba(0,0,0,0.85),
               inset 0 1px 0 rgba(184,148,100,0.08);
   position: relative;
 }
@@ -1950,15 +1950,15 @@
 .witcher-ttrpg-death-march.merchant .window-content::after {
   content: ''; position: absolute; pointer-events: none;
   font-family: 'Noto Sans Runic', serif; color: var(--v-amber-dim); opacity: 0.7;
-  font-size: 14px; letter-spacing: 0.6em;
+  font-size: 0.875rem; letter-spacing: 0.6em;
 }
 .witcher-ttrpg-death-march.merchant .window-content::before,
 .witcher-ttrpg-death-march.merchant .window-content::before {
-  content: 'ᚦ ᚷ'; top: 6px; left: 12px;
+  content: 'ᚦ ᚷ'; top: 0.375rem; left: 0.75rem;
 }
 .witcher-ttrpg-death-march.merchant .window-content::after,
 .witcher-ttrpg-death-march.merchant .window-content::after {
-  content: 'ᛗ ᚹ'; bottom: 6px; right: 12px;
+  content: 'ᛗ ᚹ'; bottom: 0.375rem; right: 0.75rem;
 }
 .witcher-ttrpg-death-march.merchant .window-header,
 .witcher-ttrpg-death-march.merchant .window-header {
@@ -1967,13 +1967,13 @@
 }
 .witcher-ttrpg-death-march.merchant .window-header .window-title,
 .witcher-ttrpg-death-march.merchant .window-header .window-title {
-  font-weight: 700; font-size: 12px;
+  font-weight: 700; font-size: 0.75rem;
   letter-spacing: 0.4em; text-transform: uppercase;
   color: var(--v-amber-hi);
 }
 
 /* Scrollbars */
-.merchant-sheet *::-webkit-scrollbar { width: 6px; height: 6px; }
+.merchant-sheet *::-webkit-scrollbar { width: 0.375rem; height: 0.375rem; }
 .merchant-sheet *::-webkit-scrollbar-thumb { background: var(--v-amber-dim); }
 .merchant-sheet *::-webkit-scrollbar-track { background: var(--v-void); }
 .merchant-sheet * { scrollbar-width: thin; scrollbar-color: var(--v-amber-dim) var(--v-void); }
@@ -1986,8 +1986,8 @@
 .merchant-sheet .header-left .profile-img {
   border-radius: 0;
   border: 1px solid var(--v-amber-dim);
-  box-shadow: inset 0 0 0 3px rgba(0,0,0,0.6),
-              inset 0 0 0 4px rgba(184,148,100,0.18);
+  box-shadow: inset 0 0 0 0.1875rem rgba(0,0,0,0.6),
+              inset 0 0 0 0.25rem rgba(184,148,100,0.18);
   transition: border-color .15s;
 }
 .merchant-sheet .header-left .profile-img:hover { border-color: var(--v-amber-bright); }
@@ -2065,7 +2065,7 @@
 .merchant-sheet .summary-card {
   background: linear-gradient(180deg, rgba(20,17,13,0.55), rgba(10,9,8,0.75));
   border: 1px solid var(--v-amber-dim);
-  border-left: 3px solid var(--v-amber);
+  border-left: 0.1875rem solid var(--v-amber);
   border-radius: 0;
 }
 .merchant-sheet .summary-card .card-label {
@@ -2400,7 +2400,7 @@
 .merchant-sheet .rarity-badge.common     { color: var(--v-poison); border-color: var(--v-poison); background: rgba(110,138,74,0.15); }
 .merchant-sheet .rarity-badge.poor       { color: var(--v-amber-hi); border-color: var(--v-amber-hi); background: rgba(184,148,100,0.10); }
 .merchant-sheet .rarity-badge.rare       { color: var(--v-frost); border-color: var(--v-frost); background: rgba(106,138,162,0.15); }
-.merchant-sheet .rarity-badge.witcher    { color: var(--v-violet); border-color: var(--v-violet); background: rgba(136,112,168,0.15); box-shadow: 0 0 6px rgba(136,112,168,0.30); }
+.merchant-sheet .rarity-badge.witcher    { color: var(--v-violet); border-color: var(--v-violet); background: rgba(136,112,168,0.15); box-shadow: 0 0 0.375rem rgba(136,112,168,0.30); }
 
 .merchant-sheet .rarity-weights {
   background: rgba(0,0,0,0.30);
@@ -2435,7 +2435,7 @@
 .merchant-sheet .relation-card {
   background: linear-gradient(180deg, rgba(20,17,13,0.55), rgba(10,9,8,0.75));
   border: 1px solid var(--v-amber-dim);
-  border-left: 3px solid var(--v-ink-dim);
+  border-left: 0.1875rem solid var(--v-ink-dim);
   border-radius: 0;
 }
 .merchant-sheet .relation-card.relation-good     { border-left-color: var(--v-amber); }

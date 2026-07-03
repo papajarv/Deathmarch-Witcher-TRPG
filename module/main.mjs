@@ -28,10 +28,12 @@ import { registerCalendar } from "./setup/calendar.mjs";
 import { registerSocket } from "./setup/socketHook.mjs";
 import { registerHooks } from "./setup/hooks.mjs";
 import { isHomebrewEnabled } from "./api/homebrew.mjs";
+import { wrHeroicApi } from "./mechanics/wrHeroic.mjs";
 import { runLegacyMigration } from "./migrate/migrateLegacyFlags.mjs";
 import { readBook } from "./mechanics/bookSystem.mjs";
 import { stressApi }        from "./mechanics/stress.mjs";
 import { foodAndDrinkApi }  from "./mechanics/foodAndDrink.mjs";
+import { alchemyApi }       from "./mechanics/alchemy.mjs";
 import { weatherApi }       from "./mechanics/weather.mjs";
 import { weatherModifierApi } from "./mechanics/weather-modifiers.mjs";
 import { manualWeatherApi }   from "./mechanics/manual-weather.mjs";
@@ -57,6 +59,7 @@ import { registerDicePokerLobby } from "./minigames/dicepoker/lobby.mjs";
 import { registerGamesControl } from "./minigames/games.mjs";
 import { registerMerchantNet } from "./merchant/net.mjs";
 import { registerMerchantCards } from "./canvas/merchantCards.mjs";
+import { registerAdditiveTargeting } from "./policy/canvas-additive-targeting.mjs";
 
 const SYSTEM_ID = "witcher-ttrpg-death-march";
 const log = (...args) => console.log(`${SYSTEM_ID} |`, ...args);
@@ -107,6 +110,31 @@ Hooks.once("init", () => {
     // policy installers, and context menus during init. See
     // module/chrome/index.mjs for the orchestration contract.
     wireChromeInit();
+
+    // T-key additive-target keybinding. Foundry rejects keybinding
+    // registrations after `init` closes, so this MUST run here, not in
+    // registerHooks() (which runs during `setup`).
+    // See policy/canvas-additive-targeting.mjs.
+    registerAdditiveTargeting();
+
+    /* Compendium browser resize handle. Foundry ships the Compendium
+     * ApplicationV2 with `window.resizable` unset — inheriting the
+     * ApplicationV2 default of `false` — so `_renderFrame` never
+     * appends the `.window-resize-handle` grip. Users can't drag-resize
+     * the pack browser, which is painful when a large compendium
+     * (e.g. Death March's own equipment packs) overflows the default
+     * 350×tall window. Flip the static DEFAULT_OPTIONS entry at init so
+     * every subsequent Compendium instance picks it up on construction;
+     * ApplicationV2 reads DEFAULT_OPTIONS via `mergeObject` at construct
+     * time, so we don't need to touch already-open windows. */
+    try {
+        const Compendium = foundry?.applications?.sidebar?.apps?.Compendium;
+        if (Compendium?.DEFAULT_OPTIONS?.window) {
+            Compendium.DEFAULT_OPTIONS.window.resizable = true;
+        }
+    } catch (err) {
+        console.warn(`${SYSTEM_ID} | compendium resizable override failed`, err);
+    }
 });
 
 Hooks.once("setup", () => {
@@ -136,6 +164,23 @@ Hooks.once("ready", async () => {
         WITCHER,
         documents: { WitcherActor, WitcherItem, WitcherActiveEffect },
         homebrew: { isEnabled: isHomebrewEnabled },
+        /* Witchers Reborn heroic actions — exposed here so a hotbar
+         * macro can invoke Flow and Ebb / Lightning Fast with:
+         *   game.system.api.wr.flowAndEbb(_token.actor);
+         *   game.system.api.wr.lightningFast(_token.actor, 2);
+         * The other heroics (Pirouette / Deadly Focus / Unrelenting /
+         * Bulwark / Shield Mastery) are chat-card riders that surface
+         * in-flow; no macro entry is needed for them. */
+        wr: wrHeroicApi,
+        // Headless alchemy helpers (Alchemy Reborn) — base reading,
+        // ingredient potency/substance resolution, quality-from-potency,
+        // craftWith entry point. Exposed at the top level (not under
+        // mechanics) so the chrome wheel can delegate to
+        // `game.system.api.alchemy.isBaseOfType` etc. without an extra
+        // namespace layer. Pre-existing chrome code checks for the
+        // function on this path and falls back to a local implementation
+        // if absent, so this works the same with or without the wiring.
+        alchemy: alchemyApi,
         mechanics: {
             readBook,
             stress: stressApi,

@@ -20,19 +20,19 @@
 .waypoint-label {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 4px 8px;
+    gap: 0.3125rem;
+    padding: 0.25rem 0.5rem;
     background:
-        radial-gradient(ellipse 140px 60px at 50% 0%, rgba(184, 148, 100, 0.13), transparent 75%),
+        radial-gradient(ellipse 8.75rem 3.75rem at 50% 0%, rgba(184, 148, 100, 0.13), transparent 75%),
         linear-gradient(180deg, rgba(22, 18, 13, 0.96) 0%, rgba(10, 9, 8, 0.96) 100%);
     border: 1px solid var(--wdm-amber-dim, #6e5224);
     border-radius: 0;
     box-shadow:
-        0 4px 12px rgba(0, 0, 0, 0.6),
+        0 0.25rem 0.75rem rgba(0, 0, 0, 0.6),
         0 0 0 1px rgba(0, 0, 0, 0.4),
         inset 0 0 0 1px rgba(184, 148, 100, 0.08);
     font-family: var(--wdm-font-display, "Bebas Neue", sans-serif);
-    font-size: 12px;
+    font-size: 0.75rem;
     letter-spacing: 0.10em;
     color: var(--wdm-ink-hi, #cac4b0);
     line-height: 1;
@@ -42,16 +42,16 @@
 }
 
 .waypoint-label .icon {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--wdm-amber-hi, #b89464);
 }
 .waypoint-label .img {
-    width: 14px;
-    height: 14px;
+    width: 0.875rem;
+    height: 0.875rem;
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
-    filter: brightness(1.05) drop-shadow(0 1px 0 rgba(0, 0, 0, 0.6));
+    filter: brightness(1.05) drop-shadow(0 0.0625rem 0 rgba(0, 0, 0, 0.6));
 }
 .waypoint-label .action-label {
     color: var(--wdm-amber-hi, #b89464);
@@ -61,7 +61,7 @@
 /* Headline number — the running total. Brighter amber, slightly larger
  * so it reads at a glance from across the map. */
 .waypoint-label .total-measurement {
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: var(--wdm-amber-bright, #c8a878);
     font-weight: 600;
 }
@@ -69,12 +69,12 @@
 /* The (+N) delta that follows the total — secondary, dimmer. */
 .waypoint-label .delta-measurement,
 .waypoint-label .delta-elevation {
-    font-size: 10px;
+    font-size: 0.625rem;
     color: var(--wdm-ink-dim, #8a857a);
     opacity: 0.85;
 }
 
 .waypoint-label .total-elevation {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--wdm-ink, #b0a994);
 }

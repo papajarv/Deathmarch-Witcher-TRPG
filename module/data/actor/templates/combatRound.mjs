@@ -47,6 +47,13 @@ export function combatRoundSchema() {
             runUsed:         new fields.BooleanField({ initial: false }),
             defenseCount:    new fields.NumberField({ initial: 0, integer: true, min: 0 }),
             activelyDodging: new fields.BooleanField({ initial: false }),
+            /* Reposition (defensive reaction, half-SPD per instance) has a
+             * per-ROUND cap of total SPD in meters — the sum of every
+             * reposition committed across defenses this round. Tracked
+             * here (not on movementMeters) because reposition fires on
+             * OTHER actors' turns and the movement budget is a per-turn
+             * concept; the reposition cap is per-round. */
+            repositionMeters: new fields.NumberField({ initial: 0, integer: true, min: 0 }),
             // Set when at least one reload action was taken this turn. If a
             // turn passes with this still false, banked reloadProgress on the
             // actor's weapons is zeroed at the next turn start (Slow Reload

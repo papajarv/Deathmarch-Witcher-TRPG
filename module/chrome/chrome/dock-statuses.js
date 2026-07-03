@@ -43,18 +43,18 @@ function installStatusPopover() {
       position: fixed;
       z-index: 9200;
       display: none;
-      max-width: 320px;
-      padding: 10px 14px 12px;
+      max-width: 20rem;
+      padding: 0.625rem 0.875rem 0.75rem;
       background:
-        radial-gradient(ellipse 280px 140px at 50% 0%, rgba(184,148,100,0.12), transparent 75%),
+        radial-gradient(ellipse 17.5rem 8.75rem at 50% 0%, rgba(184,148,100,0.12), transparent 75%),
         linear-gradient(180deg, rgba(22,18,13,0.98) 0%, rgba(10,9,8,0.98) 100%);
       background-color: rgba(10,9,8,0.98);
       border: 1px solid var(--wdm-amber-dim);
       border-radius: 2px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.85), inset 0 0 0 1px rgba(184,148,100,0.10);
+      box-shadow: 0 0.5rem 1.5rem rgba(0,0,0,0.85), inset 0 0 0 1px rgba(184,148,100,0.10);
       color: var(--wdm-ink-hi);
       font-family: var(--wdm-font-body);
-      font-size: 12px;
+      font-size: 0.75rem;
       line-height: 1.5;
       letter-spacing: 0.02em;
       text-align: left;
@@ -100,8 +100,8 @@ function positionPopover(anchor, pop) {
   pop.style.top = "0px";
   const pr = pop.getBoundingClientRect();
   let left = ar.left + ar.width / 2 - pr.width / 2;
-  let top = ar.top - pr.height - 8;        // 8px gap above the badge
-  // Clamp to viewport with 8px margin
+  let top = ar.top - pr.height - 8;        // 0.5rem gap above the badge
+  // Clamp to viewport with 0.5rem margin
   left = Math.max(8, Math.min(left, window.innerWidth - pr.width - 8));
   if (top < 8) top = ar.bottom + 8;        // flip below if no room above
   pop.style.left = `${left}px`;
@@ -140,7 +140,7 @@ export function injectStatusesRow() {
     "flex-wrap: nowrap",
     "align-items: center",
     "justify-content: flex-end",
-    "gap: 4px",
+    "gap: 0.25rem",
     "overflow: visible",
     "pointer-events: auto",
     "position: absolute",
@@ -376,9 +376,9 @@ function statusBadgeHTML(effect) {
   const badgeStyle = [
     "position: relative",
     "display: block",
-    "flex: 0 1 60px",
-    "min-width: 14px",
-    "max-width: 60px",
+    "flex: 0 1 3.75rem",
+    "min-width: 0.875rem",
+    "max-width: 3.75rem",
     "aspect-ratio: 1",
     "overflow: visible",
     "cursor: help"
@@ -415,7 +415,7 @@ function statusBadgeHTML(effect) {
       </svg>
       <img class="wou-status-icon" src="${escapeAttr(icon)}" alt="" draggable="false"
            style="position:absolute;top:50%;left:50%;width:73%;height:73%;transform:translate(-50%,-50%);border-radius:50%;object-fit:cover;border:1px solid rgba(140,133,121,0.45);"/>
-      ${total > 0 ? `<span class="wou-status-num" style="position:absolute;top:-2px;right:-1px;z-index:10;line-height:1;font-weight:700;white-space:nowrap;color:#e8e1cb;text-shadow:0 0 2px #000,0 0 3px #000,0 1px 0 #000;pointer-events:none;">${label}</span>` : ""}
+      ${total > 0 ? `<span class="wou-status-num" style="position:absolute;top:-0.125rem;right:-0.0625rem;z-index:10;line-height:1;font-weight:700;white-space:nowrap;color:#e8e1cb;text-shadow:0 0 2px #000,0 0 0.1875rem #000,0 1px 0 #000;pointer-events:none;">${label}</span>` : ""}
     </div>
   `;
 }

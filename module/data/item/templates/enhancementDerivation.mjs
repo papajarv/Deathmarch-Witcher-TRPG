@@ -1,3 +1,5 @@
+import { getActiveWeaponQualities, WEAPON_QUALITIES, ARMOR_LOCATION_COVERAGE, ARMOR_SLOTS } from "../../../setup/config.mjs";
+
 /**
  * Enhancement derivation — shared helpers that fold socketed enhancement
  * contributions into a weapon's / armor's *effective* stats.
@@ -67,6 +69,30 @@ export function deriveWeaponEffective(sys) {
         }
     }
 
+    /* Quality-driven reliability bonus (Meteorite = +5; GM-authored qualities
+     * with `reliabilityBonus` ride the same fold). Read AFTER the qualities
+     * set is finalized so a granted-by-enhancement Meteorite still adds its
+     * +5. Catalog read is sync; the helper falls back to the built-in
+     * defaults during init before settings are registered. */
+    const cat = getActiveWeaponQualities?.() ?? WEAPON_QUALITIES;
+    for (const q of qualities) {
+        reliabilityMax += Number(cat[q]?.reliabilityBonus) || 0;
+    }
+
+    /* Quality-driven bonus enhancement slots (Meteorite EO p.7: "if you
+     * don't use the alternate optional rules for monster susceptibilities,
+     * this quality instead grants the weapon an extra enchantment slot
+     * for runes, up to 3 total"). One extra slot when the active set
+     * includes any quality flagged `meteoriteExtraEnchantSlot`. */
+    let bonusSlots = 0;
+    for (const q of qualities) {
+        if (cat[q]?.meteoriteExtraEnchantSlot) bonusSlots += 1;
+    }
+    /* Cap at the difference between the weapon's authored slot count
+     * and the EO ceiling of 3 — never grant a 4th. */
+    const baseSlots = Number(sys.weaponEnhancement) || 0;
+    const bonusSlotsClamped = Math.max(0, Math.min(bonusSlots, 3 - baseSlots));
+
     return {
         accuracy,
         reliabilityMax,
@@ -75,6 +101,7 @@ export function deriveWeaponEffective(sys) {
         qualities:     [...qualities],
         qualityValues,
         enhancementCount: enh.length,
+        bonusSlots:    bonusSlotsClamped,
         modified: enh.length > 0
     };
 }
@@ -106,11 +133,21 @@ export function deriveArmorEffective(sys) {
         }
     }
 
-    // Bonus SP applies to every covered location (max > 0). Stays
-    // non-destructive: base {loc}Stopping is untouched.
+    /* Per-location SP, GATED by the `location` enum. Each piece carries
+     * its own value per slot (so a hauberk can be 10 torso / 5 arms),
+     * but only the locations the enum says are covered actually
+     * contribute. Uncovered slots are forced to 0 even if the document
+     * still has a non-zero {loc}Stopping from a past "Full" config the
+     * GM later switched. Coverage map is the shared
+     * `ARMOR_LOCATION_COVERAGE` from config.mjs. */
+    const covered = new Set(ARMOR_LOCATION_COVERAGE[sys.location] ?? []);
     const stopping = {};
     for (const loc of ARMOR_LOCATIONS) {
-        const baseVal = Number(sys[`${loc}Stopping`]) || 0;
+        if (!covered.has(loc)) {
+            stopping[loc] = { value: 0, max: 0 };
+            continue;
+        }
+        const baseVal = Number(sys[`${loc}Stopping`])    || 0;
         const baseMax = Number(sys[`${loc}MaxStopping`]) || 0;
         stopping[loc] = {
             value: baseMax > 0 ? baseVal + bonusSP : baseVal,

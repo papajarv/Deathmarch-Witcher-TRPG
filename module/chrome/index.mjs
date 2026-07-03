@@ -76,6 +76,8 @@ import { setupSkillsPanel } from "./chrome/skills-panel.js";
 import { setupGMPanel } from "./chrome/gm-panel.js";
 import { wireWeather } from "./chrome/weather.js";
 import { installParchments } from "./chrome/parchments.js";
+import { applyUIScale, installUIScaleWatcher } from "./setup/ui-scale.js";
+import { installPopupScale } from "./setup/popup-scale.js";
 
 /* ── Public surface (re-exported so main.mjs can expose to system.api) ── */
 export { openContainer, openContainerFloating };
@@ -143,8 +145,27 @@ export function wireChromeReady() {
 
     document.body.classList.add("witcher-ttrpg-death-march");
     applyFeatureClasses();
+    /* UI scale — set the --wdm-scale CSS var so rem-based sizes pick up the
+     * user's pick (or the auto-detected viewport/DPR scale) before any
+     * chrome injection measures DOM. */
+    applyUIScale();
+    installUIScaleWatcher();
     installGlobalListeners();
     migrateBestiarySchemaIfNeeded();
+
+    /* One-shot: if the world was created before the sourcePacks default
+     * seeded the system's own bestiary pack, and the GM has never picked
+     * source packs, populate it now so monster-lore books and the
+     * bestiary panel work without a manual first-run step. GM-only write. */
+    if (game.user?.isGM) {
+        try {
+            const cur = getSetting("bestiary.sourcePacks");
+            if (Array.isArray(cur) && cur.length === 0) {
+                game.settings.set(MODULE_ID, "bestiary.sourcePacks",
+                    ["witcher-ttrpg-death-march.bestiary"]);
+            }
+        } catch (_) { /* swallow — the panel still lets the GM populate manually */ }
+    }
 
     if (getSetting("feature.topChrome")) {
         injectTopBar();
@@ -155,6 +176,11 @@ export function wireChromeReady() {
         injectCharacterPanel();
         injectMapPanel();
         injectBestiaryPanel();
+        /* Popup scale hook — stamps `data-wdm-scaled="1"` on floating
+         * popouts after render, removes it on close so Foundry's
+         * close animation runs against an unscaled element (avoids
+         * the "grow → black → vanish" bug the pure-CSS scale had). */
+        installPopupScale();
     }
     if (getSetting("feature.hotbar")) {
         injectDock();
@@ -192,6 +218,21 @@ export function wireChromeReady() {
     };
     Hooks.on("updateUser",  (user)  => { if (user.id  === game.user.id)           scheduleRebindDock(); });
     Hooks.on("updateActor", (actor) => { if (actor.id === getAssignedActor()?.id) scheduleRebindDock(); });
+    // Unlinked tokens (most monsters) route actor flag/data updates through
+    // updateToken — setFlag writes to token.actorData and fires this hook
+    // instead of updateActor. Without listening here, the dock never refreshes
+    // for an unlinked monster's per-round state (ROF tally, etc.). Narrow to
+    // changes that touch actor data (`delta` in v13, `actorData` in v12) so
+    // position / vision / name updates during a drag don't queue a rebind
+    // per frame — the sig-cache would short-circuit them anyway, but skipping
+    // the schedule keeps per-frame allocation flat.
+    Hooks.on("updateToken", (tokenDoc, change) => {
+        if (!change) return;
+        const touchesActor = "delta" in change || "actorData" in change || "flags" in change;
+        if (!touchesActor) return;
+        const a = tokenDoc?.actor;
+        if (a && a.id === getAssignedActor()?.id) scheduleRebindDock();
+    });
     Hooks.on("createItem",  (item)  => { if (ownsItem(item))                      scheduleRebindDock(); });
     Hooks.on("updateItem",  (item)  => { if (ownsItem(item))                      scheduleRebindDock(); });
     Hooks.on("deleteItem",  (item)  => { if (ownsItem(item))                      scheduleRebindDock(); });
@@ -199,11 +240,38 @@ export function wireChromeReady() {
     Hooks.on("updateActiveEffect", (ae) => { if (ownsEffect(ae))                  scheduleRebindDock(); });
     Hooks.on("deleteActiveEffect", (ae) => { if (ownsEffect(ae))                  scheduleRebindDock(); });
     Hooks.on("updateMacro", scheduleRebindDock);
+    /* Combat Extended — refresh the dock when the master toggle or any
+     * per-subsystem toggle changes. Without this, the GM toggles a
+     * subsystem in the editor and the dock's Raise Shield button / guard
+     * indicator / warding tags stay stale until the next dock-touching
+     * event (selecting a token, updating an actor). Filter on the
+     * setting key so unrelated setting writes don't churn the dock. */
+    Hooks.on("updateSetting", (setting) => {
+        const key = setting?.key ?? "";
+        if (key === "witcher-ttrpg-death-march.combatExtendedSubsystems" ||
+            key === "witcher-ttrpg-death-march.homebrew.extendedCombat" ||
+            key === "witcher-ttrpg-death-march.combatActionsOverride") {
+            scheduleRebindDock();
+        }
+    });
     // World time advancing expires oil coatings (Core p.248: a blade oil lasts
     // 30 game-minutes). They live on the weapon as effects and expire on world
     // time, not combat rounds, so the GM-side sweep deletes any that have run
     // out; refreshing the dock then ticks the surviving bars down.
     Hooks.on("updateWorldTime", () => { sweepExpiredOilCoatings(); scheduleRebindDock(); });
+    /* Real-time wall-clock safety belt: a 60-second interval that re-runs
+     * the oil sweep + schedules a dock rebind. updateWorldTime is the
+     * primary path (and runs immediately on every game.time.advance —
+     * including those fired by time-flow), but a worldTime advance that
+     * fires before the dock finishes a prior rebind, or a paused world
+     * that then unpauses, can leave the bar stale until the next event.
+     * The sig-skip inside rebindDock makes the no-op case effectively
+     * free — only a real change to oil charges / worldTime remaining
+     * actually re-emits HTML. */
+    setInterval(() => {
+        try { sweepExpiredOilCoatings(); } catch (_) { /* sweep guard */ }
+        scheduleRebindDock();
+    }, 60 * 1000);
     // Entering/leaving combat (and each round/turn) flips how durations read —
     // wall-clock out of combat, rounds in combat (describeDuration keys off
     // game.combat.started). The weapon oil bar must re-render on those edges,

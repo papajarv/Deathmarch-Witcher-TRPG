@@ -56,7 +56,7 @@ test("Renders each pipeline stage that fires", () => {
   for (const re of [
     /Quen shield drained/,
     /Armor SP/,
-    /Damage Resistance halved/,
+    /Armor resists this damage type/,
     /vulnerable/,
     /Crit bonus/,
     /Location ×<b>3<\/b>/

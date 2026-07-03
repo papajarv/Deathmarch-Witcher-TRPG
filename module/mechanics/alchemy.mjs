@@ -37,17 +37,51 @@ const SYSTEM_ID = "witcher-ttrpg-death-march";
 /**
  * Resolve the base subschema for a given item.
  * Returns { baseType, baseMod, quality } even if the item has no base.
- */
+ *
+ * Storage layout (Alchemy Reborn):
+ *   alchemical : sys.alchemyBase.{enabled, baseType, baseMod}
+ *                (formalized schema field). Legacy top-level
+ *                sys.{baseType, baseMod} from witcher-alchemy-craft is
+ *                migrated to the nested shape by AlchemicalData.migrateData;
+ *                read here as a fallback so a half-migrated item still
+ *                resolves correctly.
+ *   food       : sys.alchemyBase.{enabled, baseType, baseMod}
+ *                (drinks → potion bases, ingredients → bomb / decoction
+ *                bases; the kind / baseType pairing is GM-set).
+ *   valuable   : sys.alchemyBase.{baseType, baseMod, quality}
+ *                Defensive read — there's no formal schema on valuables,
+ *                but pre-existing data from earlier code paths might
+ *                still exist.
+ *
+ * `enabled === false` collapses to baseType="" (and therefore quietly
+ * drops the base from the wheel) — gives the GM a quick switch without
+ * having to clear the baseType string. */
 function readBase(item) {
     const sys = item?.system;
     if (!sys) return { baseType: "", baseMod: 0, quality: "" };
-    // Alchemical bases store directly; valuables nest under alchemyBase.
-    if (item.type === "alchemical") {
-        return {
-            baseType: sys.baseType ?? "",
-            baseMod:  sys.baseMod  ?? 0,
-            quality:  sys.quality  ?? ""
-        };
+    if (item.type === "alchemical" || item.type === "food") {
+        const ab = sys.alchemyBase;
+        // Honor the explicit enable toggle; without it (or false) the
+        // base doesn't surface even if a baseType was authored.
+        if (ab && ab.enabled !== false && ab.baseType) {
+            return {
+                baseType: String(ab.baseType ?? ""),
+                baseMod:  Number(ab.baseMod) || 0,
+                quality:  String(ab.quality ?? "")
+            };
+        }
+        // Legacy alchemical: top-level baseType/baseMod, no nesting.
+        // Pre-AlchemicalData.migrateData state; once the doc has been
+        // saved through Foundry once the migration runs and the nested
+        // path wins above.
+        if (item.type === "alchemical" && sys.baseType) {
+            return {
+                baseType: String(sys.baseType ?? ""),
+                baseMod:  Number(sys.baseMod) || 0,
+                quality:  String(sys.quality ?? "")
+            };
+        }
+        return { baseType: "", baseMod: 0, quality: "" };
     }
     if (item.type === "valuable") {
         return {
@@ -136,7 +170,12 @@ export function qualityColour(quality) {
 export function getDiagramFlags(diagram) {
     const sys = diagram?.system ?? {};
     return {
-        outputNormal:    sys.outputNormal    ?? "",
+        /* Normal tier output is the same field as the diagram's Produced
+         * Item (system.associatedItem.uuid) — Phase-1 of Alchemy Reborn
+         * collapsed the standalone outputNormal field into associatedItem
+         * so legacy diagrams automatically have a Normal slot. Enhanced
+         * and Superior remain on their own UUID-only string fields. */
+        outputNormal:    sys.associatedItem?.uuid ?? "",
         outputEnhanced:  sys.outputEnhanced  ?? "",
         outputSuperior:  sys.outputSuperior  ?? "",
         potencyNormal:   sys.potencyNormal   ?? 0,
@@ -151,11 +190,44 @@ export function getIngredientPotency(item) {
     return item?.system?.potency ?? 0;
 }
 
-/** Substance the ingredient provides (component: substanceType). Mutagens
- *  are no longer ingredients, so they yield no substance. */
+/* Human-readable summary of an item's Alchemy Reborn base configuration.
+ * Returns null when the item isn't a brew base (or the toggle is off);
+ * otherwise returns { typeLabel, modSigned, summary, key } where:
+ *   typeLabel : localized base-type name ("Potion / Decoction base", …)
+ *   modSigned : signed string of the DC modifier ("+1" / "-2" / "0")
+ *   summary   : composed display line ("Potion / Decoction · -2 DC")
+ *   key       : the bare baseType key (used by callers for theming, e.g.
+ *               colour-coding the badge by base category).
+ * Used by item sheets and the inventory inspect window so the same line
+ * reads identically across surfaces. */
+export function baseSummaryFor(item) {
+    const { baseType, baseMod } = readBase(item);
+    if (!baseType) return null;
+    const typeKey = `WITCHER.AlchemyReborn.Base.Type.${
+        baseType.charAt(0).toUpperCase() + baseType.slice(1)
+    }`;
+    const typeLabel = game.i18n?.localize?.(typeKey) ?? baseType;
+    const n = Number(baseMod) || 0;
+    const modSigned = n > 0 ? `+${n}` : (n === 0 ? "0" : String(n));
+    const summary = game.i18n?.format?.(
+        "WITCHER.AlchemyReborn.Base.Display.Summary",
+        { type: typeLabel, mod: modSigned }
+    ) ?? `${typeLabel} · ${modSigned} DC`;
+    return { typeLabel, modSigned, summary, key: baseType };
+}
+
+/** Substance the ingredient provides. Reads three storage paths in priority
+ *  order (canonical, legacy alias, upstream alchemy-craft flag) so compendium
+ *  components carrying the substance on the flag — common for Witcher core
+ *  packs — still resolve. Lowercased so substance map lookups are
+ *  case-insensitive. */
 export function getIngredientSubstance(item) {
     if (!item?.system) return "";
-    return item.system.substance || item.system.substanceType || "";
+    const sub = item.system.substanceType
+            || item.system.substance
+            || item.flags?.["witcher-alchemy-craft"]?.substance
+            || "";
+    return String(sub).toLowerCase();
 }
 
 /**
@@ -334,21 +406,44 @@ async function consumeBase(baseItem) {
 
 export function getAppliedOil(weapon) {
     const oil = weapon?.system?.appliedOil;
-    if (!oil?.id) return null;
+    if (!oil?.name) return null;
     return { ...oil };
 }
 
+/* Headless oil-application — same canonical schema the chrome UI writes,
+ * so anything calling `game.system.api.alchemy.applyOilToWeapon(...)` from
+ * a macro or another module produces an identical coating. The chrome
+ * inventory layer has its own copy that ALSO handles the stack-peel +
+ * action-spend; this version is the lean "just write the snapshot" path
+ * that headless callers want. */
 export async function applyOilToWeapon(weapon, oil) {
     if (!weapon || !oil) return;
-    const ch = getBaseChargeInfo(oil);
+    const sys = oil.system ?? {};
+    const now = Number(game.time?.worldTime) || 0;
+    const alchemyRebornOn = isHomebrewEnabled?.("alchemyPotency");
+    /* Reborn: charges authored on the oil item (per source-sheet table,
+     * Normal=5 / Enhanced=10 / Superior=15). RAW: no charges, the
+     * oilDuration drives expiry instead. Default to 5 when the field is
+     * unset so a freshly-authored oil doesn't deplete on first hit. */
+    const oilMaxCharges = alchemyRebornOn
+        ? Math.max(1, Number(sys.oilCharges) || 5)
+        : 0;
+    const dur = sys.oilDuration ?? {};
+    const v = Number(dur.value) || 0;
+    const u = String(dur.units || "").toLowerCase();
+    const unitSecs = u.startsWith("d") ? 86400 : u.startsWith("h") ? 3600 : u.startsWith("m") ? 60 : 1;
+    const durationSecs = alchemyRebornOn ? 0 : (v > 0 ? v * unitSecs : 0);
     await weapon.update({
         "system.appliedOil": {
-            id:         oil.id,
-            name:       oil.name,
-            img:        oil.img ?? "",
-            effect:     oil.system?.effect ?? "",
-            charges:    ch?.current ?? (oil.system?.time ?? 1),
-            maxCharges: ch?.max ?? (oil.system?.time ?? 1)
+            id:             oil.id,
+            name:           oil.name,
+            img:            oil.img ?? "",
+            oilTarget:      String(sys.oilTarget ?? ""),
+            oilBonusDamage: Number(sys.oilBonusDamage) || 0,
+            appliedAt:      now,
+            expireAt:       durationSecs > 0 ? (now + durationSecs) : 0,
+            charges:        oilMaxCharges,
+            maxCharges:     oilMaxCharges
         }
     });
     // Consume one oil unit
@@ -360,10 +455,11 @@ export async function applyOilToWeapon(weapon, oil) {
 export async function deductOilCharge(weapon) {
     const oil = getAppliedOil(weapon);
     if (!oil) return;
-    const newCharges = oil.charges - 1;
+    const newCharges = Number(oil.charges) - 1;
     if (newCharges <= 0) {
         await weapon.update({ "system.appliedOil": {
-            id: "", name: "", img: "", effect: "", charges: 0, maxCharges: 0
+            id: "", name: "", img: "", oilTarget: "", oilBonusDamage: 0,
+            appliedAt: 0, expireAt: 0, charges: 0, maxCharges: 0
         }});
         ChatMessage.create({
             content: `${weapon.name} — ${oil.name} depleted.`
@@ -392,6 +488,7 @@ export const alchemyApi = Object.freeze({
     getAppliedOil,
     applyOilToWeapon,
     deductOilCharge,
+    baseSummaryFor,
     SUBSTANCES,
     BASE_TYPES
 });

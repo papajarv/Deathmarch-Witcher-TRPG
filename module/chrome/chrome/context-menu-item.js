@@ -25,6 +25,7 @@ import { doHarvest, openCarcassPopup } from "./harvest.js";
 import { encKey, bestiaryKeyFor, bumpResearchIfZero } from "../lib/bestiary.js";
 import { reloadWithPrompt } from "../lib/reload.js";
 
+import { t, tFormat } from "../lib/i18n.js";
 function escapeText(s) {
   return String(s ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
 }
@@ -128,10 +129,10 @@ export async function runCarcassAction(action, item, actor = null) {
          * harvest.js removeEntry). Otherwise destroy it now. */
         const leftover = item.flags?.[MODULE_ID]?.harvest?.contents;
         if (Array.isArray(leftover) && leftover.length > 0) {
-            ui.notifications?.info(`${item.name} — fully consumed, but still holds harvested loot. Open it to collect.`);
+            ui.notifications?.info(tFormat("WITCHER.Notify.Item.ConsumedHasLoot", { item: item.name }, "{item} — fully consumed, but still holds harvested loot. Open it to collect."));
             return;
         }
-        ui.notifications?.info(`${item.name} — fully consumed, destroyed.`);
+        ui.notifications?.info(tFormat("WITCHER.Notify.Item.ConsumedDestroyed", { item: item.name }, "{item} — fully consumed, destroyed."));
         await item.delete();
         return;
     }
@@ -160,28 +161,28 @@ export async function runCarcassAction(action, item, actor = null) {
  */
 async function doExtractMutagen(item, actor) {
     if (!actor) {
-        ui.notifications?.warn("Extract Mutagen must be triggered from a character sheet, not the sidebar.");
+        ui.notifications?.warn(t("WITCHER.Notify.Mutagen.NotSidebar", "Extract Mutagen must be triggered from a character sheet, not the sidebar."));
         return false;
     }
 
     if (typeof actor.findProfessionSlot !== "function") {
-        ui.notifications?.error(`System's profession-skill helper missing — cannot extract.`);
+        ui.notifications?.error(t("WITCHER.Notify.Mutagen.HelperMissing", `System's profession-skill helper missing — cannot extract.`));
         return false;
     }
     const slot = actor.findProfessionSlot(EXTRACT_SKILL_NAME);
     if (!slot) {
-        ui.notifications?.error(`${actor.name} doesn't know how to extract mutagens (no "${EXTRACT_SKILL_NAME}" profession skill).`);
+        ui.notifications?.error(tFormat("WITCHER.Notify.Mutagen.NoSkill", { actor: actor.name, skill: EXTRACT_SKILL_NAME }, "{actor} doesn't know how to extract mutagens (no \"{skill}\" profession skill)."));
         return false;
     }
 
     const monsterUuid = item.system?.monsterUuid || item.flags?.[MODULE_ID]?.[MONSTER_UUID_FLAG];
     if (!monsterUuid) {
-        ui.notifications?.error(`These remains aren't linked to a source monster.`);
+        ui.notifications?.error(t("WITCHER.Notify.Remains.NotLinked", `These remains aren't linked to a source monster.`));
         return false;
     }
     const monster = await fromUuid(monsterUuid);
     if (!monster) {
-        ui.notifications?.error(`The source monster could not be found (deleted or compendium not loaded).`);
+        ui.notifications?.error(t("WITCHER.Notify.Remains.MonsterMissing", `The source monster could not be found (deleted or compendium not loaded).`));
         return false;
     }
 
@@ -200,12 +201,12 @@ async function doExtractMutagen(item, actor) {
     }
     const mutagen = await fromUuid(mutagenUuid);
     if (!mutagen) {
-        ui.notifications?.error(`${monster.name}'s linked mutagen could not be found (deleted or unloaded).`);
+        ui.notifications?.error(tFormat("WITCHER.Notify.Mutagen.LinkMissing", { monster: monster.name }, "{monster}'s linked mutagen could not be found (deleted or unloaded)."));
         return false;
     }
 
     if (typeof actor.rollProfessionSkill !== "function") {
-        ui.notifications?.error(`System's profession-skill roll helper missing — cannot extract.`);
+        ui.notifications?.error(t("WITCHER.Notify.Mutagen.RollHelperMissing", `System's profession-skill roll helper missing — cannot extract.`));
         return false;
     }
 
@@ -227,9 +228,9 @@ async function doExtractMutagen(item, actor) {
         // Reveal the mutagen on this PC's bestiary entry for the monster
         // so the bestiary panel renders its name + description from now on.
         await revealMutagenInBestiary(actor, monster, mutagen);
-        ui.notifications?.info(`${actor.name} extracted ${mutagen.name} from ${item.name}.`);
+        ui.notifications?.info(tFormat("WITCHER.Notify.Mutagen.Extracted", { actor: actor.name, mutagen: mutagen.name, item: item.name }, "{actor} extracted {mutagen} from {item}."));
     } else {
-        ui.notifications?.info(`${actor.name} failed the extraction (rolled ${total} vs DC ${EXTRACT_DC}).`);
+        ui.notifications?.info(tFormat("WITCHER.Notify.Mutagen.ExtractFailed", { actor: actor.name, total: total, dc: EXTRACT_DC }, "{actor} failed the extraction (rolled {total} vs DC {dc})."));
     }
     /* The act of cutting the body open to attempt an extraction (pass or
      * fail) counts as observation — bump research 0 → 1 if it's still 0.
@@ -380,7 +381,7 @@ async function takeTrophy(item, actor = null) {
     if (owner) await owner.createEmbeddedDocuments("Item", [trophyData]);
     else       await Item.create(trophyData, { displaySheet: false });
     await item.setFlag(MODULE_ID, "trophyTaken", true);
-    ui.notifications?.info(`Trophy taken: "${monsterName} Trophy".`);
+    ui.notifications?.info(tFormat("WITCHER.Notify.Trophy.Taken", { name: monsterName }, "Trophy taken: \"{name} Trophy\"."));
 }
 
 /* The carcass (Harvest/Extract/Dissect/Open) and book (Study/Read/Review)
@@ -547,6 +548,227 @@ function registerWeaponReloadActions() {
         condition: (item) => !!item?.usesAmmo && item.hasChamber && item.isLoaded,
         callback: (item) => item.unload(),
         surfaces: { sidebar: false }
+    });
+}
+
+/* Food / drink portion-pouring. Uses our own food-and-drink mechanic
+ * (mechanics/foodAndDrink.mjs). Splits a charged source (Bottle of X /
+ * Plate of X) into a NON-charged single-portion item ("Glass of X" /
+ * "Portion of X") on the same actor and decrements the source by one
+ * charge. The portion's label prefix + optional icon override are
+ * authored on the source's item-sheet config view (system.pourLabel /
+ * system.pourIconCustom / system.pourIcon) — there's no separate
+ * "configure" context entry. */
+const DEFAULT_POUR_LABEL = { drink: "Glass", meal: "Portion", ingredient: "Portion" };
+
+/** Strip the source's container prefix so "Glass of X" reads cleanly
+ *  instead of "Glass of Bottle of X". */
+function strippedSourceName(name) {
+    return String(name ?? "").replace(/^(?:Bottle|Flask|Cask|Jug|Plate|Bowl|Tray|Pot)\s+of\s+/i, "");
+}
+
+/** True when this item is a `food`-type charged source with 2+ portions
+ *  left (1 = consume only, no pour). `expectedKind` is "drink" for the
+ *  Pour-a-Glass action; anything else (meal / ingredient) routes through
+ *  the Serve-a-Portion action. */
+function canPourFrom(item, expectedKind) {
+    if (!item || item.type !== "food") return false;
+    const charges = item.system?.charges;
+    if (!Number.isFinite(charges?.max) || charges.max <= 0) return false;
+    if (Number(charges.current ?? 0) < 2) return false;
+    const kind = item.system?.kind ?? "meal";
+    if (expectedKind === "drink") return kind === "drink";
+    return kind !== "drink";
+}
+
+/** Split one portion off `item` into a fresh NON-CHARGED single-portion
+ *  item on the same actor. Source decrements via consumeOneCharge so
+ *  stack-of-N-bottles split semantics behave like the rest of the
+ *  consume flow. */
+async function pourPortion(item, actor) {
+    if (item?.type !== "food") return;
+    const charges = item.system?.charges;
+    if (!Number.isFinite(charges?.max) || charges.max <= 0) {
+        ui.notifications?.warn(tFormat("WITCHER.Notify.Item.NoCharges", { item: item.name }, "{item} has no charges configured."));
+        return;
+    }
+    if (Number(charges.current ?? 0) < 2) {
+        ui.notifications?.warn(tFormat("WITCHER.Notify.Item.PourTooLow", { item: item.name }, "{item} doesn't have enough left to pour a portion (needs 2+ charges)."));
+        return;
+    }
+    const kind   = item.system?.kind ?? "meal";
+    const labelOverride = String(item.system?.pourLabel ?? "").trim();
+    const prefix  = labelOverride || (DEFAULT_POUR_LABEL[kind] ?? "Portion");
+    const newName = `${prefix} of ${strippedSourceName(item.name)}`;
+
+    /* Build the portion: clone source, drop charges entirely (portion is
+     * a dumb single-serving item, not a charged source — consuming it
+     * follows the base quantity-decrement path). Set qty 1, scale weight
+     * + cost down to one-portion shares, optionally swap the icon. */
+    const data = item.toObject();
+    delete data._id;
+    data.name = newName;
+    /* The icon override is the only place the GM-authored portion icon
+     * makes a difference. When off, the portion inherits the source's
+     * img. */
+    if (item.system?.pourIconCustom && String(item.system?.pourIcon ?? "").trim()) {
+        data.img = item.system.pourIcon;
+    }
+    /* Strip flags from peer modules (witcher-food-and-drink, alchemy
+     * craft, etc.) that might cache charge state, anchor timestamps, or
+     * other source-only metadata. The portion is a fresh single-serving
+     * item; only OUR namespace's flags survive (and the pour-config
+     * flags on those are blank-reset anyway via system fields below). */
+    if (data.flags) {
+        const ours = data.flags[MODULE_ID];
+        data.flags = ours ? { [MODULE_ID]: ours } : {};
+    }
+    data.system = {
+        ...(data.system ?? {}),
+        quantity: 1,
+        /* Reset charges to a "no ticker" state — the portion is an item
+         * without portions, NOT a 1/1 source. Setting both to 0
+         * disables the consume flow's charge path entirely, so eating /
+         * drinking the portion routes through the base quantity drop
+         * (qty 1 → 0 → item.delete). */
+        charges: { current: 0, max: 0 },
+        /* Reset freshness anchor — the portion is freshly poured "now",
+         * not aged from when the bottle was acquired. Shelf life carries
+         * over so the portion still spoils on its own schedule, but it
+         * starts counting from this moment via stampFreshnessAnchor on
+         * its first acquisition by an actor (already triggered by the
+         * addItem below). */
+        freshness: {
+            shelfLifeDays: Number(item.system?.freshness?.shelfLifeDays) || 0,
+            anchorTime:    null
+        },
+        /* The portion itself isn't a pourable source — clear the per-
+         * item pour config so it doesn't accidentally surface as one. */
+        pourLabel:      "",
+        pourIconCustom: false,
+        pourIcon:       ""
+    };
+    const max = Math.max(1, Number(charges.max) || 1);
+    if (Number.isFinite(Number(item.system?.weight))) {
+        data.system.weight = Number((Number(item.system.weight) / max).toFixed(4));
+    }
+    if (Number.isFinite(Number(item.system?.cost))) {
+        data.system.cost = Math.round(Number(item.system.cost) / max);
+    }
+
+    try {
+        if (typeof actor.addItem === "function") await actor.addItem(data, 1);
+        else await actor.createEmbeddedDocuments("Item", [data]);
+    } catch (err) {
+        console.warn(`${MODULE_ID} | pourPortion: add to actor failed`, err);
+        return;
+    }
+    try {
+        const { consumeOneCharge } = await import("../../mechanics/foodAndDrink.mjs");
+        await consumeOneCharge(item);
+    } catch (err) {
+        console.warn(`${MODULE_ID} | pourPortion: source decrement failed`, err);
+    }
+}
+
+/** Register the two pour-related actions. Authoring (pour label + icon
+ *  override) happens on the food item's sheet config view; no separate
+ *  context-menu configurator. */
+function registerFoodDrinkPourActions() {
+    registerItemAction({
+        name: "Pour a Glass",
+        icon: '<i class="fa-solid fa-wine-glass"></i>',
+        condition: (item, actor) => !!actor && canPourFrom(item, "drink"),
+        callback:  (item, actor) => pourPortion(item, actor),
+        surfaces:  { sidebar: false }
+    });
+    registerItemAction({
+        name: "Serve a Portion",
+        icon: '<i class="fa-solid fa-utensils"></i>',
+        condition: (item, actor) => !!actor && canPourFrom(item, "meal"),
+        callback:  (item, actor) => pourPortion(item, actor),
+        surfaces:  { sidebar: false }
+    });
+}
+
+/* Gift an item to another actor — opens a recipient picker, optionally
+ * splits a stack, then routes the transfer through the GM proxy so a
+ * player can gift to another player's PC without owning that PC. */
+function registerGiftItemAction() {
+    registerItemAction({
+        name: t("WITCHER.Dialog.Item.Gift", "Gift Item"),
+        icon: '<i class="fa-solid fa-gift"></i>',
+        /* Container items aren't giftable (would orphan their contents
+         * unless we recursively transfer — out of scope for v1). Same
+         * for any item without an actor parent (sidebar templates have
+         * no owner — handled via the surfaces gate below too). */
+        condition: (item, actor) => !!actor && item?.type !== "container",
+        callback: (item, actor) => openGiftDialog(item, actor),
+        surfaces: { sidebar: false }
+    });
+}
+
+/** Dialog: pick the recipient actor + quantity, then emit the gift. */
+async function openGiftDialog(item, sourceActor) {
+    const DialogV2 = foundry?.applications?.api?.DialogV2;
+    if (!DialogV2 || !item || !sourceActor) return;
+
+    /* Eligible recipients: every character actor in the world (the GM
+     * sees them all; players see ones they can see). Skip the source.
+     * Sorted by name for a stable list. */
+    const recipients = (game.actors?.contents ?? [])
+        .filter(a => a && a !== sourceActor && a.type === "character")
+        .filter(a => a.visible !== false)
+        .sort((a, b) => a.name.localeCompare(b.name));
+    if (!recipients.length) {
+        ui.notifications?.warn(t("WITCHER.Notify.Item.NoRecipients", "No eligible recipients found."));
+        return;
+    }
+
+    const stackQty = Math.max(1, Number(item.system?.quantity) || 1);
+    const recipientOpts = recipients
+        .map(a => `<option value="${a.uuid}">${escapeText(a.name)}</option>`)
+        .join("");
+
+    const content = `
+        <div class="wdm-gift-dialog" style="display:flex;flex-direction:column;gap:10px;padding:6px 2px;">
+            <div style="font-size:0.75rem;opacity:0.85;">Give <strong>${escapeText(item.name)}</strong> from <em>${escapeText(sourceActor.name)}</em> to:</div>
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:0.75rem;">
+                <span>Recipient</span>
+                <select name="recipient" autofocus>${recipientOpts}</select>
+            </label>
+            ${stackQty > 1 ? `
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:0.75rem;">
+                <span>Quantity (1–${stackQty})</span>
+                <input type="number" name="qty" value="${stackQty}" min="1" max="${stackQty}" step="1" />
+            </label>` : `<input type="hidden" name="qty" value="1" />`}
+        </div>`;
+
+    let choice;
+    try {
+        choice = await DialogV2.prompt({
+            window: { title: t("WITCHER.Dialog.Item.Gift", "Gift Item"), icon: "fa-solid fa-gift" },
+            content,
+            rejectClose: false,
+            ok: {
+                label: "Give",
+                icon: "fa-solid fa-gift",
+                callback: (_event, button) => ({
+                    recipientUuid: button.form?.elements?.recipient?.value ?? "",
+                    qty: Math.max(1, Math.min(stackQty, Number(button.form?.elements?.qty?.value) || 1))
+                })
+            }
+        });
+    } catch (_) { return; }
+    if (!choice?.recipientUuid) return;
+
+    const { emitGiftItem } = await import("../../setup/socketHook.mjs");
+    await emitGiftItem({
+        sourceActorUuid: sourceActor.uuid,
+        targetActorUuid: choice.recipientUuid,
+        itemId:          item.id,
+        quantity:        choice.qty,
+        fromUserId:      game.user?.id ?? null
     });
 }
 
@@ -785,7 +1007,7 @@ async function openChargeConfig(item) {
     const DialogV2 = foundry.applications.api.DialogV2;
 
     await DialogV2.wait({
-        window: { title: `Configure Charges — ${item.name}` },
+        window: { title: tFormat("WITCHER.Dialog.Item.Charges", { item: item.name }, "Configure Charges — {item}") },
         content: `
             <form>
                 <div class="form-group">
@@ -925,6 +1147,8 @@ export function registerItemContextMenu() {
     registerCarcassAndBookActions();
     registerWeaponDrawAction();
     registerWeaponReloadActions();
+    registerFoodDrinkPourActions();
+    registerGiftItemAction();
 
     // Sidebar hook — world items have no owning actor, so the registry's
     // actions act against the user's assigned character. The food-and-drink

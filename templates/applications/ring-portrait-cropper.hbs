@@ -14,7 +14,7 @@
     {{#if sourceImage}}
       <img class="wdm-rpc-image" data-img src="{{sourceImage}}" alt="" draggable="false" />
     {{else}}
-      <div class="wdm-rpc-empty">No portrait set on this actor.</div>
+      <div class="wdm-rpc-empty">{{localize 'WITCHER.App.RingPortraitCropper.Text.NoPortraitSetOnThisActor'}}</div>
     {{/if}}
     <svg class="wdm-rpc-mask" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
       <defs>
@@ -31,7 +31,7 @@
 
   <div class="wdm-rpc-controls">
     <label class="wdm-rpc-zoom">
-      <span>Zoom</span>
+      <span>{{localize 'WITCHER.App.RingPortraitCropper.Text.Zoom'}}</span>
       <input type="range" min="0.2" max="4" step="0.01" value="1" data-zoom />
     </label>
     <button type="button" data-action="reset">
