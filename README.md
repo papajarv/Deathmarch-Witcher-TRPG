@@ -8,7 +8,10 @@ If you'd rather run it closer to the book, almost all of the homebrew can be swi
 
 It runs on Foundry v14, built and tested against 14.363. It's English-only for now, and there's no build step — drop it in and it works.
 
-<img width="1280" height="800" alt="Death March Foundry VTT system overview" src="https://github.com/user-attachments/assets/adb832b2-0683-4034-9425-a87b8ea5a067" />
+# COMMUNITY TRANSLATORS WANTED
+
+<img width="1262" height="625" alt="Screenshot_20260718_034654" src="https://github.com/user-attachments/assets/700a3357-df5c-4bc1-aab0-4a91756374d4" />
+
 
 ---
 
