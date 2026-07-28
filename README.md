@@ -6,7 +6,7 @@ Playing Witcher on Foundry used to mean a clunky and barren base system plus a p
 
 If you'd rather run it closer to the book, almost all of the homebrew can be switched off.
 
-It runs on Foundry v14, built and tested against 14.363. It's English-only for now, and there's no build step — drop it in and it works.
+It runs on Foundry v14, built and tested against 14.363.
 
 # COMMUNITY TRANSLATORS WANTED
 
