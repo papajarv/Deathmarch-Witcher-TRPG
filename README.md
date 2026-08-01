@@ -62,7 +62,7 @@ These utilities include:
 
 Not only display, reworked the logic. You can only access gear in containers in combat, from weapons to consumables. You can quickdraw, stow things, etc.
 
-<img width="1280" height="800" alt="Death March inventory and equipment UI" src="https://github.com/user-attachments/assets/12fe9938-5229-433f-87fc-140cebdcd5a0" />
+<img width="2556" height="1323" alt="Screenshot_20260801_012813" src="https://github.com/user-attachments/assets/df5c2bfd-4ef4-4516-bf2e-5ded77a5cb4c" />
 
 ---
 
@@ -103,6 +103,11 @@ A visual aid for crafting items.
 If you have map items in your inventory, you may visualize them.
 
 ---
+
+## Full range of item classes!
+Weapons, Gear, Shields, Armor, Bombs, Food, Books, Maps, Perks, Professions, Races, Lootable Remains, you name it!
+<img width="1224" height="649" alt="Screenshot_20260801_013353" src="https://github.com/user-attachments/assets/e665978d-d6d3-47e1-85c5-acce4af48aab" />
+
 
 ## Mechanics
 
