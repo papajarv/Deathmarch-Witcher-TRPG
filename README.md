@@ -77,25 +77,17 @@ Not only display, reworked the logic. You can only access gear in containers in 
 
 Visual rework with IP spending, wounds (critical wounds which track with different states, penalties and heal over game time) and biography (character background stuff).
 
-<img width="1280" height="800" alt="Death March character sheet" src="https://github.com/user-attachments/assets/d1651706-5dc5-4587-b1b3-6972df0a5fe2" />
-
 ### A Journal
 
 For personal entries, relationships with NPCs, that sync with a auto-calculating timeline based on your age.
-
-<img width="1280" height="655" alt="Death March journal" src="https://github.com/user-attachments/assets/085ba571-7542-48d7-957b-f4b60fe8dd63" />
 
 ### Bestiary
 
 Includes research levels for monsters, encounter tracking, a learning system aswell as the option to dissect monsters to learn more about them.
 
-<img width="1280" height="655" alt="Death March bestiary" src="https://github.com/user-attachments/assets/4882e5a7-37e2-4725-9622-1935f47e4479" />
-
 ### Crafting Sreen
 
 A visual aid for crafting items.
-
-<img width="1280" height="655" alt="Death March crafting screen" src="https://github.com/user-attachments/assets/6e70f766-fe51-4269-8c3e-dc0178acb667" />
 
 ### Map
 
@@ -113,7 +105,7 @@ If you have map items in your inventory, you may visualize them.
 
 <p align="center">
   <img width="49%" alt="Alchemy" src="https://github.com/user-attachments/assets/13e77fa1-2bc0-4864-8f90-928b5c49251e" />
-  <img width="49%" alt="Bestiary" src="https://github.com/user-attachments/assets/3455cad0-cd46-44ff-98ea-d2f3ffc85876" />
+  <img width="49%" alt="Bestiary" src="https://github.com/user-attachments/assets/35309f08-520d-4083-b6d7-9048c02e3649" />
 </p>
 
 <p align="center">
@@ -127,30 +119,37 @@ If you have map items in your inventory, you may visualize them.
 Weapons, Gear, Shields, Armor, Bombs, Food, Books, Maps, Perks, Professions, Races, Lootable Remains, you name it!
 <img width="1224" height="649" alt="Screenshot_20260801_013353" src="https://github.com/user-attachments/assets/e665978d-d6d3-47e1-85c5-acce4af48aab" />
 
+---
 
-## Mechanics
-
-- Combat is tracked through an action budget off the bottom bar.
-- Weapon sheathing/drawing along with Fast Draw.
-- Manually harvesting mutagens and loot, aswell as dissection bestiary mechanic, off monster remain items (When monsters are marked defeated in combat, they create a remains item in the world item bar)
-- Complete list of item classes with two layers, visual and configuration.
-- Custom time and weather engine, can be turned off and used with module ones.
-- Effects go off system time.
-- Crafting requires appropriate tools. They go off name, so just have an item with the correct name.
-- Automatic potion threshhold.
-- Race items have a check that allows its actor to have a variable portrait depending on toxicity or other effects, accessed via top right corner of the top bar's character button.
-- Enhancements were designed to attach to weapons with real changes to their stats.
-- Monsters can be toggled as "mounts", have a control modifier set and have their portrait dragged unto the mount slot of the inventory UI to have access to their bags and gain the modifier as a riding bonus.
-- Dice Poker and Farkle :))))
-- Note Items that can be dragged on scene to look like contract postings, then swiped to player inventories
-- Merchant Actor with complex shop stock system that can be dragged on scene to have a shopfront for players
-
-And many more features! Feel free to explore :) They're genuinely too many to document.
+## Inbuilt Weather system!
 
 <p align="center">
-  <img width="49%" alt="Death March dice poker" src="https://github.com/user-attachments/assets/405b58ba-5e3f-459e-9aad-fa4f6ed59add" />
-  <img width="49%" alt="Death March farkle" src="https://github.com/user-attachments/assets/1d7bd9b4-8359-4bad-94e1-afd209a57cb0" />
+  <img width="29%" alt="Weather1" src="https://github.com/user-attachments/assets/c3ec7b7d-8d84-41a7-8a92-78b8341115d8" />
+  <img width="29%" alt="Weather2" src="https://github.com/user-attachments/assets/db3e2464-29bf-4bcb-be7b-f0bca8f6607b" />
 </p>
+
+<p align="center">
+  <img width="29%" alt="Weather3" src="https://github.com/user-attachments/assets/e39d927d-9b18-4ad0-acba-4c083a63fe38" />
+</p>
+
+---
+
+## Token Combat!
+
+<p align="center">
+  <img width="29%" alt="Death March dice poker" src="https://github.com/user-attachments/assets/39ac1177-b674-4fc9-8b9f-1100bcced4f7" />
+  <img width="29%" alt="Death March farkle" src="https://github.com/user-attachments/assets/7881d0bf-a402-471a-a17a-195e006e9e35" />
+</p>
+
+<p align="center">
+  <img width="29%" alt="Death March game screen" src="https://github.com/user-attachments/assets/a740218e-ee13-4c27-8b24-8e7d4da6e9c4" />
+  <img width="29%" alt="Death March game screen" src="https://github.com/user-attachments/assets/7a6b4c6a-c1b7-4164-875e-a8621417ca8c" />
+</p>
+
+---
+
+
+And many more features! Feel free to explore :) They're genuinely too many to document.
 
 <p align="center">
   <img width="49%" alt="Death March game screen" src="https://github.com/user-attachments/assets/92681ac1-d26b-41a5-aa85-a503fb6d7766" />
@@ -159,10 +158,11 @@ And many more features! Feel free to explore :) They're genuinely too many to do
 
 <p align="center">
   <img width="49%" alt="Death March game screen" src="https://github.com/user-attachments/assets/ce1cb307-8198-4c7d-aa15-664ca8dada24" />
+   <img width="49%" alt="Death March farkle" src="https://github.com/user-attachments/assets/1d7bd9b4-8359-4bad-94e1-afd209a57cb0" />
 </p>
 
 
----
+
 
 ## Homebrew is the whole point
 
