@@ -34,13 +34,22 @@ Bottom bar tracks:
 - Race
 - Some more stats and utility buttons depending if you are in combat or not
 
-<img width="2552" height="343" alt="Death March bottom bar" src="https://github.com/user-attachments/assets/5b1dc3c7-df29-4600-8708-9077010527d7" />
+
+<img width="1955" height="213" alt="Screenshot_20260801_014436" src="https://github.com/user-attachments/assets/6ba67887-6e91-4f84-8890-e17305a1d249" />
+
 
 The hotbar below it can recieve macros to be ran, weapons to be drawn/sheated, containers and consumables.
 
 Once the actor is in combat or a weapon is drawn, the bottom bar changes into combat mode.
 
 ---
+
+## Left and Right Bars, Foundries Utilities
+
+Anything native to foundry remains. Additionally, in the left bar you may see online players and assign characters to them by clicking on their name, aswell
+as monitoring your fps.
+
+<img width="973" height="485" alt="Screenshot_20260801_014937" src="https://github.com/user-attachments/assets/f88d0ab4-cfbe-4617-9667-db825e8e5593" />
 
 ## Top Bar
 
@@ -54,6 +63,8 @@ Top bar has:
 - Encumbrance
 - All the new interface utilities
 
+<img width="1953" height="115" alt="Screenshot_20260801_014646" src="https://github.com/user-attachments/assets/cb89b28b-a08f-4319-8197-5233c486e8a7" />
+
 These utilities include:
 
 ---
@@ -62,17 +73,11 @@ These utilities include:
 
 Not only display, reworked the logic. You can only access gear in containers in combat, from weapons to consumables. You can quickdraw, stow things, etc.
 
-<img width="2556" height="1323" alt="Screenshot_20260801_012813" src="https://github.com/user-attachments/assets/df5c2bfd-4ef4-4516-bf2e-5ded77a5cb4c" />
-
----
-
 ### Character Sheet
 
 Visual rework with IP spending, wounds (critical wounds which track with different states, penalties and heal over game time) and biography (character background stuff).
 
 <img width="1280" height="800" alt="Death March character sheet" src="https://github.com/user-attachments/assets/d1651706-5dc5-4587-b1b3-6972df0a5fe2" />
-
----
 
 ### A Journal
 
@@ -80,15 +85,11 @@ For personal entries, relationships with NPCs, that sync with a auto-calculating
 
 <img width="1280" height="655" alt="Death March journal" src="https://github.com/user-attachments/assets/085ba571-7542-48d7-957b-f4b60fe8dd63" />
 
----
-
 ### Bestiary
 
 Includes research levels for monsters, encounter tracking, a learning system aswell as the option to dissect monsters to learn more about them.
 
 <img width="1280" height="655" alt="Death March bestiary" src="https://github.com/user-attachments/assets/4882e5a7-37e2-4725-9622-1935f47e4479" />
-
----
 
 ### Crafting Sreen
 
@@ -96,11 +97,29 @@ A visual aid for crafting items.
 
 <img width="1280" height="655" alt="Death March crafting screen" src="https://github.com/user-attachments/assets/6e70f766-fe51-4269-8c3e-dc0178acb667" />
 
----
-
 ### Map
 
 If you have map items in your inventory, you may visualize them.
+
+<p align="center">
+  <img width="49%" alt="Inventory" src="https://github.com/user-attachments/assets/df5c2bfd-4ef4-4516-bf2e-5ded77a5cb4c" />
+  <img width="49%" alt="Journal1" src="https://github.com/user-attachments/assets/8fe580f1-069a-4a53-ae07-ddcd535a346e" />
+</p>
+
+<p align="center">
+  <img width="49%" alt="Journal3" src="https://github.com/user-attachments/assets/83f1c535-d03a-47dc-8848-c640bf26629d" />
+  <img width="49%" alt="Character" src="https://github.com/user-attachments/assets/5e340ce1-7d9b-4a3c-94ba-1717ef9b6fb1" />
+</p>
+
+<p align="center">
+  <img width="49%" alt="Alchemy" src="https://github.com/user-attachments/assets/13e77fa1-2bc0-4864-8f90-928b5c49251e" />
+  <img width="49%" alt="Bestiary" src="https://github.com/user-attachments/assets/3455cad0-cd46-44ff-98ea-d2f3ffc85876" />
+</p>
+
+<p align="center">
+  <img width="49%" alt="Map" src="https://github.com/user-attachments/assets/bfbf10c3-9779-4d43-9c7a-a3bdd99079e9" />
+</p>
+(Depicted Map of the Continent by Moreno Paissan https://ko-fi.com/s/1ea4b64570)
 
 ---
 
