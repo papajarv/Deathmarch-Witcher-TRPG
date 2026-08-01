@@ -190,11 +190,7 @@ Where that lives:
 - **Linux:** `~/.local/share/FoundryVTT/Data/systems/`
 - **macOS:** `~/Library/Application Support/FoundryVTT/Data/systems/`
 
-Alternatively, install it directly via Foundry by using the manifest url:
-
-```txt
-https://github.com/papajarv/Deathmarch-Witcher-TRPG/releases/download/1.0/system.json
-```
+Alternatively, install it directly via Foundry! Its in the system browser.
 
 Then make a world with it and you're off.
 
