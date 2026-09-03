@@ -1,0 +1,105 @@
+{{!-- Focus item sheet — a spellcasting focus.
+        DISPLAY  → Witcher-3 tooltip aesthetic (Focus / Greater Focus values)
+        CONFIG   → editable form (cog toggle, owners only)
+      Equip it in an armor slot; when a caster (whose profession Can Use Foci)
+      casts a spell they may cast through it: Focus reduces STA (min 1),
+      Greater Focus adds to the spellcasting roll. --}}
+
+<div class="wdm-item-sheet wdm-item-v2" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}{{localize 'WITCHER.Sheet.Item.Cog.BackToDisplay'}}{{else}}{{localize 'WITCHER.Sheet.Item.Cog.ConfigureItem'}}{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════ DISPLAY VIEW ════════════════ --}}
+  <div class="wdm-display-view">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">{{localize 'WITCHER.Sheet.Focus.Text.Focus'}}</div>
+        </div>
+      </header>
+
+      <ul class="wdm-w3-stats">
+        <li class="wdm-w3-stat is-positive">
+          <span class="val">−{{source.focus}}</span>
+          <span class="lbl">{{localize 'WITCHER.Sheet.Focus.Text.StaReduction'}}</span>
+        </li>
+        <li class="wdm-w3-stat is-positive">
+          <span class="val">+{{source.greaterFocus}}</span>
+          <span class="lbl">{{localize 'WITCHER.Sheet.Focus.Text.CastBonus'}}</span>
+        </li>
+      </ul>
+
+      {{#if source.description}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Focus.Text.Notes'}}</div>
+        <div class="wdm-w3-effects">{{{source.description}}}</div>
+      {{/if}}
+
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Note.Label.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="{{localize 'WITCHER.Sheet.Item.Text.Availability'}}">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Sheet.Focus.Tooltip.Value'}}"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ════════════════ CONFIG VIEW ════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Item.Cog.ConfigureItem'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Focus.Hint.FocusName'}}" />
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Focus.Text.Focus'}}</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Focus.Tooltip.FocusValue'}}">
+          <span>{{localize 'WITCHER.Sheet.Focus.Text.StaReduction'}}</span>
+          <input type="number" min="0" step="1" name="system.focus" value="{{source.focus}}" />
+        </label>
+        <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Focus.Tooltip.GreaterFocusValue'}}">
+          <span>{{localize 'WITCHER.Sheet.Focus.Text.CastBonus'}}</span>
+          <input type="number" min="0" step="1" name="system.greaterFocus" value="{{source.greaterFocus}}" />
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Note.Text.Details'}}</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Note.Label.Quantity'}}</span>
+          <input type="number" min="0" step="1" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Note.Label.WeightKg'}}</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Focus.Tooltip.Value'}}"><span>{{localize 'WITCHER.Sheet.Focus.Label.Value'}}</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Item.Text.Availability'}}</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        {{> "systems/witcher-ttrpg-death-march/templates/item/partials/flair-override.hbs" flairColor=source.flairColor}}
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Focus.Text.Notes'}}</div>
+      <textarea class="wdm-cfg-textarea" name="system.description">{{source.description}}</textarea>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+    </div>
+  </div>
+
+</div>

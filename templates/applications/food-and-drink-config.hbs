@@ -1,0 +1,105 @@
+{{!-- Food & Drink configuration form. Three sections — Decay, Hunger tier
+      thresholds, Drunk tier metadata. The outer `wdm-fdc-scroll` is the
+      scrollable region so the dialog can grow taller than the window without
+      hiding the footer / Save button. Styling lives in
+      styles/food-and-drink-config.css. --}}
+
+<div class="wdm-fdc">
+
+  <header class="wdm-fdc-head">
+    <h2><i class="fa-solid fa-utensils"></i> {{localize 'WITCHER.App.FoodAndDrinkConfig.Text.FoodDrinkConfiguration'}}</h2>
+    <p class="wdm-fdc-blurb">
+    {{localize 'WITCHER.App.FoodAndDrinkConfig.Blurb.Intro'}}
+  </p>
+  </header>
+
+  <div class="wdm-fdc-scroll">
+
+    <section class="wdm-fdc-section">
+      <div class="wdm-fdc-section-head">
+        <h3><i class="fa-solid fa-droplet-slash"></i> {{localize 'WITCHER.App.FoodAndDrinkConfig.Text.SatietyDecay'}}</h3>
+        <p class="wdm-fdc-section-hint">
+          {{localize 'WITCHER.App.FoodAndDrinkConfig.Blurb.SatietyDecay'}}
+        </p>
+      </div>
+      <div class="wdm-fdc-grid">
+        <label class="wdm-fdc-cell">
+          <span class="wdm-fdc-label">{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.BaseHour'}}</span>
+          <input type="number" name="decay.base" value="{{decay.base}}" min="0" step="1" />
+        </label>
+        <label class="wdm-fdc-cell">
+          <span class="wdm-fdc-label">{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.BodyDivisor'}}</span>
+          <input type="number" name="decay.bodyDivisor" value="{{decay.bodyDivisor}}" min="1" step="1" />
+        </label>
+        <label class="wdm-fdc-cell">
+          <span class="wdm-fdc-label">{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.CombatSatietyPctPerSta'}}</span>
+          <input type="number" name="decay.combatStaPerUnit" value="{{decay.combatStaPerUnit}}" min="0" max="1" step="0.0005" />
+          <small style="opacity:0.7;font-size:0.7rem;line-height:1.35;">{{localize 'WITCHER.App.FoodAndDrinkConfig.Hint.CombatSatietyPctPerSta'}}</small>
+        </label>
+      </div>
+    </section>
+
+    {{!-- Hunger-stage % thresholds were removed from the UI on 2026-07-20.
+          The defaults are the RAW spec (Full 75, Fed 50, Peckish 25, Hungry 0
+          → Famished depths below zero) and GMs weren't tweaking them; the
+          knobs added confusion without benefit. Stored values still carry
+          through so any world that DID customise them keeps its numbers,
+          but there's no editor entry point anymore. --}}
+
+    <section class="wdm-fdc-section">
+      <div class="wdm-fdc-section-head">
+        <h3><i class="fa-solid fa-glass-water"></i> {{localize 'WITCHER.App.FoodAndDrinkConfig.Text.DrunkTierMetadata'}}</h3>
+        <p class="wdm-fdc-section-hint">
+    {{localize 'WITCHER.App.FoodAndDrinkConfig.Blurb.DrunkTier'}}
+  <em>{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.StatusEffectsEditStatusEffects'}}</em>.
+        </p>
+      </div>
+      {{!-- Death chance column removed on 2026-07-20 — it was never a
+            per-tier tunable in practice (only Drunk-VIII carries a fatal
+            poisoning chance, hard-coded to 5% in FOOD_AND_DRINK_CONFIG_DEFAULTS
+            + baked into the Drunk-VIII effect description). The mechanic
+            still fires from the code default; there's just no editor. --}}
+      <table class="wdm-fdc-table wdm-fdc-table-drunk">
+        <thead>
+          <tr>
+            <th>{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.Tier'}}</th>
+            <th class="wdm-fdc-num">{{localize 'WITCHER.App.FoodAndDrinkConfig.Text.UnconsciousDc'}}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each drunkTiers}}
+            <tr>
+              <td><strong>Drunk {{this.roman}}</strong></td>
+              <td class="wdm-fdc-num">
+                {{#if this.isLethal}}
+                  <input type="number" name="drunkTiers.{{this.level}}.unconsciousDC" value="{{this.unconsciousDC}}" min="0" step="1" />
+                {{else}}
+                  <span class="wdm-fdc-na">—</span>
+                {{/if}}
+              </td>
+            </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </section>
+
+    {{!-- Chat toggles — per-GM preference for how noisy the food mechanic is
+          in the log. Spoilage notifications are the loudest recurring source
+          (fires on every day-skip that turns any tracked food); this checkbox
+          silences them without disabling the underlying spoilage mechanic. --}}
+    <section class="wdm-fdc-section">
+      <div class="wdm-fdc-section-head">
+        <h3>{{localize "WITCHER.App.FoodAndDrinkConfig.Section.Chat"}}</h3>
+        <p class="wdm-fdc-section-hint">
+          {{localize "WITCHER.App.FoodAndDrinkConfig.Section.ChatHint"}}
+        </p>
+      </div>
+      <label style="display:flex;align-items:center;gap:0.5rem;padding:0.25rem 0;">
+        <input type="checkbox" name="chat.spoilageNotifications" {{#if chat.spoilageNotifications}}checked{{/if}} />
+        <span>{{localize "WITCHER.App.FoodAndDrinkConfig.Chat.SpoilageNotifications"}}</span>
+      </label>
+    </section>
+
+  </div>
+
+</div>

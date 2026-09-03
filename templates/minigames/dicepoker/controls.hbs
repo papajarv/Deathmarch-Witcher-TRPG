@@ -1,0 +1,113 @@
+{{!-- Minimalist right rail floating over the scene: the pot, the current
+      phase's action (throw → keep/stand → reroll throw), and a help button.
+      Reuses the Farkle rail styling (wdm-fk-*). --}}
+<div class="wdm-fk-controls">
+    <div class="wdm-fk-rail">
+
+        <div class="wdm-fk-goal">
+            <span class="wdm-fk-goal-lbl">{{localize "WITCHER.DicePoker.pot"}}</span>
+            <span class="wdm-fk-goal-num">{{pot}}</span>
+        </div>
+
+        {{#if betting}}{{#if scores}}
+        <div class="wdm-dp-score" title="{{localize "WITCHER.DicePoker.bet.scoreTitle"}}">
+            <span class="wdm-dp-score-num">{{scores.me}}</span>
+            <span class="wdm-dp-score-sep">–</span>
+            <span class="wdm-dp-score-num">{{scores.opp}}</span>
+            {{#if continuous}}
+            <span class="wdm-dp-score-lbl">{{localize "WITCHER.DicePoker.bet.continuous"}}</span>
+            {{else}}
+            <span class="wdm-dp-score-lbl">{{localize "WITCHER.DicePoker.bet.handsToWin"}}{{target}}</span>
+            {{/if}}
+        </div>
+        {{else if handLimit}}
+        <div class="wdm-dp-score" title="{{localize "WITCHER.DicePoker.bet.scoreTitle"}}">
+            <span class="wdm-dp-score-lbl">{{localize "WITCHER.DicePoker.bet.handProgress"}} {{handNo}}/{{handLimit}}</span>
+        </div>
+        {{/if}}{{/if}}
+
+        <div class="wdm-fk-actions">
+            {{#if showRoll}}
+            <span class="wdm-fk-hint">
+                <i class="fa-solid fa-dice"></i> {{localize "WITCHER.DicePoker.board.rollHint"}}
+            </span>
+            {{/if}}
+
+            {{#if showBet}}
+            <span class="wdm-fk-hint">
+                <i class="fa-solid fa-coins"></i> {{localize "WITCHER.DicePoker.board.betHint"}}
+            </span>
+            {{#if bet.canCheck}}
+            <button type="button" class="wdm-fk-btn" data-action="check">
+                <i class="fa-solid fa-check"></i> {{localize "WITCHER.DicePoker.action.check"}}
+            </button>
+            {{/if}}
+            {{#if bet.canCall}}
+            <button type="button" class="wdm-fk-btn wdm-fk-btn-go" data-action="call">
+                <i class="fa-solid fa-equals"></i> {{bet.callLabel}}
+            </button>
+            {{/if}}
+            {{#if bet.canRaise}}
+            <button type="button" class="wdm-fk-btn" data-action="raiseBet">
+                <i class="fa-solid fa-arrow-up"></i> {{localize "WITCHER.DicePoker.action.raise"}} +{{bet.raiseStep}}
+            </button>
+            {{/if}}
+            <button type="button" class="wdm-fk-btn wdm-fk-btn-bad" data-action="fold">
+                <i class="fa-solid fa-flag"></i> {{localize "WITCHER.DicePoker.action.surrender"}}
+            </button>
+            {{/if}}
+
+            {{#if showSelect}}
+            <span class="wdm-fk-hint">
+                <i class="fa-solid fa-hand-pointer"></i> {{localize "WITCHER.DicePoker.board.selectHint"}}
+            </span>
+            <span class="wdm-dp-keepcount">{{localize "WITCHER.DicePoker.select.keeping"}} {{keepCount}} · {{localize "WITCHER.DicePoker.select.rerolling"}} {{rerollCount}}</span>
+            <button type="button" class="wdm-fk-btn" data-action="reroll">
+                <i class="fa-solid fa-rotate"></i> {{localize "WITCHER.DicePoker.action.reroll"}} ({{rerollCount}})
+            </button>
+            <button type="button" class="wdm-fk-btn wdm-fk-btn-go" data-action="stand">
+                <i class="fa-solid fa-hand"></i> {{localize "WITCHER.DicePoker.action.stand"}}
+            </button>
+            {{/if}}
+
+            {{#if showReroll}}
+            <span class="wdm-fk-hint">
+                <i class="fa-solid fa-dice"></i> {{localize "WITCHER.DicePoker.board.rerollHint"}}
+            </span>
+            {{/if}}
+
+            {{#if waitOpponent}}
+            <span class="wdm-fk-wait"><i class="fa-solid fa-hourglass-half fa-spin"></i> {{localize "WITCHER.DicePoker.wait.opponentTurn"}}</span>
+            {{/if}}
+
+            {{!-- The outcome is announced by the big board banner (#announceResult),
+                  fired only after the final dice land so it can't spoil. The rail
+                  keeps just the New Game button (solo) — no discreet result text. --}}
+            {{#if showResult}}{{#if canNewGame}}
+            <button type="button" class="wdm-fk-btn wdm-fk-btn-go" data-action="newGame">
+                {{localize "WITCHER.DicePoker.action.newGame"}}
+            </button>
+            {{/if}}{{/if}}
+        </div>
+
+        <button type="button" class="wdm-fk-help" data-action="showRules" title="{{localize "WITCHER.DicePoker.rules.title"}}">
+            <i class="fa-solid fa-circle-question"></i> {{localize "WITCHER.DicePoker.help"}}
+        </button>
+
+        {{#if canForfeit}}
+        <button type="button" class="wdm-fk-help wdm-fk-close" data-action="forfeit" title="{{localize "WITCHER.DicePoker.forfeit"}}">
+            <i class="fa-solid fa-flag"></i> {{localize "WITCHER.DicePoker.forfeit"}}
+        </button>
+        {{/if}}
+        {{#if canEndTable}}
+        <button type="button" class="wdm-fk-help wdm-fk-close" data-action="endTable" title="{{localize "WITCHER.DicePoker.lobby.endTable"}}">
+            <i class="fa-solid fa-flag-checkered"></i> {{localize "WITCHER.DicePoker.lobby.endTable"}}
+        </button>
+        {{/if}}
+        {{#if showClose}}
+        <button type="button" class="wdm-fk-help wdm-fk-close" data-action="close" title="{{localize "WITCHER.DicePoker.close"}}">
+            <i class="fa-solid fa-xmark"></i> {{localize "WITCHER.DicePoker.close"}}
+        </button>
+        {{/if}}
+    </div>
+</div>

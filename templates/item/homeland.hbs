@@ -1,0 +1,107 @@
+{{!-- Homeland item sheet — two-layer (RAW Core p.43-44):
+        DISPLAY  → Witcher 3 in-game tooltip aesthetic (player reads)
+        CONFIG   → editable form (cog toggle, owners only)
+      Teal accent (.is-homeland). A homeland's mechanical payload is a small
+      fixed bonus (RAW: +1 by region) carried as transferred ActiveEffects;
+      the display lists those bonuses, the config view manages them. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-homeland" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}{{localize 'WITCHER.Sheet.Item.Cog.BackToDisplay'}}{{else}}{{localize 'WITCHER.Sheet.Item.Cog.ConfigureItem'}}{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip layout
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">{{localize 'WITCHER.Sheet.Homeland.Text.Homeland'}}</div>
+        </div>
+      </header>
+
+      {{#if modifiers.length}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Homeland.Text.Bonus'}}</div>
+        <ul class="wdm-w3-stats">
+          {{#each modifiers}}
+            <li class="wdm-w3-stat">
+              <span class="val">{{this.value}}</span>
+              <span class="lbl">{{this.label}}</span>
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+      {{#if source.description}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Homeland.Text.Description'}}</div>
+        <div class="wdm-w3-effects">{{{source.description}}}</div>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — compact tech form.
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form wdm-cfg-paneled">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Homeland.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Homeland.Hint.HomelandEGTemeria'}}" />
+      </div>
+
+      {{!-- ── Bonus ───────────────────────────────────────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Homeland.Text.Bonus'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          <div class="wdm-cfg-panel-note">Applied to the character — RAW: +1 to a stat or skill.</div>
+          <div class="wdm-cfg-effects">
+            {{#if effects.length}}
+              <ul class="wdm-effect-list">
+                {{#each effects}}
+                  <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                    <div class="wdm-effect-head">
+                      <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                      <span class="wdm-effect-name">{{this.name}}</span>
+                      {{#if this.duration.label}}<span class="wdm-effect-duration">{{this.duration.label}}</span>{{/if}}
+                      <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                        <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                      </a>
+                      <a data-action="editEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Homeland.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+                      <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Homeland.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
+                    </div>
+                  </li>
+                {{/each}}
+              </ul>
+            {{else}}
+              <p class="wdm-empty">{{localize 'WITCHER.Sheet.Homeland.Text.NoBonusConfigured'}}</p>
+            {{/if}}
+            <button type="button" class="wdm-add-effect" data-action="createEffect">
+              <i class="fa-solid fa-plus"></i> {{localize 'WITCHER.Sheet.Homeland.Button.AddBonus'}}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {{!-- ── Lore & Source ───────────────────────────────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Homeland.Text.Description'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+          <textarea class="wdm-cfg-textarea" name="system.description" placeholder="{{localize 'WITCHER.Sheet.Homeland.Hint.WhereTheCharacterHailsFromAndWhatThatMea'}}">{{source.description}}</textarea>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+</div>

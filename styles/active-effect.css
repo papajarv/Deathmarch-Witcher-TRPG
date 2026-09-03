@@ -1,0 +1,375 @@
+/* Friendly ActiveEffect editor — the "changes" tab rendered by
+   WitcherActiveEffectConfig. Scoped to our class on the AE config app so
+   it doesn't touch other sheets. Tokens come from styles/tokens.css. */
+
+/* Custom Status tab — item-local clause authoring UI. Compact grids for
+   the stat/roll/derived rows so a full clause fits without scrolling. */
+body.witcher-ttrpg-death-march .wdm-cs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.375rem 0.5rem; }
+body.witcher-ttrpg-death-march .wdm-cs-row  { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; }
+body.witcher-ttrpg-death-march .wdm-cs-mini { display: flex; flex-direction: column; gap: 0.125rem; font-size: calc(0.75rem * var(--wdm-tf, 1)); }
+body.witcher-ttrpg-death-march .wdm-cs-mini > span { text-transform: uppercase; letter-spacing: 0.06em; color: var(--wdm-ink-dim, #8c8579); font-size: calc(0.6875rem * var(--wdm-tf, 1)); }
+body.witcher-ttrpg-death-march .wdm-cs-mini input { width: 100%; box-sizing: border-box; }
+
+/* Collapsible advanced sections. <details>/<summary> — click to expand.
+   Summary shows a lightweight count/preview so folded sections still hint
+   at their content ("Counts as (3)", "DoT (1d6 · fire)"). */
+body.witcher-ttrpg-death-march .wdm-cs-group {
+    border: 1px solid rgb(from var(--wdm-divider) r g b / 0.20);
+    border-radius: 0.25rem;
+    margin: 0.5rem 0;
+    background: rgba(20,16,12,0.35);
+}
+body.witcher-ttrpg-death-march .wdm-cs-group > summary {
+    padding: 0.375rem 0.625rem;
+    cursor: pointer;
+    font-family: var(--wdm-font-display, inherit);
+    font-size: calc(0.8125rem * var(--wdm-tf, 1));
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--wdm-amber-bright, #d8b056);
+    list-style: none;
+    user-select: none;
+}
+body.witcher-ttrpg-death-march .wdm-cs-group > summary::-webkit-details-marker { display: none; }
+body.witcher-ttrpg-death-march .wdm-cs-group > summary::before {
+    content: "▸";
+    display: inline-block;
+    margin-right: 0.375rem;
+    transition: transform var(--wdm-dur, 0.18s);
+    color: var(--wdm-ink-dim, #8c8579);
+}
+body.witcher-ttrpg-death-march .wdm-cs-group[open] > summary::before { transform: rotate(90deg); }
+body.witcher-ttrpg-death-march .wdm-cs-count {
+    margin-left: 0.5rem;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--wdm-ink-dim, #8c8579);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    opacity: 0.85;
+}
+body.witcher-ttrpg-death-march .wdm-cs-details-body { padding: 0.5rem 0.625rem 0.625rem; }
+
+/* Counts-as: checkbox chips laid out in a responsive grid — click-to-toggle,
+   no ctrl-click nonsense. Wide chips so status names fit on one line. */
+body.witcher-ttrpg-death-march .wdm-cs-checkgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: 0.25rem 0.5rem;
+    margin-top: 0.375rem;
+}
+body.witcher-ttrpg-death-march .wdm-cs-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid rgb(from var(--wdm-divider) r g b / 0.20);
+    border-radius: 0.25rem;
+    background: rgba(10,8,6,0.35);
+    cursor: pointer;
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    line-height: 1;
+    transition: border-color var(--wdm-dur, 0.18s), background var(--wdm-dur, 0.18s);
+}
+body.witcher-ttrpg-death-march .wdm-cs-chip:hover { border-color: var(--wdm-amber-dim, #9a7b3a); background: rgb(from var(--wdm-amber-hi) r g b / 0.10); }
+body.witcher-ttrpg-death-march .wdm-cs-chip:has(input:checked) {
+    border-color: var(--wdm-amber-bright, #d8b056);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.18);
+    color: var(--wdm-ink-hi, #f0e6d0);
+}
+body.witcher-ttrpg-death-march .wdm-cs-chip input[type="checkbox"] { margin: 0; flex: none; }
+body.witcher-ttrpg-death-march .wdm-cs-chip span { flex: 1 1 auto; }
+
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-changes-hint {
+  margin: 0 0 0.5rem;
+  font-size: calc(0.6875rem * var(--wdm-tf, 1));
+  color: var(--wdm-ink-dim, #b3a98f);
+  font-style: italic;
+}
+
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-changes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  /* Cap the action list and scroll within it — without this, adding many
+     rows grows the window unbounded. The right padding keeps the scrollbar
+     clear of each row's delete button (which sits at the row's right). */
+  max-height: 55vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0.25rem;
+}
+/* Themed thin scrollbar so the well reads as part of the editor. */
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-changes::-webkit-scrollbar {
+  width: 0.625rem;
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-changes::-webkit-scrollbar-thumb {
+  background: var(--wdm-amber-dim, #8a6d3b);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 0.375rem;
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-changes::-webkit-scrollbar-track {
+  background: rgb(from var(--wdm-bg) r g b / 0.35);
+}
+
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-change-row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.5rem 1.875rem 0.5rem 0.625rem;
+  background: rgb(from var(--wdm-bg) r g b / 0.35);
+  border: 1px solid rgb(from var(--wdm-divider) r g b / 0.18);
+  border-left: 2px solid var(--wdm-amber-dim, #8a6d3b);
+}
+
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-change-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-change-field > label {
+  flex: 0 0 4rem;
+  font-size: calc(0.625rem * var(--wdm-tf, 1));
+  letter-spacing: var(--wdm-track, 0.06em);
+  text-transform: uppercase;
+  color: var(--wdm-ink-dim, #b3a98f);
+  font-family: var(--wdm-font-display, inherit);
+}
+
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-change-field > select,
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-change-field > input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Free-text Target path + the condition expression read as raw data, so
+   they get the mono treatment to signal "this is a path / formula". */
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-target-input,
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-change-condition > input {
+  font-family: var(--wdm-font-mono, monospace);
+  font-size: calc(0.6875rem * var(--wdm-tf, 1));
+}
+
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-change-del {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  line-height: 1;
+  background: none;
+  border: none;
+  color: var(--wdm-ink-faint, #6f675a);
+  cursor: pointer;
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-change-del:hover {
+  color: var(--wdm-red-bright, #a25050);
+}
+
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-add-change {
+  margin-top: 0.625rem;
+  padding: 0.3125rem 0.75rem;
+  background: rgb(from var(--wdm-amber-hi) r g b / 0.10);
+  border: 1px solid var(--wdm-amber-dim, #8a6d3b);
+  color: var(--wdm-amber-hi, #e8c98f);
+  font-family: var(--wdm-font-display, inherit);
+  font-size: calc(0.625rem * var(--wdm-tf, 1));
+  letter-spacing: var(--wdm-track, 0.06em);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-add-change:hover {
+  background: rgb(from var(--wdm-amber-hi) r g b / 0.22);
+  color: var(--wdm-amber-bright, #f3dca6);
+}
+
+/* ── Logic tab — per-turn tick payload ──────────────────────────────── */
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-hint,
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-subhint {
+  margin: 0 0 0.5rem;
+  font-size: calc(0.6875rem * var(--wdm-tf, 1));
+  color: var(--wdm-ink-dim, #b3a98f);
+  font-style: italic;
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-subhint {
+  margin: 0.125rem 0 0;
+  font-size: calc(0.625rem * var(--wdm-tf, 1));
+}
+
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--wdm-font-display, inherit);
+  font-size: calc(0.6875rem * var(--wdm-tf, 1));
+  letter-spacing: var(--wdm-track, 0.06em);
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi, #e8c98f);
+  cursor: pointer;
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-toggle > input {
+  flex: 0 0 auto;
+}
+
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-fields {
+  margin-top: 0.625rem;
+  padding: 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: rgb(from var(--wdm-bg) r g b / 0.35);
+  border: 1px solid rgb(from var(--wdm-divider) r g b / 0.18);
+  border-left: 2px solid var(--wdm-amber-dim, #8a6d3b);
+}
+
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-field > label {
+  flex: 0 0 5.625rem;
+  font-size: calc(0.625rem * var(--wdm-tf, 1));
+  letter-spacing: var(--wdm-track, 0.06em);
+  text-transform: uppercase;
+  color: var(--wdm-ink-dim, #b3a98f);
+  font-family: var(--wdm-font-display, inherit);
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-field > select,
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-field > input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-through {
+  margin-top: 0.125rem;
+  font-size: calc(0.625rem * var(--wdm-tf, 1));
+}
+
+/* Hit-location picker — checkboxes styled as toggle buttons. */
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-loc-field {
+  align-items: flex-start;
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-loc-field > label {
+  margin-top: 0.25rem;
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-loc-grid {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-loc-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1875rem 0.5rem;
+  font-family: var(--wdm-font-display, inherit);
+  font-size: calc(0.625rem * var(--wdm-tf, 1));
+  letter-spacing: var(--wdm-track, 0.06em);
+  text-transform: uppercase;
+  color: var(--wdm-ink-dim, #b3a98f);
+  background: rgb(from var(--wdm-bg) r g b / 0.35);
+  border: 1px solid rgb(from var(--wdm-divider) r g b / 0.28);
+  border-radius: 0.1875rem;
+  cursor: pointer;
+  user-select: none;
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-loc-btn:hover {
+  border-color: var(--wdm-amber-dim, #8a6d3b);
+  color: var(--wdm-amber-hi, #e8c98f);
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-loc-btn.is-on {
+  color: var(--wdm-ink-strong, #1a1611);
+  background: var(--wdm-amber-hi, #e8c98f);
+  border-color: var(--wdm-amber-hi, #e8c98f);
+}
+/* The checkbox itself is hidden; the label IS the button. */
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-loc-btn > input {
+  position: absolute;
+  width: 0.0625rem;
+  height: 0.0625rem;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-logic-section {
+  margin: 1rem 0 0.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgb(from var(--wdm-divider) r g b / 0.18);
+  font-family: var(--wdm-font-display, inherit);
+  font-size: calc(0.6875rem * var(--wdm-tf, 1));
+  letter-spacing: var(--wdm-track, 0.06em);
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi, #e8c98f);
+}
+
+/* ── Unified Effects tab — per-row action selector ──────────────────── */
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-action-type {
+  padding-bottom: 0.375rem;
+  margin-bottom: 0.125rem;
+  border-bottom: 1px solid rgb(from var(--wdm-divider) r g b / 0.18);
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-action-type > select {
+  font-family: var(--wdm-font-display, inherit);
+  font-size: calc(0.6875rem * var(--wdm-tf, 1));
+  letter-spacing: var(--wdm-track, 0.06em);
+  text-transform: uppercase;
+  color: var(--wdm-amber-hi, #e8c98f);
+}
+
+/* ── AE Target field: input + "browse all parameters" button ─────────────── */
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-target-row { display: flex; gap: 0.25rem; align-items: center; }
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-target-row .wdm-target-input { flex: 1 1 auto; min-width: 0; }
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-target-browse {
+  flex: 0 0 auto; width: 1.625rem; height: 1.625rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--wdm-bg-deep); color: var(--wdm-amber-dim);
+  border: 1px solid var(--wdm-amber-dim); border-radius: 0.1875rem; cursor: pointer;
+}
+.application.active-effect-config.witcher-ttrpg-death-march .wdm-target-browse:hover { color: var(--wdm-amber-bright); }
+
+/* ── Parameter picker dialog — self-scoped to the dialog's own class so it
+      doesn't depend on the body / app-element scope ─────────────────────── */
+/* Bound the whole DialogV2 chain (.window-content > form > .dialog-content)
+   so the inner list — not the window — is what scrolls. */
+.wdm-target-picker-dialog .window-content { display: flex; flex-direction: column; min-height: 0; }
+.wdm-target-picker-dialog form.dialog-form { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+.wdm-target-picker-dialog .dialog-content { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+.wdm-target-picker-dialog .wdm-target-picker { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 0.5rem; }
+.wdm-target-picker-dialog .wdm-tp-bar { flex: 0 0 auto; display: flex; gap: 0.375rem; }
+.wdm-target-picker-dialog .wdm-tp-cat { flex: 0 0 auto; max-width: 45%; }
+.wdm-target-picker-dialog .wdm-tp-search { flex: 1 1 auto; min-width: 0; }
+.wdm-target-picker-dialog .wdm-tp-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 0.125rem; }
+.wdm-target-picker-dialog .wdm-tp-group { margin-bottom: 0.625rem; }
+.wdm-target-picker-dialog .wdm-tp-group-label {
+  font-family: var(--wdm-font-display, inherit); text-transform: uppercase; letter-spacing: 0.1em;
+  font-size: calc(0.6875rem * var(--wdm-tf, 1)); font-weight: 700; color: var(--wdm-amber-bright, #d8b056);
+  border-bottom: 1px solid var(--wdm-amber-dim, #9a7b3a);
+  padding: 0.1875rem 0.125rem; margin-bottom: 0.25rem;
+  position: sticky; top: 0; background: var(--wdm-bg-deep, #14110d); z-index: 1;
+}
+/* Stack label over path so neither overflows the row (long combatMods keys). */
+.wdm-target-picker-dialog .wdm-tp-opt {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.0625rem; width: 100%;
+  box-sizing: border-box;
+  padding: 0.25rem 0.5rem; margin: 0.0625rem 0; background: transparent; border: 1px solid transparent;
+  color: var(--wdm-ink, #d8cbb4); text-align: left; cursor: pointer; border-radius: 2px; font-size: calc(0.75rem * var(--wdm-tf, 1));
+}
+.wdm-target-picker-dialog .wdm-tp-opt:hover { background: rgba(168,132,80,0.14); border-color: var(--wdm-amber-dim, #9a7b3a); }
+.wdm-target-picker-dialog .wdm-tp-opt.is-current { border-color: var(--wdm-amber-bright, #d8b056); }
+.wdm-target-picker-dialog .wdm-tp-opt-label { width: 100%; overflow-wrap: anywhere; }
+.wdm-target-picker-dialog .wdm-tp-opt-key { width: 100%; color: var(--wdm-ink-dim, #8c8579); font-size: calc(0.625rem * var(--wdm-tf, 1)); opacity: 0.75; word-break: break-all; }
+
+/* Custom Status tab — item-local clause authoring UI (activeEffect config). */
+.witcher-ttrpg-death-march .wdm-cs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.375rem 0.5rem; }
+.witcher-ttrpg-death-march .wdm-cs-row  { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; }
+.witcher-ttrpg-death-march .wdm-cs-mini { display: flex; flex-direction: column; gap: 0.125rem; font-size: calc(0.75rem * var(--wdm-tf, 1)); }
+.witcher-ttrpg-death-march .wdm-cs-mini > span { text-transform: uppercase; letter-spacing: 0.06em; color: var(--wdm-ink-dim, #8c8579); font-size: calc(0.6875rem * var(--wdm-tf, 1)); }
+.witcher-ttrpg-death-march .wdm-cs-mini input { width: 100%; box-sizing: border-box; }

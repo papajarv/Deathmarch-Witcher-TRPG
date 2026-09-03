@@ -1,0 +1,243 @@
+{{!-- Token Stealth Configuration — GM only.
+
+      Organised by the QUESTION each group answers rather than by which
+      variable it sets, because the two dials people actually reach for
+      (how far, how long) are independent by design and everything else is
+      a refinement of one of them.
+
+      Every field here is read by the live model. The legacy passive-vs-roll
+      model's controls — range bands, vision zones, coverage mods, base sight —
+      were removed with that model. --}}
+<div class="wdm-stealth-config-body wdm-stress-config-body">
+
+  <header class="wdm-se-head">
+    <h2><i class="fa-solid fa-user-ninja"></i> {{localize 'WITCHER.App.StealthConfig.Title'}}</h2>
+    <p class="wdm-se-blurb">Each watcher projects a <b>cone</b> whose size is fixed
+      by your Stealth against their Awareness, plus the light and weather. Inside
+      that cone you roll Stealth once per tick — guards never roll. Missing the
+      roll fills their eye; a full eye means they've found you.</p>
+  </header>
+
+  {{!-- ================= CORE ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-toggle-on"></i> {{localize 'WITCHER.App.StealthConfig.Section.Core'}}</summary>
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="enabled" data-config-key="enabled" {{#if values.enabled}}checked{{/if}} />
+        <span><b>Enable stealth</b><br>
+          <small class="wdm-sc-help">Off = no checks, no cones, no HUD. Existing stealth states are kept.</small></span>
+      </label>
+      <label class="wdm-se-check">
+        <input type="checkbox" name="crossLevelDetection" data-config-key="crossLevelDetection" {{#if values.crossLevelDetection}}checked{{/if}} />
+        <span><b>See between floors</b><br>
+          <small class="wdm-sc-help">Whether watchers on another level can spot you.</small></span>
+      </label>
+      <label class="wdm-se-check">
+        <input type="checkbox" name="debug" data-config-key="debug" {{#if values.debug}}checked{{/if}} />
+        <span><b>Debug output</b><br>
+          <small class="wdm-sc-help">Verbose GM logging. <code>wdmStealthWhy()</code> in the console prints the full breakdown per watcher.</small></span>
+      </label>
+    </div>
+  </details>
+
+  {{!-- ================= HOW FAR ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-eye-low-vision"></i> How far people get noticed</summary>
+    <p class="wdm-se-blurb">These set the <b>size of the cone</b>. None of them
+      change how long you survive once inside it.</p>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>Notice distance (m)</span>
+        <input type="number" step="1" min="1" name="dBaseMetres" data-config-key="dBaseMetres" value="{{values.dBaseMetres}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">The reach of an average watcher
+        against an average sneak, in daylight, looking straight at them. Everything
+        below scales this. Raise if people cross open ground unnoticed; lower if
+        cones swamp the map.</small>
+    </div>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>Darkness strength</span>
+        <input type="number" step="0.05" min="0.01" max="0.5" name="lightStep" data-config-key="lightStep" value="{{values.lightStep}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">Reach removed per step of
+        darkness. 0.2 → dim −1 keeps 80%, dim −2 60%, dim −3 40%, darkness 20%,
+        pitch black nothing. Night Vision waives the dim tiers outright; Improved
+        also waives darkness; Dark Vision sees in pitch out to its own range.</small>
+    </div>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>Skill weight</span>
+        <input type="number" step="0.01" min="1.01" name="skillBase" data-config-key="skillBase" value="{{values.skillBase}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">Cone size per point of
+        (their Awareness − your Stealth). 1.12 means every 5 points roughly halves
+        it. Deliberately capped between ½× and 2× — your Stealth is <i>also</i> in
+        the roll, and letting it swing the cone as well made high Stealth
+        untouchable.</small>
+    </div>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>Night sight cap (m)</span>
+        <input type="number" step="1" min="1" name="nightCeilingMetres" data-config-key="nightCeilingMetres" value="{{values.nightCeilingMetres}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">Nobody notices anyone beyond
+        this at night, however brightly lit they are. Darkvision overrides it —
+        it's a purchased ability to see further.</small>
+    </div>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>Vision arc (°)</span>
+        <input type="number" step="5" min="1" max="360" name="defaultVisionAngleDeg" data-config-key="defaultVisionAngleDeg" value="{{values.defaultVisionAngleDeg}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">Cone width for tokens with no
+        vision angle set.</small>
+    </div>
+
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="clipOverlayToOwnFov" data-config-key="clipOverlayToOwnFov" {{#if values.clipOverlayToOwnFov}}checked{{/if}} />
+        <span><b>Hide cones in your own blind spot</b><br>
+          <small class="wdm-sc-help">On: the overlay is clipped to what your
+            selected character can actually see, so nothing is drawn behind
+            them. Off: cones show all around you.</small></span>
+      </label>
+      <label class="wdm-se-check">
+        <input type="checkbox" name="fullCircleIsUnset" data-config-key="fullCircleIsUnset" {{#if values.fullCircleIsUnset}}checked{{/if}} />
+        <span><b>Treat 360° as "not configured"</b><br>
+          <small class="wdm-sc-help">On: a token left at Foundry's default 360°
+            uses the arc above, instead of projecting a full circle. Off: 360°
+            is taken literally. The per-token True Angle flag always wins.</small></span>
+      </label>
+    </div>
+  </details>
+
+  {{!-- ================= HOW LONG ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-hourglass-half"></i> How long you last inside one</summary>
+    <p class="wdm-se-blurb">These decide what happens <b>inside</b> the cone. None
+      of them change its size.</p>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>Exposure to spot</span>
+        <input type="number" step="1" min="1" name="threshold" data-config-key="threshold" value="{{values.threshold}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">A failed roll adds however much
+        it missed by. At this total the watcher has you. Raise if people are caught
+        too fast; lower if guards feel oblivious.</small>
+    </div>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>Forget rate</span>
+        <input type="number" step="1" min="0" name="exposureDecayPerTick" data-config-key="exposureDecayPerTick" value="{{values.exposureDecayPerTick}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">Suspicion drained per tick once
+        you're out of their cone.</small>
+    </div>
+
+    <p class="wdm-se-blurb" style="margin-top:.5rem"><b>Depth penalties.</b> How
+      much your roll suffers by how deep into the cone you stand. Steep on purpose
+      — without it, a high Stealth score is untouchable at arm's length.</p>
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled"><span>Outer</span>
+        <input type="number" step="1" name="tierModifiers.outer" data-config-key="tierModifiers.outer" value="{{values.tierModifiers.outer}}" /></label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled"><span>Mid</span>
+        <input type="number" step="1" name="tierModifiers.mid" data-config-key="tierModifiers.mid" value="{{values.tierModifiers.mid}}" /></label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled"><span>Inner</span>
+        <input type="number" step="1" name="tierModifiers.inner" data-config-key="tierModifiers.inner" value="{{values.tierModifiers.inner}}" /></label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled"><span>Core</span>
+        <input type="number" step="1" name="tierModifiers.core" data-config-key="tierModifiers.core" value="{{values.tierModifiers.core}}" /></label>
+    </div>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>Point blank (m)</span>
+        <input type="number" step="0.5" min="0" name="pointBlankMetres" data-config-key="pointBlankMetres" value="{{values.pointBlankMetres}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">Inside this you're seen with no
+        roll at all — proximity is a fact, not a contest. Pitch darkness is the one
+        exception.</small>
+    </div>
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="pointBlankAutoSpot" data-config-key="pointBlankAutoSpot" {{#if values.pointBlankAutoSpot}}checked{{/if}} />
+        <span><b>Point blank is automatic</b><br>
+          <small class="wdm-sc-help">Off = a brutal penalty instead of a certainty,
+            so an extraordinary sneak can try it.</small></span>
+      </label>
+    </div>
+  </details>
+
+  {{!-- ================= WHAT HELPS YOU ================= --}}
+  <details class="wdm-se-group">
+    <summary><i class="fa-solid fa-shield-halved"></i> What helps you hide</summary>
+    <p class="wdm-se-blurb">Bonuses added to your roll. Higher = better hidden.</p>
+
+    <p class="wdm-se-blurb"><b>Cover</b> — by how much of you is visible.</p>
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled"><span>In the open</span>
+        <input type="number" step="1" name="coverBonuses.exposed" data-config-key="coverBonuses.exposed" value="{{values.coverBonuses.exposed}}" /></label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled"><span>¾ visible</span>
+        <input type="number" step="1" name="coverBonuses.threeQuarter" data-config-key="coverBonuses.threeQuarter" value="{{values.coverBonuses.threeQuarter}}" /></label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled"><span>Half</span>
+        <input type="number" step="1" name="coverBonuses.half" data-config-key="coverBonuses.half" value="{{values.coverBonuses.half}}" /></label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled"><span>Quarter</span>
+        <input type="number" step="1" name="coverBonuses.quarter" data-config-key="coverBonuses.quarter" value="{{values.coverBonuses.quarter}}" /></label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled"><span>A sliver</span>
+        <input type="number" step="1" name="coverBonuses.sliver" data-config-key="coverBonuses.sliver" value="{{values.coverBonuses.sliver}}" /></label>
+    </div>
+
+    <p class="wdm-se-blurb"><b>Movement</b> — measured from ground covered per tick,
+      never declared.</p>
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled"><span>Still</span>
+        <input type="number" step="1" name="paceBonuses.still" data-config-key="paceBonuses.still" value="{{values.paceBonuses.still}}" /></label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled"><span>Creeping</span>
+        <input type="number" step="1" name="paceBonuses.creep" data-config-key="paceBonuses.creep" value="{{values.paceBonuses.creep}}" /></label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled"><span>Walking</span>
+        <input type="number" step="1" name="paceBonuses.walk" data-config-key="paceBonuses.walk" value="{{values.paceBonuses.walk}}" /></label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled"><span>Running</span>
+        <input type="number" step="1" name="paceBonuses.run" data-config-key="paceBonuses.run" value="{{values.paceBonuses.run}}" /></label>
+    </div>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>Prone</span>
+        <input type="number" step="1" name="postureProne" data-config-key="postureBonuses.prone" value="{{values.postureProne}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">Applied while the token has the
+        Prone status. Darkness is handled by the light ladder above, not here.</small>
+    </div>
+  </details>
+
+  {{!-- ================= FEEDBACK ================= --}}
+  <details class="wdm-se-group">
+    <summary><i class="fa-solid fa-comment"></i> Feedback</summary>
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="rollChatCard" data-config-key="rollChatCard" {{#if values.rollChatCard}}checked{{/if}} />
+        <span><b>Post each tick's rolls</b><br>
+          <small class="wdm-sc-help">One card per tick showing the roll, the DC and
+            every modifier. Watchers are not named — the DC says "this one is
+            sharp" without pointing him out on the map.</small></span>
+      </label>
+      <label class="wdm-se-check">
+        <input type="checkbox" name="spottedChatCard" data-config-key="spottedChatCard" {{#if values.spottedChatCard}}checked{{/if}} />
+        <span><b>Announce being spotted</b></span>
+      </label>
+      <label class="wdm-se-check">
+        <input type="checkbox" name="hideConeWhenSpotted" data-config-key="hideConeWhenSpotted" {{#if values.hideConeWhenSpotted}}checked{{/if}} />
+        <span><b>Hide the cone once spotted</b><br>
+          <small class="wdm-sc-help">Their eye stays red either way.</small></span>
+      </label>
+    </div>
+  </details>
+
+</div>

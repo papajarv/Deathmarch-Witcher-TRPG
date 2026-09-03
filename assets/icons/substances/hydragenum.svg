@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Hydragenum">
+  <mask id="hydragenum-cut">
+    <circle cx="50" cy="50" r="48" fill="#fff"/>
+    <line x1="5" y1="5" x2="95" y2="95" stroke="#000" stroke-width="10" stroke-linecap="butt"/>
+    <line x1="95" y1="5" x2="5" y2="95" stroke="#000" stroke-width="10" stroke-linecap="butt"/>
+  </mask>
+  <circle cx="50" cy="50" r="48" fill="#5e72a4" mask="url(#hydragenum-cut)"/>
+</svg>

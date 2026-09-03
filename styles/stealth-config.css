@@ -1,0 +1,144 @@
+/* stealth-config — visual polish for the Token Stealth settings form.
+ * Layered on top of the shared wdm-se-* form primitives defined in
+ * statuses.css; only add rules for elements/hierarchies that don't
+ * already have base styling that fits. */
+
+body.witcher-ttrpg-death-march .wdm-stealth-config-body {
+  /* Comfortable overall padding so section rows don't crash into the
+   * window chrome. Matches the stress-config visual weight. */
+  padding: 0.25rem 0.35rem 0.75rem;
+}
+
+/* Scroll wrapper — the form body has more content than the window
+ * caps at, so let the inner container scroll independently of the
+ * header/footer. Foundry V14 wraps ApplicationV2 form content in
+ * `<form>` → `<section class="window-content">`; giving that
+ * container `overflow-y: auto` plus a bounded height lets it
+ * scroll rather than push the footer off-screen. */
+body.witcher-ttrpg-death-march #wdm-stealth-config .window-content {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+body.witcher-ttrpg-death-march #wdm-stealth-config .window-content > .main {
+  min-height: 0;
+}
+/* Firefox-friendly slim scrollbar. */
+body.witcher-ttrpg-death-march #wdm-stealth-config .window-content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--wdm-amber-dim, #6b5a3a) transparent;
+}
+/* WebKit scrollbar — narrow, amber-tinted so it fits the theme. */
+body.witcher-ttrpg-death-march #wdm-stealth-config .window-content::-webkit-scrollbar {
+  width: 8px;
+}
+body.witcher-ttrpg-death-march #wdm-stealth-config .window-content::-webkit-scrollbar-thumb {
+  background: var(--wdm-amber-dim, #6b5a3a);
+  border-radius: 4px;
+}
+body.witcher-ttrpg-death-march #wdm-stealth-config .window-content::-webkit-scrollbar-thumb:hover {
+  background: var(--wdm-amber, #b89464);
+}
+
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-checks {
+  /* Stack full-width check rows with breathing room between them. */
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-inline {
+  /* One-line labeled input + trailing help text. Wraps on narrow
+   * windows so the help doesn't shove the input off-screen. */
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.35rem 0;
+  flex-wrap: wrap;
+}
+
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-mini-labeled {
+  /* Compact labeled input for numeric knobs — label above, input
+   * below in a tight column. Sits next to inline help text via
+   * .wdm-sc-inline. */
+  flex: 0 0 auto;
+  min-width: 8rem;
+}
+
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-help {
+  display: block;
+  font-size: calc(0.72rem * var(--wdm-tf, 1));
+  line-height: 1.4;
+  color: var(--wdm-ink-dim, #a89877);
+  font-style: italic;
+  margin-top: 0.15rem;
+}
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-help-inline {
+  flex: 1 1 12rem;
+  margin: 0;
+}
+
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-formula {
+  /* Highlighted formula box — makes the max-sight computation stand
+   * out from surrounding blurb so users see it immediately when
+   * they open the Sight section. */
+  margin: 0.1rem 0 0.65rem;
+  padding: 0.45rem 0.6rem;
+  background: rgb(from var(--wdm-amber-hi) r g b / 0.06);
+  border-left: 3px solid var(--wdm-amber, #b89464);
+  color: var(--wdm-ink-hi, #e8e1cb);
+  font-size: calc(0.78rem * var(--wdm-tf, 1));
+  line-height: 1.5;
+  border-radius: 0;
+}
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-formula b {
+  color: var(--wdm-amber-bright, #c8a878);
+}
+
+/* Table-form for the tabular sections (range bands, zones, coverage).
+ * Reads more naturally than a flat wdm-se-row of unlabeled boxes. */
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.25rem 0 0.15rem;
+  font-size: calc(0.78rem * var(--wdm-tf, 1));
+}
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-table thead th {
+  text-align: left;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--wdm-amber-dim, #6b5a3a);
+  color: var(--wdm-amber-bright, #c8a878);
+  font-family: var(--wdm-font-display, sans-serif);
+  font-size: calc(0.65rem * var(--wdm-tf, 1));
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-table tbody td {
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid rgba(107, 90, 58, 0.35);
+  vertical-align: middle;
+}
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-table tbody tr:last-child td {
+  border-bottom: none;
+}
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-num {
+  text-align: right;
+  width: 6.5rem;
+}
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-num input[type="number"] {
+  width: 5rem;
+  text-align: right;
+}
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-sc-cell-note {
+  font-size: calc(0.68rem * var(--wdm-tf, 1));
+  color: var(--wdm-ink-dim, #a89877);
+  font-style: italic;
+  margin-top: 0.1rem;
+}
+
+/* Section header icons — a touch of amber so each `<summary>` reads
+ * as a distinct navigable chunk instead of a text label. */
+body.witcher-ttrpg-death-march .wdm-stealth-config-body .wdm-se-group > summary i {
+  color: var(--wdm-amber, #b89464);
+  margin-right: 0.4rem;
+}

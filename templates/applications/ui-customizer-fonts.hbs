@@ -1,0 +1,31 @@
+{{!-- UI Customizer — Fonts tab. Assign any font family Foundry has loaded
+      (core + custom-added world fonts) to the three text roles the UI uses.
+      "(inherit)" leaves the role at its inherited value. The sample text
+      re-renders live in the chosen family (wired in _onRender). --}}
+<section class="tab wdm-cfg-tab wdm-uic-tab {{tab.cssClass}}" data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+  {{#if hasFonts}}
+  <p class="wdm-uic-tabnote">{{localize 'WITCHER.App.UiCustomizer.FontsNote'}}</p>
+
+  <div class="wdm-uic-fonts">
+    {{#each fonts}}
+    <div class="wdm-uic-font-row">
+      <div class="wdm-uic-font-meta">
+        <label class="wdm-uic-font-label" for="wdm-uic-font-{{role}}">{{label}}</label>
+        {{#if desc}}<div class="wdm-uic-font-desc">{{desc}}</div>{{/if}}
+      </div>
+      <select id="wdm-uic-font-{{role}}" name="font.{{role}}" class="wdm-uic-font-select">
+        <option value="">{{localize 'WITCHER.App.UiCustomizer.FontInherit'}}</option>
+        {{#each options}}
+        <option value="{{fam}}" {{#if selected}}selected{{/if}}>{{fam}}</option>
+        {{/each}}
+      </select>
+      <span class="wdm-uic-font-sample" data-role="{{role}}">{{localize 'WITCHER.App.UiCustomizer.FontSample'}}</span>
+    </div>
+    {{/each}}
+  </div>
+  {{else}}
+  <p class="wdm-uic-empty">{{localize 'WITCHER.App.UiCustomizer.NoFonts'}}</p>
+  {{/if}}
+
+</section>

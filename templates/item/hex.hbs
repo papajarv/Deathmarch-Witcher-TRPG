@@ -1,0 +1,288 @@
+{{!-- Hex item sheet — two-layer (RAW Core p.120-122):
+        DISPLAY  → Witcher 3 in-game tooltip aesthetic (player reads)
+        CONFIG   → editable form (GM / owner with cog toggle)
+      Deep-purple accent (.is-hex). Fields are structured for the combat
+      engine: STA + cast time are numbers, defense / duration / danger are
+      enums, and components are links to real items. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-hex" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}{{localize 'WITCHER.Sheet.Item.Cog.BackToDisplay'}}{{else}}{{localize 'WITCHER.Sheet.Item.Cog.ConfigureItem'}}{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip layout
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">Hex · {{dangerLabel}} Danger</div>
+        </div>
+      </header>
+
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value">{{source.staminaCost}}</div>
+        <div class="wdm-w3-hero-label">{{localize 'WITCHER.Sheet.Item.Text.STAMINA'}}</div>
+        <div class="wdm-w3-hero-sub">{{localize 'WITCHER.Sheet.Item.Text.Vs'}} {{defenseLabel}}</div>
+      </div>
+
+      <ul class="wdm-w3-stats">
+        <li class="wdm-w3-stat">
+          <span class="val">{{source.castingTime}}</span>
+          <span class="lbl">{{localize 'WITCHER.Sheet.Hex.Text.ActionsToCast'}}</span>
+        </li>
+        {{#if source.range}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{source.range}}</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Hex.Text.Range'}}</span>
+          </li>
+        {{/if}}
+        <li class="wdm-w3-stat">
+          <span class="val">{{durationLabel}}</span>
+          <span class="lbl">{{localize 'WITCHER.Sheet.Hex.Text.Duration'}}</span>
+        </li>
+        <li class="wdm-w3-stat">
+          <span class="val">{{dangerLabel}}</span>
+          <span class="lbl">{{localize 'WITCHER.Sheet.Hex.Text.Danger'}}</span>
+        </li>
+        {{#if damageLabel}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{damageLabel}}</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Hex.Text.Damage'}}</span>
+          </li>
+        {{/if}}
+        {{#if areaLabel}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{areaLabel}}</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Hex.Text.Area'}}</span>
+          </li>
+        {{/if}}
+      </ul>
+
+      {{#if statusRiderRows.length}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Hex.Text.OnWeave'}}</div>
+        <ul class="wdm-w3-riders">
+          {{#each statusRiderRows}}
+            <li class="wdm-w3-rider">
+              <img src="{{this.icon}}" alt="" />
+              <span class="nm">{{this.label}}</span>
+              {{#if this.duration.value}}
+                <span class="dur">{{this.duration.value}} {{this.duration.unit}}</span>
+              {{/if}}
+              <span class="qt">{{this.chance}}%</span>
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+      {{#if source.effect}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Hex.Text.Effect'}}</div>
+        <div class="wdm-w3-effects">{{{source.effect}}}</div>
+      {{/if}}
+
+      {{#if source.liftRequirement}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Hex.Text.RequirementsToLift'}}</div>
+        <div class="wdm-w3-effects">{{{source.liftRequirement}}}</div>
+      {{/if}}
+
+      {{#if componentLinks.length}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Hex.Text.Components'}}</div>
+        <ul class="wdm-w3-ingredients">
+          {{#each componentLinks}}
+            <li class="wdm-w3-ingredient" data-component-index="{{this.index}}" data-uuid="{{this.uuid}}" data-action="openComponent">
+              <img src="{{this.img}}" alt="" />
+              <span class="nm">{{this.name}}</span>
+              {{#if (gte this.qty 2)}}<span class="qt">×{{this.qty}}</span>{{/if}}
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — compact tech form.
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Hex.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Hex.Hint.HexName'}}" />
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Hex.Text.Casting'}}</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Hex.Tooltip.StaminaSpentToWeaveTheHex'}}">{{localize 'WITCHER.Sheet.Hex.Label.STACost'}}</span>
+          <input type="number" min="0" name="system.staminaCost" value="{{source.staminaCost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Hex.Tooltip.NumberOfActionsTheCastTakes'}}">{{localize 'WITCHER.Sheet.Hex.Label.CastActions'}}</span>
+          <input type="number" min="0" name="system.castingTime" value="{{source.castingTime}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Hex.Text.Defense'}}</span>
+          <select name="system.defense">
+            {{#each WITCHER.hex.defenses}}
+              <option value="{{@key}}" {{#if (eq @key ../source.defense)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Hex.Text.Danger'}}</span>
+          <select name="system.danger">
+            {{#each WITCHER.hex.danger}}
+              <option value="{{@key}}" {{#if (eq @key ../source.danger)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Hex.Text.Range'}}</span>
+          <input type="text" name="system.range" value="{{source.range}}" placeholder="{{localize 'WITCHER.Sheet.Hex.Hint.Touch10mSight'}}" />
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Hex.Text.Duration'}}</div>
+      <div class="wdm-cfg-grid">
+        {{#unless (or (eq source.duration.unit "lifted") (eq source.duration.unit "instant"))}}
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Hex.Text.Amount'}}</span>
+            <input type="number" min="0" name="system.duration.value" value="{{source.duration.value}}" />
+          </label>
+        {{/unless}}
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Hex.Text.Unit'}}</span>
+          <select name="system.duration.unit">
+            {{#each WITCHER.hex.durationUnits}}
+              <option value="{{@key}}" {{#if (eq @key ../source.duration.unit)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Hex.Text.Damage'}} <span class="wdm-cfg-sub">(structured — read by the cast flow, blank = non-damaging; most RAW hexes are non-damaging)</span></div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span title="Dice formula rolled on a successful weave — e.g. 3d6, 1d6+1. Placeholders {sta}/{margin} supported. Blank = non-damaging.">{{localize 'WITCHER.Sheet.Hex.Text.Formula'}}</span>
+          <input type="text" name="system.damageFormula" value="{{source.damageFormula}}" placeholder="3d6" />
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Hex.Tooltip.ElementTheDamageCarries'}}">{{localize 'WITCHER.Sheet.Hex.Text.Element'}}</span>
+          <select name="system.damageElement">
+            {{#each WITCHER.hex.damageElements}}
+              <option value="{{@key}}" {{#if (eq @key ../source.damageElement)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Hex.Tooltip.WhatResourceTheDamageDrains'}}">{{localize 'WITCHER.Sheet.Hex.Text.Type'}}</span>
+          <select name="system.damageType">
+            {{#each WITCHER.hex.damageTypes}}
+              <option value="{{@key}}" {{#if (eq @key ../source.damageType)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row is-checkbox"><span title="{{localize 'WITCHER.Sheet.Hex.Tooltip.TangibleHexesRareAPhysicalCurseAreAbsorb'}}">{{localize 'WITCHER.Sheet.Hex.Text.Tangible'}}</span>
+          <input type="checkbox" name="system.tangible" {{#if source.tangible}}checked{{/if}} />
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Hex.Text.Area'}} <span class="wdm-cfg-sub">(rare for hexes)</span></div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Hex.Tooltip.GeometryOfTheAreaOfEffect'}}">{{localize 'WITCHER.Sheet.Hex.Text.Shape'}}</span>
+          <select name="system.areaShape">
+            {{#each WITCHER.hex.areaShapes}}
+              <option value="{{@key}}" {{#if (eq @key ../source.areaShape)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Hex.Tooltip.SizeInMeters0SingleTarget'}}">{{localize 'WITCHER.Sheet.Hex.Text.SizeM'}}</span>
+          <input type="number" min="0" step="0.5" name="system.areaSize" value="{{source.areaSize}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Hex.Tooltip.CasterTemplateOriginIsLockedToYourTokenY'}}">{{localize 'WITCHER.Sheet.Hex.Text.Anchor'}}</span>
+          <select name="system.areaAnchor">
+            {{#each WITCHER.hex.areaAnchors}}
+              <option value="{{@key}}" {{#if (eq @key ../source.areaAnchor)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Hex.Text.StatusRiders'}} <span class="wdm-cfg-sub">(effects that persist on the cursed target)</span></div>
+      <div class="wdm-status-rider-list">
+        {{#each statusRiderRows}}
+          <div class="wdm-status-rider-row" data-status-rider-index="{{this.index}}">
+            <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Hex.Text.StatusId'}}</span>
+              <input type="text" name="system.statusRiders.{{this.index}}.statusId" value="{{this.statusId}}" placeholder="cursed" />
+            </label>
+            <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Hex.Text.Chance'}}</span>
+              <input type="number" min="0" max="100" step="1" name="system.statusRiders.{{this.index}}.chance" value="{{this.chance}}" />
+            </label>
+            <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Hex.Text.Duration'}}</span>
+              <input type="text" name="system.statusRiders.{{this.index}}.duration.value" value="{{this.duration.value}}" placeholder="1d6 or 3" />
+            </label>
+            <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Hex.Text.Unit'}}</span>
+              <select name="system.statusRiders.{{this.index}}.duration.unit">
+                {{#each WITCHER.hex.durationUnits}}
+                  <option value="{{@key}}" {{#if (eq @key ../this.duration.unit)}}selected{{/if}}>{{localize this}}</option>
+                {{/each}}
+              </select>
+            </label>
+            <button type="button" class="wdm-link-remove" data-action="removeStatusRider" title="{{localize 'WITCHER.Sheet.Hex.Text.Remove'}}"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        {{/each}}
+        <button type="button" class="wdm-drop-hint" data-action="addStatusRider"><i class="fa-solid fa-plus"></i> {{localize 'WITCHER.Sheet.Hex.Text.AddStatusRider'}}</button>
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Hex.Text.Effect'}}</div>
+      <textarea class="wdm-cfg-textarea" name="system.effect" placeholder="{{localize 'WITCHER.Sheet.Hex.Hint.MechanicalEffectOnTheTarget'}}">{{source.effect}}</textarea>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Hex.Text.RequirementsToLift'}}</div>
+      <textarea class="wdm-cfg-textarea" name="system.liftRequirement" placeholder="{{localize 'WITCHER.Sheet.Hex.Hint.WhatItTakesToBreakTheCurse'}}">{{source.liftRequirement}}</textarea>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Hex.Text.Components'}}</div>
+      <div class="wdm-drop-zone is-list" data-component-drop>
+        {{#each componentLinks}}
+          <div class="wdm-link-row" data-component-index="{{this.index}}" data-uuid="{{this.uuid}}">
+            <img src="{{this.img}}" alt="" />
+            <span class="wdm-link-name">{{this.name}}</span>
+            <input type="number" class="wdm-link-qty" data-component-qty min="1" value="{{this.qty}}" title="{{localize 'WITCHER.Sheet.Hex.Tooltip.Quantity'}}" />
+            <button type="button" class="wdm-link-remove" data-action="removeComponent" title="{{localize 'WITCHER.Sheet.Hex.Tooltip.Remove'}}"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        {{/each}}
+        <div class="wdm-drop-hint"><i class="fa-solid fa-plus"></i> {{localize 'WITCHER.Sheet.Hex.Text.DropAnyItemHereAsAComponent'}}</div>
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Hex.Text.Effects'}} <span class="wdm-cfg-sub">(applied to the target when cast — not the caster)</span></div>
+      <div class="wdm-cfg-effects">
+        {{#if effects.length}}
+          <ul class="wdm-effect-list">
+            {{#each effects}}
+              <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                <div class="wdm-effect-head">
+                  <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                  <span class="wdm-effect-name">{{this.name}}</span>
+                  {{#if this.duration.label}}<span class="wdm-effect-duration">{{this.duration.label}}</span>{{/if}}
+                  <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                    <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                  </a>
+                  <a data-action="editEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Hex.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+                  <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Hex.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
+                </div>
+              </li>
+            {{/each}}
+          </ul>
+        {{else}}
+          <p class="wdm-empty">{{localize 'WITCHER.Sheet.Hex.Text.NoEffectsConfigured'}}</p>
+        {{/if}}
+        <button type="button" class="wdm-add-effect" data-action="createEffect">
+          <i class="fa-solid fa-plus"></i> {{localize 'WITCHER.Sheet.Item.Button.AddEffect'}}
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</div>

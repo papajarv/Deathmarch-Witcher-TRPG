@@ -1,0 +1,274 @@
+{{!-- Status Conditions tab — item-local status clause. When "Make Status
+      Condition" is on + an id is set, this AE contributes a clause
+      (stat/roll/derived modifiers, restrict flags, DoT, autoHit DC, ending
+      check, auto-clear, periodic save) that statusEngine.clauseFor(id, actor)
+      reads in preference to the world Status Effects registry.
+
+      Layout: identity + core mods stay always-open. DoT / End check /
+      Auto-clear / Counts as collapse into <details> to keep the tab from
+      reading as a wall of fields. --}}
+
+<section class="tab standard-form scrollable{{#if tab.active}} active{{/if}}"
+         data-tab="{{tab.id}}" data-group="{{tab.group}}">
+
+  <fieldset>
+    <legend>{{localize "WITCHER.Effect.CustomStatus.Section"}}</legend>
+    <p class="hint">{{localize "WITCHER.Effect.CustomStatus.Hint"}}</p>
+
+    <div class="form-group">
+      <label>{{localize "WITCHER.Effect.CustomStatus.Enabled"}}</label>
+      <div class="form-fields">
+        <input type="checkbox" name="{{cs.base}}.enabled" {{#if cs.enabled}}checked{{/if}} />
+      </div>
+      <p class="hint">{{localize "WITCHER.Effect.CustomStatus.EnabledHint"}}</p>
+    </div>
+
+    {{#if cs.enabled}}
+    <div class="form-group">
+      <label>{{localize "WITCHER.Effect.CustomStatus.Id"}}</label>
+      <div class="form-fields">
+        <input type="text" name="{{cs.base}}.id" value="{{cs.id}}" placeholder="lowercase-id" spellcheck="false" />
+      </div>
+      <p class="hint">{{localize "WITCHER.Effect.CustomStatus.IdHint"}}</p>
+    </div>
+
+    <div class="form-group stacked">
+      <label>{{localize "WITCHER.Effect.CustomStatus.Description"}}</label>
+      <textarea name="{{cs.base}}.description" rows="2" spellcheck="false">{{cs.description}}</textarea>
+    </div>
+    {{/if}}
+  </fieldset>
+
+  {{#if cs.enabled}}
+
+  <details class="wdm-cs-group" data-sync="cs-stat-mods" {{#if cs.statModCount}}open{{/if}}>
+    <summary>{{localize "WITCHER.Effect.CustomStatus.StatMods"}}
+      {{#if cs.statModCount}}<span class="wdm-cs-count">({{cs.statModCount}})</span>{{/if}}
+    </summary>
+    <div class="wdm-cs-details-body">
+      <div class="wdm-cs-grid">
+        {{#each cs.statRows as |stat|}}
+        <label class="wdm-cs-mini">
+          <span>{{stat.label}}</span>
+          <input type="number" step="1" name="{{../cs.base}}.mods.stats.{{stat.key}}" value="{{stat.value}}" />
+        </label>
+        {{/each}}
+      </div>
+    </div>
+  </details>
+
+  <details class="wdm-cs-group" data-sync="cs-roll-mods" {{#if cs.rollModCount}}open{{/if}}>
+    <summary>{{localize "WITCHER.Effect.CustomStatus.RollMods"}}
+      {{#if cs.rollModCount}}<span class="wdm-cs-count">({{cs.rollModCount}})</span>{{/if}}
+    </summary>
+    <div class="wdm-cs-details-body">
+      <div class="wdm-cs-grid">
+        {{#each cs.rollRows as |roll|}}
+        <label class="wdm-cs-mini">
+          <span>{{roll.label}}</span>
+          <input type="number" step="1" name="{{../cs.base}}.mods.roll.{{roll.key}}" value="{{roll.value}}" />
+        </label>
+        {{/each}}
+      </div>
+    </div>
+  </details>
+
+  <fieldset>
+    <legend>{{localize "WITCHER.Effect.CustomStatus.Restrict"}}</legend>
+    <p class="hint">{{localize "WITCHER.Effect.CustomStatus.RestrictHint"}}</p>
+    <div class="wdm-cs-row">
+      <label><input type="checkbox" name="{{cs.base}}.restrict.act"    {{#if cs.restrict.act}}checked{{/if}} />
+        {{localize "WITCHER.Effect.CustomStatus.RestrictAct"}}</label>
+      <label><input type="checkbox" name="{{cs.base}}.restrict.defend" {{#if cs.restrict.defend}}checked{{/if}} />
+        {{localize "WITCHER.Effect.CustomStatus.RestrictDefend"}}</label>
+      <label><input type="checkbox" name="{{cs.base}}.restrict.move"   {{#if cs.restrict.move}}checked{{/if}} />
+        {{localize "WITCHER.Effect.CustomStatus.RestrictMove"}}</label>
+      <label><input type="checkbox" name="{{cs.base}}.restrict.hard"   {{#if cs.restrict.hard}}checked{{/if}} />
+        {{localize "WITCHER.Effect.CustomStatus.RestrictHard"}}</label>
+    </div>
+  </fieldset>
+
+  <details class="wdm-cs-group" data-sync="cs-counts-as">
+    <summary>{{localize "WITCHER.Effect.CustomStatus.CountsAs"}}
+      {{#if cs.countsAsCount}}<span class="wdm-cs-count">({{cs.countsAsCount}})</span>{{/if}}
+    </summary>
+    <div class="wdm-cs-details-body">
+      <p class="hint">{{localize "WITCHER.Effect.CustomStatus.CountsAsHint"}}</p>
+      <div class="wdm-cs-checkgrid">
+        {{#each cs.countsAsOptions as |opt|}}
+          <label class="wdm-cs-chip">
+            <input type="checkbox" data-cs-countsas-id="{{opt.value}}" {{#if opt.selected}}checked{{/if}} />
+            <span>{{opt.label}}</span>
+          </label>
+        {{/each}}
+      </div>
+    </div>
+  </details>
+
+  <details class="wdm-cs-group" data-sync="cs-derived-mods" {{#if cs.derivedModCount}}open{{/if}}>
+    <summary>{{localize "WITCHER.Effect.CustomStatus.DerivedMods"}}
+      {{#if cs.derivedModCount}}<span class="wdm-cs-count">({{cs.derivedModCount}})</span>{{/if}}
+    </summary>
+    <div class="wdm-cs-details-body">
+      <div class="wdm-cs-grid">
+        {{#each cs.derivedRows as |d|}}
+        <label class="wdm-cs-mini">
+          <span>{{d.label}}</span>
+          <input type="number" step="1" name="{{../cs.base}}.mods.derived.{{d.key}}" value="{{d.value}}" />
+        </label>
+        {{/each}}
+      </div>
+    </div>
+  </details>
+
+  <details class="wdm-cs-group" data-sync="cs-dot">
+    <summary>{{localize "WITCHER.Effect.CustomStatus.Dot"}}
+      {{#if cs.dot.amount}}<span class="wdm-cs-count">({{cs.dot.amount}}{{#if cs.dot.damageType}} · {{cs.dot.damageType}}{{/if}})</span>{{/if}}
+    </summary>
+    <div class="wdm-cs-details-body">
+      <p class="hint">{{localize "WITCHER.Effect.CustomStatus.DotHint"}}</p>
+      <div class="form-group">
+        <label>{{localize "WITCHER.Effect.CustomStatus.DotAmount"}}</label>
+        <div class="form-fields">
+          <input type="text" name="{{cs.base}}.dot.amount" value="{{cs.dot.amount}}" placeholder="e.g. 3  or  1d6+2" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>{{localize "WITCHER.Effect.CustomStatus.DotCadence"}}</label>
+        <div class="form-fields">
+          <input type="number" min="1" step="1" name="{{cs.base}}.dot.cadence" value="{{cs.dot.cadence}}" />
+        </div>
+        <p class="hint">{{localize "WITCHER.Effect.CustomStatus.DotCadenceHint"}}</p>
+      </div>
+      <div class="form-group">
+        <label>{{localize "WITCHER.Effect.CustomStatus.DotAblateArmor"}}</label>
+        <div class="form-fields">
+          <input type="text" name="{{cs.base}}.dot.ablateArmor" value="{{cs.dot.ablateArmor}}"
+                 placeholder="3 or 1d6" />
+        </div>
+        <p class="hint">{{localize "WITCHER.Effect.CustomStatus.DotAblateArmorHint"}}</p>
+        <label class="wdm-cs-inline-check"><input type="checkbox"
+          name="{{cs.base}}.dot.ablateArmorOnlyIfPenetrated"
+          {{#if cs.dot.ablateArmorOnlyIfPenetrated}}checked{{/if}} />
+          {{localize "WITCHER.Effect.TickAblateOnlyIfPenetrated"}}</label>
+      </div>
+      <div class="form-group">
+        <label>{{localize "WITCHER.Effect.CustomStatus.DotAblateWeapon"}}</label>
+        <div class="form-fields">
+          <input type="text" name="{{cs.base}}.dot.ablateWeapon" value="{{cs.dot.ablateWeapon}}"
+                 placeholder="1 or 1d3" />
+        </div>
+        <p class="hint">{{localize "WITCHER.Effect.CustomStatus.DotAblateWeaponHint"}}</p>
+        <label class="wdm-cs-inline-check"><input type="checkbox"
+          name="{{cs.base}}.dot.ablateWeaponOnlyIfPenetrated"
+          {{#if cs.dot.ablateWeaponOnlyIfPenetrated}}checked{{/if}} />
+          {{localize "WITCHER.Effect.TickAblateOnlyIfPenetrated"}}</label>
+      </div>
+      <div class="wdm-cs-row">
+        <label><input type="checkbox" name="{{cs.base}}.dot.throughArmor" {{#if cs.dot.throughArmor}}checked{{/if}} />
+          {{localize "WITCHER.Effect.CustomStatus.DotThroughArmor"}}</label>
+        <label><input type="checkbox" name="{{cs.base}}.dot.everyLocation" {{#if cs.dot.everyLocation}}checked{{/if}} />
+          {{localize "WITCHER.Effect.CustomStatus.DotEveryLocation"}}</label>
+      </div>
+      <div class="form-group">
+        <label>{{localize "WITCHER.Effect.CustomStatus.DotDamageType"}}</label>
+        <div class="form-fields">
+          <select name="{{cs.base}}.dot.damageType">
+            <option value="" {{#unless cs.dot.damageType}}selected{{/unless}}>—</option>
+            {{#each cs.dot.damageTypeOptions as |opt|}}
+              <option value="{{opt.value}}" {{#if (eq opt.value ../cs.dot.damageType)}}selected{{/if}}>{{opt.label}}</option>
+            {{/each}}
+          </select>
+        </div>
+        <p class="hint">{{localize "WITCHER.Effect.CustomStatus.DotDamageTypeHint"}}</p>
+      </div>
+    </div>
+  </details>
+
+  <details class="wdm-cs-group" data-sync="cs-incoming-dc">
+    <summary>{{localize "WITCHER.Effect.CustomStatus.Restrict"}}: {{localize "WITCHER.Effect.CustomStatus.IncomingDC"}}</summary>
+    <div class="wdm-cs-details-body">
+      <div class="form-group">
+        <label>{{localize "WITCHER.Effect.CustomStatus.IncomingDC"}}</label>
+        <div class="form-fields">
+          <input type="number" min="0" step="1" name="{{cs.base}}.incomingDC" value="{{cs.incomingDC}}" placeholder="(none)" />
+        </div>
+        <p class="hint">{{localize "WITCHER.Effect.CustomStatus.IncomingDCHint"}}</p>
+      </div>
+    </div>
+  </details>
+
+  <details class="wdm-cs-group" data-sync="cs-end-check">
+    <summary>{{localize "WITCHER.Effect.CustomStatus.EndCheck"}}
+      {{#unless (eq cs.endCheck.kind "none")}}<span class="wdm-cs-count">({{cs.endCheck.kind}}{{#if cs.endCheck.dc}} DC {{cs.endCheck.dc}}{{/if}})</span>{{/unless}}
+    </summary>
+    <div class="wdm-cs-details-body">
+      <p class="hint">{{localize "WITCHER.Effect.CustomStatus.EndCheckHint"}}</p>
+      <div class="form-group">
+        <label>{{localize "WITCHER.Effect.CustomStatus.EndCheckKind"}}</label>
+        <div class="form-fields">
+          <select name="{{cs.base}}.endCheck.kind">
+            <option value="none"     {{#if (eq cs.endCheck.kind "none")}}selected{{/if}}>{{localize "WITCHER.Effect.CustomStatus.EndKindNone"}}</option>
+            <option value="stunSave" {{#if (eq cs.endCheck.kind "stunSave")}}selected{{/if}}>{{localize "WITCHER.Effect.CustomStatus.EndKindStun"}}</option>
+            <option value="skill"    {{#if (eq cs.endCheck.kind "skill")}}selected{{/if}}>{{localize "WITCHER.Effect.CustomStatus.EndKindSkill"}}</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>{{localize "WITCHER.Effect.CustomStatus.EndCheckSkill"}}</label>
+        <div class="form-fields">
+          <select name="{{cs.base}}.endCheck.skill">
+            <option value="" {{#unless cs.endCheck.skill}}selected{{/unless}}>—</option>
+            {{#each cs.endCheck.skillOptions as |opt|}}
+              <option value="{{opt.value}}" {{#if (eq opt.value ../cs.endCheck.skill)}}selected{{/if}}>{{opt.label}}</option>
+            {{/each}}
+          </select>
+        </div>
+      </div>
+      <div class="wdm-cs-row">
+        <label class="wdm-cs-mini"><span>DC</span>
+          <input type="number" min="0" step="1" name="{{cs.base}}.endCheck.dc" value="{{cs.endCheck.dc}}" placeholder="0" />
+        </label>
+        <label class="wdm-cs-mini"><span>{{localize "WITCHER.Effect.CustomStatus.EndCheckActionCost"}}</span>
+          <input type="number" min="0" step="1" name="{{cs.base}}.endCheck.actionCost" value="{{cs.endCheck.actionCost}}" placeholder="0" />
+        </label>
+      </div>
+    </div>
+  </details>
+
+  <details class="wdm-cs-group" data-sync="cs-auto-clear">
+    <summary>{{localize "WITCHER.Effect.CustomStatus.AutoClear"}}</summary>
+    <div class="wdm-cs-details-body">
+      <div class="wdm-cs-row">
+        <label><input type="checkbox" name="{{cs.base}}.clearsAtOwnTurn" {{#if cs.clearsAtOwnTurn}}checked{{/if}} />
+          {{localize "WITCHER.Effect.CustomStatus.ClearsAtOwnTurn"}}</label>
+        <label><input type="checkbox" name="{{cs.base}}.clearsAtOwnTurnEnd" {{#if cs.clearsAtOwnTurnEnd}}checked{{/if}} />
+          {{localize "WITCHER.Effect.CustomStatus.ClearsAtOwnTurnEnd"}}</label>
+        <label><input type="checkbox" name="{{cs.base}}.clearOnHit" {{#if cs.clearOnHit}}checked{{/if}} />
+          {{localize "WITCHER.Effect.CustomStatus.ClearOnHit"}}</label>
+      </div>
+      <div class="wdm-cs-row">
+        <label class="wdm-cs-mini"><span>{{localize "WITCHER.Effect.CustomStatus.PeriodicEvery"}}</span>
+          <input type="number" min="0" step="1" name="{{cs.base}}.periodic.every" value="{{cs.periodic.every}}" placeholder="(none)" />
+        </label>
+        <label class="wdm-cs-mini"><span>{{localize "WITCHER.Effect.CustomStatus.PeriodicRollUnder"}}</span>
+          <select name="{{cs.base}}.periodic.rollUnder">
+            <option value="" {{#unless cs.periodic.rollUnder}}selected{{/unless}}>—</option>
+            <option value="int"  {{#if (eq cs.periodic.rollUnder "int")}}selected{{/if}}>INT</option>
+            <option value="ref"  {{#if (eq cs.periodic.rollUnder "ref")}}selected{{/if}}>REF</option>
+            <option value="dex"  {{#if (eq cs.periodic.rollUnder "dex")}}selected{{/if}}>DEX</option>
+            <option value="body" {{#if (eq cs.periodic.rollUnder "body")}}selected{{/if}}>BODY</option>
+            <option value="spd"  {{#if (eq cs.periodic.rollUnder "spd")}}selected{{/if}}>SPD</option>
+            <option value="emp"  {{#if (eq cs.periodic.rollUnder "emp")}}selected{{/if}}>EMP</option>
+            <option value="cra"  {{#if (eq cs.periodic.rollUnder "cra")}}selected{{/if}}>CRA</option>
+            <option value="will" {{#if (eq cs.periodic.rollUnder "will")}}selected{{/if}}>WILL</option>
+            <option value="luck" {{#if (eq cs.periodic.rollUnder "luck")}}selected{{/if}}>LUCK</option>
+          </select>
+        </label>
+      </div>
+      <p class="hint">{{localize "WITCHER.Effect.CustomStatus.PeriodicHint"}}</p>
+    </div>
+  </details>
+
+  {{/if}}
+</section>

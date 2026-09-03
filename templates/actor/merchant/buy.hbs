@@ -1,0 +1,347 @@
+{{!-- Player-facing shop window.
+
+     Buy tab: the basket panel down the left, and the merchant's WHOLE stock as
+     one flat tile lattice on the right. Tiles are real .wou-slot elements — the
+     same class the inventory grid uses — so square and 2:1 tall icons, the
+     availability wash and the flair override all render identically to your
+     own pack, for free.
+
+     Sell tab keeps the grouped row list: selling is a per-item negotiation,
+     not a basket. --}}
+<div class="buy-sheet-root">
+
+  {{!-- HEADER --}}
+  <div class="bs-header">
+    <img class="bs-portrait" src="{{snapshot.img}}" />
+    <div class="bs-title-block">
+      <div class="bs-shop-name">{{snapshot.shopName}}</div>
+      {{#unless (eq snapshot.shopName snapshot.name)}}
+        <div class="bs-merchant-name">{{snapshot.name}}</div>
+      {{/unless}}
+      <div class="bs-personality"><i class="fas fa-mask"></i> {{snapshot.personality}}</div>
+    </div>
+    <div class="bs-buyer-info">
+      {{#if hasBuyer}}
+        <div class="bs-buyer-label">{{localize "WITCHER.Merchant.ShoppingAs"}}</div>
+        <div class="bs-buyer-name">{{buyerName}}</div>
+        <div class="bs-purse"><i class="fas fa-coins"></i> {{buyerCoin}} {{snapshot.currency}}</div>
+      {{else}}
+        <div class="bs-buyer-warn"><i class="fas fa-exclamation-circle"></i> {{localize "WITCHER.Merchant.NoCharAssigned"}}</div>
+      {{/if}}
+      {{!-- What the trader has in the till — what he can actually pay out. --}}
+      <div class="bs-purse bs-purse-merchant" title="{{localize "WITCHER.Merchant.TraderPurseHint"}}">
+        <i class="fas fa-sack-dollar"></i> {{localize "WITCHER.Merchant.TraderPurse"}}: {{merchantCoin}} {{snapshot.currency}}
+      </div>
+    </div>
+  </div>
+
+  {{!-- TABS --}}
+  <div class="bs-tabs">
+    <button type="button" class="bs-tab {{#if (eq activeTab 'buy')}}active{{/if}}" data-action="switchTab" data-tab="buy">
+      <i class="fas fa-shopping-cart"></i> {{localize "WITCHER.Merchant.Buy"}}
+    </button>
+    <button type="button" class="bs-tab {{#if (eq activeTab 'sell')}}active{{/if}}" data-action="switchTab" data-tab="sell">
+      <i class="fas fa-hand-holding-usd"></i> {{localize "WITCHER.Merchant.Sell"}}
+    </button>
+    <button type="button" class="bs-tab-refresh" data-action="refresh" title="{{localize "WITCHER.Merchant.Refresh"}}">
+      <i class="fas fa-sync"></i>
+    </button>
+  </div>
+
+  {{!-- BUY TAB --}}
+  {{#if (eq activeTab 'buy')}}
+    <div class="bs-shop-body">
+
+      {{!-- ── CART (left) ─────────────────────────────────────────────── --}}
+      <aside class="bs-cart-panel">
+        <header class="bs-cart-header">
+          <i class="fas fa-basket-shopping"></i>
+          <span>{{localize "WITCHER.Merchant.Cart"}}</span>
+          {{#if cartCount}}<span class="bs-cart-count">{{cartCount}}</span>{{/if}}
+        </header>
+
+        {{#if cartHasLines}}
+          <div class="bs-cart-lines">
+            {{#each cartLines}}
+              {{#if this.stale}}
+                <div class="bs-cart-line is-stale" data-item-id="{{this.id}}">
+                  <div class="wou-slot bs-cart-slot"><i class="icon fa-solid fa-triangle-exclamation"></i></div>
+                  <div class="bs-cart-line-body">
+                    <div class="bs-cart-line-name">{{this.name}}</div>
+                    <div class="bs-cart-line-meta">{{localize "WITCHER.Merchant.CartLineGoneHint"}}</div>
+                  </div>
+                  <button type="button" class="bs-cart-remove" data-action="cartRemove" data-item-id="{{this.id}}"
+                    title="{{localize "WITCHER.Merchant.CartRemove"}}"><i class="fas fa-xmark"></i></button>
+                </div>
+              {{else}}
+                <div class="bs-cart-line" data-item-id="{{this.id}}">
+                  <div class="wou-slot bs-cart-slot"><img class="icon" src="{{this.img}}" alt="" draggable="false" /></div>
+                  <div class="bs-cart-line-body">
+                    <div class="bs-cart-line-name">{{this.name}}</div>
+                    <div class="bs-cart-line-meta">
+                      <span>{{this.unit}} {{../snapshot.currency}} {{localize "WITCHER.Merchant.PerUnit"}}</span>
+                      {{#if this.isService}}<span class="bs-cart-line-service"><i class="fas fa-handshake"></i></span>{{/if}}
+                    </div>
+                    <div class="bs-cart-line-qty">
+                      <button type="button" class="bs-cart-step" data-action="cartDec" data-item-id="{{this.id}}"
+                        title="{{localize "WITCHER.Merchant.CartFewer"}}"><i class="fas fa-minus"></i></button>
+                      <span class="bs-cart-qty">{{this.qty}}</span>
+                      <button type="button" class="bs-cart-step" data-action="cartInc" data-item-id="{{this.id}}"
+                        {{#if this.atMax}}disabled title="{{localize "WITCHER.Merchant.CartAtStock"}}"{{else}}title="{{localize "WITCHER.Merchant.CartMore"}}"{{/if}}><i class="fas fa-plus"></i></button>
+                      <span class="bs-cart-line-total">{{this.lineTotal}}</span>
+                    </div>
+                  </div>
+                  <button type="button" class="bs-cart-remove" data-action="cartRemove" data-item-id="{{this.id}}"
+                    title="{{localize "WITCHER.Merchant.CartRemove"}}"><i class="fas fa-xmark"></i></button>
+                </div>
+              {{/if}}
+            {{/each}}
+          </div>
+
+          <div class="bs-cart-foot">
+            <div class="bs-cart-total-row">
+              <span class="bs-cart-total-label">{{localize "WITCHER.Merchant.CartAsking"}}</span>
+              <span class="bs-cart-total {{#unless canAfford}}is-short{{/unless}}">{{cartTotal}}</span>
+              <span class="bs-cart-total-cur">{{snapshot.currency}}</span>
+            </div>
+            <div class="bs-cart-purse {{#unless canAfford}}is-short{{/unless}}">
+              {{#if canAfford}}
+                {{localize "WITCHER.Merchant.CartAfter"}} {{remainder}} {{snapshot.currency}}
+              {{else}}
+                {{localize "WITCHER.Merchant.CartShort"}} {{remainder}} {{snapshot.currency}}
+              {{/if}}
+            </div>
+            <div class="bs-cart-actions">
+              <button type="button" class="bs-cart-btn clear" data-action="cartClear"
+                title="{{localize "WITCHER.Merchant.CartClear"}}"><i class="fas fa-trash"></i></button>
+              <button type="button" class="bs-cart-btn checkout" data-action="cartCheckout"
+                {{#unless canAfford}}disabled{{/unless}}{{#if checkingOut}} disabled{{/if}}{{#unless hasBuyer}} disabled{{/unless}}>
+                <i class="fas fa-handshake"></i> {{localize "WITCHER.Merchant.CartCheckout"}}
+              </button>
+            </div>
+          </div>
+        {{else}}
+          <div class="bs-cart-empty">
+            <i class="fas fa-basket-shopping"></i>
+            <p>{{localize "WITCHER.Merchant.CartEmptyHint"}}</p>
+          </div>
+        {{/if}}
+      </aside>
+
+      {{!-- ── STOCK LATTICE (right) ───────────────────────────────────── --}}
+      <div class="bs-grid-wrap">
+        <div class="bs-grid-toolbar">
+          {{#if appraisalLocked}}
+            <span class="bs-appraisal-lock"><i class="fas fa-lock"></i> {{localize "WITCHER.Merchant.AppraisalLockedHint"}}</span>
+          {{else if hasBuyer}}
+            <span class="bs-appraisal-left"><i class="fas fa-magnifying-glass-dollar"></i> {{localize "WITCHER.Merchant.AppraisalsLeft"}}: {{appraisalChecksLeft}}</span>
+          {{/if}}
+          {{#if items.length}}
+            <label class="bs-sort" title="{{localize "WITCHER.Chrome.Inventory.Text.SortItems"}}">
+              <i class="fa-solid {{buySortIcon}}"></i>
+              <select data-sort-tab="buy">
+                {{#each sortOptions}}
+                  <option value="{{this.id}}" {{#if (eq this.id ../buySort)}}selected{{/if}}>{{this.label}}</option>
+                {{/each}}
+              </select>
+            </label>
+          {{/if}}
+        </div>
+
+        {{#if items.length}}
+          <div class="bs-grid">
+            {{#each items}}
+              <div class="wou-slot bs-tile{{#if this.isTall}} wou-slot--tall{{/if}}{{#if this.flairColor}} has-flair{{/if}}{{#if this.inCart}} in-cart{{/if}}{{#if this.isService}} is-service{{/if}}"
+                   data-item-id="{{this.id}}"
+                   data-rarity="{{this.rarity}}"
+                   {{#if this.flairColor}}style="--wdm-rar: {{this.flairColor}}"{{/if}}
+                   data-action="addToCart"
+                   role="button" tabindex="0"
+                   aria-label="{{this.name}}">
+
+                {{!-- Tall tiles wrap the art in the clip box so the measured
+                     subject crop fills a 2:1 tile, exactly as in the inventory. --}}
+                {{#if this.isTall}}
+                  <span class="wou-tall-fit"><img class="icon" src="{{this.img}}" alt="" draggable="false" style="{{this.cropStyle}}" /></span>
+                {{else}}
+                  <img class="icon" src="{{this.img}}" alt="" draggable="false" />
+                {{/if}}
+
+                {{#unless this.isService}}<span class="count">{{this.quantity}}</span>{{/unless}}
+                {{#if this.inCart}}<span class="bs-tile-incart">{{this.inCart}}</span>{{/if}}
+
+                {{#if ../isGM}}
+                  <button type="button" class="bs-tile-pin {{#if this.pinned}}active{{/if}}"
+                    data-action="togglePin" data-item-id="{{this.id}}"
+                    title="{{localize "WITCHER.Merchant.PinTooltip"}}"><i class="fas fa-thumbtack"></i></button>
+                {{else if this.pinned}}
+                  <span class="bs-tile-pin active"><i class="fas fa-thumbtack"></i></span>
+                {{/if}}
+
+                {{!-- Deliberately bare: no price, no appraisal icon. The tile is
+                     just the goods, exactly like an inventory slot. Price and
+                     appraisal live on the hover card. --}}
+                {{#if this.isService}}
+                  <span class="bs-tile-service" title="{{localize "WITCHER.Merchant.ServiceHint"}}"><i class="fas fa-handshake"></i></span>
+                {{/if}}
+              </div>
+            {{/each}}
+          </div>
+        {{else}}
+          <div class="bs-empty">
+            <i class="fas fa-box-open"></i>
+            <p>{{localize "WITCHER.Merchant.ShopEmpty"}}</p>
+          </div>
+        {{/if}}
+      </div>
+
+    </div>
+  {{/if}}
+
+  {{!-- SELL TAB — the buy tab in reverse: your own pack as the same lattice,
+        filtered by the inventory's category tabs, with the sell cart on the
+        left. The offer that goes to the GM is the whole cart at one price. --}}
+  {{#if (eq activeTab 'sell')}}
+    {{#if hasBuyer}}
+      {{#if sellItems.length}}
+        <div class="bs-shop-body">
+
+          {{!-- ── SELL CART (left) ──────────────────────────────────────── --}}
+          <aside class="bs-cart-panel is-sell">
+            <header class="bs-cart-header">
+              <i class="fas fa-hand-holding-usd"></i>
+              <span>{{localize "WITCHER.Merchant.SellCart"}}</span>
+              {{#if sellCartCount}}<span class="bs-cart-count">{{sellCartCount}}</span>{{/if}}
+            </header>
+
+            {{#if sellCartHasLines}}
+              <div class="bs-cart-lines">
+                {{#each sellCartLines}}
+                  {{#if this.stale}}
+                    <div class="bs-cart-line is-stale" data-item-id="{{this.id}}">
+                      <div class="wou-slot bs-cart-slot"><i class="icon fa-solid fa-triangle-exclamation"></i></div>
+                      <div class="bs-cart-line-body">
+                        <div class="bs-cart-line-name">{{this.name}}</div>
+                        <div class="bs-cart-line-meta">{{localize "WITCHER.Merchant.SellLineGoneHint"}}</div>
+                      </div>
+                      <button type="button" class="bs-cart-remove" data-action="sellRemove" data-item-id="{{this.id}}"
+                        title="{{localize "WITCHER.Merchant.CartRemove"}}"><i class="fas fa-xmark"></i></button>
+                    </div>
+                  {{else}}
+                    <div class="bs-cart-line" data-item-id="{{this.id}}">
+                      <div class="wou-slot bs-cart-slot"><img class="icon" src="{{this.img}}" alt="" draggable="false" /></div>
+                      <div class="bs-cart-line-body">
+                        <div class="bs-cart-line-name">{{this.name}}</div>
+                        <div class="bs-cart-line-meta">
+                          <span>{{this.unit}} {{../snapshot.currency}} {{localize "WITCHER.Merchant.PerUnit"}}</span>
+                        </div>
+                        <div class="bs-cart-line-qty">
+                          <button type="button" class="bs-cart-step" data-action="sellDec" data-item-id="{{this.id}}"
+                            title="{{localize "WITCHER.Merchant.CartFewer"}}"><i class="fas fa-minus"></i></button>
+                          <span class="bs-cart-qty">{{this.qty}}</span>
+                          <button type="button" class="bs-cart-step" data-action="sellInc" data-item-id="{{this.id}}"
+                            {{#if this.atMax}}disabled title="{{localize "WITCHER.Merchant.SellAtHeld"}}"{{else}}title="{{localize "WITCHER.Merchant.CartMore"}}"{{/if}}><i class="fas fa-plus"></i></button>
+                          <span class="bs-cart-line-total">{{this.lineTotal}}</span>
+                        </div>
+                      </div>
+                      <button type="button" class="bs-cart-remove" data-action="sellRemove" data-item-id="{{this.id}}"
+                        title="{{localize "WITCHER.Merchant.CartRemove"}}"><i class="fas fa-xmark"></i></button>
+                    </div>
+                  {{/if}}
+                {{/each}}
+              </div>
+
+              <div class="bs-cart-foot">
+                <div class="bs-cart-total-row">
+                  <span class="bs-cart-total-label">{{localize "WITCHER.Merchant.SellAsking"}}</span>
+                  <span class="bs-cart-total">{{sellCartSuggested}}</span>
+                  <span class="bs-cart-total-cur">{{snapshot.currency}}</span>
+                </div>
+                <div class="bs-cart-purse {{#unless merchantCanPay}}is-short{{/unless}}">
+                  {{#if merchantCanPay}}
+                    {{localize "WITCHER.Merchant.SellSuggestedHint"}}
+                  {{else}}
+                    <i class="fas fa-exclamation-triangle"></i> {{localize "WITCHER.Merchant.SellOverReserve"}}
+                  {{/if}}
+                </div>
+                <div class="bs-cart-actions">
+                  <button type="button" class="bs-cart-btn clear" data-action="sellClear"
+                    title="{{localize "WITCHER.Merchant.CartClear"}}"><i class="fas fa-trash"></i></button>
+                  <button type="button" class="bs-cart-btn checkout" data-action="sellOffer"
+                    {{#if offering}}disabled{{/if}}>
+                    <i class="fas fa-comments-dollar"></i> {{localize "WITCHER.Merchant.SellOffer"}}
+                  </button>
+                </div>
+              </div>
+            {{else}}
+              <div class="bs-cart-empty">
+                <i class="fas fa-hand-holding-usd"></i>
+                <p>{{localize "WITCHER.Merchant.SellCartEmptyHint"}}</p>
+              </div>
+            {{/if}}
+          </aside>
+
+          {{!-- ── YOUR PACK (right) ─────────────────────────────────────── --}}
+          <div class="bs-grid-wrap">
+            <div class="bs-grid-toolbar bs-sell-cats">
+              {{#each sellCats}}
+                <button type="button" class="bs-sell-cat {{#if (eq this.id ../activeSellCat)}}is-active{{/if}}"
+                  data-action="sellCategory" data-cat="{{this.id}}" title="{{this.label}}">
+                  <i class="fas {{this.icon}}"></i>
+                  <span class="bs-sell-cat-label">{{this.label}}</span>
+                  <span class="bs-sell-cat-count">{{this.count}}</span>
+                </button>
+              {{/each}}
+              {{#if sellShelf.length}}
+                <label class="bs-sort" title="{{localize "WITCHER.Chrome.Inventory.Text.SortItems"}}">
+                  <i class="fa-solid {{sellSortIcon}}"></i>
+                  <select data-sort-tab="sell">
+                    {{#each sortOptions}}
+                      <option value="{{this.id}}" {{#if (eq this.id ../sellSort)}}selected{{/if}}>{{this.label}}</option>
+                    {{/each}}
+                  </select>
+                </label>
+              {{/if}}
+            </div>
+
+            <div class="bs-grid">
+              {{#each sellShelf}}
+                <div class="wou-slot bs-tile{{#if this.isTall}} wou-slot--tall{{/if}}{{#if this.flairColor}} has-flair{{/if}}{{#if this.inCart}} in-cart{{/if}}"
+                     data-item-id="{{this.id}}"
+                     data-rarity="{{this.rarity}}"
+                     {{#if this.flairColor}}style="--wdm-rar: {{this.flairColor}}"{{/if}}
+                     data-action="addToSell"
+                     role="button" tabindex="0"
+                     aria-label="{{this.name}}">
+                  {{#if this.isTall}}
+                    <span class="wou-tall-fit"><img class="icon" src="{{this.img}}" alt="" draggable="false" style="{{this.cropStyle}}" /></span>
+                  {{else}}
+                    <img class="icon" src="{{this.img}}" alt="" draggable="false" />
+                  {{/if}}
+                  <span class="count">{{this.quantity}}</span>
+                  {{#if this.inCart}}<span class="bs-tile-incart">{{this.inCart}}</span>{{/if}}
+                </div>
+              {{/each}}
+            </div>
+          </div>
+
+        </div>
+      {{else}}
+        <div class="bs-content">
+          <div class="bs-empty">
+            <i class="fas fa-box-open"></i>
+            <p>{{localize "WITCHER.Merchant.NothingToSell"}}</p>
+          </div>
+        </div>
+      {{/if}}
+    {{else}}
+      <div class="bs-content">
+        <div class="bs-empty">
+          <i class="fas fa-exclamation-circle"></i>
+          <p>{{localize "WITCHER.Merchant.SellNeedChar"}}</p>
+        </div>
+      </div>
+    {{/if}}
+  {{/if}}
+
+</div>

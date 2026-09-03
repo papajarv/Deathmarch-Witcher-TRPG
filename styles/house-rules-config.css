@@ -1,0 +1,43 @@
+/* house-rules-config — visual polish for the House Rules settings form.
+ * The form body reuses the `wdm-stealth-config-body` class for its
+ * primary layout, so those rules already apply. This file only adds
+ * the ID-scoped scroll rules and any HR-specific tweaks.
+ *
+ * Mirrors the pattern in stealth-config.css: bound the
+ * `.window-content` height + `overflow-y: auto` so the inner form
+ * scrolls independently of the header/footer instead of pushing
+ * the Save button off-screen at low window heights. */
+
+body.witcher-ttrpg-death-march .wdm-house-rules-config-body {
+  /* Match stealth-config's overall padding so the two panels feel
+   * consistent when the user tabs between them. */
+  padding: 0.25rem 0.35rem 0.75rem;
+}
+
+/* Scroll wrapper — Foundry V14 wraps ApplicationV2 form content in
+ * `<form>` → `<section class="window-content">`; giving that
+ * container `overflow-y: auto` plus a bounded height lets it scroll
+ * rather than push the footer off-screen. */
+body.witcher-ttrpg-death-march #wdm-house-rules-config .window-content {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+body.witcher-ttrpg-death-march #wdm-house-rules-config .window-content > .main {
+  min-height: 0;
+}
+/* Firefox-friendly slim scrollbar. */
+body.witcher-ttrpg-death-march #wdm-house-rules-config .window-content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--wdm-amber-dim, #6b5a3a) transparent;
+}
+/* WebKit scrollbar — narrow, amber-tinted so it fits the theme. */
+body.witcher-ttrpg-death-march #wdm-house-rules-config .window-content::-webkit-scrollbar {
+  width: 8px;
+}
+body.witcher-ttrpg-death-march #wdm-house-rules-config .window-content::-webkit-scrollbar-thumb {
+  background: var(--wdm-amber-dim, #6b5a3a);
+  border-radius: 4px;
+}
+body.witcher-ttrpg-death-march #wdm-house-rules-config .window-content::-webkit-scrollbar-thumb:hover {
+  background: var(--wdm-amber, #b89464);
+}

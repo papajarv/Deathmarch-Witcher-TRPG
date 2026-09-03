@@ -1,0 +1,789 @@
+{{!-- Merchant (GM) sheet — faithful port of witcher-merchant-system's
+      header + 5 tabs. The original used Foundry's generic tab nav with
+      `.tab.active` show/hide; here the panels show/hide via `data-active-tab`
+      on the root and the base sheet's `changeTab` action. Field paths are
+      adapted to the new schema: a single shop denomination (`system.shopDenom`)
+      and the six-denomination wallet (`system.currency.<denom>`) replace the
+      original's `system.currency` string + `system.coinReserve` number.
+      Do NOT wrap in <form>; ApplicationV2's frame already is one. --}}
+
+<div class="merchant-sheet wdm-merchant" data-active-tab="{{activeTab}}">
+
+  {{!-- ── Header ─────────────────────────────────────────── --}}
+  <div class="merchant-header">
+    <div class="header-left">
+      <img class="profile-img" src="{{actor.img}}" data-action="editImage" data-edit="img" title="{{actor.name}}" />
+    </div>
+
+    <div class="header-center">
+      <input class="merchant-name-input" name="name" type="text" value="{{actor.name}}" placeholder="{{localize 'WITCHER.Sheet.Merchant.Hint.MerchantName'}}" />
+
+      <div class="header-fields">
+        <div class="field">
+          <label>{{localize 'WITCHER.Sheet.Merchant.Text.Shop'}}</label>
+          <input type="text" name="system.shopName" value="{{source.shopName}}" placeholder="{{localize 'WITCHER.Sheet.Merchant.Hint.ShopName'}}" />
+        </div>
+
+        <div class="field">
+          <label>{{localize 'WITCHER.Sheet.Merchant.Text.Personality'}}</label>
+          <select name="system.personality.type">
+            <option value="friendly"  {{#if (eq currentPersonality "friendly")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Friendly10'}}</option>
+            <option value="grumpy"    {{#if (eq currentPersonality "grumpy")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Grumpy15'}}</option>
+            <option value="shifty"    {{#if (eq currentPersonality "shifty")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Shifty20'}}</option>
+            <option value="noble"     {{#if (eq currentPersonality "noble")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Noble5'}}</option>
+            <option value="desperate" {{#if (eq currentPersonality "desperate")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Desperate25'}}</option>
+            <option value="neutral"   {{#if (eq currentPersonality "neutral")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Neutral0'}}</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>{{localize 'WITCHER.Sheet.Merchant.Text.Currency'}}</label>
+          <select name="system.shopDenom">
+            <option value="crown"  {{#if (eq shopDenom "crown")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Crown'}}</option>
+            <option value="bizant" {{#if (eq shopDenom "bizant")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Bizant'}}</option>
+            <option value="ducat"  {{#if (eq shopDenom "ducat")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Ducat'}}</option>
+            <option value="lintar" {{#if (eq shopDenom "lintar")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Lintar'}}</option>
+            <option value="floren" {{#if (eq shopDenom "floren")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Floren'}}</option>
+            <option value="oren"   {{#if (eq shopDenom "oren")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Oren'}}</option>
+          </select>
+        </div>
+
+        <div class="field quirk-field">
+          <label>{{localize 'WITCHER.Sheet.Merchant.Text.Quirk'}}</label>
+          <input type="text" name="system.personality.quirk" value="{{personalityQuirk}}" placeholder="{{localize 'WITCHER.Sheet.Merchant.Hint.ANervousTicOddHabit'}}" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {{!-- ── Tab nav ────────────────────────────────────────── --}}
+  <nav class="wdm-merchant-tabs">
+    <button type="button" class="wdm-tab{{#if (eq activeTab "general")}} is-active{{/if}}" data-action="changeTab" data-tab="general"><i class="fas fa-user"></i> {{localize 'WITCHER.Sheet.Merchant.Text.General'}}</button>
+    <button type="button" class="wdm-tab{{#if (eq activeTab "pricing")}} is-active{{/if}}" data-action="changeTab" data-tab="pricing"><i class="fas fa-coins"></i> {{localize 'WITCHER.Sheet.Merchant.Text.Pricing'}}</button>
+    <button type="button" class="wdm-tab{{#if (eq activeTab "inventory")}} is-active{{/if}}" data-action="changeTab" data-tab="inventory"><i class="fas fa-boxes-stacked"></i> {{localize 'WITCHER.Sheet.Merchant.Text.Inventory'}}</button>
+    <button type="button" class="wdm-tab{{#if (eq activeTab "relationships")}} is-active{{/if}}" data-action="changeTab" data-tab="relationships"><i class="fas fa-handshake"></i> {{localize 'WITCHER.Sheet.Merchant.Text.Relationships'}}</button>
+    <button type="button" class="wdm-tab{{#if (eq activeTab "stocking")}} is-active{{/if}}" data-action="changeTab" data-tab="stocking"><i class="fas fa-dice"></i> {{localize 'WITCHER.Sheet.Merchant.Text.Stocking'}}</button>
+  </nav>
+
+  <div class="wdm-merchant-panels">
+
+    {{!-- ── General ──────────────────────────────────────── --}}
+    <section class="wdm-panel" data-tab="general">
+      <div class="merchant-tab-content">
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="card-label">{{localize 'WITCHER.Sheet.Merchant.Text.Inventory'}}</div>
+            <div class="card-value">{{itemCount}} items</div>
+            <div class="card-sub">{{totalInventoryValue}} {{shopDenom}} total value</div>
+          </div>
+
+          <div class="summary-card">
+            <div class="card-label">{{localize 'WITCHER.Sheet.Merchant.Text.CoinReserve'}}</div>
+            <div class="card-value coin-readonly">{{coinReserve}}</div>
+            <div class="card-sub">{{shopDenom}} (manage in Inventory tab)</div>
+          </div>
+
+          <div class="summary-card">
+            <div class="card-label">{{localize 'WITCHER.Sheet.Merchant.Text.Personality'}}</div>
+            <div class="card-value personality-badge">{{personalityLabel}}</div>
+            {{#if personalityQuirk}}
+              <div class="card-sub quirk">"{{personalityQuirk}}"</div>
+            {{/if}}
+          </div>
+
+          <div class="summary-card">
+            <div class="card-label">{{localize 'WITCHER.Sheet.Merchant.Text.Markup'}}</div>
+            <div class="card-value">{{markupSign}}{{markupPercent}}%</div>
+            <div class="card-sub">{{localize 'WITCHER.Sheet.Merchant.Text.BasePriceAdjustment'}}</div>
+          </div>
+        </div>
+
+        <div class="description-section">
+          <label>{{localize 'WITCHER.Sheet.Merchant.Text.Description'}}</label>
+          <textarea name="system.description" placeholder="{{localize 'WITCHER.Sheet.Merchant.Hint.WhoIsThisMerchantWhatDoTheySellWhereDoTh'}}">{{source.description}}</textarea>
+        </div>
+
+        <p class="merchant-scene-hint">
+          <i class="fas fa-store"></i>
+    {{localize 'WITCHER.Sheet.Merchant.Text.SceneCardBlurb'}}
+  </p>
+      </div>
+    </section>
+
+    {{!-- ── Pricing ──────────────────────────────────────── --}}
+    <section class="wdm-panel" data-tab="pricing">
+      <div class="merchant-tab-content">
+        <div class="pricing-block">
+          <h3>{{localize 'WITCHER.Sheet.Merchant.Text.PriceMarkup'}}</h3>
+          <p class="pricing-hint">{{localize 'WITCHER.Sheet.Merchant.Text.HowMuchThisMerchantChargesAboveOrBelowSt'}}</p>
+
+          <div class="slider-row">
+            <input type="range" name="system.pricing.baseMarkup"
+              value="{{baseMarkup}}" min="0.5" max="3" step="0.01"
+              class="markup-slider precision-slider" />
+            <div class="slider-readout {{markupClass}}">{{markupSign}}{{markupPercent}}%</div>
+          </div>
+          <div class="slider-labels markup-labels">
+            <span style="left:0%">-50%</span>
+            <span style="left:10%">-25%</span>
+            <span style="left:20%">0%</span>
+            <span style="left:40%">+50%</span>
+            <span style="left:60%">+100%</span>
+            <span style="left:100%">+200%</span>
+          </div>
+        </div>
+
+        <div class="pricing-block">
+          <h3>{{localize 'WITCHER.Sheet.Merchant.Text.BulkDiscount'}}</h3>
+          <p class="pricing-hint">{{localize 'WITCHER.Sheet.Merchant.Text.DiscountAppliedWhenABuyerPurchasesAtOrAb'}}</p>
+
+          <div class="bulk-controls">
+            <div class="bulk-field">
+              <label>{{localize 'WITCHER.Sheet.Merchant.Text.BuyThisManyOrMore'}}</label>
+              <input type="number" name="system.pricing.bulkDiscountThreshold"
+                value="{{bulkDiscountThreshold}}" min="1" max="50" step="1" class="threshold-input" />
+            </div>
+
+            <div class="bulk-field">
+              <label>{{localize 'WITCHER.Sheet.Merchant.Text.Discount'}}</label>
+              <div class="slider-row">
+                <input type="range" name="system.pricing.bulkDiscountPercent"
+                  value="{{bulkDiscountPercent}}" min="0" max="50" step="1"
+                  class="discount-slider precision-slider"
+                  data-sync-target="discount-numeric" />
+                <input type="number"
+                  value="{{bulkDiscountPercent}}" min="0" max="50" step="1"
+                  class="slider-numeric"
+                  data-sync-id="discount-numeric"
+                  data-sync-source="discount-slider" />
+                <div class="slider-readout markup-negative">{{bulkDiscountPercent}}% off</div>
+              </div>
+              <div class="slider-labels">
+                <span>0%</span><span>10%</span><span>20%</span><span>30%</span><span>40%</span><span>50%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bulk-example">
+            {{#if hasBulkDiscount}}
+              Buying {{bulkDiscountThreshold}}+ of the same item &rarr; {{bulkDiscountPercent}}% discount
+            {{else}}
+              No bulk discount currently set.
+            {{/if}}
+          </div>
+        </div>
+
+        <div class="pricing-block">
+          <h3>{{localize 'WITCHER.Sheet.Merchant.Text.BuybackRate'}}</h3>
+          <p class="pricing-hint">{{localize 'WITCHER.Sheet.Merchant.Text.BuybackRateHint'}}</p>
+
+          <div class="bulk-controls">
+            <div class="bulk-field">
+              <label>{{localize 'WITCHER.Sheet.Merchant.Text.BuybackPercent'}}</label>
+              <div class="slider-row">
+                <input type="range" name="system.pricing.buybackPercent"
+                  value="{{buybackPercent}}" min="0" max="100" step="1"
+                  class="discount-slider precision-slider"
+                  data-sync-target="buyback-numeric" />
+                <input type="number"
+                  value="{{buybackPercent}}" min="0" max="100" step="1"
+                  class="slider-numeric"
+                  data-sync-id="buyback-numeric"
+                  data-sync-source="discount-slider" />
+                <div class="slider-readout">{{buybackPercent}}%</div>
+              </div>
+              <div class="slider-labels">
+                <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bulk-example">
+            {{localize 'WITCHER.Sheet.Merchant.Text.BuybackExample1'}} {{buybackPercent}}% {{localize 'WITCHER.Sheet.Merchant.Text.BuybackExample2'}}
+          </div>
+        </div>
+
+        <div class="pricing-block">
+          <h3>{{localize 'WITCHER.Sheet.Merchant.Text.BuyCategories'}}</h3>
+          <p class="pricing-hint">{{localize 'WITCHER.Sheet.Merchant.Text.BuyCategoriesHint'}}</p>
+          <div class="wdm-buycat-grid">
+            {{#each buyCategoryOptions}}
+              <label class="wdm-buycat-item">
+                <input type="checkbox" class="wdm-buycat-check" data-category="{{this.type}}" {{#if this.checked}}checked{{/if}} />
+                <span>{{this.label}}</span>
+              </label>
+            {{/each}}
+          </div>
+        </div>
+
+        <div class="pricing-block pricing-note">
+          <i class="fas fa-info-circle"></i>
+    {{localize 'WITCHER.Sheet.Merchant.Text.PriceFormulaBlurb'}}
+  </div>
+      </div>
+    </section>
+
+    {{!-- ── Inventory ────────────────────────────────────── --}}
+    <section class="wdm-panel" data-tab="inventory">
+      <div class="merchant-tab-content merchant-inventory">
+        <div class="inventory-topbar">
+          <div class="inv-stats">
+            <div class="inv-stat coin-stat">
+              <i class="fas fa-coins"></i>
+              <span class="coin-display">{{coinReserve}}</span>
+              <span class="currency-label">{{shopDenom}}</span>
+              <div class="coin-buttons">
+                <button type="button" class="inv-btn coin-btn" data-action="depositCoin" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.DepositCoin'}}">
+                  <i class="fas fa-plus"></i>
+                </button>
+                <button type="button" class="inv-btn coin-btn" data-action="withdrawCoin" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.WithdrawCoin'}}">
+                  <i class="fas fa-minus"></i>
+                </button>
+              </div>
+            </div>
+            <div class="inv-stat">
+              <i class="fas fa-boxes-stacked"></i>
+              <span>{{itemCount}} items</span>
+            </div>
+            <div class="inv-stat">
+              <i class="fas fa-tag"></i>
+              <span>{{totalInventoryValue}} {{shopDenom}} value</span>
+            </div>
+            <div class="inv-stat">
+              <i class="fas fa-weight-hanging"></i>
+              <span>{{totalWeight}} kg</span>
+            </div>
+          </div>
+          <div class="inv-actions">
+            <button type="button" class="inv-btn" data-action="clearStock" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.DeleteAllItems'}}">
+              <i class="fas fa-broom"></i> {{localize 'WITCHER.Sheet.Merchant.Button.Clear'}}
+            </button>
+            <button type="button" class="inv-btn" data-action="runRestock" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.RestockFromLastFullStock'}}">
+              <i class="fas fa-rotate"></i> {{localize 'WITCHER.Sheet.Merchant.Button.Restock'}}
+            </button>
+          </div>
+        </div>
+
+        {{#if itemCount}}
+          <table class="inv-table">
+            <thead>
+              <tr>
+                <th class="col-expand"></th>
+                <th class="col-img"></th>
+                <th class="col-name sortable" data-action="sortInventory" data-sort-field="name">
+                  Item {{#if (eq sortField "name")}}<i class="fas fa-caret-{{#if (eq sortDir "asc")}}up{{else}}down{{/if}}"></i>{{/if}}
+                </th>
+                <th class="col-type sortable" data-action="sortInventory" data-sort-field="type">
+                  Type {{#if (eq sortField "type")}}<i class="fas fa-caret-{{#if (eq sortDir "asc")}}up{{else}}down{{/if}}"></i>{{/if}}
+                </th>
+                <th class="col-price sortable" data-action="sortInventory" data-sort-field="cost">
+                  Price {{#if (eq sortField "cost")}}<i class="fas fa-caret-{{#if (eq sortDir "asc")}}up{{else}}down{{/if}}"></i>{{/if}}
+                </th>
+                <th class="col-qty sortable" data-action="sortInventory" data-sort-field="quantity">
+                  Qty {{#if (eq sortField "quantity")}}<i class="fas fa-caret-{{#if (eq sortDir "asc")}}up{{else}}down{{/if}}"></i>{{/if}}
+                </th>
+                <th class="col-weight sortable" data-action="sortInventory" data-sort-field="weight">
+                  Wt. {{#if (eq sortField "weight")}}<i class="fas fa-caret-{{#if (eq sortDir "asc")}}up{{else}}down{{/if}}"></i>{{/if}}
+                </th>
+                <th class="col-actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#each allItems}}
+                <tr class="inv-row {{#if this.isExpanded}}expanded{{/if}}" data-item-id="{{this.id}}">
+                  <td class="col-expand">
+                    {{#if this.hasDescription}}
+                      <a data-action="toggleItemExpand" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.Expand'}}">
+                        <i class="fas fa-caret-{{#if this.isExpanded}}down{{else}}right{{/if}}"></i>
+                      </a>
+                    {{/if}}
+                  </td>
+                  <td class="col-img"><div class="bs-item-slot{{#if this.flairColor}} has-flair{{/if}}" data-rarity="{{this.rarity}}"{{#if this.flairColor}} style="--wdm-rar: {{this.flairColor}}"{{/if}}><img src="{{this.img}}" title="{{this.name}}" /></div></td>
+                  <td class="col-name">{{this.name}}</td>
+                  <td class="col-type"><span class="type-badge">{{this.type}}</span></td>
+                  <td class="col-price">
+                    <div class="price-cell">
+                      {{#if this.hasItemMarkup}}
+                        <span class="base-price-strike" title="Base cost: {{this.cost}}">{{this.cost}}</span>
+                        <span class="effective-price" title="With item markup: {{this.itemMarkupSign}}{{this.itemMarkupPercent}}%">{{this.effectivePrice}}</span>
+                        <span class="item-markup-pct {{this.itemMarkupClass}}">{{this.itemMarkupSign}}{{this.itemMarkupPercent}}%</span>
+                      {{else}}
+                        {{this.cost}}
+                      {{/if}}
+                    </div>
+                  </td>
+                  <td class="col-qty">
+                    <input type="number" class="qty-edit" data-item-id="{{this.id}}" data-item-qty value="{{this.quantity}}" min="0" step="1" />
+                  </td>
+                  <td class="col-weight">{{this.weight}}</td>
+                  <td class="col-actions">
+                    <a data-action="editItemMarkup" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.SetItemMarkupDiscount'}}"><i class="fas fa-percent"></i></a>
+                    <a data-action="toggleItemService" data-item-id="{{this.id}}"
+                       class="{{#if this.isService}}is-active{{/if}}"
+                       title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.ToggleService'}}"><i class="fas fa-handshake"></i></a>
+                    {{#if this.isFood}}
+                      <a data-action="toggleItemFreshness" data-item-id="{{this.id}}"
+                         class="{{#if this.freshnessDecayOn}}is-active{{/if}}"
+                         title="{{#if this.freshnessDecayOn}}{{localize 'WITCHER.Sheet.Merchant.Tooltip.ToggleFreshnessDecayOn'}}{{else}}{{localize 'WITCHER.Sheet.Merchant.Tooltip.ToggleFreshnessDecayOff'}}{{/if}}"><i class="fas fa-hourglass-half"></i></a>
+                    {{/if}}
+                    <a data-action="inventoryDelete" data-item-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.Remove'}}"><i class="fas fa-trash"></i></a>
+                  </td>
+                </tr>
+                {{#if this.isExpanded}}
+                  <tr class="inv-row-detail">
+                    <td colspan="8">
+                      <div class="item-description">{{{this.description}}}</div>
+                    </td>
+                  </tr>
+                {{/if}}
+              {{/each}}
+            </tbody>
+          </table>
+        {{else}}
+          <div class="empty-inv">
+            <i class="fas fa-box-open"></i>
+            <p>{{localize 'WITCHER.Sheet.Merchant.Text.NoItemsInStock'}}</p>
+            <p class="hint">{{localize 'WITCHER.Sheet.Merchant.Text.DragItemsFromACompendiumOrConfigureTheSt'}}</p>
+          </div>
+        {{/if}}
+      </div>
+    </section>
+
+    {{!-- ── Relationships ────────────────────────────────── --}}
+    <section class="wdm-panel" data-tab="relationships">
+      <div class="merchant-tab-content">
+        <div class="theorycraft-banner">
+          <i class="fas fa-handshake"></i>
+          <span>{{localize 'WITCHER.Sheet.Merchant.Text.RelationshipsAffectThisMerchantSPricingP'}}</span>
+        </div>
+
+        {{!-- Race / profession price rules --}}
+        <div class="wdm-demo-section">
+          <div class="wdm-demo-head">
+            <h3><i class="fas fa-users"></i> {{localize 'WITCHER.Sheet.Merchant.Text.DemographicPricing'}}</h3>
+            <button type="button" class="relation-btn" data-action="addDemographic"><i class="fas fa-plus"></i> {{localize 'WITCHER.Sheet.Merchant.Text.AddRule'}}</button>
+          </div>
+          <p class="pricing-hint">{{localize 'WITCHER.Sheet.Merchant.Text.DemographicPricingHint'}}</p>
+          {{#if demographicRules.length}}
+            <div class="wdm-demo-list">
+              {{#each demographicRules}}
+                <div class="wdm-demo-row">
+                  <select class="wdm-demo-field" data-index="{{this.index}}" data-field="kind">
+                    <option value="race"       {{#if (eq this.kind "race")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Race'}}</option>
+                    <option value="profession" {{#if (eq this.kind "profession")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Merchant.Text.Profession'}}</option>
+                  </select>
+                  <input type="text" class="wdm-demo-field" data-index="{{this.index}}" data-field="name"
+                    value="{{this.name}}" placeholder="{{localize 'WITCHER.Sheet.Merchant.Hint.RaceProfName'}}" />
+                  <div class="wdm-demo-pct">
+                    <input type="number" class="wdm-demo-field" data-index="{{this.index}}" data-field="pricePercent"
+                      value="{{this.pricePercent}}" min="0" step="1" />
+                    <span>%</span>
+                  </div>
+                  <button type="button" class="relation-btn reset" data-action="removeDemographic" data-index="{{this.index}}"
+                    title="{{localize 'WITCHER.Sheet.Merchant.Text.Remove'}}"><i class="fas fa-trash"></i></button>
+                </div>
+              {{/each}}
+            </div>
+          {{else}}
+            <p class="hint">{{localize 'WITCHER.Sheet.Merchant.Text.NoDemographicRules'}}</p>
+          {{/if}}
+        </div>
+
+        {{#if relationships.length}}
+          <div class="relations-list">
+            {{#each relationships}}
+              <div class="relation-card relation-{{this.relationshipColor}}">
+                <div class="relation-header">
+                  <img src="{{this.playerImg}}" class="relation-avatar" />
+                  <div class="relation-info">
+                    <div class="relation-name">{{this.playerName}}</div>
+                    <div class="relation-status">
+                      <span class="relation-label">{{this.relationshipLabel}}</span>
+                      <span class="relation-score">{{this.relationship}}</span>
+                      <span class="relation-modifier">{{this.priceModifierLabel}}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="relation-controls">
+                  <input type="range"
+                    value="{{this.relationship}}" min="-100" max="100" step="1"
+                    class="relation-slider" data-player-id="{{this.playerId}}" />
+
+                  <div class="relation-buttons">
+                    <button type="button" class="relation-btn" data-action="adjustRelationship" data-player-id="{{this.playerId}}" data-delta="-10" title="-10">-10</button>
+                    <button type="button" class="relation-btn" data-action="adjustRelationship" data-player-id="{{this.playerId}}" data-delta="-1" title="-1">-1</button>
+                    <button type="button" class="relation-btn reset" data-action="resetRelationship" data-player-id="{{this.playerId}}" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.ResetTo0'}}">
+                      <i class="fas fa-undo"></i>
+                    </button>
+                    <button type="button" class="relation-btn" data-action="adjustRelationship" data-player-id="{{this.playerId}}" data-delta="1" title="+1">+1</button>
+                    <button type="button" class="relation-btn" data-action="adjustRelationship" data-player-id="{{this.playerId}}" data-delta="10" title="+10">+10</button>
+                  </div>
+                </div>
+
+                <textarea class="relation-notes"
+                  placeholder="{{localize 'WITCHER.Sheet.Merchant.Hint.NotesAboutThisPlayer'}}"
+                  data-player-id="{{this.playerId}}">{{this.notes}}</textarea>
+              </div>
+            {{/each}}
+          </div>
+        {{else}}
+          <div class="empty-inv">
+            <i class="fas fa-users"></i>
+            <p>{{localize 'WITCHER.Sheet.Merchant.Text.NoPlayerCharactersFoundInThisWorld'}}</p>
+            <p class="hint">{{localize 'WITCHER.Sheet.Merchant.Text.AssignCharactersToUsersToStartTrackingRe'}}</p>
+          </div>
+        {{/if}}
+      </div>
+    </section>
+
+    {{!-- ── Stocking ─────────────────────────────────────── --}}
+    <section class="wdm-panel" data-tab="stocking">
+      <div class="merchant-tab-content stocking-content">
+
+        <div class="stocking-topbar">
+          <div class="stocking-summary">
+            <i class="fas fa-warehouse"></i>
+            <span>{{localize 'WITCHER.Sheet.Merchant.Text.LastStocked'}} <strong>{{stockingData.lastStockedAtFormatted}}</strong></span>
+            {{#if stockingData.hasLastStock}}
+              <span class="separator">·</span>
+              <span>{{stockingData.lastStockCount}} items</span>
+            {{/if}}
+          </div>
+          <div class="stocking-actions">
+            <button type="button" class="inv-btn primary" data-action="runStocking" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.GenerateFreshStockFromConfig'}}">
+              <i class="fas fa-magic"></i> {{localize 'WITCHER.Sheet.Merchant.Button.StockNow'}}
+            </button>
+            <button type="button" class="inv-btn" data-action="runRestock" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.Restock14FromLastStocking'}}"
+              {{#unless stockingData.hasLastStock}}disabled{{/unless}}>
+              <i class="fas fa-rotate"></i> {{localize 'WITCHER.Sheet.Merchant.Button.Restock'}}
+            </button>
+          </div>
+        </div>
+
+        {{!-- Sources --}}
+        <div class="stocking-section">
+          <div class="section-head">
+            <h3><i class="fas fa-book"></i> {{localize 'WITCHER.Sheet.Merchant.Text.Sources'}}</h3>
+          </div>
+
+          <div class="source-mode-toggle">
+            <label class="radio-label">
+              <input type="radio" name="system.stocking.useItemPool" value="false" {{#unless stockingData.useItemPool}}checked{{/unless}} />
+              <i class="fas fa-book"></i> {{localize 'WITCHER.Sheet.Merchant.Text.Compendium'}}
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="system.stocking.useItemPool" value="true" {{#if stockingData.useItemPool}}checked{{/if}} />
+              <i class="fas fa-hand-holding"></i> {{localize 'WITCHER.Sheet.Merchant.Text.ItemPool'}}
+            </label>
+            <p class="hint-text" style="margin-top:0.4rem;">
+              {{#if stockingData.useItemPool}}
+                {{localize 'WITCHER.Sheet.Merchant.Hint.ItemPoolMode'}}
+              {{else}}
+                {{localize 'WITCHER.Sheet.Merchant.Hint.CompendiumMode'}}
+              {{/if}}
+            </p>
+          </div>
+
+          {{#unless stockingData.useItemPool}}
+          <div class="compendium-sources-block">
+            <div class="section-head" style="margin-top:0.5rem;">
+              <span></span>
+              <button type="button" class="inv-btn small" data-action="addSource">
+                <i class="fas fa-plus"></i> {{localize 'WITCHER.Sheet.Merchant.Button.AddCompendium'}}
+              </button>
+            </div>
+
+            {{#if stockingData.sources.length}}
+              <div class="sources-list" data-source-pool>
+                {{#each stockingData.sources}}
+                  <div class="source-row" data-source-index="{{@index}}">
+                    <div class="source-info">
+                      <div class="source-name">
+                        <i class="fas fa-book"></i> {{this.packLabel}}
+                      </div>
+                      <div class="source-controls">
+                        <button type="button" class="icon-btn" data-action="editSource" data-index="{{@index}}" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.EditFoldersKeywords'}}">
+                          <i class="fas fa-pen"></i>
+                        </button>
+                        <button type="button" class="icon-btn delete" data-action="removeSource" data-index="{{@index}}" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.Remove'}}">
+                          <i class="fas fa-times"></i>
+                        </button>
+                      </div>
+                    </div>
+                    {{#if this.folderPaths.length}}
+                      <div class="source-folders">
+                        {{#each this.folderPaths}}
+                          <span class="folder-chip"><i class="fas fa-folder"></i> {{this}}</span>
+                        {{/each}}
+                      </div>
+                    {{/if}}
+                    {{#if (or this.includeKeywords this.excludeKeywords)}}
+                      <div class="source-filters">
+                        {{#if this.includeKeywords}}
+                          <span class="filter-badge include" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.MustMatchAtLeastOne'}}"><i class="fas fa-plus"></i> {{this.includeKeywords}}</span>
+                        {{/if}}
+                        {{#if this.excludeKeywords}}
+                          <span class="filter-badge exclude" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.MustNotMatchAny'}}"><i class="fas fa-minus"></i> {{this.excludeKeywords}}</span>
+                        {{/if}}
+                      </div>
+                    {{/if}}
+                    <div class="source-slider-row">
+                      <input type="range" class="source-slider precision-slider"
+                        data-source-index="{{@index}}"
+                        value="{{this.weight}}" min="0" max="100" step="1" />
+                      <div class="source-readout">{{this.weight}}%</div>
+                    </div>
+                  </div>
+                {{/each}}
+              </div>
+              <div class="pool-status">{{localize 'WITCHER.Sheet.Merchant.Text.Total'}} <strong class="pool-total">100%</strong> · {{localize 'WITCHER.Sheet.Merchant.Hint.PoolAutoBalances'}}</div>
+            {{else}}
+              <div class="empty-sub">{{localize 'WITCHER.Sheet.Merchant.Text.NoCompendiumSourcesYetAddOneToStartConfi'}}</div>
+            {{/if}}
+          </div>
+          {{/unless}}
+
+          {{#if stockingData.useItemPool}}
+          <div class="item-pool-info">
+            <div class="item-pool-status">
+              <i class="fas fa-cubes"></i>
+              <span>{{localize 'WITCHER.Sheet.Merchant.Text.Pool'}} <strong>{{stockingData.itemPoolCount}}</strong> {{localize 'WITCHER.Sheet.Merchant.Text.ItemsSaved'}}</span>
+            </div>
+            <p class="hint-text">
+              {{{localize 'WITCHER.Sheet.Merchant.Hint.ItemPoolExplain'}}}
+            </p>
+            <div class="item-pool-actions">
+              <button type="button" class="inv-btn small" data-action="saveItemPool" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.SaveCurrentInventoryAsTheItemPool'}}">
+                <i class="fas fa-save"></i> {{localize 'WITCHER.Sheet.Merchant.Button.SaveAsPool'}}
+              </button>
+              {{#if stockingData.itemPoolCount}}
+                <button type="button" class="inv-btn small" data-action="clearItemPool" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.ClearTheSavedItemPool'}}">
+                  <i class="fas fa-trash"></i> {{localize 'WITCHER.Sheet.Merchant.Button.ClearPool'}}
+                </button>
+              {{/if}}
+            </div>
+          </div>
+          {{/if}}
+        </div>
+
+        {{!-- Quantity --}}
+        <div class="stocking-section">
+          <h3><i class="fas fa-boxes-stacked"></i> {{localize 'WITCHER.Sheet.Merchant.Text.Quantity'}}</h3>
+
+          <div class="qty-mode-toggle">
+            <label class="radio-label">
+              <input type="radio" name="system.stocking.totalMode" value="fixed" {{#if (eq stockingData.totalMode "fixed")}}checked{{/if}} />
+              {{localize 'WITCHER.Sheet.Merchant.Text.FixedAmount'}}
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="system.stocking.totalMode" value="random" {{#if (eq stockingData.totalMode "random")}}checked{{/if}} />
+              {{localize 'WITCHER.Sheet.Merchant.Text.RandomRange'}}
+            </label>
+          </div>
+
+          {{#if (eq stockingData.totalMode "fixed")}}
+            <div class="qty-input-row">
+              <label>{{localize 'WITCHER.Sheet.Merchant.Text.TotalItemsPerStocking'}}</label>
+              <input type="number" name="system.stocking.totalFixed" value="{{stockingData.totalFixed}}" min="1" max="500" step="1" />
+            </div>
+          {{else}}
+            <div class="qty-input-row">
+              <label>{{localize 'WITCHER.Sheet.Merchant.Text.Min'}}</label>
+              <input type="number" name="system.stocking.totalRandomMin" value="{{stockingData.totalRandomMin}}" min="1" max="500" step="1" />
+              <label>{{localize 'WITCHER.Sheet.Merchant.Text.Max'}}</label>
+              <input type="number" name="system.stocking.totalRandomMax" value="{{stockingData.totalRandomMax}}" min="1" max="500" step="1" />
+            </div>
+          {{/if}}
+
+          <hr class="subdivider" />
+
+          <h4>{{localize 'WITCHER.Sheet.Merchant.Text.StackTolerance'}}</h4>
+          <p class="hint-text">{{localize 'WITCHER.Sheet.Merchant.Text.ControlsHowOftenTheStockerRollsMultipleC'}}</p>
+
+          <label class="inline-checkbox">
+            <input type="checkbox" name="system.stocking.allowStacks" {{#if stockingData.allowStacks}}checked{{/if}} />
+            {{localize 'WITCHER.Sheet.Merchant.Text.AllowStacks'}}
+          </label>
+
+          {{#if stockingData.allowStacks}}
+            <div class="stack-explanation">
+              <p><strong>{{localize 'WITCHER.Sheet.Merchant.Text.TotalIsRows'}}</strong> {{localize 'WITCHER.Sheet.Merchant.Text.StacksJustAddCopiesToARowNotExtraRows'}}</p>
+              <p>{{localize 'WITCHER.Sheet.Merchant.Text.ForEachRowRoll'}} <strong>{{localize 'WITCHER.Sheet.Merchant.Text.StackChance'}}</strong> → {{{localize 'WITCHER.Sheet.Merchant.Hint.StackChanceOutcome'}}}</p>
+            </div>
+
+            <div class="stack-controls">
+              <div class="stack-field">
+                <label>{{localize 'WITCHER.Sheet.Merchant.Text.MaxStackSize'}}</label>
+                <input type="number" name="system.stocking.maxStack" value="{{stockingData.maxStack}}" min="2" max="10" step="1" />
+              </div>
+              <div class="stack-field">
+                <label>{{localize 'WITCHER.Sheet.Merchant.Text.StackChance2'}}</label>
+                <div class="slider-row">
+                  <input type="range" name="system.stocking.stackChance" value="{{stockingData.stackChance}}" min="0" max="100" step="1" class="precision-slider stack-chance-slider" />
+                  <div class="slider-readout stack-chance-readout">{{stockingData.stackChance}}%</div>
+                </div>
+              </div>
+            </div>
+          {{/if}}
+        </div>
+
+        {{!-- Availability --}}
+        <div class="stocking-section">
+          <h3><i class="fas fa-gem"></i> {{localize 'WITCHER.Sheet.Merchant.Text.Availability'}}</h3>
+          <p class="hint-text">{{localize 'WITCHER.Sheet.Merchant.Text.FilterWhichItemRaritiesCanAppearInThisMe'}}</p>
+
+          <div class="rarity-toggles">
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.everywhere" {{#if stockingData.rarityEnabled.everywhere}}checked{{/if}} />
+              <span class="rarity-badge everywhere">{{localize 'WITCHER.Sheet.Merchant.Text.Everywhere'}}</span>
+            </label>
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.common" {{#if stockingData.rarityEnabled.common}}checked{{/if}} />
+              <span class="rarity-badge common">{{localize 'WITCHER.Sheet.Merchant.Text.Common'}}</span>
+            </label>
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.poor" {{#if stockingData.rarityEnabled.poor}}checked{{/if}} />
+              <span class="rarity-badge poor">{{localize 'WITCHER.Sheet.Merchant.Text.Poor'}}</span>
+            </label>
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.rare" {{#if stockingData.rarityEnabled.rare}}checked{{/if}} />
+              <span class="rarity-badge rare">{{localize 'WITCHER.Sheet.Merchant.Text.Rare'}}</span>
+            </label>
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.witcher" {{#if stockingData.rarityEnabled.witcher}}checked{{/if}} />
+              <span class="rarity-badge witcher">{{localize 'WITCHER.Sheet.Merchant.Text.Witcher'}}</span>
+            </label>
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.elderfolk" {{#if stockingData.rarityEnabled.elderfolk}}checked{{/if}} />
+              <span class="rarity-badge elderfolk">{{localize 'WITCHER.Sheet.Merchant.Text.ElderFolk'}}</span>
+            </label>
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.relic" {{#if stockingData.rarityEnabled.relic}}checked{{/if}} />
+              <span class="rarity-badge relic">{{localize 'WITCHER.Sheet.Merchant.Text.Relic'}}</span>
+            </label>
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.goetia" {{#if stockingData.rarityEnabled.goetia}}checked{{/if}} />
+              <span class="rarity-badge goetia">{{localize 'WITCHER.Sheet.Merchant.Text.Goetia'}}</span>
+            </label>
+            <label class="rarity-toggle">
+              <input type="checkbox" name="system.stocking.rarityEnabled.experimental" {{#if stockingData.rarityEnabled.experimental}}checked{{/if}} />
+              <span class="rarity-badge experimental">{{localize 'WITCHER.Sheet.Merchant.Text.Experimental'}}</span>
+            </label>
+          </div>
+
+          <hr class="subdivider" />
+
+          <label class="inline-checkbox">
+            <input type="checkbox" name="system.stocking.useRarityWeights" {{#if stockingData.useRarityWeights}}checked{{/if}} />
+            <strong>{{localize 'WITCHER.Sheet.Merchant.Text.UseWeightedRarity'}}</strong> &mdash; adjust how likely each rarity is to appear
+          </label>
+
+          {{#if stockingData.useRarityWeights}}
+            <div class="rarity-weights">
+              {{#if stockingData.rarityEnabled.everywhere}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge everywhere">{{localize 'WITCHER.Sheet.Merchant.Text.Everywhere'}}</span>
+                  <input type="range" name="system.stocking.rarityWeights.everywhere" value="{{stockingData.rarityWeights.everywhere}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.everywhere}}%</div>
+                </div>
+              {{/if}}
+              {{#if stockingData.rarityEnabled.common}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge common">{{localize 'WITCHER.Sheet.Merchant.Text.Common'}}</span>
+                  <input type="range" name="system.stocking.rarityWeights.common" value="{{stockingData.rarityWeights.common}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.common}}%</div>
+                </div>
+              {{/if}}
+              {{#if stockingData.rarityEnabled.poor}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge poor">{{localize 'WITCHER.Sheet.Merchant.Text.Poor'}}</span>
+                  <input type="range" name="system.stocking.rarityWeights.poor" value="{{stockingData.rarityWeights.poor}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.poor}}%</div>
+                </div>
+              {{/if}}
+              {{#if stockingData.rarityEnabled.rare}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge rare">{{localize 'WITCHER.Sheet.Merchant.Text.Rare'}}</span>
+                  <input type="range" name="system.stocking.rarityWeights.rare" value="{{stockingData.rarityWeights.rare}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.rare}}%</div>
+                </div>
+              {{/if}}
+              {{#if stockingData.rarityEnabled.witcher}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge witcher">{{localize 'WITCHER.Sheet.Merchant.Text.Witcher'}}</span>
+                  <input type="range" name="system.stocking.rarityWeights.witcher" value="{{stockingData.rarityWeights.witcher}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.witcher}}%</div>
+                </div>
+              {{/if}}
+              {{#if stockingData.rarityEnabled.elderfolk}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge elderfolk">{{localize 'WITCHER.Sheet.Merchant.Text.ElderFolk'}}</span>
+                  <input type="range" name="system.stocking.rarityWeights.elderfolk" value="{{stockingData.rarityWeights.elderfolk}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.elderfolk}}%</div>
+                </div>
+              {{/if}}
+              {{#if stockingData.rarityEnabled.relic}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge relic">{{localize 'WITCHER.Sheet.Merchant.Text.Relic'}}</span>
+                  <input type="range" name="system.stocking.rarityWeights.relic" value="{{stockingData.rarityWeights.relic}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.relic}}%</div>
+                </div>
+              {{/if}}
+              {{#if stockingData.rarityEnabled.goetia}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge goetia">{{localize 'WITCHER.Sheet.Merchant.Text.Goetia'}}</span>
+                  <input type="range" name="system.stocking.rarityWeights.goetia" value="{{stockingData.rarityWeights.goetia}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.goetia}}%</div>
+                </div>
+              {{/if}}
+              {{#if stockingData.rarityEnabled.experimental}}
+                <div class="rarity-weight-row">
+                  <span class="rarity-badge experimental">{{localize 'WITCHER.Sheet.Merchant.Text.Experimental'}}</span>
+                  <input type="range" name="system.stocking.rarityWeights.experimental" value="{{stockingData.rarityWeights.experimental}}" min="0" max="100" step="1" class="precision-slider" />
+                  <div class="slider-readout">{{stockingData.rarityWeights.experimental}}%</div>
+                </div>
+              {{/if}}
+            </div>
+          {{/if}}
+        </div>
+
+        {{!-- Presets --}}
+        <div class="stocking-section">
+          <div class="section-head">
+            <h3><i class="fas fa-bookmark"></i> {{localize 'WITCHER.Sheet.Merchant.Text.Presets'}}</h3>
+            <button type="button" class="inv-btn small" data-action="savePreset">
+              <i class="fas fa-save"></i> {{localize 'WITCHER.Sheet.Merchant.Button.SaveCurrent'}}
+            </button>
+          </div>
+
+          {{#if stockingData.presets.length}}
+            <div class="presets-list">
+              {{#each stockingData.presets}}
+                <div class="preset-row" data-preset-id="{{this.id}}">
+                  <div class="preset-info">
+                    <i class="fas fa-bookmark"></i>
+                    <span class="preset-name">{{this.name}}</span>
+                    {{#if this.createdBy}}<span class="preset-author">{{localize 'WITCHER.Sheet.Merchant.Text.By'}} {{this.createdBy}}</span>{{/if}}
+                  </div>
+                  <div class="preset-actions">
+                    <button type="button" class="icon-btn" data-action="loadPreset" data-preset-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.LoadThisPreset'}}">
+                      <i class="fas fa-upload"></i> {{localize 'WITCHER.Sheet.Merchant.Button.Load'}}
+                    </button>
+                    <button type="button" class="icon-btn delete" data-action="deletePreset" data-preset-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Merchant.Tooltip.Delete'}}">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              {{/each}}
+            </div>
+          {{else}}
+            <div class="empty-sub">{{localize 'WITCHER.Sheet.Merchant.Text.NoSavedPresetsYetConfigureYourStockingAn'}}</div>
+          {{/if}}
+        </div>
+
+      </div>
+    </section>
+
+  </div>
+</div>

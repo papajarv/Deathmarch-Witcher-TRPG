@@ -1,0 +1,340 @@
+{{!-- Profession item sheet — Core p.62-70. Two-layer:
+        DISPLAY → reads the profession: defining skill, three trees, and
+                  the package of regular skills it grants (with stats).
+        CONFIG  → edit those (cog toggle, owners only).
+      A profession item is dropped on a character to populate its
+      profession pane; field shape matches what the chrome pane reads
+      (definingSkill / skillPath1-3 / professionSkills). --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-profession" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}{{localize 'WITCHER.Sheet.Item.Cog.BackToDisplay'}}{{else}}{{localize 'WITCHER.Sheet.Item.Cog.ConfigureProfession'}}{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view">
+    <div class="wdm-prof">
+
+      <header class="wdm-prof-head">
+        <img class="wdm-prof-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-prof-head-titles">
+          <div class="wdm-prof-eyebrow">{{localize 'WITCHER.Sheet.Profession.Text.Profession'}}</div>
+          <h1 class="wdm-prof-title">{{item.name}}</h1>
+        </div>
+      </header>
+
+      {{#if source.description}}
+        <div class="wdm-prof-flavor">{{{source.description}}}</div>
+      {{/if}}
+
+      {{#if source.definingSkill.skillName}}
+        <section class="wdm-prof-defining-card">
+          <div class="wdm-prof-card-eyebrow">{{localize 'WITCHER.Sheet.Profession.Text.DefiningSkill'}}</div>
+          <div class="wdm-prof-defining-row">
+            <span class="wdm-prof-defining-name">{{source.definingSkill.skillName}}</span>
+            <span class="wdm-prof-stat-badge{{#unless source.definingSkill.stat}} is-na{{/unless}}">{{lookup statLabels source.definingSkill.stat}}</span>
+          </div>
+          {{#if source.definingSkill.definition}}
+            <div class="wdm-prof-skill-def">{{{source.definingSkill.definition}}}</div>
+          {{/if}}
+        </section>
+      {{/if}}
+
+      {{#if treesDisplay.length}}
+        <div class="wdm-prof-section-label">{{localize 'WITCHER.Sheet.Profession.Text.SkillTrees'}}</div>
+        <div class="wdm-prof-trees">
+          {{#each treesDisplay}}
+            <section class="wdm-prof-tree is-{{tone}}">
+              <header class="wdm-prof-tree-head">{{name}}</header>
+              {{#each skills}}
+                <article class="wdm-prof-tree-skill">
+                  <div class="wdm-prof-tree-skill-top">
+                    <span class="wdm-prof-tree-skill-name">{{skillName}}</span>
+                    <span class="wdm-prof-stat-badge{{#if statNA}} is-na{{/if}}">{{statLabel}}</span>
+                  </div>
+                  {{#if definition}}<div class="wdm-prof-tree-skill-def">{{{definition}}}</div>{{/if}}
+                </article>
+              {{/each}}
+            </section>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if packageGroups.length}}
+        <div class="wdm-prof-section-label">{{localize 'WITCHER.Sheet.Profession.Text.ProfessionSkills'}}</div>
+        <div class="wdm-prof-package">
+          {{#each packageGroups}}
+            <div class="wdm-prof-pkg-group">
+              <div class="wdm-prof-pkg-stat-head">{{statLabel}}</div>
+              <div class="wdm-prof-pkg-chips">
+                {{#each skills}}
+                  <span class="wdm-prof-chip">{{label}}</span>
+                {{/each}}
+              </div>
+            </div>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if skillPackagesDisplay.length}}
+        <div class="wdm-prof-section-label">{{localize 'WITCHER.Sheet.Profession.Text.SkillPackages'}}</div>
+        <div class="wdm-prof-package">
+          {{#each skillPackagesDisplay}}
+            <div class="wdm-prof-pkg-group">
+              <div class="wdm-prof-pkg-stat-head">Choose {{choose}} of</div>
+              <div class="wdm-prof-pkg-chips">
+                {{#each options}}
+                  <span class="wdm-prof-chip">{{label}}</span>
+                {{/each}}
+              </div>
+            </div>
+          {{/each}}
+        </div>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form wdm-cfg-paneled">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Profession.Hint.ProfessionEGWitcher'}}" />
+      </div>
+
+      {{!-- ── Medallion ───────────────────────────────────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Profession.Text.MedallionIcon'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          <div class="wdm-cfg-panel-note">SVG shown in the dock medallion.</div>
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Profession.Text.IconPath'}}</span>
+            <input type="text" name="system.medallionIcon" value="{{source.medallionIcon}}"
+                   placeholder="icons/skills/trades/academics-book-study-purple.webp"
+                   data-action="editImage" data-edit="system.medallionIcon"
+                   title="{{localize 'WITCHER.Sheet.Profession.Tooltip.ClickToPickAnSvgImage'}}" readonly />
+          </label>
+        </div>
+      </section>
+
+      {{!-- ── Vigor ───────────────────────────────────────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Profession.Text.Vigor'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          <div class="wdm-cfg-panel-note">Starting allowance — Core p.38; a floor the character can't lose.</div>
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Profession.Text.BaselineVigor'}}</span>
+            <input type="number" name="system.vigor" value="{{source.vigor}}" min="0" step="1"
+                   title="{{localize 'WITCHER.Sheet.Profession.Tooltip.PerRoundVigorThresholdThisProfessionGran'}}" />
+          </label>
+          <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.CanUseFoci'}}">
+            <span>{{localize 'WITCHER.Sheet.Profession.Text.CanUseFoci'}}</span>
+            <input type="checkbox" name="system.canUseFoci" {{#if source.canUseFoci}}checked{{/if}} />
+          </label>
+        </div>
+      </section>
+
+      {{!-- ── Defining Skill ──────────────────────────────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Profession.Text.DefiningSkill'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          <div class="wdm-cfg-grid">
+            <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Profession.Text.SkillName'}}</span>
+              <input type="text" name="system.definingSkill.skillName" value="{{source.definingSkill.skillName}}" placeholder="e.g. Witcher Training" />
+            </label>
+            <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Profession.Text.GoverningStat'}}</span>
+              <select name="system.definingSkill.stat">
+                {{#each definingStatOptions}}
+                  <option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                {{/each}}
+              </select>
+            </label>
+            <label class="wdm-cfg-row wdm-cfg-check-inline"
+                   title="{{localize 'WITCHER.Sheet.Profession.Tooltip.Magical'}}">
+              <input type="checkbox" name="system.definingSkill.isMagical"
+                     {{#if definingIsMagical}}checked{{/if}} />
+              <span>{{localize 'WITCHER.Sheet.Profession.Text.Magical'}}</span>
+            </label>
+          </div>
+          <textarea class="wdm-cfg-textarea" name="system.definingSkill.definition"
+                    placeholder="{{localize 'WITCHER.Sheet.Profession.Hint.WhatTheDefiningSkillDoes'}}">{{source.definingSkill.definition}}</textarea>
+        </div>
+      </section>
+
+      {{!-- ── Skill Trees (one framed section per tree) ───────────── --}}
+      {{#each treesConfig}}
+      <details class="wdm-cfg-panel wdm-cfg-panel-collapsible" open>
+        <summary class="wdm-cfg-panel-head">
+          <i class="fa-solid fa-chevron-down wdm-cfg-panel-chev"></i>
+          <span>{{label}}</span>
+        </summary>
+        <div class="wdm-cfg-panel-body">
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Profession.Text.PathName'}}</span>
+            <input type="text" name="system.{{prefix}}.pathName" value="{{pathName}}" placeholder="{{localize 'WITCHER.Sheet.Profession.Hint.TreeName'}}" />
+          </label>
+          {{#each skills}}
+            <details class="wdm-cfg-collapse is-inline wdm-prof-skill-slot">
+              <summary class="wdm-cfg-collapse-head">
+                <i class="fa-solid fa-chevron-down wdm-cfg-collapse-chev"></i>
+                <span class="wdm-cfg-collapse-title">{{#if skillName}}{{skillName}}{{else}}Skill {{n}}{{/if}}</span>
+                {{#if isMagical}}<span class="wdm-prof-magic-tag">{{localize 'WITCHER.Sheet.Profession.Text.Magical'}}</span>{{/if}}
+              </summary>
+              <div class="wdm-cfg-collapse-body">
+                <div class="wdm-prof-cfg-slot">
+                  <label class="wdm-cfg-row"><span>Skill {{n}}</span>
+                    <input type="text" name="system.{{prefix}}.{{slot}}.skillName" value="{{skillName}}" placeholder="{{localize 'WITCHER.Sheet.Profession.Hint.SkillName'}}" />
+                  </label>
+                  <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Profession.Text.Stat'}}</span>
+                    <select name="system.{{prefix}}.{{slot}}.stat">
+                      {{#each statOptions}}
+                        <option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+                      {{/each}}
+                    </select>
+                  </label>
+                  <label class="wdm-cfg-row wdm-cfg-check-inline"
+                         title="{{localize 'WITCHER.Sheet.Profession.Tooltip.Magical'}}">
+                    <input type="checkbox" name="system.{{prefix}}.{{slot}}.isMagical"
+                           {{#if isMagical}}checked{{/if}} />
+                    <span>{{localize 'WITCHER.Sheet.Profession.Text.Magical'}}</span>
+                  </label>
+                  <textarea class="wdm-cfg-textarea" name="system.{{prefix}}.{{slot}}.definition"
+                            placeholder="{{localize 'WITCHER.Sheet.Profession.Hint.WhatThisSkillDoes'}}">{{definition}}</textarea>
+                </div>
+              </div>
+            </details>
+          {{/each}}
+        </div>
+      </details>
+      {{/each}}
+
+      {{!-- ── Profession Skills ───────────────────────────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Profession.Text.ProfessionSkills'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          <div class="wdm-cfg-panel-note">The regular skills this profession grants.</div>
+          {{#each skillGroups}}
+            <details class="wdm-cfg-collapse">
+              <summary class="wdm-cfg-collapse-head">
+                <i class="fa-solid fa-chevron-down wdm-cfg-collapse-chev"></i>
+                <span class="wdm-cfg-collapse-title">{{statLabel}}</span>
+              </summary>
+              <div class="wdm-cfg-collapse-body">
+                <div class="wdm-cfg-checkgrid">
+                  {{#each skills}}
+                    <label class="wdm-cfg-check">
+                      <input type="checkbox" name="system.professionSkills" value="{{key}}"
+                             data-dtype="String" {{#if selected}}checked{{/if}} />
+                      <span>{{label}}</span>
+                    </label>
+                  {{/each}}
+                </div>
+              </div>
+            </details>
+          {{/each}}
+        </div>
+      </section>
+
+      {{!-- ── Skill Packages ──────────────────────────────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Profession.Text.SkillPackages'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          <div class="wdm-cfg-panel-note">{{localize 'WITCHER.Sheet.Profession.Text.SkillPackagesSub'}}</div>
+          {{#each skillPackages}}
+            <details class="wdm-cfg-collapse wdm-prof-pkg-collapse">
+              <summary class="wdm-cfg-collapse-head">
+                <i class="fa-solid fa-chevron-down wdm-cfg-collapse-chev"></i>
+                <span class="wdm-cfg-collapse-title">{{localize 'WITCHER.Sheet.Profession.Text.Choose'}} {{choose}} {{localize 'WITCHER.Sheet.Profession.Text.Of'}}</span>
+                <span class="wdm-cfg-collapse-sub">{{#each options}}{{label}}{{#unless @last}}, {{/unless}}{{/each}}</span>
+              </summary>
+              <div class="wdm-cfg-collapse-body">
+                <div class="wdm-prof-pkg" data-package="{{index}}">
+                  <div class="wdm-prof-pkg-head">
+                    <span class="wdm-prof-pkg-word">{{localize 'WITCHER.Sheet.Profession.Text.Choose'}}</span>
+                    <button type="button" class="wdm-prof-pkg-step" data-action="stepPackageChoose"
+                            data-index="{{index}}" data-delta="-1" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.Fewer'}}">&minus;</button>
+                    <span class="wdm-prof-pkg-num">{{choose}}</span>
+                    <button type="button" class="wdm-prof-pkg-step" data-action="stepPackageChoose"
+                            data-index="{{index}}" data-delta="1" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.More'}}">+</button>
+                    <span class="wdm-prof-pkg-word">{{localize 'WITCHER.Sheet.Profession.Text.Of'}}</span>
+                    <button type="button" class="wdm-prof-pkg-remove" data-action="removeSkillPackage"
+                            data-index="{{index}}" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.RemoveThisPackage'}}"><i class="fa-solid fa-trash"></i></button>
+                  </div>
+                  <div class="wdm-prof-pkg-opts">
+                    {{#each options}}
+                      <span class="wdm-prof-pkg-chip">{{label}}<button type="button"
+                            class="wdm-prof-pkg-chip-x" data-action="removePackageOption"
+                            data-index="{{../index}}" data-skill="{{key}}" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.Remove'}}">&times;</button></span>
+                    {{/each}}
+                    {{#if addable.length}}
+                      <select class="wdm-prof-pkg-add" data-index="{{index}}">
+                        <option value="">{{localize 'WITCHER.Sheet.Profession.Text.AddSkillOption'}}</option>
+                        {{#each addable}}<option value="{{key}}">{{label}}</option>{{/each}}
+                      </select>
+                    {{/if}}
+                  </div>
+                </div>
+              </div>
+            </details>
+          {{/each}}
+          <button type="button" class="wdm-cfg-add" data-action="addSkillPackage">
+            <i class="fa-solid fa-plus"></i> {{localize 'WITCHER.Sheet.Profession.Button.AddPackage'}}
+          </button>
+        </div>
+      </section>
+
+      {{!-- ── Lore & Source ───────────────────────────────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Profession.Text.Description'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+          <textarea class="wdm-cfg-textarea is-tall" name="system.description"
+                    placeholder="{{localize 'WITCHER.Sheet.Profession.Hint.TheProfessionSFlavourAndRole'}}">{{source.description}}</textarea>
+        </div>
+      </section>
+
+      {{!-- ── School Passives ─────────────────────────────────────────
+            Transfer Active Effects applied to whoever has this profession
+            (target Combat passives via the AE editor). --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Profession.Text.Passives'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          <div class="wdm-cfg-panel-note">{{localize 'WITCHER.Sheet.Profession.Text.PassivesSub'}}</div>
+          <div class="wdm-cfg-effects">
+            {{#if effects.length}}
+              <ul class="wdm-effect-list">
+                {{#each effects}}
+                  <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                    <div class="wdm-effect-head">
+                      <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                      <span class="wdm-effect-name">{{this.name}}</span>
+                      <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}{{localize 'WITCHER.Sheet.Item.Text.Enable'}}{{else}}{{localize 'WITCHER.Sheet.Item.Text.Disable'}}{{/if}}">
+                        <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                      </a>
+                      <a data-action="editEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+                      <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Profession.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
+                    </div>
+                  </li>
+                {{/each}}
+              </ul>
+            {{else}}
+              <p class="wdm-empty">{{localize 'WITCHER.Sheet.Profession.Text.NoPassivesConfigured'}}</p>
+            {{/if}}
+            <button type="button" class="wdm-add-effect" data-action="createEffect">
+              <i class="fa-solid fa-plus"></i> {{localize 'WITCHER.Sheet.Profession.Button.AddPassive'}}
+            </button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+</div>

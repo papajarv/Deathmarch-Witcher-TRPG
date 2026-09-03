@@ -1,0 +1,1498 @@
+/* ===========================================================================
+   The spell canvas.
+
+   Two panels, and the split between them is the argument the whole engine
+   rests on. On the left, the entry as the book prints it — cost, range,
+   defence, duration. Those are LAW: enforced by the frame, in the same order,
+   for every castable in the game, and there is deliberately no way to drag
+   them. On the right, the blocks — behaviour, freely composed.
+
+   An author who can delete the stamina cost is an author who eventually does.
+   =========================================================================== */
+
+/* ── Tokens ─────────────────────────────────────────────────────────────────
+   Light is the base definition; dark redefines the same names. Nothing below
+   this block ever names a colour directly. */
+:root {
+    --wm-ground:    #E9E2D4;   /* tallow parchment, not paper white */
+    --wm-surface:   #F6F1E6;
+    --wm-sunken:    #DCD3C1;
+    --wm-ink:       #221C15;
+    --wm-ink-soft:  #5C5245;
+    --wm-ink-faint: #8B7F6D;
+    --wm-rule:      #C4B79E;
+    --wm-brass:     #8A6218;   /* the medallion, darkened to hold on parchment */
+    --wm-brass-lit: #B98A2C;
+    --wm-blood:     #8E3423;
+    /* Text sitting ON a brass fill. The light theme darkens brass to hold on
+       parchment, which makes near-black text on it unreadable — so this flips
+       with the theme instead of being written into each rule. */
+    --wm-on-brass:  #FFF6E4;
+
+    --wm-block-sat: 34%;
+    --wm-block-lum: 62%;
+    --wm-block-edge-lum: 44%;
+    --wm-block-text: #FFF8EC;
+
+    --wm-shadow: 0 1px 0 rgba(34,28,21,.18), 0 2px 6px rgba(34,28,21,.10);
+    --wm-notch: 0.42em;   /* the tab/notch depth — em, so the silhouette scales with the block */
+
+    --wm-font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+    --wm-font-ui: "Archivo", "Helvetica Neue", system-ui, sans-serif;
+    --wm-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --wm-ground:    #15120E;
+        --wm-surface:   #1E1A14;
+        --wm-sunken:    #100E0B;
+        --wm-ink:       #EADFCB;
+        --wm-ink-soft:  #A99C86;
+        --wm-ink-faint: #6E6353;
+        --wm-rule:      #332C22;
+        --wm-brass:     #C8963E;
+        --wm-brass-lit: #E4B65E;
+        --wm-blood:     #B14A33;
+        --wm-on-brass:  #1B1509;
+
+        --wm-block-sat: 30%;
+        --wm-block-lum: 40%;
+        --wm-block-edge-lum: 27%;
+        --wm-block-text: #F3E9D6;
+
+        --wm-shadow: 0 1px 0 rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.35);
+    }
+}
+
+:root[data-theme="dark"] {
+    --wm-ground:    #15120E;
+    --wm-surface:   #1E1A14;
+    --wm-sunken:    #100E0B;
+    --wm-ink:       #EADFCB;
+    --wm-ink-soft:  #A99C86;
+    --wm-ink-faint: #6E6353;
+    --wm-rule:      #332C22;
+    --wm-brass:     #C8963E;
+    --wm-brass-lit: #E4B65E;
+    --wm-blood:     #B14A33;
+    --wm-on-brass:  #1B1509;
+
+    --wm-block-sat: 30%;
+    --wm-block-lum: 40%;
+    --wm-block-edge-lum: 27%;
+    --wm-block-text: #F3E9D6;
+
+    --wm-shadow: 0 1px 0 rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.35);
+}
+
+/* ── Shell ──────────────────────────────────────────────────────────────── */
+
+.wm-canvas {
+    /* THE SCALE ANCHOR.
+     *
+     * Everything in this file is `em`, and this is the only `px` in it. `rem`
+     * would read the document root, which this system multiplies by the user's
+     * UI-scale knob — so a canvas sized in rem grew with the knob while its
+     * px-sized text stood still, and the whole thing bloated out of its
+     * window. One anchor, one unit, and the knob still works: it moves the
+     * canvas as a single object rather than pulling it apart.
+     *
+     * The knob is DAMPED — half-weighted rather than applied straight. This is
+     * dense UI inside a window that does not grow: a chip reading "deal
+     * damage" does not need to be as large as body text, and at a 1.5 knob a
+     * linear scale pushed the three columns past any laptop screen. 10px at
+     * the default, 12px at 1.5, 9px at 0.8. */
+    font-size: calc(6px + 4px * var(--wdm-scale, 1));
+
+    display: grid;
+    grid-template-columns: 15.5em minmax(0, 1fr) 17em;
+    gap: 0;
+    min-height: 32em;
+    background: var(--wm-ground);
+    color: var(--wm-ink);
+    font-family: var(--wm-font-ui);
+    font-size: 1.182em;
+    line-height: 1.45;
+}
+
+@media (max-width: 60em) {
+    .wm-canvas { grid-template-columns: minmax(0, 1fr); }
+    .wm-rail, .wm-law { border: 0; border-top: 1px solid var(--wm-rule); }
+}
+
+.wm-rail, .wm-law {
+    background: var(--wm-surface);
+    overflow-y: auto;
+    max-height: 78vh;
+}
+.wm-rail { border-right: 1px solid var(--wm-rule); }
+.wm-law  { border-left:  1px solid var(--wm-rule); }
+
+/* ── Section headings ───────────────────────────────────────────────────── */
+
+.wm-eyebrow {
+    font-family: var(--wm-font-ui);
+    font-size: 0.909em;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--wm-ink-faint);
+    margin: 0;
+}
+
+.wm-cat {
+    padding: .9em 1em .35em;
+    position: sticky;
+    top: 0;
+    background: linear-gradient(var(--wm-surface) 72%, transparent);
+    z-index: 2;
+}
+.wm-cat .wm-blurb {
+    margin: .15em 0 0;
+    font-size: 1.0em;
+    color: var(--wm-ink-faint);
+    line-height: 1.35;
+}
+
+/* ── Blocks ─────────────────────────────────────────────────────────────────
+   The interlock is real geometry, not a border trick: every block carries a
+   notch cut into its top edge and a tab protruding into its own bottom
+   padding, and stacked siblings overlap by exactly the notch depth so one
+   sits into the other. It is worth the fiddle — a stack of plain rectangles
+   reads as a list, and a list does not tell you that order matters. */
+
+.wm-blk {
+    --h: 200;
+    position: relative;
+    display: block;
+    margin: 0 0 0 0;
+    padding: .38em .55em calc(.38em + var(--wm-notch));
+    background: hsl(var(--h) var(--wm-block-sat) var(--wm-block-lum));
+    color: var(--wm-block-text);
+    border-radius: 5px;
+    box-shadow: var(--wm-shadow);
+    cursor: grab;
+    clip-path: polygon(
+        0 0,
+        1.2em 0, 1.5em var(--wm-notch), 2.5em var(--wm-notch), 2.9em 0,
+        100% 0, 100% 100%,
+        2.9em 100%, 2.5em calc(100% - var(--wm-notch)), 1.5em calc(100% - var(--wm-notch)), 1.2em 100%,
+        0 100%
+    );
+}
+.wm-blk + .wm-blk,
+.wm-body > .wm-blk + .wm-blk { margin-top: calc(var(--wm-notch) * -1); }
+
+.wm-blk:focus-visible {
+    outline: 2px solid var(--wm-brass-lit);
+    outline-offset: 2px;
+}
+.wm-blk:active { cursor: grabbing; }
+
+.wm-blk-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .3em;
+    min-height: 1.5em;
+}
+.wm-blk-word {
+    font-size: 1.136em;
+    font-weight: 500;
+    letter-spacing: .002em;
+}
+
+/* Slots read as inset wells — you can see they are the parts that change. */
+.wm-slot {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.25em;
+    padding: .05em .4em;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, .26);
+    box-shadow: inset 0 1px 0 rgba(0, 0, 0, .3);
+    color: var(--wm-block-text);
+    font-size: 1.045em;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.wm-slot[data-control="expression"] {
+    font-family: var(--wm-font-mono);
+    font-size: 0.955em;
+    letter-spacing: -.01em;
+    /* An expression IS code. Dressing it as prose hides that `{sta}` is a
+       variable and that `min(4, …)` is arithmetic the engine will run. */
+    background: rgba(0, 0, 0, .34);
+}
+.wm-slot[data-control="choice"]::after {
+    content: "";
+    width: 0; height: 0;
+    margin-left: .3em;
+    border: 3px solid transparent;
+    border-top-color: currentColor;
+    opacity: .55;
+}
+.wm-slot--empty { color: rgba(255, 255, 255, .45); font-style: italic; }
+
+/* Extra arguments the label never mentions. Present, quiet, never hidden —
+   an unreachable argument is how a 30-SP wall ends up with no armour. */
+.wm-extras {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25em .45em;
+    margin-top: .3em;
+    padding-top: .3em;
+    border-top: 1px solid rgba(0, 0, 0, .18);
+}
+.wm-extra { display: inline-flex; align-items: center; gap: .25em; font-size: 0.955em; opacity: .82; }
+.wm-extra-key { text-transform: lowercase; letter-spacing: .03em; }
+
+/* ── Gates ─────────────────────────────────────────────────────────────────
+   A C-shape: arm, spine, arm. The spine is what tells you the blocks inside
+   belong to the condition rather than following it. */
+
+.wm-gate { position: relative; }
+.wm-gate > .wm-blk { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+
+.wm-body {
+    position: relative;
+    margin-left: 1.5em;
+    padding: 4px 0 4px 8px;
+    min-height: 1.6em;
+    border-left: 8px solid hsl(var(--h) var(--wm-block-sat) var(--wm-block-edge-lum));
+}
+.wm-gate-foot {
+    height: 1em;
+    margin-top: calc(var(--wm-notch) * -1);
+    background: hsl(var(--h) var(--wm-block-sat) var(--wm-block-lum));
+    border-radius: 0 5px 5px 5px;
+    box-shadow: var(--wm-shadow);
+    clip-path: polygon(
+        0 0, 100% 0, 100% 100%,
+        2.9em 100%, 2.5em calc(100% - var(--wm-notch)), 1.5em calc(100% - var(--wm-notch)), 1.2em 100%,
+        0 100%
+    );
+    padding-bottom: var(--wm-notch);
+}
+
+/* A deferred block's spine is dashed: its body does not run here. It is handed
+   to a zone, or a clock, and fires somewhere the author is not standing. */
+.wm-gate--deferred > .wm-body {
+    border-left-style: dashed;
+    border-left-color: hsl(var(--h) calc(var(--wm-block-sat) - 8%) var(--wm-block-edge-lum));
+}
+.wm-defer-tag {
+    display: inline-block;
+    margin-left: .35em;
+    padding: 0 .3em;
+    border: 1px dashed currentColor;
+    border-radius: 3px;
+    font-size: 0.818em;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    opacity: .7;
+}
+
+.wm-drop {
+    display: flex;
+    align-items: center;
+    padding: .3em .5em;
+    border: 1px dashed var(--wm-rule);
+    border-radius: 4px;
+    color: var(--wm-ink-faint);
+    font-size: 1.0em;
+    font-style: italic;
+}
+
+/* ── Hats ──────────────────────────────────────────────────────────────────
+   An entry point, and it is not decoration. The same blocks under "when it
+   hits" and under "when damage reaches you" are two different spells, and the
+   entry decides which blocks are even available. */
+
+.wm-hat {
+    position: relative;
+    padding: .55em .8em calc(.4em + var(--wm-notch));
+    background: linear-gradient(180deg, var(--wm-brass-lit), var(--wm-brass));
+    color: var(--wm-on-brass);
+    border-radius: 1.2em 1.2em 5px 5px;
+    box-shadow: var(--wm-shadow);
+    clip-path: polygon(
+        0 0, 100% 0, 100% 100%,
+        2.9em 100%, 2.5em calc(100% - var(--wm-notch)), 1.5em calc(100% - var(--wm-notch)), 1.2em 100%,
+        0 100%
+    );
+}
+.wm-hat-title {
+    font-family: var(--wm-font-display);
+    font-weight: 600;
+    font-size: 1.273em;
+    letter-spacing: .005em;
+    margin: 0;
+}
+.wm-hat-scope {
+    margin: .1em 0 0;
+    font-size: 0.909em;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    opacity: .68;
+}
+
+.wm-stack { display: flex; flex-direction: column; margin: 0 0 1.1em; }
+.wm-stack > .wm-blk:first-of-type,
+.wm-stack > .wm-gate:first-of-type > .wm-blk { margin-top: calc(var(--wm-notch) * -1); }
+
+.wm-sheet { padding: 1.25em 1.4em 2em; overflow-x: auto; }
+
+/* ── The law panel ─────────────────────────────────────────────────────────
+   Typeset as the book prints it, because that is what it is. */
+
+.wm-law-inner { padding: 1.1em 1.1em 1.6em; }
+.wm-law-name {
+    font-family: var(--wm-font-display);
+    font-optical-sizing: auto;
+    font-weight: 600;
+    font-size: 1.909em;
+    line-height: 1.12;
+    margin: .35em 0 .1em;
+    text-wrap: balance;
+}
+.wm-law-kind {
+    font-size: 0.909em;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--wm-brass);
+}
+.wm-law-rule {
+    height: 1px;
+    margin: .75em 0;
+    background: linear-gradient(90deg, var(--wm-brass), transparent);
+    border: 0;
+}
+.wm-facts { display: grid; grid-template-columns: auto 1fr; gap: .4em .7em; margin: 0; }
+.wm-facts dt {
+    font-size: 0.909em;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--wm-ink-faint);
+    padding-top: .12em;
+}
+.wm-facts dd { margin: 0; font-size: 1.136em; color: var(--wm-ink); }
+.wm-facts dd em { font-style: normal; color: var(--wm-brass); }
+
+.wm-law-note {
+    margin-top: 1.1em;
+    padding: .6em .7em;
+    background: var(--wm-sunken);
+    border-left: 2px solid var(--wm-brass);
+    border-radius: 0 4px 4px 0;
+    font-size: 1.045em;
+    line-height: 1.5;
+    color: var(--wm-ink-soft);
+}
+
+/* ── Palette entries ────────────────────────────────────────────────────── */
+
+.wm-rail-list { display: flex; flex-direction: column; gap: 3px; padding: 0 .8em .9em; }
+.wm-chip {
+    --h: 200;
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: .3em .5em;
+    border: 0;
+    border-left: 3px solid hsl(var(--h) var(--wm-block-sat) var(--wm-block-lum));
+    border-radius: 3px;
+    background: var(--wm-sunken);
+    color: var(--wm-ink);
+    font-family: inherit;
+    font-size: 1.045em;
+    cursor: grab;
+    transition: background 120ms ease, transform 120ms ease;
+}
+.wm-chip:hover { background: hsl(var(--h) var(--wm-block-sat) var(--wm-block-lum) / .22); transform: translateX(2px); }
+.wm-chip:focus-visible { outline: 2px solid var(--wm-brass-lit); outline-offset: 1px; }
+.wm-chip[data-dim="true"] { opacity: .38; }
+.wm-chip-shape { font-size: 0.818em; letter-spacing: .09em; text-transform: uppercase; color: var(--wm-ink-faint); }
+
+/* ── Refusals ──────────────────────────────────────────────────────────────
+   The message is the validator's own, rewritten for whoever is holding the
+   block. It never names a namespace or an index: they are looking straight at
+   the thing that would not fit. */
+
+.wm-refusal {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    gap: .5em;
+    align-items: flex-start;
+    margin: 0;
+    padding: .6em .8em;
+    background: var(--wm-sunken);
+    border-top: 2px solid var(--wm-blood);
+    color: var(--wm-ink);
+    font-size: 1.091em;
+    line-height: 1.45;
+}
+.wm-refusal-mark { color: var(--wm-blood); font-weight: 700; }
+.wm-blk[data-refused="true"] { box-shadow: 0 0 0 2px var(--wm-blood), var(--wm-shadow); }
+
+.wm-unknown {
+    padding: .5em .6em;
+    border: 1px dashed var(--wm-blood);
+    border-radius: 5px;
+    background: var(--wm-sunken);
+    color: var(--wm-ink-soft);
+    font-size: 1.045em;
+}
+.wm-unknown strong { color: var(--wm-blood); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+    .wm-chip { transition: none; }
+    .wm-chip:hover { transform: none; }
+}
+
+/* ===========================================================================
+   The item sheet's Behaviour section, and the seeding dialog.
+
+   Both sit inside existing chrome rather than owning a page, so they borrow
+   the sheet's surface and spend their colour only where it carries meaning:
+   the brass says "this spell is on the block engine", the blood says
+   "something here will not work".
+   =========================================================================== */
+
+/* ── The badge on the display view ──────────────────────────────────────── */
+
+.wdm-w3-authored {
+    display: inline-flex;
+    align-items: center;
+    gap: .35em;
+    margin-top: .3em;
+    padding: .1em .45em;
+    border: 1px solid var(--wm-brass);
+    border-radius: 3px;
+    color: var(--wm-brass);
+    font-family: var(--wm-font-ui);
+    font-size: 0.909em;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── The config section ─────────────────────────────────────────────────── */
+
+.wdm-authored-list {
+    display: grid;
+    gap: 2px;
+    margin: 0 0 .6em;
+    padding: 0;
+    list-style: none;
+}
+.wdm-authored-row {
+    display: grid;
+    grid-template-columns: minmax(9em, auto) 1fr;
+    gap: .8em;
+    align-items: baseline;
+    padding: .3em .5em;
+    background: var(--wm-sunken);
+    border-left: 2px solid var(--wm-brass);
+    border-radius: 0 3px 3px 0;
+}
+.wdm-authored-trigger {
+    font-family: var(--wm-font-display);
+    font-size: 1.091em;
+    font-weight: 600;
+    color: var(--wm-ink);
+}
+.wdm-authored-count { font-size: 1.045em; color: var(--wm-ink-soft); }
+
+.wdm-authored-problems {
+    margin: 0 0 .6em;
+    padding: .45em .6em .45em 1.4em;
+    background: var(--wm-sunken);
+    border-left: 2px solid var(--wm-blood);
+    border-radius: 0 3px 3px 0;
+    color: var(--wm-ink);
+    font-size: 1.045em;
+    line-height: 1.45;
+}
+
+/* Three controls of three different weights. Adding a trigger is the routine
+   one and sits left; loading the book replaces everything and clearing throws
+   work away, so both sit right, apart from it, where a hand does not land by
+   accident. */
+.wdm-authored-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: .4em;
+    margin-top: .6em;
+    font-size: calc(6px + 4px * var(--wdm-scale, 1));
+}
+.wdm-authored-actions > .wm-trigger-add { flex: 1 1 auto; }
+.wdm-authored-actions > .wdm-authored-start,
+.wdm-authored-actions > .wdm-authored-clear { flex: none; align-self: center; }
+.wdm-authored-actions > .wdm-authored-start { margin-left: auto; }
+.wdm-authored-clear {
+    padding: .3em .6em;
+    border: 1px solid var(--wm-rule);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--wm-ink-soft);
+    font-family: inherit;
+    font-size: 1.045em;
+    cursor: pointer;
+    transition: color 120ms ease, border-color 120ms ease;
+}
+.wdm-authored-clear:hover { color: var(--wm-blood); border-color: var(--wm-blood); }
+.wdm-authored-clear:focus-visible { outline: 2px solid var(--wm-brass-lit); outline-offset: 1px; }
+
+/* ── The seeding dialog ─────────────────────────────────────────────────── */
+
+.wm-seed { font-family: var(--wm-font-ui); color: var(--wm-ink); font-size: 1.136em; }
+.wm-seed-lede {
+    margin: 0 0 1em;
+    padding-bottom: .7em;
+    border-bottom: 1px solid var(--wm-rule);
+    color: var(--wm-ink-soft);
+    line-height: 1.5;
+}
+.wm-seed-group { margin: 0 0 1em; }
+.wm-seed-group h4 {
+    margin: 0 0 .25em;
+    font-family: var(--wm-font-display);
+    font-size: 1.182em;
+    font-weight: 600;
+    color: var(--wm-ink);
+}
+.wm-seed-group.is-good h4 { color: var(--wm-brass); }
+.wm-seed-group.is-warn h4 { color: var(--wm-blood); }
+
+.wm-seed-note { margin: 0 0 .4em; font-size: 1.045em; color: var(--wm-ink-faint); line-height: 1.45; }
+.wm-seed-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11em, 1fr));
+    gap: 1px 1em;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 11em;
+    overflow-y: auto;
+}
+.wm-seed-list li { font-size: 1.045em; color: var(--wm-ink-soft); }
+.wm-seed-more { color: var(--wm-ink-faint); font-style: italic; }
+
+@media (prefers-reduced-motion: reduce) { .wdm-authored-clear { transition: none; } }
+
+
+
+
+/* ===========================================================================
+   THE LEAN CANVAS — one column.
+
+   It was three: a permanent palette rail, the blocks, and a permanent frame
+   panel. About 225px of an 800px window gone before a single block was drawn,
+   on every spell, whether or not you were adding anything — and on a small
+   monitor that is most of the sheet.
+
+   Both side panels are on demand now. The frame is a one-line strip that opens
+   to edit. The palette is a popover that OVERLAYS rather than reserving space.
+   What is left is the thing you came to look at.
+   =========================================================================== */
+
+.wm-canvas.is-lean {
+    /* Inherits the sheet's ground. A panel that paints its own background
+       inside another panel is a box inside a box for no reason. */
+    background: transparent;
+    /* The scale anchor, damped. `rem` would read the document root, which this
+       system multiplies by the UI knob — so a canvas laid out in rem grew with
+       the knob while its px type stood still. Everything below is `em`. */
+    font-size: calc(6px + 4px * var(--wdm-scale, 1));
+
+    display: flex;
+    flex-direction: column;
+    gap: .5em;
+    position: relative;       /* the palette popover anchors here */
+    min-height: 0;
+    color: var(--wm-ink);
+    font-family: var(--wm-font-ui);
+}
+
+/* ── The frame, as one line ───────────────────────────────────────────────
+   Cost, range, defence and duration are the four things a GM checks when they
+   open a spell. Shown, not hidden — but on one line, and the controls that set
+   them are a click away rather than a column away. */
+
+.wm-frame-strip {
+    border: 1px solid var(--wm-rule);
+    border-radius: 4px;
+    background: var(--wm-surface);
+}
+.wm-frame-line {
+    display: flex;
+    align-items: center;
+    gap: .5em;
+    padding: .4em .6em;
+    cursor: pointer;
+    list-style: none;
+    font-size: 1.1em;
+}
+.wm-frame-line::-webkit-details-marker { display: none; }
+.wm-frame-line::before {
+    content: "▸";
+    flex: none;
+    color: var(--wm-brass);
+    font-size: .9em;
+    transition: transform 120ms ease;
+}
+.wm-frame-strip[open] > .wm-frame-line::before { transform: rotate(90deg); }
+.wm-frame-line:hover { color: var(--wm-brass); }
+.wm-frame-line:focus-visible { outline: 2px solid var(--wm-brass-lit); outline-offset: -2px; }
+.wm-frame-glance {
+    color: var(--wm-ink-soft);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wm-frame-strip .wm-law-inner { padding: .2em .7em .8em; }
+.wm-frame-strip .wm-law-kind,
+.wm-frame-strip .wm-law-name,
+.wm-frame-strip .wm-law-rule { display: none; }   /* the sheet header already says which spell */
+
+/* Ordered by how often they are touched, then paired by kind: the two number
+   fields together, the two dropdowns together, and defence given its own full
+   row because it is a set of choices rather than one value. */
+.wm-frame-strip .wm-law-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9.5em, 1fr));
+    gap: .55em .9em;
+    align-items: start;
+}
+/* Defence and duration each want the whole width — one holds four toggles, the
+   other a value and a unit that must not be split across a column break. */
+.wm-frame-strip .wm-law-row.is-wide { grid-column: 1 / -1; }
+
+/* ── Defence toggles ──────────────────────────────────────────────────────
+   One control with several states, not four independent checkboxes. */
+
+body.witcher-ttrpg-death-march .wm-toggle-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25em;
+}
+body.witcher-ttrpg-death-march .wm-toggle {
+    display: inline-flex;
+    align-items: center;
+    padding: .22em .55em;
+    border: 1px solid var(--wm-rule);
+    border-radius: 3px;
+    background: var(--wm-sunken);
+    color: var(--wm-ink-faint);
+    font-size: 1em;
+    line-height: 1.3;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 110ms ease, border-color 110ms ease, background 110ms ease;
+}
+/* The label sets a colour and the SPAN inside it has to be told as well — it
+   was inheriting from the surrounding chrome, which is how a selected toggle
+   ended up grey on amber and unreadable. */
+body.witcher-ttrpg-death-march .wm-toggle > span { color: inherit; }
+
+/* Anchor selector — sits beside the "spares you" toggle in the AOE row. Boxed
+   like a toggle, with a small key label and the on-you / free-placed dropdown. */
+body.witcher-ttrpg-death-march .wm-law-anchor {
+    display: inline-flex;
+    align-items: center;
+    gap: .4em;
+    padding: .18em .5em;
+    border: 1px solid var(--wm-rule);
+    border-radius: 3px;
+    background: var(--wm-sunken);
+    color: var(--wm-ink-faint);
+    white-space: nowrap;
+}
+body.witcher-ttrpg-death-march .wm-law-anchor-key { font-size: .85em; opacity: .8; }
+body.witcher-ttrpg-death-march .wm-law-anchor select {
+    background: transparent;
+    border: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+body.witcher-ttrpg-death-march .wm-toggle input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+body.witcher-ttrpg-death-march .wm-toggle:hover {
+    color: var(--wm-ink);
+    border-color: var(--wm-ink-faint);
+}
+body.witcher-ttrpg-death-march .wm-toggle.is-on {
+    border-color: var(--wm-brass);
+    background: var(--wm-brass);
+    color: var(--wm-on-brass);
+    font-weight: 500;
+}
+body.witcher-ttrpg-death-march .wm-toggle.is-on > span { color: var(--wm-on-brass); }
+body.witcher-ttrpg-death-march .wm-toggle:has(input:focus-visible) {
+    outline: 2px solid var(--wm-brass-lit);
+    outline-offset: 1px;
+}
+
+.wm-toggle-note {
+    display: block;
+    margin-top: .3em;
+    font-size: .95em;
+    line-height: 1.4;
+    color: var(--wm-ink-faint);
+}
+
+/* ── The blocks ───────────────────────────────────────────────────────────
+   Full width, and the only thing holding a permanent place. */
+
+.wm-canvas.is-lean .wm-sheet {
+    min-height: 6em;
+    max-height: min(30em, 44vh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: .7em .8em 1em;
+    border: 1px solid var(--wm-rule);
+    border-radius: 4px;
+    /* No pattern. A grid was meant to read as a surface you place things on;
+       over the sheet's own ground it read as a green mesh, and the blocks
+       already look like objects without help from the background. */
+    background: transparent;
+}
+
+/* ── The palette, as a popover ────────────────────────────────────────────
+   Overlays the blocks instead of standing beside them permanently. Drag still
+   works while it is open; so does click-to-append, which is the only path on a
+   trackpad or a touchscreen. */
+
+.wm-palette-pop { position: relative; align-self: flex-start; }
+.wm-palette-open {
+    display: inline-block;
+    padding: .3em .7em;
+    border: 1px solid var(--wm-brass);
+    border-radius: 3px;
+    color: var(--wm-brass);
+    font-size: 1.1em;
+    cursor: pointer;
+    list-style: none;
+    transition: background 120ms ease, color 120ms ease;
+}
+.wm-palette-open::-webkit-details-marker { display: none; }
+.wm-palette-open:hover { background: var(--wm-brass); color: var(--wm-on-brass); }
+.wm-palette-open:focus-visible { outline: 2px solid var(--wm-brass-lit); outline-offset: 1px; }
+
+.wm-palette-panel {
+    position: absolute;
+    bottom: calc(100% + .35em);
+    left: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: .4em;
+    width: min(26em, 78vw);
+    max-height: min(26em, 50vh);
+    padding: .5em;
+    border: 1px solid var(--wm-rule);
+    border-radius: 4px;
+    background: var(--wm-surface);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .35);
+}
+.wm-palette-filter {
+    flex: none;
+    padding: .3em .5em;
+    border: 1px solid var(--wm-rule);
+    border-radius: 3px;
+    background: var(--wm-sunken);
+    color: var(--wm-ink);
+    font: inherit;
+    font-size: 1.1em;
+}
+.wm-palette-filter:focus-visible { outline: 2px solid var(--wm-brass-lit); outline-offset: 0; }
+.wm-palette-panel .wm-rail {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 0;
+    background: transparent;
+}
+
+/* Two columns of chips in the popover — 38 blocks in one column is a scroll. */
+.wm-palette-panel .wm-rail-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(10em, 1fr));
+    gap: 2px;
+    padding: 0 0 .5em;
+}
+.wm-palette-panel .wm-cat { padding: .5em 0 .25em; position: static; background: none; }
+.wm-palette-panel .wm-cat .wm-blurb { display: none; }   /* the popover is for picking, not reading */
+.wm-chip[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .wm-frame-line::before, .wm-palette-open { transition: none; }
+}
+
+/* ── Empty state: the model, in the order you meet it ─────────────────────
+   The first thing anyone sees on an unprogrammed spell, and the only chance to
+   explain how this works before they are looking at a wall of blocks. */
+
+.wm-empty-canvas {
+    display: flex;
+    flex-direction: column;
+    gap: .4em;
+    align-items: center;
+    padding: 1.6em 1.2em;
+    border: 1px dashed var(--wm-rule);
+    border-radius: 4px;
+    background: var(--wm-surface);
+    text-align: center;
+}
+.wm-empty-title {
+    margin: 0;
+    font-family: var(--wm-font-display);
+    font-size: 1.4em;
+    font-weight: 600;
+    color: var(--wm-ink);
+}
+.wm-empty-hint { margin: 0; max-width: 30em; font-size: 1.05em; line-height: 1.55; color: var(--wm-ink-soft); }
+
+/* Numbered because it IS a sequence: the trigger has to exist before blocks
+   can go under it, and a block cannot be dropped anywhere else. */
+.wm-empty-steps {
+    display: grid;
+    gap: .5em;
+    margin: 1em 0 0;
+    padding: .9em 0 0;
+    border-top: 1px solid var(--wm-rule);
+    max-width: 32em;
+    list-style: none;
+    counter-reset: step;
+    text-align: left;
+}
+.wm-empty-steps > li {
+    position: relative;
+    padding-left: 2em;
+    font-size: 1em;
+    line-height: 1.5;
+    color: var(--wm-ink-faint);
+}
+.wm-empty-steps > li::before {
+    counter-increment: step;
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: .05em;
+    width: 1.4em;
+    height: 1.4em;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--wm-brass);
+    border-radius: 50%;
+    color: var(--wm-brass);
+    font-size: .85em;
+    font-variant-numeric: tabular-nums;
+}
+.wm-empty-steps b { color: var(--wm-ink); font-weight: 600; }
+
+/* WHEN this stack runs — on the hat itself, where someone reading a spell is
+   looking. The scope line that used to sit here answered a different question
+   and moved to the tooltip. */
+.wm-hat-when { margin: .1em 0 0; font-size: .95em; line-height: 1.35; opacity: .72; }
+
+/* ── Adding a trigger ─────────────────────────────────────────────────────
+   A trigger is WHEN a stack runs, and it is the concept the engine turns on.
+   A dropdown labelled "Add a trigger" said none of that. */
+
+.wm-trigger-add { font-size: 1em; }
+/* Only claims the row once it is open — closed, it is one small button. */
+.wm-trigger-add[open] { flex: 1 1 100%; }
+.wm-trigger-add[open] > summary { color: var(--wm-brass); border-color: var(--wm-brass); }
+.wm-trigger-add > summary {
+    display: inline-block;
+    padding: .3em .6em;
+    border: 1px solid var(--wm-rule);
+    border-radius: 3px;
+    color: var(--wm-ink-soft);
+    font-size: 1.1em;
+    cursor: pointer;
+    list-style: none;
+}
+.wm-trigger-add > summary::-webkit-details-marker { display: none; }
+.wm-trigger-add > summary:hover { color: var(--wm-brass); border-color: var(--wm-brass); }
+.wm-trigger-add > summary:focus-visible { outline: 2px solid var(--wm-brass-lit); outline-offset: 1px; }
+.wm-trigger-hint { margin: .6em 0 .4em; max-width: 34em; font-size: 1.05em; line-height: 1.5; color: var(--wm-ink-faint); }
+/* `minmax(14em, 1fr)` was the bug: at 14em a label like "When an attack comes
+   at you" cannot fit on one line, and with `nowrap` inherited from the row it
+   ran straight out of its box. Wider minimum, and both lines wrap. */
+.wm-trigger-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 17em), 1fr));
+    gap: 2px;
+}
+.wm-trigger-option {
+    display: flex;
+    flex-direction: column;
+    gap: .1em;
+    padding: .4em .55em;
+    border: 1px solid var(--wm-rule);
+    border-radius: 3px;
+    background: var(--wm-sunken);
+    color: var(--wm-ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 120ms ease, background 120ms ease;
+}
+.wm-trigger-option:hover { border-color: var(--wm-brass); background: var(--wm-surface); }
+.wm-trigger-option:focus-visible { outline: 2px solid var(--wm-brass-lit); outline-offset: 1px; }
+.wm-trigger-name {
+    font-size: 1.1em;
+    font-weight: 500;
+    line-height: 1.25;
+    overflow-wrap: anywhere;      /* never run out of the box */
+}
+.wm-trigger-when {
+    font-size: .95em;
+    color: var(--wm-ink-faint);
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+}
+
+@media (prefers-reduced-motion: reduce) { .wm-trigger-option { transition: none; } }
+
+.wm-canvas.is-lean .wm-stack:last-of-type { margin-bottom: 0; }
+
+/* An empty gate's landing strip: quieter than a block, but still a target. */
+.wm-drop { font-size: .95em; padding: .3em .55em; opacity: .85; }
+
+/* ===========================================================================
+   BUTTONS, RECLAIMED.
+
+   Every control in this editor is a `<button>` — palette chips, trigger
+   options, book rows — and Foundry's core stylesheet gives buttons a fixed
+   height, `white-space: nowrap` and an ellipsis, on selectors specific enough
+   to beat a bare class. So a trigger labelled "When an attack comes at you"
+   was clipped to one line and pushed straight out of its box, and setting
+   `overflow-wrap` on the span inside could not help: the button itself was
+   never going to wrap.
+
+   Scoped under the system's body class, which is how the rest of these
+   stylesheets raise specificity, and stating every property Foundry sets
+   rather than hoping.
+   =========================================================================== */
+
+body.witcher-ttrpg-death-march .wm-trigger-option,
+body.witcher-ttrpg-death-march .wm-chip,
+body.witcher-ttrpg-death-march .wm-book-row,
+body.witcher-ttrpg-death-march .wdm-authored-start,
+body.witcher-ttrpg-death-march .wdm-authored-clear {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    line-height: 1.35;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+/* Palette chips are genuinely one line, so they truncate cleanly rather than
+   escaping. An earlier edit folded this selector into the one below it, which
+   left chips with the trigger-option rules and no truncation at all. */
+body.witcher-ttrpg-death-march .wm-chip {
+    flex: 0 0 auto;
+    overflow: hidden;
+}
+body.witcher-ttrpg-death-march .wm-chip > * {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Trigger options wrap on purpose: their whole point is a name AND a sentence
+   saying when it fires, and neither is worth truncating. */
+body.witcher-ttrpg-death-march .wm-trigger-option {
+    flex: 0 0 auto;
+    align-items: stretch;
+    text-align: left;
+}
+body.witcher-ttrpg-death-march .wm-trigger-name,
+body.witcher-ttrpg-death-march .wm-trigger-when {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+/* ── What happens when you cast this ──────────────────────────────────────
+   Permanent, under the blocks, because "what if I just don't pick a trigger?"
+   is the right question and nothing on the sheet answered it. The trap is the
+   middle state: a trigger with nothing under it looks finished and behaves
+   exactly like no trigger at all. */
+
+.wm-status {
+    display: flex;
+    align-items: baseline;
+    gap: .45em;
+    margin: 0;
+    padding: .35em .55em;
+    border-radius: 3px;
+    background: var(--wm-surface);
+    font-size: 1.05em;
+    line-height: 1.45;
+    color: var(--wm-ink-soft);
+}
+.wm-status-dot {
+    flex: none;
+    width: .5em;
+    height: .5em;
+    border-radius: 50%;
+    background: currentColor;
+    transform: translateY(-.05em);
+}
+.wm-status.is-legacy { color: var(--wm-ink-faint); }
+.wm-status.is-empty  { color: var(--wm-brass); }
+.wm-status.is-live   { color: var(--wm-brass); }
+.wm-status.is-live .wm-status-dot { background: var(--wm-brass); }
+.wm-status.is-broken { color: var(--wm-blood); background: var(--wm-sunken); }
+
+/* ===========================================================================
+   START FROM THE BOOK — the picker dialog.
+
+   Every rule here is scoped under the system's body class, and that is the
+   whole point. The first version mixed bare-class rules with scoped ones, and
+   Foundry's own `button` styling — fixed height, nowrap, its own padding and
+   display — beat the bare half. The rows lost their flex layout, the name and
+   the tier ran together, and the whole list read as collapsed text.
+
+   Consistency of specificity matters more here than any single property.
+   =========================================================================== */
+
+/* The scroll chain. `height: 100%` only resolves when EVERY ancestor has a
+   definite height, and Foundry's `.window-content` is a plain block. */
+body.witcher-ttrpg-death-march .wm-book-dialog .window-content {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding: 8px;
+}
+body.witcher-ttrpg-death-march .wm-book-dialog .dialog-content,
+body.witcher-ttrpg-death-march .wm-book-dialog form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+body.witcher-ttrpg-death-march .wm-book {
+    min-width: 0;
+    /* Its own scale anchor: this dialog is not inside `.wm-canvas`, so `em`
+       would otherwise resolve against the scaled document root. */
+    font-size: calc(6px + 4px * var(--wdm-scale, 1));
+    display: flex;
+    flex-direction: column;
+    gap: .5em;
+    flex: 1 1 auto;
+    min-height: 0;
+    color: var(--wm-ink);
+    font-family: var(--wm-font-ui);
+}
+
+body.witcher-ttrpg-death-march .wm-book-hint {
+    margin: 0;
+    font-size: 1.05em;
+    line-height: 1.5;
+    color: var(--wm-ink-faint);
+}
+
+body.witcher-ttrpg-death-march .wm-book-filter {
+    flex: none;
+    width: 100%;
+    padding: .35em .55em;
+    border: 1px solid var(--wm-rule);
+    border-radius: 3px;
+    background: var(--wm-sunken);
+    color: var(--wm-ink);
+    font: inherit;
+    font-size: 1.1em;
+    line-height: 1.4;
+    height: auto;
+}
+body.witcher-ttrpg-death-march .wm-book-filter:focus-visible {
+    outline: 2px solid var(--wm-brass-lit);
+    outline-offset: 0;
+}
+
+body.witcher-ttrpg-death-march .wm-book-list {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--wm-rule);
+    border-radius: 3px;
+    background: var(--wm-sunken);
+}
+
+/* One row per spell: its name, and what kind of spell it is. Two columns that
+   must stay two columns — run them together and the list is unreadable. */
+/* One row per spell: the name, and under it what kind of spell it is.
+ *
+ * They were side by side, competing for one line in a 360px dialog, and
+ * "Stammelford's Earthquake" simply ran out of the box. Truncating the name is
+ * not an answer either — the name is the entire reason the row exists and an
+ * ellipsis in the middle of a list of similar names is a list you cannot read.
+ *
+ * Stacked, nothing competes and nothing can overflow. It costs a line of
+ * height per row and buys a picker that works at any width. */
+body.witcher-ttrpg-death-march .wm-book-row {
+    /* NEVER shrink.
+     *
+     * `.wm-book-list` is a flex column with a bounded height, and a flex item
+     * defaults to `flex-shrink: 1` — so with a hundred rows in it, every row
+     * was squashed to a fraction of its natural height and its two lines drew
+     * on top of the next row. The list is what scrolls; the rows keep their
+     * size. */
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .1em;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    padding: .38em .6em;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--wm-ink);
+    font: inherit;
+    font-size: 1.1em;
+    line-height: 1.3;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: 400;
+    white-space: normal;
+    cursor: pointer;
+}
+body.witcher-ttrpg-death-march .wm-book-row + .wm-book-row {
+    border-top: 1px solid var(--wm-rule);
+}
+body.witcher-ttrpg-death-march .wm-book-row:hover,
+body.witcher-ttrpg-death-march .wm-book-row:focus-visible {
+    background: var(--wm-brass);
+    color: var(--wm-on-brass);
+}
+body.witcher-ttrpg-death-march .wm-book-row:focus-visible {
+    outline: 2px solid var(--wm-brass-lit);
+    outline-offset: -2px;
+}
+body.witcher-ttrpg-death-march .wm-book-row[hidden] { display: none; }
+
+/* The name wraps rather than truncating. A picker's whole job is telling you
+   which spell this is. */
+body.witcher-ttrpg-death-march .wm-book-name {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    color: inherit;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+body.witcher-ttrpg-death-march .wm-book-meta {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    color: inherit;
+    font-size: .78em;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    white-space: normal;
+    opacity: .55;
+}
+body.witcher-ttrpg-death-march .wm-book-row:hover .wm-book-meta,
+body.witcher-ttrpg-death-march .wm-book-row:focus-visible .wm-book-meta { opacity: .8; }
+
+/* ── Cost: one setting, two modes ─────────────────────────────────────────
+   It was a number with an unrelated-looking checkbox beside it, and the
+   checkbox is the load-bearing half: variable cost is what makes `{sta}`
+   exist for the blocks to use. A segmented pair says "these are two states of
+   one thing" where a checkbox says "here is another setting". */
+
+body.witcher-ttrpg-death-march .wm-mode {
+    display: inline-flex;
+    flex: none;
+    border: 1px solid var(--wm-rule);
+    border-radius: 3px;
+    overflow: hidden;
+}
+body.witcher-ttrpg-death-march .wm-mode-opt {
+    display: inline-flex;
+    align-items: center;
+    padding: .22em .5em;
+    background: var(--wm-sunken);
+    color: var(--wm-ink-faint);
+    font-size: 1em;
+    line-height: 1.3;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 110ms ease, background 110ms ease;
+}
+body.witcher-ttrpg-death-march .wm-mode-opt + .wm-mode-opt { border-left: 1px solid var(--wm-rule); }
+body.witcher-ttrpg-death-march .wm-mode-opt input { position: absolute; opacity: 0; pointer-events: none; }
+body.witcher-ttrpg-death-march .wm-mode-opt:hover { color: var(--wm-ink); }
+body.witcher-ttrpg-death-march .wm-mode-opt.is-on { background: var(--wm-brass); color: var(--wm-on-brass); font-weight: 500; }
+body.witcher-ttrpg-death-march .wm-mode-opt:has(input:focus-visible) {
+    outline: 2px solid var(--wm-brass-lit);
+    outline-offset: -2px;
+}
+
+/* The one line explaining what variable cost buys you. Only shown when it is
+   on, because a permanent note about an inactive mode is noise. */
+body.witcher-ttrpg-death-march .wm-law-note {
+    display: block;
+    margin-top: .3em;
+    font-size: .95em;
+    line-height: 1.4;
+    color: var(--wm-ink-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.witcher-ttrpg-death-march .wm-mode-opt { transition: none; }
+}
+
+/* A number with its unit attached. A bare `2` next to a shape dropdown is a
+   number of something unstated; metres is the only sane guess and guessing is
+   not the same as being told. */
+body.witcher-ttrpg-death-march .wm-law-unit {
+    display: inline-flex;
+    align-items: stretch;
+    flex: none;
+    border: 1px solid var(--wm-rule);
+    border-radius: 3px;
+    background: var(--wm-sunken);
+    overflow: hidden;
+}
+body.witcher-ttrpg-death-march .wm-law-unit input {
+    width: 3.4em;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    text-align: right;
+}
+body.witcher-ttrpg-death-march .wm-law-unit input:focus-visible {
+    outline: 2px solid var(--wm-brass-lit);
+    outline-offset: -2px;
+}
+body.witcher-ttrpg-death-march .wm-law-suffix {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 .4em;
+    border-left: 1px solid var(--wm-rule);
+    color: var(--wm-ink-faint);
+    font-size: .9em;
+}
+
+/* The targeting row holds a mode, a shape, a size and a toggle. Let it wrap
+   rather than squeezing four controls into one line on a narrow sheet. */
+body.witcher-ttrpg-death-march .wm-law-row.is-wide .wm-law-pair { flex-wrap: wrap; }
+
+/* ── Unset arguments ──────────────────────────────────────────────────────
+   Shown, not hidden. An argument filtered off the block because it has no
+   value yet is an argument nobody can set — the same failure that put a 30-SP
+   wall on the map with no armour, one level down. An empty slot shows what it
+   wants instead of what it holds. */
+
+body.witcher-ttrpg-death-march .wm-extra.is-unset { opacity: .58; }
+body.witcher-ttrpg-death-march .wm-extra.is-unset:hover,
+body.witcher-ttrpg-death-march .wm-extra.is-unset:focus-within { opacity: 1; }
+body.witcher-ttrpg-death-march .wm-extra.is-unset .wm-slot {
+    border: 1px dashed rgba(255, 255, 255, .25);
+    background: transparent;
+    box-shadow: none;
+    font-style: italic;
+}
+
+/* ── What an expression can refer to ──────────────────────────────────────
+   Alzur's Thunder loses a die per target it passes through and says so with
+   `max(1,8-{index})d6`. That works — but nothing told anyone `{index}` exists,
+   so "there is no block for the falloff" was a fair reading of an empty text
+   box. The variables are the feature. */
+
+body.witcher-ttrpg-death-march .wm-expr-help {
+    font-size: calc(6px + 4px * var(--wdm-scale, 1));
+    margin-top: .7em;
+    padding-top: .6em;
+    border-top: 1px solid var(--wm-rule);
+    color: var(--wm-ink-faint);
+}
+body.witcher-ttrpg-death-march .wm-expr-lede { margin: 0; font-size: 1.05em; line-height: 1.5; }
+body.witcher-ttrpg-death-march .wm-expr-vars {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .25em .7em;
+    margin: .6em 0;
+}
+body.witcher-ttrpg-death-march .wm-expr-vars dt { margin: 0; }
+body.witcher-ttrpg-death-march .wm-expr-vars dt code {
+    padding: .05em .3em;
+    border-radius: 2px;
+    background: var(--wm-sunken);
+    color: var(--wm-brass);
+    font-family: var(--wm-font-mono);
+    font-size: .95em;
+}
+body.witcher-ttrpg-death-march .wm-expr-vars dd {
+    margin: 0;
+    font-size: 1em;
+    line-height: 1.45;
+    color: var(--wm-ink-soft);
+}
+
+/* The strip's own name. It carried only a summary of its contents — "5 STA ·
+   12m · Dodge / Block" — which says what is inside but never what it is, so
+   the one control folding away every rule the spell runs under read as a stray
+   line of stats. */
+body.witcher-ttrpg-death-march .wm-frame-label {
+    flex: none;
+    font-size: .92em;
+    font-weight: 600;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--wm-ink);
+}
+body.witcher-ttrpg-death-march .wm-frame-line .wm-frame-glance {
+    padding-left: .6em;
+    border-left: 1px solid var(--wm-rule);
+}
+/* Open, the summary underneath repeats the controls — so keep the name and
+   drop the recap. */
+body.witcher-ttrpg-death-march .wm-frame-strip[open] .wm-frame-glance { display: none; }
+
+/* ── Expressions, read out ────────────────────────────────────────────────
+   A slot holding a formula that depends on the cast shows what it SAYS. The
+   formula stays the truth — it is the tooltip, and it is what you edit — but
+   `max(1,8-{index})d6` on the face of a block is the most interesting fact
+   about Alzur's Thunder written where nobody will read it. */
+
+body.witcher-ttrpg-death-march .wm-slot.is-said {
+    font-family: var(--wm-font-ui);
+    font-size: .95em;
+    font-style: normal;
+    letter-spacing: normal;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    /* A dotted underline: this is a reading of something, and there is more
+       underneath. */
+    border-bottom: 1px dotted rgba(255, 255, 255, .3);
+}
+
+/* In the editor, the formula and its reading sit together — you type the one,
+   you check the other. */
+body.witcher-ttrpg-death-march .wm-expr-says {
+    margin: .6em 0 0;
+    font-size: calc(6px + 4px * var(--wdm-scale, 1));
+    line-height: 1.5;
+    color: var(--wm-ink);
+}
+body.witcher-ttrpg-death-march .wm-expr-says > span {
+    font-size: .85em;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--wm-ink-faint);
+    margin-right: .4em;
+}
+
+/* ── Building a value by choosing ─────────────────────────────────────────
+   The engine stores `max(1,8-{index})d6`. Nobody types that. You pick the
+   sentence that describes how the number is worked out and fill in its blanks;
+   the formula is built from that and never has to be seen. */
+
+body.witcher-ttrpg-death-march .wm-build {
+    font-size: calc(6px + 4px * var(--wdm-scale, 1));
+    display: flex;
+    flex-direction: column;
+    gap: .7em;
+    color: var(--wm-ink);
+    font-family: var(--wm-font-ui);
+}
+body.witcher-ttrpg-death-march .wm-build-shape,
+body.witcher-ttrpg-death-march .wm-build-field {
+    display: flex;
+    flex-direction: column;
+    gap: .2em;
+}
+body.witcher-ttrpg-death-march .wm-build-shape > span,
+body.witcher-ttrpg-death-march .wm-build-field > span {
+    font-size: .9em;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--wm-ink-faint);
+}
+body.witcher-ttrpg-death-march .wm-build-shape select,
+body.witcher-ttrpg-death-march .wm-build-field input {
+    width: 100%;
+    height: auto;
+    padding: .3em .5em;
+    border: 1px solid var(--wm-rule);
+    border-radius: 3px;
+    background: var(--wm-sunken);
+    color: var(--wm-ink);
+    font: inherit;
+    font-size: 1.15em;
+    text-transform: none;
+    letter-spacing: normal;
+}
+body.witcher-ttrpg-death-march .wm-build-shape select:focus-visible,
+body.witcher-ttrpg-death-march .wm-build-field input:focus-visible {
+    outline: 2px solid var(--wm-brass-lit);
+    outline-offset: 0;
+}
+
+/* The numbers the chosen sentence needs, side by side. */
+body.witcher-ttrpg-death-march .wm-build-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7em, 1fr));
+    gap: .5em .7em;
+}
+
+/* The sentence, assembled. This is the setting AND its own explanation, so it
+   gets the weight the formula used to have. */
+body.witcher-ttrpg-death-march .wm-build-reads {
+    margin: 0;
+    padding: .55em .7em;
+    border-left: 2px solid var(--wm-brass);
+    border-radius: 0 3px 3px 0;
+    background: var(--wm-surface);
+    font-size: 1.15em;
+    line-height: 1.5;
+    color: var(--wm-ink);
+}
+body.witcher-ttrpg-death-march .wm-build-custom {
+    margin: 0;
+    font-size: 1em;
+    line-height: 1.45;
+    color: var(--wm-blood);
+}

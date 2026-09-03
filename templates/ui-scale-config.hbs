@@ -1,0 +1,93 @@
+{{!-- Configure UI Scaling dialog body. Rendered by UIScaleConfig (ApplicationV2).
+      Auto / Manual / Detailed behave as before. "Per Section" is the decoupled
+      per-surface mode: each surface gets a Size (layout) + Text (font) slider,
+      with Text also scaled by UI Text Scaling — Size never touches text. All
+      sliders preview live as you drag; nothing persists until Apply. --}}
+
+<div class="wou-ui-scale-config-body">
+
+  <p class="hint">{{localize 'WITCHER.UiScaleConfig.Blurb.Modes'}}</p>
+
+  <div class="form-group" data-row="mode">
+    <label for="wou-uis-mode">{{localize 'WITCHER.UiScaleConfig.Text.UiScaleMode'}}</label>
+    <select id="wou-uis-mode" name="scaleMode">
+      <option value="auto"       {{#if (eq mode "auto")}}selected{{/if}}>{{localize 'WITCHER.UiScaleConfig.Text.AutoViewportDpi'}}</option>
+      <option value="manual"     {{#if (eq mode "manual")}}selected{{/if}}>{{localize 'WITCHER.UiScaleConfig.Text.Manual'}}</option>
+      <option value="detailed"   {{#if (eq mode "detailed")}}selected{{/if}}>{{localize 'WITCHER.UiScaleConfig.Text.DetailedPerElement'}}</option>
+      <option value="persection" {{#if (eq mode "persection")}}selected{{/if}}>{{localize 'WITCHER.UiScaleConfig.Text.PerSection'}}</option>
+    </select>
+  </div>
+
+  {{!-- UI Text Scaling — shown in Manual + Per Section (in Per Section it's the
+        global text multiplier). JS toggles visibility via data-row. --}}
+  <div class="form-group" data-row="scale">
+    <label for="wou-uis-scale">{{localize 'WITCHER.UiScaleConfig.Text.UiScale'}} <span data-display="scale">{{scale}}</span>×</label>
+    <input id="wou-uis-scale" name="scale" type="range" min="0.6" max="2" step="0.05" value="{{scale}}">
+  </div>
+
+  <div class="form-group" data-row="bars">
+    <label for="wou-uis-bars">{{localize 'WITCHER.UiScaleConfig.Text.OverallScaling'}} <span data-display="chromeBarsScale">{{bars}}</span>×</label>
+    <input id="wou-uis-bars" name="chromeBarsScale" type="range" min="0.6" max="1.6" step="0.05" value="{{bars}}">
+  </div>
+
+  {{!-- Detailed sliders — visible only in Detailed mode. --}}
+  <div data-detailed-block>
+    <p class="hint" style="margin-top:0.25rem;">{{localize 'WITCHER.UiScaleConfig.Blurb.Detailed'}}</p>
+    <div class="form-group">
+      <label for="wou-uis-d-ui">{{localize 'WITCHER.UiScaleConfig.Text.UiScaleText'}} <span data-display="detailed.ui">{{detailed.ui}}</span>×</label>
+      <input id="wou-uis-d-ui" name="detailed.ui" type="range" min="0.6" max="1.6" step="0.05" value="{{detailed.ui}}">
+    </div>
+    <div class="form-group">
+      <label for="wou-uis-d-topbar">{{localize 'WITCHER.UiScaleConfig.Text.TopBar'}} <span data-display="detailed.topbar">{{detailed.topbar}}</span>×</label>
+      <input id="wou-uis-d-topbar" name="detailed.topbar" type="range" min="0.6" max="1.6" step="0.05" value="{{detailed.topbar}}">
+    </div>
+    <div class="form-group">
+      <label for="wou-uis-d-dock">{{localize 'WITCHER.UiScaleConfig.Text.BottomDock'}} <span data-display="detailed.dock">{{detailed.dock}}</span>×</label>
+      <input id="wou-uis-d-dock" name="detailed.dock" type="range" min="0.6" max="1.6" step="0.05" value="{{detailed.dock}}">
+    </div>
+    <div class="form-group">
+      <label for="wou-uis-d-sidebar">{{localize 'WITCHER.UiScaleConfig.Text.RightSidebar'}} <span data-display="detailed.sidebar">{{detailed.sidebar}}</span>×</label>
+      <input id="wou-uis-d-sidebar" name="detailed.sidebar" type="range" min="0.6" max="1.6" step="0.05" value="{{detailed.sidebar}}">
+    </div>
+    <div class="form-group">
+      <label for="wou-uis-d-scenecontrols">{{localize 'WITCHER.UiScaleConfig.Text.LeftSceneControls'}} <span data-display="detailed.scenecontrols">{{detailed.scenecontrols}}</span>×</label>
+      <input id="wou-uis-d-scenecontrols" name="detailed.scenecontrols" type="range" min="0.6" max="1.6" step="0.05" value="{{detailed.scenecontrols}}">
+    </div>
+    <div class="form-group">
+      <label for="wou-uis-d-popups">{{localize 'WITCHER.UiScaleConfig.Text.PopupsSheetsDialogsCompendium'}} <span data-display="detailed.popups">{{detailed.popups}}</span>×</label>
+      <input id="wou-uis-d-popups" name="detailed.popups" type="range" min="0.6" max="1.6" step="0.05" value="{{detailed.popups}}">
+    </div>
+  </div>
+
+  {{!-- Per Section — visible only in Per Section mode. Each surface: Size (+ Text
+        unless native). --}}
+  <div data-persection-block>
+    <p class="hint" style="margin-top:0.25rem;">{{localize 'WITCHER.UiScaleConfig.Blurb.PerSurface'}}</p>
+    <div class="wou-uis-surfaces">
+      {{#each surfaces}}
+      <div class="wou-uis-surface" data-surface="{{this.key}}">
+        <div class="wou-uis-surface-name">
+          {{this.label}}{{#if this.native}} <span class="wou-uis-native">{{localize 'WITCHER.UiScaleConfig.Text.SizeOnly'}}</span>{{/if}}
+        </div>
+        <div class="form-group wou-uis-mini">
+          <label for="wou-uis-size-{{this.key}}">{{localize 'WITCHER.UiScaleConfig.Text.Size'}} <span data-display="size.{{this.key}}">{{this.size}}</span>×</label>
+          <input id="wou-uis-size-{{this.key}}" name="size.{{this.key}}" type="range" min="0.6" max="2" step="0.05" value="{{this.size}}">
+        </div>
+        {{#unless this.native}}
+        <div class="form-group wou-uis-mini">
+          <label for="wou-uis-font-{{this.key}}">{{localize 'WITCHER.UiScaleConfig.Text.TextSize'}} <span data-display="font.{{this.key}}">{{this.font}}</span>×</label>
+          <input id="wou-uis-font-{{this.key}}" name="font.{{this.key}}" type="range" min="0.6" max="2" step="0.05" value="{{this.font}}">
+        </div>
+        {{/unless}}
+      </div>
+      {{/each}}
+    </div>
+  </div>
+
+  <footer class="wou-ui-scale-config-footer">
+    <button type="button" data-action="reset" title="{{localize 'WITCHER.UiScaleConfig.Tooltip.ResetEverySliderTo100ModeStaysAsIs'}}"><i class="fa-solid fa-rotate-left"></i> {{localize 'WITCHER.UiScaleConfig.Text.ResetAll'}}</button>
+    <button type="button" data-action="cancel"><i class="fa-solid fa-xmark"></i> {{localize 'WITCHER.UiScaleConfig.Text.Cancel'}}</button>
+    <button type="button" data-action="apply"><i class="fa-solid fa-check"></i> {{localize 'WITCHER.UiScaleConfig.Text.Apply'}}</button>
+  </footer>
+
+</div>

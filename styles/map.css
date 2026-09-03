@@ -1,0 +1,277 @@
+/* =============================================================================
+   WOU · MAP PANEL
+   ============================================================================= */
+
+/* Topbar tab active state — mirrors inventory/journal */
+body.witcher-ttrpg-death-march.wou-map-open #wou-top-bar [data-tab="map"]   { color: var(--wdm-amber-bright); }
+body.witcher-ttrpg-death-march.wou-map-open #wou-top-bar [data-tab="map"] i { color: var(--wdm-amber-bright); }
+
+/* Panel container */
+body.witcher-ttrpg-death-march #wou-map {
+  position: fixed;
+  top: 3.125rem; left: 11.25rem; right: 17.5rem; bottom: 0;
+  /* Above the witcher-parchments host (z 50) AND the dock (z 9050) so the
+   * map gets the full screen including the dock area. */
+  z-index: 9070;
+  background:
+    radial-gradient(ellipse 68.75rem 43.75rem at 50% 25%, rgb(from var(--wdm-amber-hi) r g b / 0.05), transparent 70%),
+    linear-gradient(180deg, rgb(from var(--wdm-bg) r g b / 0.93), rgba(5,4,2,0.97));
+  /* backdrop-filter cut: bg is 0.93-0.97 opaque so the blur is imperceptible
+     while forcing a full canvas re-sample every composite. See chrome.css:310. */
+  border-top: var(--wdm-rule-2);
+  border-bottom: var(--wdm-rule-2);
+  display: grid;
+  /* minmax(0, 1fr) on the canvas row guarantees it takes the remaining
+     space.  Plain `1fr` defaults to min-content for its min-track-size,
+     which collapses the canvas to its placeholder string's natural height
+     and (with `max-height: 100%` on the image) hides the image entirely.
+     The minmax floor of 0 lets the row shrink below content size and the
+     fr unit then distributes the actual available height. */
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 0.625rem;
+  padding: 0.625rem 1.375rem 0.875rem 1.375rem;
+  overflow: hidden;
+  font-family: var(--wdm-font-display);
+  color: var(--wdm-ink);
+
+  transform: translateY(-0.75rem);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .22s ease-out, opacity .18s ease-out;
+}
+body.witcher-ttrpg-death-march #wou-map.is-open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Close chevron pinned to the center of the topbar Map tab */
+body.witcher-ttrpg-death-march #wou-map #wou-map-close {
+  position: absolute;
+  top: 0.125rem;
+  left: var(--map-close-x, 50%);
+  transform: translateX(-50%);
+  z-index: 50;
+  background: none;
+  border: none;
+  color: var(--wdm-ink-dim);
+  font-size: calc(1rem * var(--wdm-tf, 1));
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+}
+body.witcher-ttrpg-death-march #wou-map #wou-map-close:hover { color: var(--wdm-amber-hi); }
+
+/* Header — empty row.  Reserves vertical space for the close chevron
+   (anchored under the Map tab); the rune-trim line acts as the panel's
+   top divider. */
+body.witcher-ttrpg-death-march #wou-map .wou-map-header {
+  position: relative;
+  min-height: 1.375rem;
+}
+/* Active map name — centered in the header so the player knows which map
+   they're looking at when several share the panel. */
+body.witcher-ttrpg-death-march #wou-map .wou-map-title {
+  display: block;
+  text-align: center;
+  font-family: var(--wdm-font-display);
+  font-size: calc(0.8125rem * var(--wdm-tf, 1));
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--wdm-amber-bright);
+  padding-top: 0.125rem;
+}
+body.witcher-ttrpg-death-march #wou-map .wou-map-header::after {
+  content: '';
+  position: absolute; left: 2.5rem; right: 2.5rem; bottom: 0;
+  height: 0.0625rem;
+  background: linear-gradient(90deg, transparent 5%, var(--wdm-amber-dim) 15%, transparent 30%, var(--wdm-amber) 50%, transparent 70%, var(--wdm-amber-dim) 85%, transparent 95%);
+  opacity: 0.4;
+}
+
+/* GM "View as" picker — floated to the top-right of the map header. The pill
+ * gets tight vertical padding + a hard max-height so it fits inside the
+ * header's slim min-height and doesn't poke below the runic divider line. */
+body.witcher-ttrpg-death-march #wou-map .wou-map-viewas {
+  position: absolute;
+  top: 0;
+  right: 0.5rem;
+  z-index: 5;
+  white-space: nowrap;
+  line-height: 1;
+  max-height: 1.25rem;
+  display: flex;
+  align-items: center;
+}
+body.witcher-ttrpg-death-march #wou-map .wou-map-viewas .wou-viewas {
+  padding: 0.0625rem 0.25rem 0.0625rem 0.4375rem;
+  font-size: calc(0.75rem * var(--wdm-tf, 1));
+  line-height: 1;
+}
+body.witcher-ttrpg-death-march #wou-map .wou-map-viewas .wou-viewas-select,
+body.witcher-ttrpg-death-march #wou-map .wou-map-viewas .wou-viewas-clear {
+  height: 1rem;
+  line-height: 1;
+  font-size: calc(0.75rem * var(--wdm-tf, 1));
+}
+
+/* Top toolbar — its own row below the header.  Right-aligned by default so
+   the buttons sit at the top-right corner of the panel as originally
+   intended; wraps when many map items exist. */
+body.witcher-ttrpg-death-march #wou-map .wou-map-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-height: 2.375rem;
+}
+body.witcher-ttrpg-death-march #wou-map .wou-map-toolbar-empty {
+  font-size: calc(0.625rem * var(--wdm-tf, 1));
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-faint);
+}
+body.witcher-ttrpg-death-march #wou-map .wou-map-tool {
+  position: relative;
+  width: 2.375rem; height: 2.375rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(circle at 50% 25%, rgb(from var(--wdm-amber-hi) r g b / 0.04), transparent 65%),
+    linear-gradient(180deg, var(--wdm-bg-lifted), var(--wdm-bg-deep));
+  border: 1px solid rgb(from var(--wdm-divider) r g b / 0.22);
+  cursor: pointer;
+  color: var(--wdm-amber-hi);
+  padding: 0;
+  font-size: 1rem;
+  transition: border-color .15s, transform .12s;
+  border-radius: 0;
+}
+body.witcher-ttrpg-death-march #wou-map .wou-map-tool img {
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #wou-map .wou-map-tool:hover {
+  border-color: var(--wdm-amber-hi);
+  transform: translateY(-0.0625rem);
+}
+body.witcher-ttrpg-death-march #wou-map .wou-map-tool.is-active {
+  border-color: var(--wdm-amber-bright);
+  box-shadow: 0 0 0 1px var(--wdm-amber-dim), 0 0 0.875rem rgb(from var(--wdm-amber-hi) r g b / 0.30);
+}
+
+/* Canvas — fills the remaining space and centers a contained image.
+ * Backdrop is transparent so the parent #wou-map's warm radial wash +
+ * soft vertical gradient (matching alchemy / character / journal /
+ * inventory) reads through; just a hairline border defines the area. */
+body.witcher-ttrpg-death-march #wou-map .wou-map-canvas {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid rgb(from var(--wdm-divider) r g b / 0.12);
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+}
+body.witcher-ttrpg-death-march #wou-map .wou-map-canvas.is-dragging { cursor: grabbing; }
+body.witcher-ttrpg-death-march #wou-map .wou-map-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 0.25rem 1.5rem rgba(0,0,0,0.7));
+  /* Disable transform animations so pan/zoom feel snappy.  Transform itself
+     is set imperatively from map.js via the matrix(tx, ty, scale). */
+  transition: none;
+  /* Image shouldn't steal pointer events from the canvas (drag listeners
+     live on the canvas, not the image). */
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+body.witcher-ttrpg-death-march #wou-map .wou-map-empty {
+  text-align: center;
+  font-size: calc(0.8125rem * var(--wdm-tf, 1));
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--wdm-ink-dim);
+  line-height: 1.8;
+}
+body.witcher-ttrpg-death-march #wou-map .wou-map-empty .dim {
+  font-size: calc(0.6875rem * var(--wdm-tf, 1));
+  color: var(--wdm-ink-faint);
+  letter-spacing: 0.14em;
+}
+
+/* =============================================================================
+   ITEM SHEET — Map image picker (injected into the valuable sheet)
+   ============================================================================= */
+.wou-map-image-row {
+  display: grid;
+  grid-template-rows: auto auto auto;
+  gap: 0.375rem;
+  padding: 0.5rem 0;
+  margin-top: 0.5rem;
+  border-top: 1px solid rgb(from var(--wdm-divider) r g b / 0.18);
+}
+.wou-map-image-label {
+  font-size: calc(0.6875rem * var(--wdm-tf, 1));
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--wdm-amber);
+  font-weight: 600;
+}
+.wou-map-image-fields {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.wou-map-image-pick {
+  width: 1.875rem; height: 1.875rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgb(from var(--wdm-bg) r g b / 0.6);
+  border: 1px solid var(--wdm-amber-dim);
+  color: var(--wdm-amber-hi);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 0;
+  flex: 0 0 auto;
+}
+.wou-map-image-pick:hover { border-color: var(--wdm-amber); color: var(--wdm-amber-bright); }
+.wou-map-image-input {
+  flex: 1 1 auto;
+  background: rgb(from var(--wdm-bg) r g b / 0.4);
+  border: 1px solid rgb(from var(--wdm-divider) r g b / 0.22);
+  color: var(--wdm-ink-hi);
+  padding: 0.25rem 0.5rem;
+  font: inherit;
+}
+.wou-map-image-preview {
+  margin-top: 0.25rem;
+  max-height: 11.25rem;
+  overflow: hidden;
+  border: 1px solid rgb(from var(--wdm-divider) r g b / 0.18);
+}
+.wou-map-image-preview img {
+  width: 100%;
+  max-height: 11.25rem;
+  object-fit: contain;
+  display: block;
+  background: rgba(0,0,0,0.5);
+}
+
+
+/* ── DECOUPLED SCALING: #wou-map ────────────────────────────────────────────
+ * LAYOUT scales with the SIZE knob (--wdm-size-map) via `zoom`; TEXT scales
+ * via --wdm-tf (UI-Scale * --wdm-fs-map / size) so text is independent of the
+ * frame size. Every font-size above is wrapped in --wdm-tf; positionBounds()
+ * divides insets by --wdm-size-map. All knobs default 1.0 -> identical at
+ * UI-Scale 1. Text-content boxes that must hug their text also wrap their
+ * dimensions in --wdm-tf (see e.g. bestiary .wou-bst-card). */
+body.witcher-ttrpg-death-march #wou-map {
+  zoom: var(--wdm-size-map, var(--wdm-chrome-bars-scale, 1));
+  --wdm-tf: calc(var(--wdm-scale, 1) * var(--wdm-fs-map, 1) * var(--wdm-chrome-bars-scale, 1) / var(--wdm-size-map, var(--wdm-chrome-bars-scale, 1)));
+}

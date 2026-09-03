@@ -1,0 +1,76 @@
+{{!-- Bestiary Settings — read by BestiaryConfig#onSubmit via field `name`s.
+      World-scoped, GM-only. Styled to match the House Rules config: it borrows
+      the shared wdm-se-* form primitives (statuses.css) and the wdm-sc-*
+      layout helpers, which are scoped to .wdm-stealth-config-body /
+      .wdm-stress-config-body — so those classes ride along on the wrapper. --}}
+<div class="wdm-bestiary-config-body wdm-stealth-config-body wdm-stress-config-body">
+
+  <header class="wdm-se-head">
+    <h2><i class="fa-solid fa-dragon"></i> {{localize 'WOU.Settings.BestiaryConfig.Title'}}</h2>
+    <p class="wdm-se-blurb">{{localize 'WOU.Settings.BestiaryConfig.Hint'}}</p>
+  </header>
+
+  {{!-- ================= DISPLAY ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-eye"></i> {{localize 'WOU.Settings.BestiaryConfig.SectionDisplay'}}</summary>
+
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="hideBeasts" {{#if hideBeasts}}checked{{/if}} />
+        <span><b>{{localize 'WOU.Settings.BestiaryHideBeasts.Name'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WOU.Settings.BestiaryHideBeasts.Hint'}}</small></span>
+      </label>
+
+      <label class="wdm-se-check">
+        <input type="checkbox" name="hideHumanoids" {{#if hideHumanoids}}checked{{/if}} />
+        <span><b>{{localize 'WOU.Settings.BestiaryHideHumanoids.Name'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WOU.Settings.BestiaryHideHumanoids.Hint'}}</small></span>
+      </label>
+    </div>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WOU.Settings.BestiaryConfig.PortraitAspect'}}</span>
+        <select name="portraitAspect">
+          <option value="witcher3" {{#if isWitcher3}}selected{{/if}}>{{localize 'WOU.Settings.BestiaryConfig.AspectWitcher3'}}</option>
+          <option value="gwent"    {{#if isGwent}}selected{{/if}}>{{localize 'WOU.Settings.BestiaryConfig.AspectGwent'}}</option>
+        </select>
+      </label>
+    </div>
+  </details>
+
+  {{!-- ================= AUTOPSY ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-microscope"></i> {{localize 'WOU.Settings.BestiaryConfig.SectionAutopsy'}}</summary>
+
+    <p class="wdm-sc-help wdm-sc-help-inline">{{localize 'WOU.Settings.BestiaryConfig.AutopsyHint'}}</p>
+
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="autopsyCombat" {{#if autopsyCombat}}checked{{/if}} />
+        <span><b>{{localize 'WOU.Settings.BestiaryConfig.AutopsyCombat'}}</b></span>
+      </label>
+      <label class="wdm-se-check">
+        <input type="checkbox" name="autopsyStats" {{#if autopsyStats}}checked{{/if}} />
+        <span><b>{{localize 'WOU.Settings.BestiaryConfig.AutopsyStats'}}</b></span>
+      </label>
+      <label class="wdm-se-check">
+        <input type="checkbox" name="autopsySkills" {{#if autopsySkills}}checked{{/if}} />
+        <span><b>{{localize 'WOU.Settings.BestiaryConfig.AutopsySkills'}}</b></span>
+      </label>
+      <label class="wdm-se-check">
+        <input type="checkbox" name="autopsyResearch" {{#if autopsyResearch}}checked{{/if}} />
+        <span><b>{{localize 'WOU.Settings.BestiaryConfig.AutopsyResearch'}}</b></span>
+      </label>
+      <label class="wdm-se-check">
+        <input type="checkbox" name="autopsyDescriptive" {{#if autopsyDescriptive}}checked{{/if}} />
+        <span><b>{{localize 'WOU.Settings.BestiaryConfig.AutopsyDescriptive'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WOU.Settings.BestiaryConfig.AutopsyDescriptiveHint'}}</small></span>
+      </label>
+      <button type="button" data-action="configBrackets" style="margin-top:4px;justify-self:start;">
+        <i class="fa-solid fa-sliders"></i> {{localize 'WOU.Settings.BestiaryConfig.ConfigureBrackets'}}
+      </button>
+    </div>
+  </details>
+
+</div>

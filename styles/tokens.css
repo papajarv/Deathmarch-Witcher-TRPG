@@ -1,0 +1,504 @@
+/* =============================================================================
+   WITCHER OVERHAUL UI · design tokens
+   These are the design primitives the rest of the module composes from.
+   Single source of truth for colour, type, motion, geometry, shadows.
+
+   All tokens live under `body.witcher-ttrpg-death-march` so a master disable removes them.
+   Per-feature toggles add `.wou-<feature>` body classes on top.
+   ============================================================================= */
+
+/* @import must come before any style rules per CSS spec — keep this line on
+ * top so Barlow / Barlow Condensed actually load from Google Fonts. The UI
+ * scale block sits below. */
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&family=Barlow:wght@300;400;500;600&display=swap');
+
+/* =============================================================================
+   UI SCALE — text scales, layout does NOT.
+
+   `--wdm-scale` is the "UI Text Scaling" knob (default 1.0). It drives
+   `--wdm-tf` (text factor), and EVERY `font-size` in the chrome is written
+   `calc(<n>rem * var(--wdm-tf))`. The root font-size is fixed at 16px, so
+   `rem` is a pure layout unit that the text knob never touches — bars,
+   panels, padding and icon boxes keep their size while text grows/shrinks.
+
+   This replaced the old model where `--wdm-scale` drove the root font-size:
+   because the whole UI is rem-based, that scaled LAYOUT too (bars widened,
+   panels grew), which read to users as "the text slider resizes everything."
+
+   Frame/size scaling is a SEPARATE concern, driven by the size knobs
+   (`--wdm-size-<surface>` / `--wdm-chrome-bars-scale`) via `zoom` on each
+   surface — independent of the text knob.
+
+   applyUIScale() in module/chrome/setup/ui-scale.js writes `--wdm-scale`
+   onto <html> at runtime; the body default below turns it into `--wdm-tf`. */
+:root { --wdm-scale: 1; }
+/* TEXT-ONLY SCALING MODEL
+ * ------------------------------------------------------------------------
+ * The root font-size is FIXED. `rem` therefore means "layout" and never
+ * moves when the user drags UI Text Scaling — so bars, panels, padding,
+ * gaps and icon boxes keep their size. Text scales through ONE inherited
+ * multiplier, `--wdm-tf`, that every `font-size` is wrapped in
+ * (`calc(<n>rem * var(--wdm-tf))`). Custom properties inherit reliably into
+ * every surface (native sidebar, chrome panels, popups) — unlike a changing
+ * root font-size — so this scales text everywhere WITHOUT resizing anything.
+ *
+ * `--wdm-tf` defaults to the text knob globally; per-surface rules override
+ * it (topbar/dock divide out their size-zoom; panels fold in their
+ * per-section text slider). The old `zoom: var(--wdm-scale)` panel hack is
+ * gone — it scaled layout, which is exactly what we don't want. */
+html {
+  font-size: 16px;
+}
+body.witcher-ttrpg-death-march {
+  --wdm-tf: var(--wdm-scale, 1);
+}
+/* Font Awesome icons are glyphs sized by `font-size`, so wrapping font-size in
+ * `--wdm-tf` made them grow with the TEXT knob. Icons are UI elements, not
+ * text: pin `--wdm-tf: 1` on every icon so its `calc(<n>rem * var(--wdm-tf))`
+ * collapses to plain `rem` — a fixed layout size that only the Size/zoom knobs
+ * move. In this chrome an <i> is always an FA icon (never italic text); the
+ * `.fa*` / `[class*="fa-"]` selectors also catch icon glyphs rendered via a
+ * button's own ::before (e.g. Foundry's sidebar tab buttons). Text labels are
+ * separate <span> siblings, so they keep scaling. */
+body.witcher-ttrpg-death-march i,
+body.witcher-ttrpg-death-march .fa,
+body.witcher-ttrpg-death-march .fas,
+body.witcher-ttrpg-death-march .far,
+body.witcher-ttrpg-death-march .fal,
+body.witcher-ttrpg-death-march .fat,
+body.witcher-ttrpg-death-march .fad,
+body.witcher-ttrpg-death-march .fab,
+body.witcher-ttrpg-death-march .fa-solid,
+body.witcher-ttrpg-death-march .fa-regular,
+body.witcher-ttrpg-death-march .fa-light,
+body.witcher-ttrpg-death-march .fa-thin,
+body.witcher-ttrpg-death-march .fa-duotone,
+body.witcher-ttrpg-death-march .fa-brands,
+body.witcher-ttrpg-death-march [class*="fa-"] {
+  --wdm-tf: 1;
+}
+/* Fold the TEXT knob into Foundry's own type scale so NATIVE markup (chat
+ * log, combat tracker, dialogs, sheets that use Foundry's --font-size-N
+ * variables) scales with UI Text Scaling too. Unlayered → beats Foundry's
+ * layered `body` definitions. Values mirror foundry2.css. */
+body.witcher-ttrpg-death-march {
+  --font-size-10: calc(0.625rem  * var(--wdm-tf, 1));
+  --font-size-11: calc(0.6875rem * var(--wdm-tf, 1));
+  --font-size-12: calc(0.75rem   * var(--wdm-tf, 1));
+  --font-size-13: calc(0.8125rem * var(--wdm-tf, 1));
+  --font-size-14: calc(0.875rem  * var(--wdm-tf, 1));
+  --font-size-15: calc(0.9375rem * var(--wdm-tf, 1));
+  --font-size-16: calc(1rem      * var(--wdm-tf, 1));
+  --font-size-18: calc(1.125rem  * var(--wdm-tf, 1));
+  --font-size-20: calc(1.25rem   * var(--wdm-tf, 1));
+  --font-size-24: calc(1.5rem    * var(--wdm-tf, 1));
+  --font-size-28: calc(1.75rem   * var(--wdm-tf, 1));
+  --font-size-32: calc(2rem      * var(--wdm-tf, 1));
+  --font-size-36: calc(2.25rem   * var(--wdm-tf, 1));
+  --font-size-40: calc(2.5rem    * var(--wdm-tf, 1));
+  --font-size-48: calc(3rem      * var(--wdm-tf, 1));
+  --font-size-64: calc(4rem      * var(--wdm-tf, 1));
+  --font-size-80: calc(5rem      * var(--wdm-tf, 1));
+}
+
+/* Fold every Foundry container that renders text into the scaled rem
+ * base. Two moves in one rule:
+ *   • Non-scale-aware containers (chrome, chat, notifications, popouts,
+ *     dialogs, tooltips, context menus) get font-size: 1rem so their
+ *     children inherit the scaled base rather than the browser's 16px.
+ *   • body itself gets the same anchor so any descendant relying on
+ *     inheritance (em, %, unset font-size) also scales.
+ * Without the body anchor, elements that use `em` end up cascading off
+ * a 16px browser-default parent and shrink relative to rem siblings. */
+body.witcher-ttrpg-death-march,
+body.witcher-ttrpg-death-march #sidebar,
+body.witcher-ttrpg-death-march #hotbar,
+body.witcher-ttrpg-death-march #scene-controls,
+body.witcher-ttrpg-death-march #navigation,
+body.witcher-ttrpg-death-march #players,
+body.witcher-ttrpg-death-march #ui-top,
+body.witcher-ttrpg-death-march #ui-middle,
+body.witcher-ttrpg-death-march #ui-bottom,
+body.witcher-ttrpg-death-march #ui-left,
+body.witcher-ttrpg-death-march #ui-right,
+body.witcher-ttrpg-death-march #notifications,
+body.witcher-ttrpg-death-march #tooltip,
+body.witcher-ttrpg-death-march #context-menu,
+body.witcher-ttrpg-death-march #chat-popout,
+body.witcher-ttrpg-death-march #chat,
+body.witcher-ttrpg-death-march #chat-log,
+body.witcher-ttrpg-death-march #chat-notifications,
+body.witcher-ttrpg-death-march #pause,
+body.witcher-ttrpg-death-march #players-list,
+body.witcher-ttrpg-death-march .window-app,
+body.witcher-ttrpg-death-march .application,
+body.witcher-ttrpg-death-march .chat-message,
+body.witcher-ttrpg-death-march .message,
+body.witcher-ttrpg-death-march .dialog {
+  font-size: calc(1rem * var(--wdm-tf, 1));
+}
+
+/* NOTE: the GM panel, chat-notification toasts, and the chrome overlay panels
+ * (inventory / journal / character / crafting / map / bestiary) used to scale
+ * text with `zoom: var(--wdm-scale)`. That's gone — `zoom` scales LAYOUT, which
+ * is precisely the "non-text elements grow with the text slider" bug. Their
+ * text now scales the same way as everything else: every `font-size` is
+ * `calc(<n>rem * var(--wdm-tf))`, and `--wdm-tf` inherits from the body default
+ * above. Their frames (all rem) stay fixed because the root font-size is
+ * fixed. Per-section Size knobs still scale a panel's frame via its own
+ * `--wdm-size-<key>` zoom (see each panel's CSS). */
+
+/* Foundry popup windows — actor sheets, item sheets, dialogs, compendium
+ * browsers, journal popouts, roll config, all the ApplicationV2 windows
+ * players actually spend time in. Same `zoom` pattern the chrome
+ * overlays use, driven by the main UI Scale slider so a single slider
+ * controls text size across every popup surface.
+ *
+ * Selectors:
+ *   .window-app       — Foundry v10-v13 legacy windows (Application, Dialog)
+ *   .application[data-appid] — Foundry v13+ ApplicationV2 windows (data-appid
+ *                     is only present on floating instances, so this leaves
+ *                     inline apps like the sidebar alone)
+ *   .dialog           — plain confirm/prompt dialogs
+ *   #compendium       — the compendium browser sidebar tab when popped out
+ * Non-floating apps (chat log, combat tracker in the sidebar) don't match
+ * because they don't get `data-appid` on their root, so the sidebar scales
+ * via the sidebar zoom rule instead. */
+/* Foundry popup windows. `body > .application` (direct child) targets
+ * FLOATING popouts only — actor sheets, item sheets, dialogs, the
+ * compendium browser, roll config, etc. Foundry's sidebar tabs
+ * (chat, combat tracker, sidebar-nested apps) live INSIDE `#sidebar`
+ * and are excluded by the child-combinator so their event handlers
+ * (Clear Log button, tracker controls, chat commands) don't fight
+ * a zoom applied to their container.
+ *
+ * Legacy fallback: `.window-app` catches v10-v12 Application windows.
+ * Both `.dialog` and `#compendium` cover the classic dialog + popped-
+ * out compendium browser paths.
+ *
+ * Detailed mode overrides via `--wdm-popup-scale`; auto/manual sets it
+ * explicitly to include the viewport+DPI factor. */
+/* Popup scaling — applied via JS hooks (chrome/setup/popup-scale.js).
+ * Uses `zoom` instead of `transform: scale()` so it does not compose
+ * with Foundry's close animation (which drives `transform` itself).
+ *
+ * History: the previous `transform: scale()` version tried to work
+ * around that composition by having popup-scale.js strip the attribute
+ * on `closeApplicationV2`. But that hook fires AFTER `_animate("out")`
+ * in current Foundry V2 lifecycle for many app types, so the transform
+ * stayed applied while Foundry's close animation ran on top, giving a
+ * 2-second "black frame" while the two transforms fought and the
+ * `!important` max-width froze the layout box. `zoom` decouples from
+ * `transform` entirely — Foundry's close animation runs cleanly no
+ * matter when (or whether) the attribute is stripped.
+ *
+ * `zoom` scales layout, so no viewport-clamp calc is needed: a popup
+ * that fits at scale 1 also fits at scale ≤ viewport/popup ratio, and
+ * beyond that the popup just overflows scroll (same as an unscaled
+ * oversized popup would). Same pattern as `chrome.css` notifications
+ * and the overlay panels in this file. */
+body.witcher-ttrpg-death-march [data-wdm-scaled="1"] {
+  /* Fallback chain:
+   *   --wdm-popup-scale         — only set in Detailed mode (explicit)
+   *   --wdm-chrome-bars-scale   — Auto / Manual (default 1.0) — matches
+   *                               the chrome bars, so popup content doesn't
+   *                               double-scale the way it did when the
+   *                               fallback pointed at --wdm-scale (which the
+   *                               html font-size rule already applies to
+   *                               every rem-based dimension).
+   *   1                         — hard default. */
+  zoom: calc(var(--wdm-popup-scale, 1) * var(--wdm-chrome-bars-scale, 1));
+
+  /* Hard visual-viewport clamp.
+   *
+   * Under CSS `zoom: 1.2`, every CSS length on the element multiplies by
+   * 1.2 when painted — so a Foundry-set `height: 800px` becomes 960 visual
+   * pixels, and an `auto` height whose natural content is 800 CSS px also
+   * paints at 960. If Foundry (or the user's dragged size) requested a CSS
+   * dim larger than `viewport / zoom`, visual overflows the viewport.
+   *
+   * Bounding via `max-width`/`max-height` in CSS pixels equal to
+   * `(viewport - safety-margin) / zoom` is the cleanest fix: the browser
+   * clamps in its own layout pipeline before painting, catching both the
+   * explicit-dim case (Foundry writes an inline width that exceeds the
+   * ceiling → browser ignores the excess) and the auto-dim case (natural
+   * content taller than the ceiling → browser clamps and inner content
+   * gets its normal scrollbar via `.window-content { overflow: auto }`).
+   *
+   * The 8px margin keeps the visual edge off the very last pixel so
+   * borders / drop-shadows / resize handles stay visible.
+   *
+   * NB — the JS `_updatePosition` wrapper still runs, and it still
+   * handles: (1) correcting the left/top clamp under `zoom` semantics
+   * so drag doesn't send the popup past the visual right edge, and
+   * (2) recentring the default-center formula. Those are position
+   * concerns; this rule is the size concern. Together they keep every
+   * floating popup fully in-viewport at any UI scale. */
+  max-width:  calc((100vw - 8px) / (var(--wdm-popup-scale, 1) * var(--wdm-chrome-bars-scale, 1)));
+  max-height: calc((100vh - 8px) / (var(--wdm-popup-scale, 1) * var(--wdm-chrome-bars-scale, 1)));
+}
+
+
+@font-face {
+  font-family: 'PF DIN Text Cond Pro';
+  src: local('PF DIN Text Cond Pro'), local('PFDinTextCondPro-Regular');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'PF DIN Text Cond Pro';
+  src: local('PF DIN Text Cond Pro Bold'), local('PFDinTextCondPro-Bold');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'PF DIN Text Cond Pro';
+  src: local('PF DIN Text Cond Pro Italic'), local('PFDinTextCondPro-Italic');
+  font-weight: 400; font-style: italic; font-display: swap;
+}
+
+body.witcher-ttrpg-death-march {
+  /* ============================  COLOUR  ===================================
+     Sampled from the W3 base game references (empty BG averaged at #131313)
+     and tuned through the prototype.html merge. The amber tones are kept
+     intentionally muted ("aged tarnished brass") to avoid the vibrant green
+     cast that comes from saturated yellow stacking against warm-dark BG.
+  */
+
+  /* canvas */
+  --wdm-void:        #050402;     /* deepest black                          */
+  --wdm-bg:          #0a0908;     /* primary background — warm-tinged dark  */
+  --wdm-bg-lifted:   #14110d;     /* slightly raised panels                 */
+  --wdm-bg-deep:     #050402;     /* recessed wells / shadow pits           */
+
+  /* ink (text + line work) */
+  --wdm-ink-faint:   #5a574e;     /* hairline rules, very dim labels        */
+  --wdm-ink-dim:     #8a857a;     /* secondary labels, tab dim state        */
+  --wdm-ink:         #b0a994;     /* body text                              */
+  --wdm-ink-hi:      #cac4b0;     /* names, numbers                         */
+  --wdm-ink-bright:  #e0dac4;     /* peak highlight                         */
+  --wdm-ink-ash:     rgba(38, 28, 14, 0.95);   /* dark text on gilt surfaces */
+
+  /* amber accents — muted */
+  --wdm-amber-dim:   #6e5224;
+  --wdm-amber:       #a88450;
+  --wdm-amber-hi:    #b89464;
+  --wdm-amber-bright:#c8a878;
+
+  /* gilt (torn parchment surfaces) — normalised to the muted amber family */
+  --wdm-gilt:        #b58838;
+  --wdm-gilt-hi:     #d8a448;
+  --wdm-gilt-dk:     #5a3e1c;
+
+  /* Neutral decorative hue driving hairlines, dividers, the dotted hotkey
+     separator and button-ring circles. Equals the legacy hardcoded
+     rgb(140,133,121); those borders now read it as
+     `rgb(from var(--wdm-divider) r g b / <alpha>)`, so this recolours all of
+     them at once. The UI Customizer overrides it per-section. */
+  --wdm-divider:     #8c8579;
+
+  /* signs / status (also intentionally muted) */
+  --wdm-red:         #8c3c3c;
+  --wdm-red-bright:  #a25050;
+  --wdm-poison:      #6e8a4a;
+  --wdm-frost:       #6a8aa2;
+  --wdm-bronze:      #9a7e44;
+  --wdm-teal:        #3a8a78;     /* rail-clip stroke (carried-weapon clips) */
+  --wdm-teal-dim:    #2c6258;
+
+  /* alchemical substance elements (component substanceType) — muted to sit
+     against warm-dark BG without screaming */
+  --wdm-elem-vitriol:    #4a8a5e;   /* iron/copper sulfate green       */
+  --wdm-elem-rebis:      #8a5a9a;   /* hermetic violet (red+blue)      */
+  --wdm-elem-aether:     #8ea8b8;   /* pale fifth-element cyan         */
+  --wdm-elem-quebrith:   #c0a040;   /* sulfur yellow                   */
+  --wdm-elem-hydragenum: #a8b0b8;   /* mercury silver                  */
+  --wdm-elem-vermilion:  #b04848;   /* mercury sulfide red             */
+  --wdm-elem-sol:        #d8a448;   /* sun gold                        */
+  --wdm-elem-caelum:     #6a8aa2;   /* sky blue                        */
+  --wdm-elem-fulgur:     #9a78c0;   /* lightning violet                */
+
+  /* substance badge palette (the alchemical-symbol SVGs). These are the
+     book glyph colours desaturated to sit against the warm-dark BG. Kept
+     SEPARATE from --wdm-elem-* (which the weather/character UI reuse) so
+     recolouring the badges never bleeds into those features. Source of
+     truth: assets/icons/substances/*.svg disc fills + crafting.js node colors. */
+  --wdm-sub-vitriol:     #8a4f80;
+  --wdm-sub-rebis:       #c25a44;
+  --wdm-sub-aether:      #7a9e9c;
+  --wdm-sub-quebrith:    #b0a544;
+  --wdm-sub-hydragenum:  #5e72a4;
+  --wdm-sub-vermilion:   #5f8a62;
+  --wdm-sub-sol:         #c39a4a;
+  --wdm-sub-caelum:      #9aae54;
+  --wdm-sub-fulgur:      #9a4540;
+
+  /* rarity / availability tiers (item background gradient). Everywhere has
+     no tier color — it keeps the plain slot background. */
+  --wdm-rarity-common:   #8a857b;   /* light warm grey — no tier, near-zero sat */
+  --wdm-rarity-poor:     #6a4f8c;   /* muted violet (~28% S, theme-matched)     */
+  --wdm-rarity-rare:     #b06b44;   /* rust-orange (~42% S) — held a touch warm  */
+                                    /* + red-shifted (~22° hue) so it can't read  */
+                                    /* green for protan/deutan vision             */
+  --wdm-rarity-witcher:  #a04040;   /* blood red (~40% S) — in the --wdm-red family */
+  /* homebrew tiers above Witcher — user-authored, recolourable in the
+     UI Customizer's "Inventory & Items" tab (world-global override). */
+  --wdm-rarity-elderfolk:    #18cb00;   /* elven green   */
+  --wdm-rarity-relic:        #935c13;   /* aged bronze   */
+  --wdm-rarity-goetia:       #964c5a;   /* cursed mauve  */
+  --wdm-rarity-experimental: #7799a9;   /* alchemy steel */
+  /* scratchy grain (anisotropic turbulence → fine vertical scratches)
+     overlaid on rarity tiles for texture */
+  --wdm-rarity-tex: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.9 0.05' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23s)' opacity='0.5'/%3E%3C/svg%3E");
+
+  /* ============================  TYPOGRAPHY  ============================== */
+  --wdm-font-display: 'PF DIN Text Cond Pro', 'Barlow Condensed', 'Oswald', sans-serif;
+  --wdm-font-body:    'Barlow', 'Barlow Condensed', system-ui, sans-serif;
+  --wdm-font-mono:    ui-monospace, 'JetBrains Mono', Menlo, monospace;
+
+  /* tracking ladders for all-caps headers */
+  --wdm-track-tight:  0.06em;
+  --wdm-track:        0.18em;
+  --wdm-track-wide:   0.28em;
+  --wdm-track-extra:  0.40em;
+
+  /* ============================  GEOMETRY  =============================== */
+  --wdm-radius-xs:    0.125rem;
+  --wdm-radius-sm:    0.1875rem;
+  --wdm-radius:       0.25rem;
+  --wdm-radius-pill:  999px;
+
+  --wdm-rule-1:       0.0625rem solid rgb(from var(--wdm-divider) r g b / 0.18);
+  --wdm-rule-2:       0.0625rem solid rgb(from var(--wdm-divider) r g b / 0.10);
+  --wdm-rule-amber:   0.0625rem solid var(--wdm-amber-dim);
+
+  /* sawtooth bar tooth pitch (used by .wou-sawtooth) */
+  --wdm-tooth-w:      0.78125rem;
+  --wdm-tooth-h:      0.625rem;
+
+  /* ============================  SHADOWS  ================================ */
+  --wdm-shadow-card:  0 0.375rem 1.125rem rgba(0,0,0,0.7);
+  --wdm-shadow-amber: 0 0 0.875rem rgb(from var(--wdm-amber-hi) r g b / 0.22);
+
+  /* ============================  MOTION  ================================ */
+  --wdm-ease:         cubic-bezier(.2,.6,.25,1);
+  --wdm-dur-fast:     0.12s;
+  --wdm-dur:          0.18s;
+  --wdm-dur-slow:     0.35s;
+
+  /* ============================  Z LAYERS  =============================== */
+  --wdm-z-chrome:     50;
+  --wdm-z-overlay:    100;
+  --wdm-z-modal:      1000;
+}
+
+/* =============================================================================
+   UTILITY ATOMS — small reusable pieces composed by feature CSS layers
+   ============================================================================= */
+
+/* All-caps display label, tight tracking */
+.wou-cap-tight  { font-family: var(--wdm-font-display); text-transform: uppercase; letter-spacing: var(--wdm-track-tight); font-weight: 600; }
+.wou-cap        { font-family: var(--wdm-font-display); text-transform: uppercase; letter-spacing: var(--wdm-track);       font-weight: 600; }
+.wou-cap-wide   { font-family: var(--wdm-font-display); text-transform: uppercase; letter-spacing: var(--wdm-track-wide);  font-weight: 600; }
+.wou-cap-extra  { font-family: var(--wdm-font-display); text-transform: uppercase; letter-spacing: var(--wdm-track-extra); font-weight: 700; }
+
+/* Italic body for flavor / epithets */
+.wou-flavor     { font-family: var(--wdm-font-body); font-style: italic; color: var(--wdm-ink); }
+
+/* Hairline rule */
+.wou-rule       { height: 0.0625rem; background: linear-gradient(90deg, transparent, var(--wdm-amber-dim) 30%, var(--wdm-amber) 50%, var(--wdm-amber-dim) 70%, transparent); opacity: 0.5; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Token HUD (click a token) — repaint Foundry's default HUD into the chrome's
+   amber/dark theme. v14 root is #token-hud (.placeable-hud) inside #hud. Vars
+   carry literal fallbacks so the HUD stays themed even out of token scope.
+   ───────────────────────────────────────────────────────────────────────── */
+body.witcher-ttrpg-death-march #token-hud .control-icon {
+  background: var(--wdm-bg-deep, rgb(from var(--wdm-bg) r g b / 0.88));
+  border: 1px solid var(--wdm-amber-dim, #6b5a3a);
+  border-radius: 0.25rem;
+  color: var(--wdm-amber-bright, #c8a878);
+  box-shadow: none;
+}
+body.witcher-ttrpg-death-march #token-hud .control-icon > i { color: inherit; text-shadow: none; }
+body.witcher-ttrpg-death-march #token-hud .control-icon:hover {
+  border-color: var(--wdm-amber-bright, #c8a878);
+  color: var(--wdm-amber-bright, #c8a878);
+  box-shadow: 0 0 0.375rem rgba(200, 168, 120, 0.45);
+}
+body.witcher-ttrpg-death-march #token-hud .control-icon.active {
+  background: var(--wdm-amber-dim, #6b5a3a);
+  border-color: var(--wdm-amber-bright, #c8a878);
+  color: var(--wdm-ink-hi, #efe4cb);
+}
+
+/* Pop-out palettes (effects / levels / movement) + list entries. */
+body.witcher-ttrpg-death-march #token-hud .palette {
+  background: var(--wdm-bg-deep, rgb(from var(--wdm-bg) r g b / 0.94));
+  border: 1px solid var(--wdm-amber-dim, #6b5a3a);
+  border-radius: 0.3125rem;
+  box-shadow: 0 2px 0.625rem rgba(0, 0, 0, 0.6);
+}
+body.witcher-ttrpg-death-march #token-hud .palette-list-entry {
+  color: var(--wdm-ink, #cdbf9f);
+  font-family: var(--wdm-font-body, inherit);
+}
+body.witcher-ttrpg-death-march #token-hud .palette-list-entry:hover,
+body.witcher-ttrpg-death-march #token-hud .palette-list-entry.active {
+  color: var(--wdm-amber-bright, #c8a878);
+  background: rgba(200, 168, 120, 0.12);
+}
+
+/* Status-effects palette icons. */
+body.witcher-ttrpg-death-march #token-hud .status-effects .effect-control {
+  border: 1px solid transparent;
+  border-radius: 0.1875rem;
+  filter: grayscale(0.35) brightness(0.95);
+}
+body.witcher-ttrpg-death-march #token-hud .status-effects .effect-control:hover {
+  border-color: var(--wdm-amber-bright, #c8a878);
+  filter: none;
+}
+body.witcher-ttrpg-death-march #token-hud .status-effects .effect-control.active,
+body.witcher-ttrpg-death-march #token-hud .status-effects .effect-control.overlay {
+  border-color: var(--wdm-amber-bright, #c8a878);
+  filter: none;
+  box-shadow: 0 0 0.3125rem rgba(200, 168, 120, 0.55);
+}
+
+/* Attribute (HP/STA) bar inputs + elevation caret. */
+body.witcher-ttrpg-death-march #token-hud .attribute input {
+  background: var(--wdm-bg-deep, rgb(from var(--wdm-bg) r g b / 0.88));
+  border: 1px solid var(--wdm-amber-dim, #6b5a3a);
+  color: var(--wdm-ink-hi, #efe4cb);
+  font-family: var(--wdm-font-body, inherit);
+}
+body.witcher-ttrpg-death-march #token-hud .attribute input:focus {
+  border-color: var(--wdm-amber-bright, #c8a878);
+  outline: none;
+}
+body.witcher-ttrpg-death-march #token-hud .attribute .caret { color: var(--wdm-amber-bright, #c8a878); }
+
+/* HP/STA bar labels — an icon before each number so the two HUD bars are
+   distinguishable (heart = vitality, bolt = stamina). Injected by
+   decorateTokenHudBars in module/canvas/token.mjs. */
+body.witcher-ttrpg-death-march #token-hud .attribute.bar1,
+body.witcher-ttrpg-death-march #token-hud .attribute.bar2 {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+body.witcher-ttrpg-death-march #token-hud .attribute.bar1 input,
+body.witcher-ttrpg-death-march #token-hud .attribute.bar2 input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+body.witcher-ttrpg-death-march #token-hud .attribute .wdm-bar-icon {
+  flex: 0 0 auto;
+  font-size: calc(0.75rem * var(--wdm-tf, 1));
+  line-height: 1;
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+body.witcher-ttrpg-death-march #token-hud .attribute .wdm-bar-icon.is-hp      { color: var(--wdm-red-bright, #c0504d); }
+body.witcher-ttrpg-death-march #token-hud .attribute .wdm-bar-icon.is-sta     { color: var(--wdm-gilt-hi, #d8a448); }
+body.witcher-ttrpg-death-march #token-hud .attribute .wdm-bar-icon.is-focus   { color: var(--wdm-frost, #6a8aa2); }
+body.witcher-ttrpg-death-march #token-hud .attribute .wdm-bar-icon.is-default { color: var(--wdm-amber-bright, #c8a878); }

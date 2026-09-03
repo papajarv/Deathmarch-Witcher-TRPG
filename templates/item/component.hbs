@@ -1,0 +1,206 @@
+{{!-- Component item sheet — two-layer (crafting / alchemy ingredient,
+        Core p.83, p.143):
+        DISPLAY → Witcher 3 in-game tooltip aesthetic (player reads)
+        CONFIG  → editable form (GM / owner with cog toggle)
+      Hero is the substance when the component yields one of the nine
+      alchemical substances, otherwise its rarity/availability
+      (computed in WitcherComponentSheet). --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-component" data-mode="{{mode}}">
+
+  {{!-- ── Mode toggle (top-right) ─────────────────────────────── --}}
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}{{localize 'WITCHER.Sheet.Item.Cog.BackToDisplay'}}{{else}}{{localize 'WITCHER.Sheet.Item.Cog.ConfigureItem'}}{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view{{#if (hasFlair source.flairColor)}} has-flair{{/if}}" data-rarity="{{source.availability}}"{{#if (hasFlair source.flairColor)}} style="--wdm-rar: {{source.flairColor}}"{{/if}}>
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">{{#if isSubstance}}Alchemical Substance{{else}}Crafting Material{{/if}}</div>
+        </div>
+      </header>
+
+      {{#if hasHero}}
+        <div class="wdm-w3-hero">
+          <div class="wdm-w3-hero-value is-substance" style="--sub-color: var(--wdm-sub-{{substanceKey}})">
+            <img class="wdm-sub-icon" src="{{substanceArt}}" alt="" />{{substanceName}}
+          </div>
+          <div class="wdm-w3-hero-label">{{localize 'WITCHER.Sheet.Item.Text.SUBSTANCE'}}</div>
+          {{#if showPotency}}
+            <div class="wdm-w3-hero-sub">{{localize 'WITCHER.Sheet.Item.Text.Potency'}} {{source.potency}}</div>
+          {{/if}}
+        </div>
+      {{/if}}
+
+      <ul class="wdm-w3-stats">
+        {{#if source.forageLocation}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{source.forageLocation}}</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Component.Text.FoundIn'}}</span>
+          </li>
+        {{/if}}
+        {{#unless (eq source.forageDC 0)}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{source.forageDC}}</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Component.Text.ForageDc'}}</span>
+          </li>
+        {{/unless}}
+        {{#if source.forageQuantity}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{source.forageQuantity}}</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Component.Text.Yield'}}</span>
+          </li>
+        {{/if}}
+        {{!-- Alchemy Reborn brew-base summary. baseSummary is built by the
+              sheet context only when the toggle is on AND the ingredient is
+              configured as a base, so the row hides itself in every other
+              case without needing a {{#if alchemyRebornOn}} wrapper. --}}
+        {{#if baseSummary}}
+          <li class="wdm-w3-stat" data-base-type="{{baseSummary.key}}">
+            <span class="val">{{baseSummary.modSigned}} DC</span>
+            <span class="lbl">{{baseSummary.typeLabel}}</span>
+          </li>
+        {{/if}}
+      </ul>
+
+      {{#if source.description}}
+        <div class="wdm-w3-description">{{{source.description}}}</div>
+      {{/if}}
+
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Component.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        {{#unless (eq source.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Component.Tooltip.Quantity'}}"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+        {{/unless}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="{{localize 'WITCHER.Sheet.Item.Text.Availability'}}">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Sheet.Component.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — compact spec form
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Component.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Component.Hint.ComponentName'}}" />
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Component.Text.Details'}}</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Component.Text.WeightKg'}}</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Component.Text.Cost'}}</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Component.Text.QuantityHeld'}}</span>
+          <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">{{localize "WITCHER.AlchemyReborn.Section.Substance"}}</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.YieldsSubstance.Label"}}</span>
+          <input type="checkbox" name="system.isSubstance" {{#if source.isSubstance}}checked{{/if}}
+                 title="{{localize 'WITCHER.AlchemyReborn.YieldsSubstance.Hint'}}" />
+        </label>
+        {{#if source.isSubstance}}
+          <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.SubstanceType.Label"}}</span>
+            <select name="system.substanceType">
+              <option value="" {{#if (eq source.substanceType "")}}selected{{/if}}>— choose —</option>
+              {{#each WITCHER.alchemical.substances}}
+                <option value="{{@key}}" {{#if (eq @key ../source.substanceType)}}selected{{/if}}>{{localize this}}</option>
+              {{/each}}
+            </select>
+          </label>
+          <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Pure.Label"}}</span>
+            <input type="checkbox" name="system.pure" {{#if source.pure}}checked{{/if}}
+                   title="{{localize 'WITCHER.AlchemyReborn.Pure.Hint'}}" />
+          </label>
+          {{#if alchemyRebornOn}}
+            <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Potency.Label"}}</span>
+              <input type="number" min="0" max="10" step="1" name="system.potency" value="{{source.potency}}"
+                     title="{{localize 'WITCHER.AlchemyReborn.Potency.HintComponent'}}" />
+            </label>
+          {{/if}}
+        {{/if}}
+      </div>
+
+      {{!-- Alchemy Reborn: configure this ingredient as a brew base.
+            Mirrors the alchemical / food sheets — a raw ingredient like
+            Sulphur / Saltpetre / Timber can serve as a bomb base; the
+            dry substance of a spirit can serve as a potion base. Hidden
+            when the homebrew toggle is off. --}}
+      {{#if alchemyRebornOn}}
+        <div class="wdm-cfg-section">{{localize "WITCHER.AlchemyReborn.Section.Base"}}</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Base.Enable.Label"}}</span>
+            <input type="checkbox" name="system.alchemyBase.enabled" {{#if source.alchemyBase.enabled}}checked{{/if}}
+                   title="{{localize 'WITCHER.AlchemyReborn.Base.Enable.Hint'}}" />
+          </label>
+          {{#if source.alchemyBase.enabled}}
+            <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Base.Type.Label"}}</span>
+              <select name="system.alchemyBase.baseType">
+                <option value=""          {{#if (eq source.alchemyBase.baseType "")}}selected{{/if}}>— choose —</option>
+                <option value="potion"    {{#if (eq source.alchemyBase.baseType "potion")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Base.Type.Potion"}}</option>
+                <option value="oil"       {{#if (eq source.alchemyBase.baseType "oil")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Base.Type.Oil"}}</option>
+                <option value="bomb"      {{#if (eq source.alchemyBase.baseType "bomb")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Base.Type.Bomb"}}</option>
+              </select>
+            </label>
+            <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Base.Mod.Label"}}</span>
+              <input type="number" step="1" name="system.alchemyBase.baseMod" value="{{source.alchemyBase.baseMod}}"
+                     title="{{localize 'WITCHER.AlchemyReborn.Base.Mod.Hint'}}" />
+            </label>
+          {{/if}}
+        </div>
+      {{/if}}
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Component.Text.Foraging'}}</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Component.Text.Availability'}}</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        {{> "systems/witcher-ttrpg-death-march/templates/item/partials/flair-override.hbs" flairColor=source.flairColor}}
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Component.Text.Location'}}</span>
+          <input type="text" name="system.forageLocation" value="{{source.forageLocation}}"
+                 placeholder="{{localize 'WITCHER.Sheet.Component.Hint.FieldsMountainsUndergroundForests'}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Component.Text.ForageDc'}}</span>
+          <input type="number" min="0" name="system.forageDC" value="{{source.forageDC}}"
+                 title="{{localize 'WITCHER.Sheet.Component.Tooltip.WildernessSurvivalDcToFindThisInTheWild0'}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Component.Text.QuantityFound'}}</span>
+          <input type="text" name="system.forageQuantity" value="{{source.forageQuantity}}"
+                 placeholder="1d10 Units / 2d6 Units / N/A" />
+        </label>
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Component.Text.Description'}}</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="{{localize 'WITCHER.Sheet.Component.Hint.IngredientLoreAppearanceWhereItSHarveste'}}">{{source.description}}</textarea>
+
+    </div>
+  </div>
+
+</div>

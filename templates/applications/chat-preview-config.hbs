@@ -1,0 +1,42 @@
+{{!-- Client-scoped chat-preview options. Fields are read by ChatPreviewConfig
+      #onSubmit via their `name` attributes. --}}
+<div class="wdm-cfg-body wdm-chat-preview-config-body">
+
+  <p class="wdm-cfg-hint">
+    Compact chat cards float on the right (where the sidebar sits) whenever the
+    Chat tab is collapsed — so you see rolls, attacks, food/drink and other
+    feedback without opening chat. These are your own preferences.
+  </p>
+
+  <label class="wdm-cfg-row">
+    <span>Show previews</span>
+    <input type="checkbox" name="enabled" {{#if cfg.enabled}}checked{{/if}} />
+  </label>
+
+  <label class="wdm-cfg-row">
+    <span>When a full-screen menu is open</span>
+    <select name="whenMenuOpen">
+      <option value="over" {{#if (eq cfg.whenMenuOpen "over")}}selected{{/if}}>Show over it</option>
+      <option value="hide" {{#if (eq cfg.whenMenuOpen "hide")}}selected{{/if}}>Hide</option>
+    </select>
+  </label>
+
+  <label class="wdm-cfg-row">
+    <span>Show messages from</span>
+    <select name="from">
+      <option value="all"  {{#if (eq cfg.from "all")}}selected{{/if}}>Everyone</option>
+      <option value="mine" {{#if (eq cfg.from "mine")}}selected{{/if}}>Only me</option>
+    </select>
+  </label>
+
+  <label class="wdm-cfg-row">
+    <span>Card size <strong data-scale-out></strong></span>
+    <input type="range" name="scale" min="0.7" max="1.6" step="0.05" value="{{cfg.scale}}" />
+  </label>
+
+  <label class="wdm-cfg-row">
+    <span>Auto-dismiss after <strong data-life-out></strong></span>
+    <input type="range" name="lifetimeSec" min="3" max="30" step="1" value="{{cfg.lifetimeSec}}" />
+  </label>
+
+</div>

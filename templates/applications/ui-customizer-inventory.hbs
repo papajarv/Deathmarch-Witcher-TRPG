@@ -1,0 +1,29 @@
+{{!-- UI Customizer — Inventory & Items tab. Edits the WORLD-GLOBAL rarity
+      flair palette (the --wdm-rarity-* tier colours washed behind inventory
+      slots, item sheets and merchant cards). Unlike the Colours tab this is
+      single-scope: one GM-owned setting everyone shares, so it ignores the
+      world/client scope toggle. Players see it read-only. Each row: an
+      override checkbox, a colour swatch, the tier label, and the raw token;
+      unchecked = inherit the shipped default (still shown in the swatch). --}}
+<section class="tab wdm-cfg-tab wdm-uic-tab {{tab.cssClass}}" data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+  <p class="wdm-uic-tabnote">{{localize 'WITCHER.App.UiCustomizer.InventoryNote'}}</p>
+
+  {{#unless isGM}}
+  <p class="wdm-uic-scope-note"><i class="fa-solid fa-lock"></i> {{localize 'WITCHER.App.UiCustomizer.RarityGmOnly'}}</p>
+  {{/unless}}
+
+  <div class="wdm-uic-colors">
+    {{#each rarities}}
+    <div class="wdm-uic-color-row {{#unless on}}is-inherited{{/unless}}">
+      <label class="wdm-uic-color-toggle" title="{{localize 'WITCHER.App.UiCustomizer.OverrideHint'}}">
+        <input type="checkbox" name="rarityOn.{{tier}}" {{#if on}}checked{{/if}} {{#unless ../isGM}}disabled{{/unless}}>
+      </label>
+      <input type="color" name="rarityVal.{{tier}}" value="{{value}}" class="wdm-uic-color-input" {{#unless ../isGM}}disabled{{/unless}}>
+      <span class="wdm-uic-color-label">{{label}}</span>
+      <code class="wdm-uic-color-token">{{token}}</code>
+    </div>
+    {{/each}}
+  </div>
+
+</section>

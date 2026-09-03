@@ -1,0 +1,93 @@
+{{!--
+  Satiety dialog: stomach visual + numeric readout + GM edit form.
+  Single root element (ApplicationV2 requirement — parts must render
+  exactly one HTML element). Uses the sheet's amber theme through
+  the .witcher-ttrpg-death-march class on the window.
+--}}
+<section class="wdm-satiety" style="display:flex;flex-direction:column;gap:0.5rem;padding:0.75rem;">
+
+  <div style="display:flex;align-items:center;gap:1rem;">
+
+    {{!-- Stomach visual — single-layer: outline in tier color, interior
+          fills bottom-up in the same tier color at low opacity so "how full"
+          reads at a glance without a competing dark backing. --}}
+    <svg viewBox="0 0 191.756 191.756" width="120" height="120" aria-hidden="true" style="flex-shrink:0;">
+      <defs>
+        <clipPath id="wdm-satiety-dialog-clip">
+          <path d="{{stomachPath}}"/>
+        </clipPath>
+      </defs>
+      <rect x="0" y="{{fillTop}}" width="192" height="{{fillHeight}}"
+            fill="{{tierColor}}" opacity="0.45"
+            clip-path="url(#wdm-satiety-dialog-clip)"/>
+      <path d="{{stomachPath}}" fill="none" stroke="{{tierColor}}" stroke-width="3"/>
+      {{#if overflowPct}}
+        <rect x="60" y="0" width="{{overflowWidth}}" height="8" rx="3"
+              fill="{{tierColor}}" opacity="0.85"/>
+      {{/if}}
+    </svg>
+
+    <div style="flex:1;min-width:0;">
+
+      <div style="font-family:var(--wdm-font-display);letter-spacing:0.16em;text-transform:uppercase;font-size:0.7rem;color:var(--wdm-amber-dim);">
+        {{actorName}}
+      </div>
+
+      <div style="font-family:var(--wdm-font-display);letter-spacing:0.14em;text-transform:uppercase;font-size:1.4rem;font-weight:700;color:{{tierColor}};margin:0.2rem 0 0.4rem;">
+        {{tierLabel}}
+      </div>
+
+      <div style="font-size:0.9rem;color:var(--wdm-ink-hi);margin-bottom:0.4rem;">
+        <span style="font-weight:700;">{{current}}</span>
+        <span style="opacity:0.6;"> / {{max}}</span>
+        {{#if overflowPct}}
+          <span style="color:{{tierColor}};font-size:0.8rem;">{{localize "WITCHER.Mech.FoodAndDrink.Dialog.OverflowSuffix" pct=overflowPct}}</span>
+        {{/if}}
+      </div>
+
+      <div style="font-size:0.75rem;color:var(--wdm-ink-lo);line-height:1.35;">
+        {{localize "WITCHER.Mech.FoodAndDrink.Dialog.DrainPerHour" drain=drainPerHour}}
+        {{#if hungerStress}}
+          <br/><span style="color:#c9502e;">{{localize "WITCHER.Mech.FoodAndDrink.Dialog.HungerStressLine" n=hungerStress}}</span>
+        {{/if}}
+      </div>
+
+      {{#if isGM}}
+        <hr style="border:none;border-top:1px solid var(--wdm-amber-dim);opacity:0.4;margin:0.6rem 0 0.4rem;"/>
+
+        {{!-- Per-actor hunger tick toggle. Default is OFF for every actor
+              — GMs opt an actor in explicitly. Without this gate, a world
+              with N NPC "character" actors runs the full satiety cascade
+              N times on every hour tick / day-skip (the observed lag). --}}
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.75rem;color:var(--wdm-ink-hi);margin-bottom:0.4rem;cursor:pointer;">
+          <input type="checkbox" data-action="toggleHunger" {{#if hungerActive}}checked{{/if}} />
+          <span>{{localize "WITCHER.Mech.FoodAndDrink.Dialog.HungerTickEnabled"}}</span>
+        </label>
+
+        <label style="font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--wdm-amber-dim);">
+          {{localize "WITCHER.Mech.FoodAndDrink.Dialog.GmSetSatiety"}}
+        </label>
+        <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.25rem;">
+          <input type="number" name="satiety"
+                 value="{{current}}" min="{{min}}" max="{{gorgedMax}}"
+                 style="flex:1;padding:0.25rem 0.4rem;background:#0e0d0a;border:1px solid var(--wdm-amber-dim);color:var(--wdm-ink-hi);font-family:inherit;" />
+          <span style="font-size:0.75rem;color:var(--wdm-ink-lo);white-space:nowrap;">
+            ({{min}} – {{gorgedMax}})
+          </span>
+        </div>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{#if isGM}}
+    <footer class="form-footer" style="display:flex;justify-content:flex-end;gap:0.4rem;padding-top:0.5rem;border-top:1px solid var(--wdm-amber-dim);">
+      {{#each buttons}}
+        <button type="{{type}}" style="padding:0.35rem 0.9rem;">
+          <i class="{{icon}}"></i> {{label}}
+        </button>
+      {{/each}}
+    </footer>
+  {{/if}}
+
+</section>

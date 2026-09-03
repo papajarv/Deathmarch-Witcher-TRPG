@@ -1,0 +1,578 @@
+/**
+ * Floating circular status indicators above the dock's namebar.
+ *
+ * Witcher-3-styled:  for each active ActiveEffect on the assigned actor,
+ * renders a small disc with the effect's icon, a circular progress ring
+ * showing turns remaining out of total duration, and (when the effect has
+ * a duration) a small number badge with the remaining turn count.
+ *
+ * Hover a badge for a tooltip with the effect's name + description.
+ *
+ * Refreshes on:
+ *   - actor effect create/update/delete
+ *   - combat turn/round changes
+ *   - assigned-character swaps (updateUser)
+ */
+
+import { getAssignedActor, VIEWER_OVERRIDE_HOOK } from "../lib/actor.js";
+import { t } from "../lib/i18n.js";
+
+let _hooksWired = false;
+let _popoverInstalled = false;
+
+/**
+ * Custom hover popover for status badges, bypassing Foundry's TooltipManager.
+ * The previous data-tooltip-based approach caused #interface to dislodge to
+ * the left when the cursor crossed from a status badge into the right
+ * sidebar — Foundry's tooltip-clamping logic seems to misbehave when the
+ * tooltip's anchor element lives in #wou-dock (a sibling of #interface, not
+ * a descendant).  This implementation owns its own DOM, positioning, and
+ * show/hide, so it never touches the global #tooltip element or interacts
+ * with Foundry's clamping machinery.
+ */
+const POPOVER_ID = "wou-status-popover";
+
+function installStatusPopover() {
+  if (_popoverInstalled) return;
+  _popoverInstalled = true;
+
+  // One styles block, one popover div, reused across all badges.
+  const style = document.createElement("style");
+  style.id = "wou-status-popover-style";
+  style.textContent = `
+    #${POPOVER_ID} {
+      position: fixed;
+      z-index: 9200;
+      display: none;
+      max-width: 20rem;
+      padding: 0.625rem 0.875rem 0.75rem;
+      background:
+        radial-gradient(ellipse 17.5rem 8.75rem at 50% 0%, rgba(184,148,100,0.12), transparent 75%),
+        linear-gradient(180deg, rgba(22,18,13,0.98) 0%, rgba(10,9,8,0.98) 100%);
+      background-color: rgba(10,9,8,0.98);
+      border: 1px solid var(--wdm-amber-dim);
+      border-radius: 2px;
+      box-shadow: 0 0.5rem 1.5rem rgba(0,0,0,0.85), inset 0 0 0 1px rgba(184,148,100,0.10);
+      color: var(--wdm-ink-hi);
+      font-family: var(--wdm-font-body);
+      font-size: 0.75rem;
+      line-height: 1.5;
+      letter-spacing: 0.02em;
+      text-align: left;
+      pointer-events: none;             /* never grab the cursor */
+    }
+    #${POPOVER_ID}.is-open { display: block; }
+  `;
+  document.head.appendChild(style);
+
+  const pop = document.createElement("div");
+  pop.id = POPOVER_ID;
+  document.body.appendChild(pop);
+
+  // Delegated mouseenter/leave on the dock so we don't add one listener per
+  // badge (the row re-renders frequently).
+  const dock = document.getElementById("wou-dock");
+  if (!dock) return;
+
+  dock.addEventListener("mouseover", (e) => {
+    const badge = e.target.closest(".wou-status-badge");
+    if (!badge) return;
+    const html = badge.dataset.wouTooltip;
+    if (!html) return;
+    pop.innerHTML = html;
+    pop.classList.add("is-open");
+    positionPopover(badge, pop);
+  });
+  dock.addEventListener("mouseout", (e) => {
+    const badge = e.target.closest(".wou-status-badge");
+    if (!badge) return;
+    // Only hide when actually leaving the badge (not when moving inside it).
+    if (badge.contains(e.relatedTarget)) return;
+    pop.classList.remove("is-open");
+  });
+  // Hide if the badge gets removed mid-hover (refresh).
+  window.addEventListener("scroll", () => pop.classList.remove("is-open"), { capture: true, passive: true });
+}
+
+function positionPopover(anchor, pop) {
+  const ar = anchor.getBoundingClientRect();
+  // Measure popover after content swap
+  pop.style.left = "0px";
+  pop.style.top = "0px";
+  const pr = pop.getBoundingClientRect();
+  let left = ar.left + ar.width / 2 - pr.width / 2;
+  let top = ar.top - pr.height - 8;        // 0.5rem gap above the badge
+  // Clamp to viewport with 0.5rem margin
+  left = Math.max(8, Math.min(left, window.innerWidth - pr.width - 8));
+  if (top < 8) top = ar.bottom + 8;        // flip below if no room above
+  pop.style.left = `${left}px`;
+  pop.style.top = `${top}px`;
+}
+
+/* =========================================================================
+   ROW INJECTION + REFRESH
+   ========================================================================= */
+
+export function injectStatusesRow() {
+  const dock = document.getElementById("wou-dock");
+  if (!dock) return;
+  // Inject INSIDE the namebar so icons sit on the same line as TRISTAN
+  // (matches the design in status.png).  margin-left:auto on the row
+  // pushes it to the right side of the name-row.
+  const nameRow = dock.querySelector(".identity .ident-text .name-row");
+  if (!nameRow) return;
+  if (nameRow.querySelector(".wou-statuses")) return;
+
+  const row = document.createElement("div");
+  row.className = "wou-statuses";
+  /* Absolute-positioned along the name-row's right edge so the badges
+   * don't dictate the row's height — name / profession determine the
+   * row height, and the elements below (rule, vitality bar, race) stay
+   * at their natural y position regardless of how many badges show.
+   *
+   * `max-width: 60%` caps the badge row to 60% of the name-row width so
+   * it CAN shrink when it would otherwise overlap the name text.  Inside
+   * that cap, each badge stays at its natural 22px size when there's
+   * room, and only flex-shrinks (`flex: 0 1 22px; min-width: 8px`) when
+   * the row hits its max-width ceiling. */
+  row.style.cssText = [
+    "display: flex",
+    "flex-direction: row",
+    "flex-wrap: nowrap",
+    "align-items: center",
+    "justify-content: flex-end",
+    "gap: 0.25rem",
+    "overflow: visible",
+    "pointer-events: auto",
+    "position: absolute",
+    "top: 0",
+    "right: 0",
+    "bottom: 0",
+    "max-width: 60%",
+    "min-width: 0",
+    "z-index: 5"
+  ].join("; ");
+  nameRow.appendChild(row);
+
+  if (!_hooksWired) {
+    const refresh = () => refreshStatusesRow();
+    /* Bind to the VIEWED actor (getAssignedActor honors GM "View As"),
+     * not the raw game.user.character — otherwise a GM impersonating a
+     * player misses that player's own AE/actor updates. */
+    const viewedId = () => getAssignedActor()?.id;
+    const ownsEffect = (eff) => eff?.parent?.id === viewedId();
+    Hooks.on("createActiveEffect", (eff) => { if (ownsEffect(eff)) refresh(); });
+    Hooks.on("updateActiveEffect", (eff) => { if (ownsEffect(eff)) refresh(); });
+    Hooks.on("deleteActiveEffect", (eff) => { if (ownsEffect(eff)) refresh(); });
+    Hooks.on("combatTurn",   refresh);
+    Hooks.on("combatRound",  refresh);
+    Hooks.on("createCombat", refresh);
+    Hooks.on("deleteCombat", refresh);
+    Hooks.on("updateCombat", refresh);
+    Hooks.on("updateWorldTime", refresh);  /* tick seconds-based badges */
+    Hooks.on("updateUser",   (u) => { if (u.id === game.user.id) refresh(); });
+    Hooks.on("updateActor",  (a) => { if (a.id === viewedId()) refresh(); });
+    Hooks.on(VIEWER_OVERRIDE_HOOK, refresh);
+    _hooksWired = true;
+  }
+
+  installStatusPopover();
+  refreshStatusesRow();
+}
+
+export function refreshStatusesRow() {
+  const dock = document.getElementById("wou-dock");
+  if (!dock) return;
+  const row = dock.querySelector(".wou-statuses");
+  if (!row) return;
+
+  const actor = getAssignedActor();
+  const effects = collectEffects(actor);
+
+  if (effects.length === 0) {
+    row.innerHTML = "";
+    const profEl = row.parentElement?.querySelector(":scope > .profession");
+    if (profEl) profEl.style.marginRight = "";
+    return;
+  }
+  row.innerHTML = effects.map(statusBadgeHTML).join("");
+  scheduleFit(row);
+  /* Recompute the gap when the name-row (or anything that affects its
+   * width) resizes.  One observer per row instance is enough — bail if
+   * we've already attached it. */
+  if (!row.dataset.wouFitObs) {
+    row.dataset.wouFitObs = "1";
+    const parent = row.parentElement;
+    if (parent && "ResizeObserver" in window) {
+      new ResizeObserver(() => scheduleFit(row)).observe(parent);
+    }
+  }
+}
+
+/**
+ * Cap the badge row so it can't cover the name, then size the badges by
+ * COUNT: full 60px for one, scaling down (never up) only as more need to
+ * fit in the space after the name.
+ *
+ * The name (`.name`) is `white-space:nowrap` with no truncation, so its
+ * full text — "Tristan" — is always laid out at full width even when the
+ * absolutely-positioned badge row visually overlaps it.  We measure the
+ * name's real right edge and cap the box (`max-width`) to the space after
+ * it.  Then the badge size is the largest square (≤60) that lets all N
+ * fit packed at MIN_GAP.  When they all fit at full size we clear the
+ * explicit sizing entirely (pure CSS rendering, the known-good path) and
+ * just space them with a comfortable gap.  When we DO scale, width AND
+ * height are pinned together so the square can't blow up.
+ */
+const FULL        = 30;  // full badge size — never exceed
+const MIN_SIZE    = 14;  // smallest a badge scales to
+const COMFORT_GAP = 6;
+const MIN_GAP     = 2;
+const GUTTER      = 12;  // stop this far before the name text
+const PROF_GAP    = 10;  // breathing room between profession and badges
+
+/* Batched status-badge fitting.
+ *
+ * Every NPC row installs its OWN ResizeObserver (see the observe() below).
+ * When a chrome panel expands/collapses, the dock reflows and EVERY row's
+ * observer fires in the same frame. Running the read→write fit inline per row
+ * meant row A's writes invalidated layout, so row B's getBoundingClientRect
+ * read forced a fresh reflow — N rows → N forced reflows PER animation frame
+ * (the top-panel FPS drop, ~66 ms rAF handlers in the trace).
+ *
+ * Instead we queue the dirty rows and, once per frame, do ALL measurements
+ * first (pure reads) then ALL writes: a single reflow for the whole dock,
+ * regardless of how many rows are visible. */
+const _pendingFits = new Set();
+let _fitRaf = 0;
+function scheduleFit(row) {
+  if (!row) return;
+  _pendingFits.add(row);
+  if (_fitRaf) return;
+  _fitRaf = requestAnimationFrame(() => {
+    _fitRaf = 0;
+    const rows = [..._pendingFits];
+    _pendingFits.clear();
+    const plans = [];
+    for (const r of rows) { const p = measureStatusGap(r); if (p) plans.push(p); }  // READ phase
+    for (const p of plans) applyStatusGap(p);                                        // WRITE phase
+  });
+}
+
+/**
+ * Measure a badge row (READS ONLY — no style writes) and return a plan the
+ * write phase can apply. Returns null if the row isn't laid out yet.
+ *
+ * Cap the badge row so it can't cover the name, then size the badges by
+ * COUNT: full 30px for one, scaling down (never up) only as more need to fit
+ * in the space after the name. The name (`.name`) is `white-space:nowrap`, so
+ * its full text is always laid out even when the absolutely-positioned badge
+ * row visually overlaps it — we measure the name's real right edge and cap the
+ * box to the space after it.
+ */
+function measureStatusGap(row) {
+  if (!row) return null;
+  const nameRow = row.parentElement;
+  if (!nameRow) return null;
+  const N = row.children.length;
+
+  /* Cap the box to the space after the name's true right edge. */
+  const rowRect = nameRow.getBoundingClientRect();
+  if (!rowRect.width) return null;  // not laid out yet
+  const nameEl    = nameRow.querySelector(":scope > .name");
+  const nameRight = nameEl ? nameEl.getBoundingClientRect().right : rowRect.left;
+  const profEl    = nameRow.querySelector(":scope > .profession");
+
+  if (N < 1) return { row, profEl, empty: true };
+
+  /* The dock carries a CSS `zoom` (UI Scale × bar scale). getBoundingClientRect
+   * returns POST-zoom (rendered) pixels, but the badge `size`/gap we compute
+   * below are written as CSS px that the SAME zoom then multiplies again. So
+   * convert the measured space back to CSS px by dividing out the zoom — else at
+   * zoom > 1 the badges overflow (computed too large) and at zoom < 1 they waste
+   * space. At zoom = 1 this is a no-op, which is why it "worked" unscaled. */
+  const dockZoom = parseFloat(getComputedStyle(document.getElementById("wou-dock") || nameRow).zoom) || 1;
+  const allottedW = Math.max(FULL, Math.floor((rowRect.right - nameRight) / dockZoom - GUTTER));
+
+  /* Largest square (≤ FULL) that fits all N packed at MIN_GAP. One badge
+   * always lands at FULL; size only drops as more must share the box. */
+  const maxFit = Math.floor((allottedW - (N - 1) * MIN_GAP) / N);
+  const size   = Math.max(MIN_SIZE, Math.min(FULL, maxFit));
+
+  let gapNum;
+  if (size >= FULL && N >= 2) {
+    /* Plenty of room — open the gap up to a comfortable spacing that
+     * closes as they crowd toward full packing. */
+    const slack = allottedW - N * FULL;
+    gapNum = Math.max(MIN_GAP, Math.floor(Math.min(COMFORT_GAP, slack / (N - 1))));
+  } else {
+    gapNum = MIN_GAP;
+  }
+  const occupied = N * size + (N - 1) * gapNum;
+  return { row, profEl, empty: false, allottedW, size, gapNum, occupied };
+}
+
+/** Apply a measured plan (WRITES ONLY). Pin an explicit square (width AND
+ *  height together) on every badge — setting both dimensions removes any
+ *  reliance on the CSS aspect-ratio path, which renders unpredictably small
+ *  inside this absolutely-positioned, height-constrained row. */
+function applyStatusGap(plan) {
+  const { row, profEl } = plan;
+  if (plan.empty) {
+    row.style.gap = "";
+    if (profEl) profEl.style.marginRight = "";
+    return;
+  }
+  row.style.width = "";
+  row.style.maxWidth = `${plan.allottedW}px`;
+  const v = `${plan.size}px`;
+  for (const c of row.children) {
+    c.style.flexBasis = v; c.style.width = v; c.style.height = v; c.style.minWidth = v; c.style.maxWidth = v;
+  }
+  row.style.gap = `${plan.gapNum}px`;
+  /* Reserve the badges' footprint on the right so the profession text
+   * ellipsizes just before them instead of rendering underneath. */
+  if (profEl) profEl.style.marginRight = `${plan.occupied + PROF_GAP}px`;
+}
+
+/** Visible effects: enabled and not suppressed. */
+function collectEffects(actor) {
+  if (!actor) return [];
+  const all = actor.effects?.contents ?? actor.effects ?? [];
+  return all.filter(eff => !eff.disabled && !eff.isSuppressed);
+}
+
+/* =========================================================================
+   BADGE HTML
+   ========================================================================= */
+
+/* Hunger / hangover / food-sickness ids that classify as the food-and-drink
+ * homebrew family. Drunk ids are detected by prefix below. Kept in sync with
+ * the registrations in setup/statusEffects.mjs. */
+const FOOD_DRINK_STATUS_IDS = new Set([
+  "gorged", "full", "fed", "peckish", "hungry",
+  /* Legacy single-tier famished retained for orphan AEs from the
+   * pre-migration model; the current mechanic uses the four depths below. */
+  "famished",
+  "famished-1", "famished-2", "famished-3", "famished-4",
+  "hangover", "food-sickness"
+]);
+
+const SYSTEM_ID = "witcher-ttrpg-death-march";
+
+/* Map an effect's statuses to a homebrew family for rim/ring coloring.
+ *   stress-break  →  break-* ids (Scared, Depressive, Violent ...)
+ *   stress-boon   →  boon-*  ids (Focused, Determined Grit, Smile at Death)
+ *   food-drink    →  drunk-N + hunger ladder + hangover + food-sickness
+ *   null          →  use the default amber ring (RAW statuses, custom AEs)
+ *
+ * The system flags (`stressBreakdown`, `stressBoon`, …) take precedence over
+ * status-id pattern matching: many break / boon markers are flag-only and
+ * carry no status (e.g. Indulgent / Paranoid / Selfish breaks, and every
+ * instant-clear boon marker). Without the flag check those AEs would fall
+ * through to the default amber ring even though they ARE a homebrew source. */
+function effectFamily(effect) {
+  const flags = effect?.flags?.[SYSTEM_ID];
+  if (flags?.stressBreakdown || flags?.stressBreakdownCombatEffect) return "stress-break";
+  if (flags?.stressBoon) return "stress-boon";
+
+  const statuses = effect?.statuses;
+  if (!statuses?.size) return null;
+  for (const id of statuses) {
+    if (id.startsWith("break-")) return "stress-break";
+    if (id.startsWith("boon-"))  return "stress-boon";
+    if (id.startsWith("drunk-")) return "food-drink";
+    if (FOOD_DRINK_STATUS_IDS.has(id)) return "food-drink";
+  }
+  return null;
+}
+
+/* Per-status rim color override. The Status Effects editor lets the GM set a
+ * `rimColor` on any registered status; if any of the AE's status ids carries
+ * one, that color wins over the family default. Returned as a raw CSS color
+ * string ready to embed into the badge's inline `--ring-color` variable. */
+function effectRimColor(effect) {
+  const statuses = effect?.statuses;
+  if (!statuses?.size) return null;
+  const reg = CONFIG.statusEffects ?? [];
+  for (const id of statuses) {
+    const entry = reg.find?.(s => s?.id === id);
+    if (entry?.rimColor) return String(entry.rimColor);
+  }
+  return null;
+}
+
+function statusBadgeHTML(effect) {
+  const icon = effect.img || effect.icon || "icons/svg/aura.svg";
+  const name = effect.name ?? t("WITCHER.Chrome.DockStatuses.Text.Effect", "Effect");
+  const desc = stripHtml(
+    effect.description
+    ?? effect.system?.description
+    ?? effect.flags?.core?.statusId?.description
+    ?? ""
+  );
+  const tooltipHTML = `<strong>${escapeText(name)}</strong>${
+    desc ? `<br/><span style="opacity:0.85">${escapeText(desc)}</span>` : ""
+  }`;
+
+  const dur = effect.duration ?? {};
+  const { total, remaining, label } = describeDuration(dur);
+  const frac = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 1;
+  const pct  = Math.round(frac * 100);
+
+  /* Badge size is flex-driven so a long status list shrinks badges in
+   * place instead of pushing the layout or wrapping.
+   *   - flex: 0 1 60px  → preferred 60px, can shrink, won't grow
+   *   - min-width: 14px → shrink floor when the box is crowded
+   *   - max-width: 60px → never grow past full size
+   *   - aspect-ratio: 1 → height tracks width, badge stays square
+   * Ring + icon size in PERCENT so they scale with the badge. */
+  const badgeStyle = [
+    "position: relative",
+    "display: block",
+    "flex: 0 1 3.75rem",
+    "min-width: 0.875rem",
+    "max-width: 3.75rem",
+    "aspect-ratio: 1",
+    "overflow: visible",
+    "cursor: help"
+  ].join("; ");
+
+  // Family hook — appears as `data-family="stress-break"` etc. on the badge
+  // root so the CSS in statuses.css can color .ring-fill / .ring-track per
+  // homebrew family. RAW statuses get no attribute and fall through to the
+  // default amber ring.
+  const family = effectFamily(effect);
+  const familyAttr = family ? ` data-family="${escapeAttr(family)}"` : "";
+
+  // Per-status override — wins over the family default. Inline style sets
+  // the `--ring-color` CSS variable that .ring-fill reads in statuses.css.
+  // Inline always beats stylesheet rules, so a GM-set per-status color stays
+  // on top of both the family default and the amber fallback.
+  const rim = effectRimColor(effect);
+  const fullBadgeStyle = rim
+    ? `${badgeStyle}; --ring-color: ${escapeAttr(rim)}`
+    : badgeStyle;
+
+  return `
+    <div class="wou-status-badge" style="${fullBadgeStyle}"
+         data-wou-tooltip='${escapeAttr(tooltipHTML)}'
+         data-effect-id="${escapeAttr(effect.id)}"${familyAttr}>
+      <svg class="wou-status-ring" viewBox="0 0 30 30" aria-hidden="true"
+           style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;">
+        <circle class="ring-track" cx="15" cy="15" r="12"
+                fill="none" stroke-width="3" pathLength="100"/>
+        <circle class="ring-fill" cx="15" cy="15" r="12"
+                fill="none" stroke-width="3" pathLength="100"
+                stroke-dasharray="${pct} 100"
+                transform="rotate(-90 15 15)"/>
+      </svg>
+      <img class="wou-status-icon" src="${escapeAttr(icon)}" alt="" draggable="false"
+           style="position:absolute;top:50%;left:50%;width:73%;height:73%;transform:translate(-50%,-50%);border-radius:50%;object-fit:cover;border:1px solid rgba(140,133,121,0.45);"/>
+      ${total > 0 ? `<span class="wou-status-num" style="position:absolute;top:-0.125rem;right:-0.0625rem;z-index:10;line-height:1;font-weight:700;white-space:nowrap;color:#e8e1cb;text-shadow:0 0 2px #000,0 0 0.1875rem #000,0 1px 0 #000;pointer-events:none;">${label}</span>` : ""}
+    </div>
+  `;
+}
+
+/**
+ * Classify a duration object as seconds-based or rounds-based and return
+ * the total / remaining (in matching units) plus a formatted label.
+ *
+ *   seconds-based  →  H:MMh   (>= 1 hour)
+ *                  →  Mm      (>= 1 minute, < 1 hour)
+ *                  →  S       (< 1 minute, raw seconds)
+ *   rounds-based   →  N       (rounds remaining)
+ */
+export function describeDuration(dur) {
+  if (!dur) return { total: 0, remaining: 0, label: "" };
+
+  const roundSecs = Number(CONFIG.time?.roundTime) || 0;
+  const inCombat  = !!game.combat?.started && roundSecs > 0;
+
+  /* Combat-pacing units (rounds / turns). v14 stores them as {value, units};
+   * `remaining` is the Foundry-computed count this round (Infinity out of
+   * combat, where there's no tracker to ride).
+   *   IN combat  → a count that ticks one-per-round ("20 r" → 19 → 18).
+   *   OUT of combat → the same span expressed on the wall clock (roundTime
+   *   seconds per round), so a rounds-based effect reads as a timer just like
+   *   a minute potion does — the two stay uniform. */
+  if (dur.units === "rounds" || dur.units === "turns") {
+    const total = Number(dur.value) || 0;
+    const r = Number(dur.remaining);
+    const remaining = Number.isFinite(r) ? Math.max(0, Math.ceil(r)) : total;
+    if (inCombat) {
+      const suffix = dur.units === "rounds" ? "r" : "t";
+      return { total, remaining, label: total > 0 ? `${remaining} ${suffix}` : "" };
+    }
+    const totalSecs = total * roundSecs;
+    const remSecs   = remaining * roundSecs;
+    return { total: totalSecs, remaining: remSecs, label: total > 0 ? formatSecondsLabel(remSecs) : "" };
+  }
+
+  /* Time-based: v14 computes secondsRemaining from start.time + value/units.
+   * IN combat the wall clock is paced by the round clock, so a minute/hour
+   * potion would crawl down a few seconds at a time — convert it to a rounds
+   * readout so it ticks one-per-round, matching combat-unit effects. */
+  const totalSecs = Number(dur.seconds);
+  if (Number.isFinite(totalSecs) && totalSecs > 0) {
+    const rem = Number(dur.secondsRemaining);
+    const remaining = Number.isFinite(rem) ? Math.max(0, rem) : totalSecs;
+    if (inCombat) {
+      const totalR = Math.max(1, Math.ceil(totalSecs / roundSecs));
+      const remR   = Math.max(0, Math.ceil(remaining / roundSecs));
+      return { total: totalR, remaining: remR, label: remR > 0 ? `${remR} r` : "" };
+    }
+    return { total: totalSecs, remaining, label: formatSecondsLabel(remaining) };
+  }
+
+  return { total: 0, remaining: 0, label: "" };
+}
+
+/* Largest whole-unit readout, with the next-smaller unit shown when non-zero
+ * so the label tracks real elapsed time without rounding up:
+ *   < 60s   → "23s"        (exact seconds, never rounded up to a minute)
+ *   < 60m   → "1:30 m"     ("2m" when no leftover seconds)
+ *   < 24h   → "1:12 h"     ("3h"  when no leftover minutes)
+ *   else    → "1:06 d"     ("2d"  when no leftover hours)
+ * Seconds are floored, never ceiled — 59s reads "59s", not "1m". */
+export function formatSecondsLabel(secs) {
+  secs = Math.max(0, Math.floor(secs));
+  if (secs < 60) return `${secs}s`;
+  if (secs < 3600) {
+    const m = Math.floor(secs / 60), s = secs % 60;
+    return s ? `${m}:${String(s).padStart(2, "0")} m` : `${m}m`;
+  }
+  if (secs < 86400) {
+    const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+    return m ? `${h}:${String(m).padStart(2, "0")} h` : `${h}h`;
+  }
+  const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600);
+  return h ? `${d}:${String(h).padStart(2, "0")} d` : `${d}d`;
+}
+
+/* =========================================================================
+   UTILS
+   ========================================================================= */
+
+function stripHtml(html) {
+  if (!html) return "";
+  const tmp = document.createElement("div");
+  tmp.innerHTML = String(html);
+  return (tmp.textContent || "").trim();
+}
+
+function escapeAttr(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function escapeText(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}

@@ -1,0 +1,376 @@
+{{!-- Food item sheet — edible/drinkable provisions for the food & drink
+      homebrew. Two-layer:
+        DISPLAY  → Witcher 3 in-game tooltip aesthetic (player reads)
+        CONFIG   → editable form (cog toggle, owners only)
+
+      Fields:
+        cost / weight / availability / description → universal item fields,
+            always rendered.
+        taste                  → posted to chat on consume; never on the
+                                 display layer per spec — config-only input.
+        charges {current, max} → portion ticker; gated on foodAndDrinkOn.
+        satietyRestore         → satiety regained per portion; gated.
+        drunk.*                → alcoholic metadata (DC, level jump, flavor
+                                 verb, witcher-resist bypass, icon); gated. --}}
+
+<div class="wdm-item-sheet wdm-item-v2" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}{{localize 'WITCHER.Sheet.Item.Cog.BackToDisplay'}}{{else}}{{localize 'WITCHER.Sheet.Item.Cog.ConfigureItem'}}{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip layout
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view{{#if (hasFlair source.flairColor)}} has-flair{{/if}}" data-rarity="{{source.availability}}"{{#if (hasFlair source.flairColor)}} style="--wdm-rar: {{source.flairColor}}"{{/if}}>
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">
+            {{kindLabel}}{{#if (and foodAndDrinkOn isDrink source.drunk.isAlcohol)}} · Alcoholic{{/if}}{{#if (and foodAndDrinkOn tierLabel)}} · <span class="wdm-w3-tier-{{tier}}">{{tierLabel}}</span>{{/if}}
+          </div>
+        </div>
+      </header>
+
+      {{!-- Charges + satiety + alcohol DC stripe (homebrew-only). --}}
+      {{#if foodAndDrinkOn}}
+        <ul class="wdm-w3-stats">
+          {{#if source.charges.max}}
+            <li class="wdm-w3-stat">
+              <span class="val">{{source.charges.current}}/{{source.charges.max}}</span>
+              <span class="lbl">{{localize 'WITCHER.Sheet.Food.Text.Portions'}}</span>
+            </li>
+          {{/if}}
+          {{#unless (eq source.satietyRestore 0)}}
+            <li class="wdm-w3-stat">
+              <span class="val">+{{source.satietyRestore}}</span>
+              <span class="lbl">{{localize 'WITCHER.Sheet.Food.Text.SatietyPortion'}}</span>
+            </li>
+          {{/unless}}
+          {{#if source.drunk.isAlcohol}}
+            <li class="wdm-w3-stat">
+              <span class="val">DC {{source.drunk.dc}}</span>
+              <span class="lbl">{{localize 'WITCHER.Sheet.Food.Text.EnduranceVsDrunk'}}</span>
+            </li>
+          {{/if}}
+        </ul>
+
+        {{!-- Freshness badge. Hidden when the GM didn't author a shelf life
+              or the item hasn't been acquired yet (freshness.tracked === false). --}}
+        {{#if freshness.tracked}}
+          <div class="wdm-food-freshness is-{{freshness.state}}">
+            <i class="fa-solid {{freshness.icon}}"></i>
+            <span class="wdm-food-freshness-label">{{freshness.stateLabel}}</span>
+            {{#if freshness.remaining}}
+              <span class="wdm-food-freshness-time">· {{freshness.remaining}} day{{#unless (eq freshness.remaining "1.0")}}s{{/unless}} left</span>
+            {{/if}}
+          </div>
+        {{/if}}
+
+        {{!-- Diet bonus hint — present on GOOD / LAVISH items that carry
+              an authored axis AE in effects[]. Empty on POOR / MEDIUM. --}}
+        {{#if foodBonus}}
+          <div class="wdm-food-bonus is-{{tier}}">
+            <i class="fa-solid fa-mug-hot"></i>
+            <span class="wdm-food-bonus-label">{{foodBonus}}</span>
+          </div>
+        {{/if}}
+      {{/if}}
+
+      {{!-- Alchemy Reborn brew-base summary stripe — lives OUTSIDE the
+            foodAndDrinkOn gate because being a brew base is an alchemy
+            concept that doesn't depend on the food/drink homebrew. The
+            sheet context only populates baseSummary when the toggle is
+            on AND the item is configured as a base, so the row hides
+            cleanly in every other state. --}}
+      {{#if baseSummary}}
+        <ul class="wdm-w3-stats">
+          <li class="wdm-w3-stat" data-base-type="{{baseSummary.key}}">
+            <span class="val">{{baseSummary.modSigned}} DC</span>
+            <span class="lbl">{{baseSummary.typeLabel}}</span>
+          </li>
+        </ul>
+      {{/if}}
+
+      {{#if source.description}}
+        <div class="wdm-w3-description">{{{source.description}}}</div>
+      {{else}}
+        <div class="wdm-w3-effects wdm-empty">{{localize 'WITCHER.Sheet.Food.Text.NoDescriptionYet'}}</div>
+      {{/if}}
+
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Food.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        {{#unless (eq source.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Food.Tooltip.Quantity'}}"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+        {{/unless}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="Rarity / Availability">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Sheet.Food.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — compact spec form
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Food.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Food.Hint.FoodName'}}" />
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Food.Text.Details'}}</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Food.Tooltip.DisplayCategoryDrinksAreTheOnlyKindThatC'}}">
+          <span>{{localize 'WITCHER.Sheet.Food.Text.Kind'}}</span>
+          <select name="system.kind">
+            {{#each kindOptions}}
+              <option value="{{@key}}" {{#if (eq @key ../kind)}}selected{{/if}}>{{this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Food.Tooltip.QualityTierDrivesTheBlandDietStackPoor1M'}}">
+          <span>{{localize 'WITCHER.Sheet.Food.Text.Tier'}}</span>
+          <select name="system.tier">
+            {{#each tierOptions}}
+              <option value="{{@key}}" {{#if (eq @key ../tier)}}selected{{/if}}>{{this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Food.Tooltip.CrownsPerUnit'}}">{{localize 'WITCHER.Sheet.Food.Label.Value'}}</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Food.Tooltip.WeightPerUnitKg'}}">{{localize 'WITCHER.Sheet.Food.Label.WeightKg'}}</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Food.Tooltip.HowReadilyThisIsFoundRawAvailabilityScal'}}">{{localize 'WITCHER.Sheet.Food.Label.Rarity'}}</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        {{> "systems/witcher-ttrpg-death-march/templates/item/partials/flair-override.hbs" flairColor=source.flairColor}}
+      </div>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      {{!-- Food & Drink homebrew fields. Schema is always present (ADR 0003),
+           but the UI surface hides when the toggle is off so a pure-RAW world
+           doesn't see fields it can't actually use. Flipping it back on keeps
+           previously-authored data intact. --}}
+      {{#if foodAndDrinkOn}}
+        {{!-- Ingredients are raw inputs to cooking recipes — no portions,
+             and satiety only when the GM marks the ingredient edible. The
+             schema fields stay in place either way; the UI just hides them
+             so flipping kind back to meal/drink keeps prior data. --}}
+        {{#if isIngredient}}
+          <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Food.Text.Ingredient'}}</div>
+          <div class="wdm-cfg-grid">
+            <label class="wdm-cfg-row is-checkbox" title="{{localize 'WITCHER.Sheet.Food.Tooltip.WhenOnThisIngredientCanBeEatenRawAndRest'}}">
+              <span>{{localize 'WITCHER.Sheet.Food.Text.Edible'}}</span>
+              <input type="checkbox" name="system.ingredient.edible" {{#if ingredientEdible}}checked{{/if}} />
+            </label>
+            {{#if ingredientEdible}}
+              <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Food.Tooltip.SatietyRestoredOnConsume0125OnlyUsedWhen'}}">
+                <span>{{localize 'WITCHER.Sheet.Food.Text.SatietyRestore'}}</span>
+                <input type="number" min="0" name="system.satietyRestore" value="{{source.satietyRestore}}" />
+              </label>
+            {{/if}}
+            <label class="wdm-cfg-row is-checkbox" title="{{localize 'WITCHER.Sheet.Food.Tooltip.WhenOnConsumingThisIngredientRunsTheSpoi'}}">
+              <span>{{localize 'WITCHER.Sheet.Food.Text.MakesYouSick'}}</span>
+              <input type="checkbox" name="system.ingredient.makesSick" {{#if ingredientMakesSick}}checked{{/if}} />
+            </label>
+          </div>
+        {{else}}
+          <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Food.Text.PortionsSatiety'}}</div>
+          <div class="wdm-cfg-grid">
+            <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Food.Tooltip.PortionsLeftInThisUnitWhen0ConsumingDrop'}}">
+              <span>{{localize 'WITCHER.Sheet.Food.Text.CurrentPortion'}}</span>
+              <input type="number" min="0" name="system.charges.current" value="{{source.charges.current}}" />
+            </label>
+            <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Food.Tooltip.TotalPortionsPerUnit0NoPortionTickerCons'}}">
+              <span>{{localize 'WITCHER.Sheet.Food.Text.MaxPortions'}}</span>
+              <input type="number" min="0" name="system.charges.max" value="{{source.charges.max}}" />
+            </label>
+            <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Food.Tooltip.SatietyRestoredPerPortionEaten0125'}}">
+              <span>{{localize 'WITCHER.Sheet.Food.Text.SatietyRestore'}}</span>
+              <input type="number" min="0" name="system.satietyRestore" value="{{source.satietyRestore}}" />
+            </label>
+            {{#if (eq tier 'poor')}}
+            <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Food.Tooltip.TickWhenEatingThisCountsAsBlandFoodThatA'}}">
+              <span>{{localize 'WITCHER.Sheet.Food.Text.CountsAsBlandEating'}}</span>
+              <input type="checkbox" name="system.blandFood" {{#if blandFood}}checked{{/if}} />
+            </label>
+            {{/if}}
+          </div>
+
+          {{!-- Portion-split metadata. Only meaningful when this item is
+                actually a charged source (max ≥ 2). Right-clicking such
+                an item in the dock surfaces "Pour a Glass" / "Serve a
+                Portion" and uses these fields to name + ic the spawned
+                single-portion item. --}}
+          {{#if source.charges.max}}
+          <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Food.Text.PortionSplit'}} <span class="wdm-cfg-sub">(used by "Pour / Serve" context actions)</span></div>
+          <div class="wdm-cfg-grid">
+            <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Food.Tooltip.PrefixForTheSpawnedSinglePortionItemDefa'}}">
+              <span>{{localize 'WITCHER.Sheet.Food.Text.PourLabel'}}</span>
+              <input type="text" name="system.pourLabel" value="{{source.pourLabel}}"
+                     placeholder="{{#if (eq source.kind 'drink')}}Glass{{else}}Portion{{/if}}" />
+            </label>
+            <label class="wdm-cfg-row is-checkbox" title="{{localize 'WITCHER.Sheet.Food.Tooltip.WhenOnTheSpawnedPortionUsesTheIconBelowI'}}">
+              <span>{{localize 'WITCHER.Sheet.Food.Text.UseCustomPortionIcon'}}</span>
+              <input type="checkbox" name="system.pourIconCustom" {{#if source.pourIconCustom}}checked{{/if}} />
+            </label>
+            {{!-- Always-rendered icon picker. The value is only USED at
+                  pour time when `pourIconCustom` is on, but showing the
+                  field unconditionally lets the GM set the icon and the
+                  toggle in one pass — no tick-save-reopen round trip.
+                  When the toggle is off the row dims via the class so the
+                  inactivity reads at a glance. The IMG is the FilePicker
+                  trigger (data-action="editImage" — same pattern every
+                  other item sheet uses for its portrait); the text field
+                  next to it shows the current path and stays read-only
+                  to avoid two competing edit paths. --}}
+            <label class="wdm-cfg-row{{#unless source.pourIconCustom}} is-inactive{{/unless}}"
+                   title="{{localize 'WITCHER.Sheet.Food.Tooltip.IconForTheSpawnedPortionActiveOnlyWhenUs'}}">
+              <span>{{localize 'WITCHER.Sheet.Food.Text.PortionIcon'}}</span>
+              <span class="wdm-cfg-icon-pick">
+                <img class="wdm-cfg-icon-preview"
+                     src="{{#if source.pourIcon}}{{source.pourIcon}}{{else}}icons/svg/mystery-man.svg{{/if}}"
+                     data-action="editImage" data-edit="system.pourIcon"
+                     alt="" title="{{localize 'WITCHER.Sheet.Food.Tooltip.ClickToChangePortionIcon'}}" />
+                <input type="text" name="system.pourIcon" value="{{source.pourIcon}}"
+                       placeholder="icons/consumables/drinks/wine-amber-magenta-glass.webp"
+                       readonly />
+              </span>
+            </label>
+          </div>
+          {{/if}}
+        {{/if}}
+
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Food.Text.Freshness'}}</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Food.Tooltip.InGameDaysBeforeTheFoodSpoilsAfterItSFir'}}">
+            <span>{{localize 'WITCHER.Sheet.Food.Text.ShelfLifeDays'}}</span>
+            <input type="number" min="0" step="0.5" name="system.freshness.shelfLifeDays" value="{{source.freshness.shelfLifeDays}}" />
+          </label>
+          {{#if freshness.tracked}}
+            <div class="wdm-cfg-readout" title="{{localize 'WITCHER.Sheet.Food.Tooltip.DaysRemainingBeforeThisItemBecomesSpoile'}}">
+              State: <b>{{freshness.stateLabel}}</b>{{#if freshness.remaining}} · {{freshness.remaining}} day{{#unless (eq freshness.remaining "1.0")}}s{{/unless}} left{{/if}}
+            </div>
+          {{/if}}
+        </div>
+
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Food.Text.Taste'}}</div>
+        <textarea class="wdm-cfg-textarea" name="system.taste"
+                  placeholder="{{localize 'WITCHER.Sheet.Food.Hint.ShortFlavorLinePrintedInChatEachTimeAPor'}}">{{source.taste}}</textarea>
+
+        {{!-- Alcohol block — only drinks can carry alcohol metadata.
+             The schema accepts the values for any kind so authoring a meal
+             with alcohol fields by mistake doesn't lose data; the UI just
+             stops surfacing them. --}}
+        {{#if isDrink}}
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Food.Text.Alcohol'}}</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row is-checkbox" title="{{localize 'WITCHER.Sheet.Food.Tooltip.WhenOnConsumingTriggersAnEnduranceCheckF'}}">
+            <span>{{localize 'WITCHER.Sheet.Food.Text.Alcoholic'}}</span>
+            <input type="checkbox" name="system.drunk.isAlcohol" {{#if source.drunk.isAlcohol}}checked{{/if}} />
+          </label>
+          <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Food.Tooltip.DcOfTheEnduranceCheckTheDrinkerRollsToAv'}}">
+            <span>{{localize 'WITCHER.Sheet.Food.Text.EnduranceDc'}}</span>
+            <input type="number" min="0" name="system.drunk.dc" value="{{source.drunk.dc}}" />
+          </label>
+          <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Food.Tooltip.HowManyDrunkTiersToAdvanceOnAFailedSaveU'}}">
+            <span>{{localize 'WITCHER.Sheet.Food.Text.LevelJump'}}</span>
+            <input type="number" min="0" name="system.drunk.levelJump" value="{{source.drunk.levelJump}}" />
+          </label>
+          <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Food.Tooltip.VerbUsedInChatDrinksSipsGuzzlesDowns'}}">
+            <span>{{localize 'WITCHER.Sheet.Food.Text.FlavorVerb'}}</span>
+            <input type="text" name="system.drunk.flavorVerb" value="{{source.drunk.flavorVerb}}" placeholder="drinks" />
+          </label>
+        </div>
+        {{/if}}
+      {{/if}}
+
+      {{!-- Alchemy Reborn: configure this food item as a brew base.
+            Drinks usually act as potion bases (Cheap Vodka, Spirits);
+            ingredients usually act as bomb / decoction bases. Lives
+            OUTSIDE the foodAndDrinkOn gate — a GM with the food/drink
+            homebrew off can still author a brew base from a food item
+            since "being a base" is an alchemy concept, not a food one. --}}
+      {{#if alchemyRebornOn}}
+        <div class="wdm-cfg-section">{{localize "WITCHER.AlchemyReborn.Section.Base"}}</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Base.Enable.Label"}}</span>
+            <input type="checkbox" name="system.alchemyBase.enabled" {{#if source.alchemyBase.enabled}}checked{{/if}}
+                   title="{{localize 'WITCHER.AlchemyReborn.Base.Enable.Hint'}}" />
+          </label>
+          {{#if source.alchemyBase.enabled}}
+            <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Base.Type.Label"}}</span>
+              <select name="system.alchemyBase.baseType">
+                <option value=""          {{#if (eq source.alchemyBase.baseType "")}}selected{{/if}}>— choose —</option>
+                <option value="potion"    {{#if (eq source.alchemyBase.baseType "potion")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Base.Type.Potion"}}</option>
+                <option value="oil"       {{#if (eq source.alchemyBase.baseType "oil")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Base.Type.Oil"}}</option>
+                <option value="bomb"      {{#if (eq source.alchemyBase.baseType "bomb")}}selected{{/if}}>{{localize "WITCHER.AlchemyReborn.Base.Type.Bomb"}}</option>
+              </select>
+            </label>
+            <label class="wdm-cfg-row"><span>{{localize "WITCHER.AlchemyReborn.Base.Mod.Label"}}</span>
+              <input type="number" step="1" name="system.alchemyBase.baseMod" value="{{source.alchemyBase.baseMod}}"
+                     title="{{localize 'WITCHER.AlchemyReborn.Base.Mod.Hint'}}" />
+            </label>
+          {{/if}}
+        </div>
+      {{/if}}
+
+      {{!-- Active Effects — copy onto the consumer when eaten. With duration
+           the effect lingers and expires; without, it sits as a permanent
+           buff/debuff (author can delete later). Effects on the food itself
+           are transfer:false (handled by the sheet) so merely carrying the
+           item never applies them. --}}
+      {{#if foodAndDrinkOn}}
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Food.Text.Effects'}} <span class="wdm-cfg-sub">(applied on consume)</span></div>
+        <div class="wdm-cfg-effects">
+          {{#if effects.length}}
+            <ul class="wdm-effect-list">
+              {{#each effects}}
+                <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                  <div class="wdm-effect-head">
+                    <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                    <span class="wdm-effect-name">{{this.name}}</span>
+                    {{#if this.duration.label}}<span class="wdm-effect-duration">{{this.duration.label}}</span>{{/if}}
+                    <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                      <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                    </a>
+                    <a data-action="editEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Food.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+                    <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Food.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
+                  </div>
+                </li>
+              {{/each}}
+            </ul>
+          {{else}}
+            <p class="wdm-empty">{{localize 'WITCHER.Sheet.Food.Text.NoEffectsConfigured'}}</p>
+          {{/if}}
+          <button type="button" class="wdm-add-effect" data-action="createEffect">
+            <i class="fa-solid fa-plus"></i> {{localize 'WITCHER.Sheet.Item.Button.AddEffect'}}
+          </button>
+        </div>
+      {{/if}}
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Food.Text.Description'}}</div>
+      <textarea class="wdm-cfg-textarea is-tall" name="system.description"
+                placeholder="{{localize 'WITCHER.Sheet.Food.Hint.WhatItIsHowItTastesWhatItDoes'}}">{{source.description}}</textarea>
+
+    </div>
+  </div>
+
+</div>

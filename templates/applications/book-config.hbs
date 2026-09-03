@@ -1,0 +1,47 @@
+{{!-- Book System Configuration — GM-only world settings menu. Edits one Object
+      setting (`bookSystemConfig`); save reloads the world. Mirrors the stress
+      config DOM (shared .wdm-se-* classes). --}}
+<div class="wdm-book-config-body">
+
+  <header class="wdm-se-head">
+    <h2><i class="fa-solid fa-book"></i> {{localize 'WITCHER.App.BookConfig.Text.BookConfiguration'}}</h2>
+    <p class="wdm-se-blurb">{{localize 'WITCHER.App.BookConfig.Blurb'}}</p>
+  </header>
+
+  <details class="wdm-se-group" open>
+    <summary>{{localize 'WITCHER.App.BookConfig.Text.ReadingCooldowns'}}</summary>
+
+    <div class="wdm-se-row">
+      <label class="wdm-se-mini" title="{{localize 'WITCHER.App.BookConfig.Tooltip.StudyCooldown'}}">
+        <span>{{localize 'WITCHER.App.BookConfig.Text.StudyCooldownHours'}}</span>
+        <input type="number" step="0.5" min="0" name="studyCooldownHours"
+               value="{{values.studyCooldownHours}}" />
+      </label>
+      <label class="wdm-se-mini" title="{{localize 'WITCHER.App.BookConfig.Tooltip.NovelStepCooldown'}}">
+        <span>{{localize 'WITCHER.App.BookConfig.Text.NovelStepCooldownHours'}}</span>
+        <input type="number" step="0.5" min="0" name="novelStepCooldownHours"
+               value="{{values.novelStepCooldownHours}}" />
+      </label>
+    </div>
+  </details>
+
+  <div class="wdm-se-spacer" style="height:18px;"></div>
+
+  <details class="wdm-se-group" open>
+    <summary>{{localize 'WITCHER.App.BookConfig.Text.Language'}}</summary>
+
+    <label class="wdm-se-check">
+      <input type="checkbox" name="languageEnabled" {{#if values.languageEnabled}}checked{{/if}} />
+      <span><b>{{localize 'WITCHER.App.BookConfig.Text.LanguageEnabled'}}</b> — {{localize 'WITCHER.App.BookConfig.Text.LanguageEnabledHint'}}</span>
+    </label>
+
+    <div class="wdm-se-row">
+      <label class="wdm-se-mini" title="{{localize 'WITCHER.App.BookConfig.Tooltip.LanguagePenaltyPerRanks'}}">
+        <span>{{localize 'WITCHER.App.BookConfig.Text.LanguagePenaltyPerRanks'}}</span>
+        <input type="number" step="1" min="1" name="languagePenaltyPerRanks"
+               value="{{values.languagePenaltyPerRanks}}" />
+      </label>
+    </div>
+  </details>
+
+</div>

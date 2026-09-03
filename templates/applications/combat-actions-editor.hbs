@@ -1,0 +1,152 @@
+{{!-- Combat Actions Editor — GM-only world settings form for the
+      Combat Extended attack and defense action catalog. Two sections
+      (Attacks, Defenses), one row per action, label/description on the
+      top line + a tight grid of editable mechanical knobs below. Stable
+      meta (meleeOnly / prereq / requiresShield / defenseSkill) renders
+      as a read-only chip strip. --}}
+
+<div class="wdm-cae">
+
+  <header class="wdm-cae-head">
+    <h2>{{localize "WITCHER.CombatExtended.ActionsEditor.Title"}}</h2>
+    <p class="wdm-cae-blurb">
+    {{localize 'WITCHER.App.CombatActionsEditor.Blurb.Intro'}}
+  <strong>{{localize 'WITCHER.App.CombatActionsEditor.Text.Subsystems'}}</strong> (turn individual mechanics on or off),
+      <strong>{{localize 'WITCHER.App.CombatActionsEditor.Text.Tuneables'}}</strong> (per-subsystem knobs), and the action catalog
+      itself (per-action STA / to-hit / damage / flag overrides). Reset a row
+      to undo just that row; Reset All restores everything.
+    </p>
+  </header>
+
+  {{#*inline "actionRow"}}
+    <details class="wdm-cae-card">
+      <summary class="wdm-cae-sum">
+        <span class="wdm-cae-sum-name">{{this.label}}</span>
+        <code class="wdm-cae-sum-key">{{this.key}}</code>
+        {{#if this.meleeOnly}}<span class="wdm-cae-tag">melee</span>{{/if}}
+        {{#if this.requiresPiercing}}<span class="wdm-cae-tag">piercing</span>{{/if}}
+        {{#if this.requiresShield}}<span class="wdm-cae-tag">shield</span>{{/if}}
+        {{#if this.offhand}}<span class="wdm-cae-tag">off-hand</span>{{/if}}
+        {{#if this.prereq}}<span class="wdm-cae-tag">prereq: {{this.prereq}}</span>{{/if}}
+        {{#if this.defenseSkill}}<span class="wdm-cae-tag">skill: {{this.defenseSkill}}</span>{{/if}}
+        {{!-- Inline STA-cost editor on the summary line — the field most
+              GMs want to tune for the whole catalog. Stop-propagation so
+              clicking/typing the input doesn't toggle the <details>. --}}
+        <label class="wdm-cae-sum-sta" title="Stamina cost for {{this.label}}" onclick="event.stopPropagation()">
+          <span class="wdm-cae-lab">STA</span>
+          <input type="number" step="1" name="rows.{{this.kind}}.{{this.key}}.staCost"
+                 value="{{lookup this.fields 'staCost'}}"
+                 onclick="event.stopPropagation()"
+                 onkeydown="if(event.key===' '||event.key==='Enter')event.stopPropagation()" />
+        </label>
+      </summary>
+
+      <div class="wdm-cae-body">
+        <label class="wdm-cae-field wdm-cae-name">
+          <span class="wdm-cae-lab">{{localize 'WITCHER.App.CombatActionsEditor.Text.Name'}}</span>
+          <input type="text" name="rows.{{this.kind}}.{{this.key}}.label" value="{{this.label}}" />
+        </label>
+
+        <label class="wdm-cae-field wdm-cae-desc">
+          <span class="wdm-cae-lab">{{localize 'WITCHER.App.CombatActionsEditor.Text.Description'}}</span>
+          <textarea name="rows.{{this.kind}}.{{this.key}}.desc" rows="3">{{this.desc}}</textarea>
+        </label>
+
+        {{!-- staCost is rendered INLINE on the summary line so the GM
+              can tune it without expanding the card. The prep layer
+              filters staCost out of `fieldMeta` so it doesn't double-
+              render here (which would share a form name and conflict
+              on submit). --}}
+        <div class="wdm-cae-knobs">
+          {{!-- Partial-aware context: inside {{#each attacks}} → {{> actionRow}},
+                a nested `..` reaches the partial's caller (the attack row),
+                NOT the template root. Use @root for the editor-wide
+                fieldMeta map. --}}
+          {{#each (lookup @root.fieldMeta this.kind) as |meta|}}
+            <label class="wdm-cae-knob wdm-cae-knob-{{meta.type}}">
+              <span class="wdm-cae-lab">{{meta.label}}</span>
+              {{#if (eq meta.type "boolean")}}
+                <input type="checkbox" name="rows.{{../kind}}.{{../key}}.{{meta.key}}"
+                       {{#if (lookup ../fields meta.key)}}checked{{/if}} />
+              {{else}}
+                <input type="number" name="rows.{{../kind}}.{{../key}}.{{meta.key}}"
+                       value="{{lookup ../fields meta.key}}"
+                       {{#if meta.step}}step="{{meta.step}}"{{else}}step="1"{{/if}}
+                       {{#if meta.min}}min="{{meta.min}}"{{/if}} />
+              {{/if}}
+            </label>
+          {{/each}}
+        </div>
+
+        <div class="wdm-cae-rowactions">
+          <button type="button" class="wdm-cae-resetrow" data-action="resetRow"
+                  data-kind="{{this.kind}}" data-key="{{this.key}}"
+                  title="{{localize 'WITCHER.App.CombatActionsEditor.Tooltip.ResetJustThisActionToItsDefaultValues'}}">
+            <i class="fa-solid fa-arrow-rotate-left"></i> {{localize 'WITCHER.App.CombatActionsEditor.Button.ResetRow'}}
+          </button>
+        </div>
+      </div>
+    </details>
+  {{/inline}}
+
+  <section class="wdm-cae-section">
+    <h3 class="wdm-cae-section-head">{{localize 'WITCHER.App.CombatActionsEditor.Text.Subsystems'}}</h3>
+    <p class="wdm-cae-blurb" style="margin-top:-4px;">
+    {{localize 'WITCHER.App.CombatActionsEditor.Blurb.Subsystems'}}
+  </p>
+    <div class="wdm-cae-subsys">
+      {{#each subsystems as |sub|}}
+        <label class="wdm-cae-subsys-row" title="{{sub.hint}}">
+          <input type="checkbox" name="subsystems.{{sub.key}}"
+                 {{#if sub.enabled}}checked{{/if}} />
+          <span class="wdm-cae-subsys-label">{{sub.label}}</span>
+          <span class="wdm-cae-subsys-hint">{{sub.hint}}</span>
+        </label>
+      {{/each}}
+    </div>
+  </section>
+
+  <section class="wdm-cae-section">
+    <h3 class="wdm-cae-section-head">{{localize 'WITCHER.App.CombatActionsEditor.Text.Tuneables'}}</h3>
+    <p class="wdm-cae-blurb" style="margin-top:-4px;">
+    {{localize 'WITCHER.App.CombatActionsEditor.Blurb.Tuneables'}}
+  </p>
+    <div class="wdm-cae-tuneables">
+      {{#each tuneables as |t|}}
+        <label class="wdm-cae-subsys-row" title="{{t.hint}}">
+          {{#if (eq t.kind "boolean")}}
+            <input type="checkbox" name="tuneables.{{t.key}}"
+                   {{#if t.value}}checked{{/if}} />
+          {{else}}
+            <input type="number" name="tuneables.{{t.key}}"
+                   value="{{t.value}}"
+                   {{#if t.min}}min="{{t.min}}"{{/if}}
+                   {{#if t.max}}max="{{t.max}}"{{/if}}
+                   style="width:60px;" />
+          {{/if}}
+          <span class="wdm-cae-subsys-label">{{t.label}}</span>
+          <span class="wdm-cae-subsys-hint">{{t.hint}}</span>
+        </label>
+      {{/each}}
+    </div>
+  </section>
+
+  <section class="wdm-cae-section">
+    <h3 class="wdm-cae-section-head">{{localize 'WITCHER.App.CombatActionsEditor.Text.Attacks'}}</h3>
+    <div class="wdm-cae-list">
+      {{#each attacks}}
+        {{> actionRow}}
+      {{/each}}
+    </div>
+  </section>
+
+  <section class="wdm-cae-section">
+    <h3 class="wdm-cae-section-head">{{localize 'WITCHER.App.CombatActionsEditor.Text.Defenses'}}</h3>
+    <div class="wdm-cae-list">
+      {{#each defenses}}
+        {{> actionRow}}
+      {{/each}}
+    </div>
+  </section>
+
+</div>

@@ -1,0 +1,46 @@
+{{!-- One change row, friendly form. The Target <select> has no `name` —
+      it's a picker that JS mirrors into the named key input (see
+      WitcherActiveEffectConfig._onChangeForm). The key input is hidden
+      unless the row is in custom/advanced mode. --}}
+<li class="wdm-change-row{{#if isCustomKey}} is-custom{{/if}}" data-index="{{index}}">
+
+  <div class="wdm-change-field wdm-change-target">
+    <label>{{localize "WITCHER.Effect.Target"}}</label>
+    <select class="wdm-target-picker">
+      <option value="" {{#unless change.key}}selected{{/unless}} disabled hidden>{{localize "WITCHER.Effect.ChooseTarget"}}</option>
+      {{#each targetGroups as |group|}}
+        <optgroup label="{{group.label}}">
+          {{#each group.options as |opt|}}
+            <option value="{{opt.key}}" {{#if (eq opt.key ../../change.key)}}selected{{/if}}>{{opt.label}}</option>
+          {{/each}}
+        </optgroup>
+      {{/each}}
+      <option value="__custom__" {{#if isCustomKey}}selected{{/if}}>{{localize "WITCHER.Effect.CustomTarget"}}</option>
+    </select>
+    <input type="text" class="wdm-key-input" name="{{change.keyPath}}" value="{{change.key}}"
+           data-key-input placeholder="system.path.to.attribute"
+           title="{{localize 'WITCHER.Effect.CustomTargetHint'}}" />
+  </div>
+
+  <div class="wdm-change-field wdm-change-how">
+    <label>{{localize "WITCHER.Effect.How"}}</label>
+    <select name="{{change.typePath}}">
+      {{#each modes as |label key|}}
+        <option value="{{key}}" {{#if (eq key ../change.type)}}selected{{/if}}>{{label}}</option>
+      {{/each}}
+    </select>
+  </div>
+
+  <div class="wdm-change-field wdm-change-amount">
+    <label>{{localize "WITCHER.Effect.Amount"}}</label>
+    <input type="text" name="{{change.valuePath}}" value="{{change.value}}" placeholder="2" />
+  </div>
+
+  <input type="hidden" name="{{change.phasePath}}" value="{{change.phase}}" data-phase-input />
+  <input type="hidden" name="{{change.priorityPath}}" value="{{change.priority}}" />
+
+  <button type="button" class="wdm-change-del" data-action="deleteChange"
+          title="{{localize 'WITCHER.Effect.RemoveChange'}}">
+    <i class="fa-solid fa-trash"></i>
+  </button>
+</li>

@@ -1,0 +1,30 @@
+{{!-- UI Customizer — header: scope selector + master enable. Not a tab; sits
+      above the tab strip. Scope buttons are `data-action` (not form inputs) so
+      they never land in the submit payload; only `enabled` is submitted. --}}
+<section class="wdm-uic-head">
+
+  <p class="wdm-uic-blurb">{{localize 'WITCHER.App.UiCustomizer.Blurb'}}</p>
+
+  {{#if isGM}}
+  <div class="wdm-uic-scope" role="group" aria-label="{{localize 'WITCHER.App.UiCustomizer.ScopeAria'}}">
+    <button type="button" class="wdm-uic-scope-btn {{#if scopeIsWorld}}active{{/if}}"
+            data-action="setScope" data-scope-target="world">
+      <i class="fa-solid fa-earth-europe"></i> {{localize 'WITCHER.App.UiCustomizer.Scope.World'}}
+    </button>
+    <button type="button" class="wdm-uic-scope-btn {{#if scopeIsClient}}active{{/if}}"
+            data-action="setScope" data-scope-target="client">
+      <i class="fa-solid fa-user"></i> {{localize 'WITCHER.App.UiCustomizer.Scope.Personal'}}
+    </button>
+  </div>
+  {{else}}
+  <div class="wdm-uic-scope-note">
+    <i class="fa-solid fa-user"></i> {{localize 'WITCHER.App.UiCustomizer.Scope.PersonalOnly'}}
+  </div>
+  {{/if}}
+
+  <p class="wdm-uic-editing-note">
+    <i class="fa-solid fa-pen-to-square"></i>
+    {{localize 'WITCHER.App.UiCustomizer.EditingScope'}} <b>{{scopeLabel}}</b>
+  </p>
+
+</section>

@@ -1,0 +1,1801 @@
+/* =========================================================================
+   WITCHER OVERHAUL UI · weather strip
+   Read-only widget showing the current weather/time/date.
+   Sits as a second row inside #wou-top-bar, beneath the brand/tabs/HUD.
+   Layout: [circle] [date] [temp + FA icon] — horizontal, left-aligned
+   under the scene name's column.
+   ========================================================================= */
+
+/* Brand-text column container holding scene name + weather strip. */
+body.witcher-ttrpg-death-march #wou-top-bar .brand-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.125rem;
+    min-width: 0;
+}
+
+body.witcher-ttrpg-death-march #wou-weather {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin: 0;
+    position: relative;
+}
+
+/* "Time is Paused" indicator that sits directly beneath the date/weather
+   strip on the topbar. Absolute-positioned so it doesn't push other siblings;
+   centered horizontally under the whole strip. Hidden by default; the
+   [hidden] attribute is toggled by weather.js when the clockPaused world
+   setting flips. */
+body.witcher-ttrpg-death-march #wou-weather .wou-weather-paused {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 0.0625rem;
+    font-style: italic;
+    font-weight: 500;
+    font-size: calc(0.5625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.02em;
+    color: var(--wdm-amber-hi);
+    pointer-events: none;
+    white-space: nowrap;
+}
+body.witcher-ttrpg-death-march #wou-weather .wou-weather-paused[hidden] { display: none; }
+body.witcher-ttrpg-death-march #wou-weather.is-empty {
+    display: none;
+}
+
+/* Tiny circle: amber-bezeled medallion frame around the W3 weather image. */
+body.witcher-ttrpg-death-march #wou-weather .wou-weather-circle {
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: 1px solid var(--wdm-amber-dim);
+    position: relative;
+    flex-shrink: 0;
+    /* Light sepia + desaturate so the W3 weather art reads as warm-tinted
+       vintage rather than full-color, matching the rest of the chrome. */
+    filter: sepia(0.4) saturate(0.85);
+    box-shadow:
+        inset 0 0 0 1px rgba(0, 0, 0, 0.5),
+        0 1px 0 rgba(0, 0, 0, 0.55);
+}
+
+/* Date — uppercase, condensed, amber-ink palette. */
+body.witcher-ttrpg-death-march #wou-weather .wou-weather-date {
+    font-weight: 600;
+    font-size: calc(0.5625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--wdm-ink-hi);
+    white-space: nowrap;
+}
+
+/* Temperature — slightly larger, bright amber. */
+body.witcher-ttrpg-death-march #wou-weather .wou-weather-temp {
+    margin-left: 0.125rem;
+    font-weight: 700;
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    color: var(--wdm-amber-bright);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+body.witcher-ttrpg-death-march #wou-weather .wou-weather-temp:empty {
+    display: none;
+}
+
+/* Small FA icon for the weather glyph. */
+body.witcher-ttrpg-death-march #wou-weather .wou-weather-fa {
+    color: var(--wdm-amber-hi);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    margin-left: 0.0625rem;
+}
+
+/* Time-of-day tint on the circle border so the bezel breathes with the day. */
+body.witcher-ttrpg-death-march #wou-weather.is-dawn  .wou-weather-circle { border-color: var(--wdm-amber-hi);    }
+body.witcher-ttrpg-death-march #wou-weather.is-day   .wou-weather-circle { border-color: var(--wdm-amber);       }
+body.witcher-ttrpg-death-march #wou-weather.is-dusk  .wou-weather-circle { border-color: var(--wdm-amber);       }
+body.witcher-ttrpg-death-march #wou-weather.is-night .wou-weather-circle { border-color: var(--wdm-amber-dim);   }
+
+/* =========================================================================
+   WEATHER MENU — pops from the FA weather icon. GMs get the full time-control
+   panel; players get a read-only conditions + effects view.
+   ========================================================================= */
+/* Clickable affordance — quiet at rest (no glow, no animation), lights
+ * up only when hovered. */
+body.witcher-ttrpg-death-march .wou-weather-fa.is-clickable {
+    cursor: pointer;
+    display: inline-block;
+    transition: color .18s ease, text-shadow .18s ease, transform .18s ease;
+}
+body.witcher-ttrpg-death-march .wou-weather-fa.is-clickable:hover {
+    color: var(--wdm-amber-bright);
+    text-shadow:
+      0 0 0.5rem rgba(214,160,80,0.85),
+      0 0 0.875rem rgba(214,160,80,0.45);
+    transform: scale(1.10);
+}
+
+body.witcher-ttrpg-death-march #wou-weather-menu {
+    min-width: 17.5rem;
+    /* Cap the width: this popup is shrink-to-fit (position: fixed), so without a
+       max the flex-wrap grab row lays every condition button on one line and the
+       whole panel stretches. A max lets the rows wrap and the hint text reflow. */
+    max-width: 21.25rem;
+    box-sizing: border-box;
+    padding: 0.75rem 0.875rem;
+    background:
+        radial-gradient(ellipse 25rem 15rem at 50% 0%, rgb(from var(--wdm-amber-hi) r g b / 0.06), transparent 70%),
+        linear-gradient(180deg, rgb(from var(--wdm-bg) r g b / 0.97), rgba(5,4,2,0.99));
+    border: 1px solid var(--wdm-amber-dim);
+    box-shadow: 0 0.5rem 1.75rem rgba(0,0,0,0.75), 0 0 0 1px rgba(0,0,0,0.6);
+    /* backdrop-filter cut: bg is 0.97-0.99 opaque; blur invisible under it. */
+    color: var(--wdm-ink-hi);
+    font-family: var(--wdm-font-body);
+}
+
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-section + .wou-wm-section {
+    margin-top: 0.75rem;
+    padding-top: 0.625rem;
+    border-top: 1px dotted rgb(from var(--wdm-amber-hi) r g b / 0.20);
+}
+
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-head {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.5625rem * var(--wdm-tf, 1));
+    font-weight: 700;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: var(--wdm-amber);
+    margin-bottom: 0.375rem;
+}
+
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-clock {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 0.75rem;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-date {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.8125rem * var(--wdm-tf, 1));
+    letter-spacing: 0.08em;
+    color: var(--wdm-ink-hi);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-time {
+    font-family: var(--wdm-font-display);
+    font-weight: 700;
+    font-size: calc(1rem * var(--wdm-tf, 1));
+    letter-spacing: 0.10em;
+    font-variant-numeric: tabular-nums;
+    color: var(--wdm-amber-bright);
+    text-shadow: 0 0 0.375rem rgba(214,160,80,0.35);
+}
+
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.25rem;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-row button {
+    appearance: none;
+    padding: 0.375rem 0;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    color: var(--wdm-ink-bright, var(--wdm-ink-hi));
+    font-family: var(--wdm-font-display);
+    font-weight: 700;
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-row button:hover {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.10);
+}
+
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-toggle {
+    appearance: none;
+    width: 100%;
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    color: var(--wdm-ink-dim);
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    text-align: left;
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-toggle i {
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-toggle:hover {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.10);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-toggle.is-on {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.08);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-toggle.is-on i {
+    color: var(--wdm-amber-bright);
+    text-shadow: 0 0 0.5rem rgba(214,160,80,0.45);
+}
+
+/* Climate selector */
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-climate {
+    width: 100%;
+    padding: 0.375rem 0.5rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    color: var(--wdm-ink-bright, var(--wdm-ink-hi));
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    cursor: pointer;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-climate:hover {
+    border-color: var(--wdm-amber);
+}
+
+/* Manual weather controls */
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mtoggle {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--wdm-ink-hi);
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    cursor: pointer;
+    user-select: none;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mtoggle input {
+    accent-color: var(--wdm-amber);
+    cursor: pointer;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mlayers {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mlayers.is-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mlabel {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--wdm-amber);
+    margin-bottom: 0.1875rem;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mstates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mstate {
+    appearance: none;
+    display: inline-flex; align-items: center; gap: 0.3125rem;
+    padding: 0.25rem 0.5rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    color: var(--wdm-ink-dim);
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mstate i {
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mstate:hover {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.10);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mstate.is-active {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.14);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-mstate.is-active i {
+    text-shadow: 0 0 0.5rem rgba(214,160,80,0.45);
+}
+
+/* Forecast list */
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-forecast {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1875rem;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fc-row {
+    display: grid;
+    grid-template-columns: 1fr 1rem 2rem 1.4fr;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.1875rem 0.25rem;
+    border: 1px solid transparent;
+    border-radius: 2px;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fc-row:first-child {
+    border-color: var(--wdm-amber-dim);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.06);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fc-day {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    letter-spacing: 0.04em;
+    color: var(--wdm-ink-dim);
+    white-space: nowrap;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fc-icon {
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    color: var(--wdm-amber-hi);
+    text-align: center;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fc-temp {
+    font-weight: 700;
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    font-variant-numeric: tabular-nums;
+    color: var(--wdm-amber-bright);
+    text-align: right;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fc-cond {
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Stacked modifier readout — one row per affected target, net total on the
+ * right, contributing sources listed beneath. Boon/bane tint the total. */
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3125rem;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-empty {
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    font-style: italic;
+    color: var(--wdm-ink-dim);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: 0.25rem 0.5rem;
+    padding: 0.25rem 0.375rem;
+    border: 1px solid var(--wdm-amber-dim);
+    border-left-width: 0.1875rem;
+    border-radius: 2px;
+    background: rgb(from var(--wdm-bg) r g b / 0.45);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-row.is-bane {
+    border-left-color: var(--wdm-red);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-row.is-boon {
+    border-left-color: var(--wdm-elem-vitriol);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-target {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    letter-spacing: 0.06em;
+    color: var(--wdm-ink-hi);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-total {
+    font-family: var(--wdm-font-display);
+    font-weight: 700;
+    font-size: calc(0.875rem * var(--wdm-tf, 1));
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--wdm-ink-hi);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-row.is-bane .wou-wm-fx-total {
+    color: var(--wdm-red-bright);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-row.is-boon .wou-wm-fx-total {
+    color: var(--wdm-elem-vitriol);
+}
+
+/* ── Light-level indicator (weather menu — player popup + GM panel) ─────── */
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-light,
+.wdm-weather-control .wdm-wc-light {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.45rem;
+    margin-bottom: 0.4rem;
+    border: 1px solid var(--wdm-amber-dim);
+    border-left-width: 0.1875rem;
+    border-radius: 2px;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    font-family: var(--wdm-font-display);
+    letter-spacing: 0.04em;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-light > i,
+.wdm-weather-control .wdm-wc-light > i {
+    font-size: calc(1rem * var(--wdm-tf, 1));
+    width: 1.2rem;
+    text-align: center;
+    color: var(--wdm-ink-hi);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-light-label,
+.wdm-weather-control .wdm-wc-light-label {
+    font-weight: 700;
+    color: var(--wdm-ink-hi);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-light-pen,
+.wdm-weather-control .wdm-wc-light-pen {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    font-size: calc(0.8rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink-hi);
+}
+.wdm-weather-control .wdm-wc-light-mode {
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.35rem;
+    border: 1px solid var(--wdm-line, rgba(150,141,128,0.35));
+    border-radius: 0.6rem;
+    font-size: calc(0.62rem * var(--wdm-tf, 1));
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    color: var(--wdm-ink-mid, #968d80);
+    opacity: 0.9;
+}
+.wdm-weather-control .wdm-wc-light-mode > i { font-size: calc(0.6rem * var(--wdm-tf, 1)); opacity: 0.8; }
+.wdm-weather-control .wdm-wc-light-modedesc {
+    margin: 0.25rem 0 0;
+    font-size: calc(0.68rem * var(--wdm-tf, 1));
+    line-height: 1.3;
+    color: var(--wdm-ink-mid, #968d80);
+    opacity: 0.85;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-light-waived,
+.wdm-weather-control .wdm-wc-light-waived {
+    margin-left: 0.35rem;
+    font-size: calc(0.7rem * var(--wdm-tf, 1));
+    font-style: italic;
+    color: var(--wdm-elem-vitriol, #8fae5d);
+    opacity: 0.9;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-light.is-bane,
+.wdm-weather-control .wdm-wc-light.is-bane { border-left-color: var(--wdm-red); }
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-light.is-bane > i,
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-light.is-bane .wou-wm-light-pen,
+.wdm-weather-control .wdm-wc-light.is-bane > i,
+.wdm-weather-control .wdm-wc-light.is-bane .wdm-wc-light-pen { color: var(--wdm-red-bright); }
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-light.is-warn,
+.wdm-weather-control .wdm-wc-light.is-warn { border-left-color: var(--wdm-amber-dim); }
+
+/* ── Current weather + its penalties (flat list, not per-target boxes) ──── */
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-wx-head,
+.wdm-weather-control .wdm-wc-wx-head {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-family: var(--wdm-font-display); font-weight: 700; letter-spacing: 0.05em;
+    color: var(--wdm-ink-hi);
+    padding: 0.2rem 0; margin-bottom: 0.3rem;
+    border-bottom: 1px solid var(--wdm-amber-dim);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-wx-temp,
+.wdm-weather-control .wdm-wc-wx-temp { margin-left: auto; font-variant-numeric: tabular-nums; opacity: 0.85; }
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-wx-pen,
+.wdm-weather-control .wdm-wc-wx-pen {
+    display: grid; grid-template-columns: 2.2rem 5.5rem 1fr; align-items: baseline;
+    gap: 0.4rem; padding: 0.14rem 0.2rem; font-size: calc(0.8rem * var(--wdm-tf, 1));
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-wx-val,
+.wdm-weather-control .wdm-wc-wx-val {
+    font-family: var(--wdm-font-display); font-weight: 700; font-variant-numeric: tabular-nums;
+    text-align: right; color: var(--wdm-ink-hi);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-wx-pen.is-bane .wou-wm-wx-val,
+.wdm-weather-control .wdm-wc-wx-pen.is-bane .wdm-wc-wx-val { color: var(--wdm-red-bright); }
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-wx-pen.is-boon .wou-wm-wx-val,
+.wdm-weather-control .wdm-wc-wx-pen.is-boon .wdm-wc-wx-val { color: var(--wdm-elem-vitriol); }
+/* Narrative = flavour only (no roll consumes it): muted + italic so it never reads
+ * as a mechanical modifier, even though it carries a number. */
+.wdm-weather-control .wdm-wc-wx-pen.is-narrative { opacity: 0.7; font-style: italic; }
+.wdm-weather-control .wdm-wc-wx-pen.is-narrative .wdm-wc-wx-val { color: var(--wdm-ink-mid, #968d80); }
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-wx-tgt,
+.wdm-weather-control .wdm-wc-wx-tgt {
+    font-family: var(--wdm-font-display); font-size: calc(0.7rem * var(--wdm-tf, 1)); letter-spacing: 0.05em;
+    text-transform: uppercase; color: var(--wdm-ink-hi); opacity: 0.8;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-wx-desc,
+.wdm-weather-control .wdm-wc-wx-desc { opacity: 0.85; }
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-parts {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.0625rem;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-part {
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink-dim);
+}
+
+/* "Edit penalties" button under the effects readout (GM panel only). */
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-edit-fx {
+    appearance: none;
+    width: 100%;
+    margin-top: 0.5rem;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    color: var(--wdm-ink-dim);
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-edit-fx i {
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    color: var(--wdm-amber-hi);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-edit-fx:hover {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.10);
+}
+
+/* Plain-language environmental notes (extreme heat, sun glare) under the
+   stacked numeric readout. */
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-fx-note {
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    font-style: italic;
+    color: var(--wdm-amber-hi);
+    padding: 0.1875rem 0.375rem;
+    border-left: 2px solid var(--wdm-amber-dim);
+}
+
+/* "Grab" buttons for environmental conditions (heat exhaustion / cold tiers).
+   is-active = the condition is currently on the user's own character. */
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab {
+    appearance: none;
+    flex: 1 1 auto;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: 2px;
+    color: var(--wdm-ink-dim);
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab i { color: var(--wdm-amber-hi); }
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab:hover {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.10);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active {
+    color: var(--wdm-ink-hi);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.18);
+}
+body.witcher-ttrpg-death-march #wou-weather-menu .wou-wm-grab.is-active i { color: var(--wdm-amber-bright); }
+
+/* Scene weather (rain / snow / hail / sandstorm / fog / clouds / lightning) is
+   drawn on the canvas stage by the PIXI renderer (mechanics/weather-engine.mjs
+   via weather-canvas.mjs), masked to the scene rectangle — no DOM overlays. */
+
+/* ───────────────────────────────────────────────────────────────────────────
+   WeatherControlApp — the GM's draggable, tabbed time/weather console.
+   Scoped on the app's own class (an ApplicationV2 window, not under <body>).
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.wdm-weather-control .window-content {
+    padding: 0;
+    background: var(--wdm-bg-deep, #0c0b0a);
+}
+/* Only the active tab is shown. The framework toggles `.active` on tab change;
+   `{{tab.cssClass}}` in the template seeds the initial active tab. */
+.wdm-weather-control .wdm-wc-tab { display: none; }
+.wdm-weather-control .wdm-wc-tab.active {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem 0.875rem;
+    color: var(--wdm-ink-hi);
+    font-family: var(--wdm-font-body);
+}
+
+/* Grouped section + heading (shared by both tabs). */
+.wdm-weather-control .wdm-wc-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+.wdm-weather-control .wdm-wc-head {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--wdm-amber);
+    border-bottom: 1px solid var(--wdm-amber-dim);
+    padding-bottom: 0.1875rem;
+}
+
+/* Clock readout. */
+.wdm-weather-control .wdm-wc-clock {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.625rem;
+    padding: 0.25rem 0.125rem 0.5rem;
+}
+.wdm-weather-control .wdm-wc-date {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.9375rem * var(--wdm-tf, 1));
+    letter-spacing: 0.02em;
+    color: var(--wdm-ink-hi);
+}
+.wdm-weather-control .wdm-wc-time {
+    font-family: var(--wdm-font-display);
+    font-weight: 700;
+    font-size: calc(1.375rem * var(--wdm-tf, 1));
+    font-variant-numeric: tabular-nums;
+    color: var(--wdm-amber-bright);
+}
+
+/* Time button rows (advance/rewind = 6, jump = 4). */
+.wdm-weather-control .wdm-wc-btns {
+    display: grid;
+    gap: 0.3125rem;
+}
+.wdm-weather-control .wdm-wc-btns.eight { grid-template-columns: repeat(8, 1fr); }
+.wdm-weather-control .wdm-wc-btns.six   { grid-template-columns: repeat(6, 1fr); }
+.wdm-weather-control .wdm-wc-btns.four  { grid-template-columns: repeat(4, 1fr); }
+.wdm-weather-control .wdm-wc-btns.one   { grid-template-columns: 1fr; }
+.wdm-weather-control .wdm-wc-btns button {
+    appearance: none;
+    padding: 0.375rem 0.25rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: var(--wdm-radius-xs, 2px);
+    color: var(--wdm-ink-bright, var(--wdm-ink-hi));
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+.wdm-weather-control .wdm-wc-btns button:hover {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.12);
+}
+.wdm-weather-control .wdm-wc-pause i { margin-right: 0.4em; }
+.wdm-weather-control .wdm-wc-pause.is-paused {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.18);
+}
+
+/* Climate <select>. */
+.wdm-weather-control .wdm-wc-climate {
+    width: 100%;
+    padding: 0.3125rem 0.5rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: var(--wdm-radius-xs, 2px);
+    color: var(--wdm-ink-bright, var(--wdm-ink-hi));
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+}
+
+/* Active weather location — the painted cell/marker the forecast is read for. */
+.wdm-weather-control .wdm-wc-place {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3125rem;
+    padding: 0.4375rem 0.5625rem;
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: var(--wdm-radius-xs, 2px);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.07);
+}
+.wdm-weather-control .wdm-wc-place.is-global {
+    background: rgb(from var(--wdm-bg) r g b / 0.4);
+    border-style: dashed;
+}
+.wdm-weather-control .wdm-wc-place-status {
+    display: flex;
+    align-items: center;
+    gap: 0.4375rem;
+    font-size: calc(0.8125rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink-hi);
+}
+.wdm-weather-control .wdm-wc-place-status i { color: var(--wdm-amber-bright); }
+.wdm-weather-control .wdm-wc-place.is-global .wdm-wc-place-status i { color: var(--wdm-ink-mid, #968d80); }
+.wdm-weather-control .wdm-wc-place-detail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3125rem 0.625rem;
+    font-size: calc(0.71875rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink-mid, #c4bcae);
+}
+.wdm-weather-control .wdm-wc-place-terrain { display: inline-flex; align-items: center; gap: 0.3125rem; }
+.wdm-weather-control .wdm-wc-place-cell { font-variant-numeric: tabular-nums; }
+.wdm-weather-control .wdm-wc-place-scene { font-style: italic; opacity: 0.85; }
+
+/* Forecast list. */
+.wdm-weather-control .wdm-wc-forecast {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1875rem;
+}
+.wdm-weather-control .wdm-wc-fc-row {
+    display: grid;
+    grid-template-columns: 1fr 1rem 2.25rem 1.6fr;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.1875rem 0.25rem;
+    border: 1px solid transparent;
+    border-radius: 2px;
+}
+.wdm-weather-control .wdm-wc-fc-row:first-child {
+    border-color: var(--wdm-amber-dim);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.06);
+}
+.wdm-weather-control .wdm-wc-fc-day {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    letter-spacing: 0.04em;
+    color: var(--wdm-ink-dim);
+    white-space: nowrap;
+}
+.wdm-weather-control .wdm-wc-fc-icon {
+    font-size: calc(0.8125rem * var(--wdm-tf, 1));
+    color: var(--wdm-amber-hi);
+    text-align: center;
+}
+.wdm-weather-control .wdm-wc-fc-temp {
+    font-weight: 700;
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    font-variant-numeric: tabular-nums;
+    color: var(--wdm-amber-bright);
+    text-align: right;
+}
+.wdm-weather-control .wdm-wc-fc-cond {
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* GM debug tier badge (weatherDebug client setting). Monospace so the numbers
+ * line up; muted accent so it reads as instrumentation, not weather copy. */
+.wdm-weather-control .wdm-wc-badge {
+    font-family: var(--wdm-font-mono);
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    color: var(--wdm-accent, #b9975b);
+    opacity: 0.85;
+    white-space: nowrap;
+}
+
+/* Manual override master toggle. */
+.wdm-weather-control .wdm-wc-mtoggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: var(--wdm-radius-xs, 2px);
+    background: rgb(from var(--wdm-bg) r g b / 0.45);
+    cursor: pointer;
+}
+.wdm-weather-control .wdm-wc-mtoggle span {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    letter-spacing: 0.04em;
+    color: var(--wdm-ink-hi);
+}
+.wdm-weather-control .wdm-wc-mtoggle .wdm-wc-mtoggle-source {
+    margin-left: auto;
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    font-style: italic;
+    color: var(--wdm-ink-dim, var(--wdm-ink-hi));
+    letter-spacing: 0.02em;
+}
+.wdm-weather-control .wdm-wc-mtoggle-pin {
+    margin-top: 0.375rem;
+    margin-left: 1.25rem;
+    padding: 0.25rem 0.5rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.3);
+}
+
+/* Layered pickers. Dimmed and non-interactive while manual override is off. */
+.wdm-weather-control .wdm-wc-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+}
+.wdm-weather-control .wdm-wc-layer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.wdm-weather-control .wdm-wc-mlabel {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--wdm-ink-dim);
+}
+.wdm-weather-control .wdm-wc-mstates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+.wdm-weather-control .wdm-wc-mstate {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    padding: 0.25rem 0.5rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: var(--wdm-radius-pill, 999px);
+    color: var(--wdm-ink-dim);
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+.wdm-weather-control .wdm-wc-mstate i { font-size: calc(0.6875rem * var(--wdm-tf, 1)); color: var(--wdm-amber-hi); }
+.wdm-weather-control .wdm-wc-mstate:hover {
+    color: var(--wdm-ink-hi);
+    border-color: var(--wdm-amber);
+}
+.wdm-weather-control .wdm-wc-mstate.is-active {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.14);
+}
+.wdm-weather-control .wdm-wc-mstate.is-active i {
+    color: var(--wdm-amber-bright);
+    text-shadow: 0 0 0.5rem rgba(214,160,80,0.45);
+}
+
+/* Live stacked-modifier readout (mirrors the player popup's effects block). */
+.wdm-weather-control .wdm-wc-fx {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3125rem;
+}
+.wdm-weather-control .wdm-wc-fx-empty {
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    font-style: italic;
+    color: var(--wdm-ink-dim);
+}
+.wdm-weather-control .wdm-wc-fx-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: 0.25rem 0.5rem;
+    padding: 0.25rem 0.375rem;
+    border: 1px solid var(--wdm-amber-dim);
+    border-left-width: 0.1875rem;
+    border-radius: 2px;
+    background: rgb(from var(--wdm-bg) r g b / 0.45);
+}
+.wdm-weather-control .wdm-wc-fx-row.is-bane { border-left-color: var(--wdm-red); }
+.wdm-weather-control .wdm-wc-fx-row.is-boon { border-left-color: var(--wdm-elem-vitriol); }
+.wdm-weather-control .wdm-wc-fx-target {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    letter-spacing: 0.06em;
+    color: var(--wdm-ink-hi);
+}
+.wdm-weather-control .wdm-wc-fx-total {
+    font-family: var(--wdm-font-display);
+    font-weight: 700;
+    font-size: calc(0.875rem * var(--wdm-tf, 1));
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--wdm-ink-hi);
+}
+.wdm-weather-control .wdm-wc-fx-row.is-bane .wdm-wc-fx-total { color: var(--wdm-red-bright); }
+.wdm-weather-control .wdm-wc-fx-row.is-boon .wdm-wc-fx-total { color: var(--wdm-elem-vitriol); }
+.wdm-weather-control .wdm-wc-fx-parts {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.0625rem;
+}
+.wdm-weather-control .wdm-wc-fx-part {
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink-dim);
+}
+
+/* "Edit penalties" button under the effects readout. */
+.wdm-weather-control .wdm-wc-edit-fx {
+    appearance: none;
+    width: 100%;
+    margin-top: 0.25rem;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    color: var(--wdm-ink-dim);
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+.wdm-weather-control .wdm-wc-edit-fx i { font-size: calc(0.6875rem * var(--wdm-tf, 1)); color: var(--wdm-amber-hi); }
+.wdm-weather-control .wdm-wc-edit-fx:hover {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.10);
+}
+
+/* Plain-language environmental notes under the numeric readout. */
+.wdm-weather-control .wdm-wc-fx-note {
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    font-style: italic;
+    color: var(--wdm-amber-hi);
+    padding: 0.1875rem 0.375rem;
+    border-left: 2px solid var(--wdm-amber-dim);
+}
+
+/* Grab-condition buttons (heat exhaustion / cold tiers). */
+.wdm-weather-control .wdm-wc-grab-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+.wdm-weather-control .wdm-wc-grab {
+    appearance: none;
+    flex: 1 1 auto;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: 2px;
+    color: var(--wdm-ink-dim);
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+.wdm-weather-control .wdm-wc-grab i { color: var(--wdm-amber-hi); }
+.wdm-weather-control .wdm-wc-grab:hover {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.10);
+}
+.wdm-weather-control .wdm-wc-grab.is-active {
+    color: var(--wdm-ink-hi);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.18);
+}
+.wdm-weather-control .wdm-wc-grab.is-active i { color: var(--wdm-amber-bright); }
+.wdm-weather-control .wdm-wc-grab-hint {
+    margin-top: 0.25rem;
+    font-family: var(--wdm-font-body);
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    font-style: italic;
+    color: var(--wdm-ink-dim);
+}
+
+/* =========================================================================
+   Calendar tab — month grid with per-day weather + moon (calendar template)
+   ========================================================================= */
+.wdm-weather-control .wdm-wc-cal-empty {
+    padding: 1rem;
+    text-align: center;
+    color: var(--wdm-ink-dim);
+    font-style: italic;
+}
+
+/* Month navigation header: [spacer | ‹ Month Year › | Today] so the title
+   stays optically centered regardless of the Today button width. */
+.wdm-weather-control .wdm-wc-cal-nav {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 0.375rem;
+    margin-bottom: 0.625rem;
+}
+.wdm-weather-control .wdm-wc-cal-navc {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+.wdm-weather-control .wdm-wc-cal-navside { display: flex; gap: 0.25rem; align-items: center; }
+.wdm-weather-control .wdm-wc-cal-navside--end { justify-content: flex-end; }
+/* Reroll / reset — compact icon buttons (month: nav side; day: detail footer). */
+.wdm-weather-control .wdm-wc-cal-regen,
+.wdm-weather-control .wdm-wc-cal-reset {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.625rem;
+    height: 1.625rem;
+    padding: 0;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: var(--wdm-radius-xs, 2px);
+    color: var(--wdm-ink-bright, var(--wdm-ink-hi));
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+.wdm-weather-control .wdm-wc-cal-regen:hover,
+.wdm-weather-control .wdm-wc-cal-reset:hover {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.12);
+}
+.wdm-weather-control .wdm-wc-cal-reset { color: var(--wdm-ink-dim); }
+.wdm-weather-control .wdm-wc-cal-title {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.1;
+    min-width: 8.125rem;
+}
+.wdm-weather-control .wdm-wc-cal-month {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.375rem;
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.9375rem * var(--wdm-tf, 1));
+    letter-spacing: 0.04em;
+    color: var(--wdm-amber-bright);
+}
+/* Real-world analogue (e.g. "Jan") — subdued, sits beside the in-world name. */
+.wdm-weather-control .wdm-wc-cal-analogue {
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    letter-spacing: 0.02em;
+    color: var(--wdm-ink-dim);
+}
+/* Editable year — looks like part of the title until focused. */
+.wdm-weather-control .wdm-wc-cal-year {
+    width: 4.5ch;
+    padding: 0 0.125rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--wdm-radius-xs, 2px);
+    color: var(--wdm-amber-bright);
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.9375rem * var(--wdm-tf, 1));
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    cursor: text;
+    transition: border-color .12s, background .12s;
+    -moz-appearance: textfield;
+}
+.wdm-weather-control .wdm-wc-cal-year::-webkit-inner-spin-button,
+.wdm-weather-control .wdm-wc-cal-year::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.wdm-weather-control .wdm-wc-cal-year:hover {
+    border-color: var(--wdm-amber-dim);
+    background: rgb(from var(--wdm-bg) r g b / 0.45);
+}
+.wdm-weather-control .wdm-wc-cal-year:focus {
+    outline: none;
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-bg) r g b / 0.6);
+}
+.wdm-weather-control .wdm-wc-cal-biome {
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--wdm-ink-dim);
+}
+.wdm-weather-control .wdm-wc-cal-step,
+.wdm-weather-control .wdm-wc-cal-today {
+    appearance: none;
+    padding: 0.3125rem 0.5rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: var(--wdm-radius-xs, 2px);
+    color: var(--wdm-ink-bright, var(--wdm-ink-hi));
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+.wdm-weather-control .wdm-wc-cal-step:hover,
+.wdm-weather-control .wdm-wc-cal-today:hover {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.12);
+}
+
+/* 7-column grid. */
+.wdm-weather-control .wdm-wc-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+}
+.wdm-weather-control .wdm-wc-cal-wd {
+    text-align: center;
+    padding: 0 0 0.125rem;
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--wdm-amber);
+}
+
+/* Day cell: three rows — [day no. + moon] / [weather glyph] / [temp]. A flat
+   min-height (not aspect-ratio) keeps the glyph readable and the grid from
+   squashing on narrow widths. */
+.wdm-weather-control .wdm-wc-cal-cell {
+    appearance: none;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    align-items: center;
+    min-height: 3.875rem;
+    padding: 0.1875rem 0.25rem 0.25rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.45);
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: var(--wdm-radius-xs, 2px);
+    color: var(--wdm-ink-hi);
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color .12s, background .12s, box-shadow .12s;
+}
+.wdm-weather-control .wdm-wc-cal-cell.is-blank {
+    background: transparent;
+    border-color: transparent;
+    cursor: default;
+    min-height: 0;
+}
+.wdm-weather-control .wdm-wc-cal-cell:not(.is-blank):hover {
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.12);
+}
+.wdm-weather-control .wdm-wc-cal-cell.is-today {
+    border-color: var(--wdm-amber-bright);
+    box-shadow: inset 0 0 0 1px var(--wdm-amber-bright);
+}
+.wdm-weather-control .wdm-wc-cal-cell.is-selected {
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.20);
+    border-color: var(--wdm-amber-bright);
+}
+
+/* Top row: day number left, moon right. */
+.wdm-weather-control .wdm-wc-cal-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    line-height: 1;
+}
+.wdm-weather-control .wdm-wc-cal-num {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    font-variant-numeric: tabular-nums;
+    color: var(--wdm-ink-dim);
+}
+.wdm-weather-control .wdm-wc-cal-cell.is-today .wdm-wc-cal-num { color: var(--wdm-amber-bright); }
+.wdm-weather-control .wdm-wc-cal-moon {
+    font-size: calc(0.5625rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink-faint, var(--wdm-ink-dim));
+    opacity: 0.8;
+}
+
+/* Middle row: the weather glyph, the visual anchor of the cell. */
+.wdm-weather-control .wdm-wc-cal-wx {
+    justify-self: center;
+    font-size: calc(1.125rem * var(--wdm-tf, 1));
+    color: var(--wdm-amber-hi);
+}
+
+/* Bottom row: noon temperature. */
+.wdm-weather-control .wdm-wc-cal-temp {
+    justify-self: center;
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    color: var(--wdm-ink-hi);
+}
+
+/* Selected-day detail panel. */
+.wdm-weather-control .wdm-wc-cal-detail {
+    margin-top: 0.625rem;
+    padding: 0.5rem 0.625rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.45);
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: var(--wdm-radius-xs, 2px);
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+.wdm-weather-control .wdm-wc-cal-dhead {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+}
+.wdm-weather-control .wdm-wc-cal-dtitle {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.8125rem * var(--wdm-tf, 1));
+    color: var(--wdm-amber-bright);
+}
+.wdm-weather-control .wdm-wc-cal-dsub {
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--wdm-ink-dim);
+}
+.wdm-weather-control .wdm-wc-cal-dsub i { color: var(--wdm-ink-dim); margin-left: 0.25rem; }
+.wdm-weather-control .wdm-wc-cal-dmoon { color: var(--wdm-ink-dim); }
+
+/* Dawn→Night breakdown: a tidy row per daypart [name · glyph · condition · temp]. */
+.wdm-weather-control .wdm-wc-cal-parts {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.0625rem;
+}
+.wdm-weather-control .wdm-wc-cal-part {
+    display: grid;
+    grid-template-columns: 5.5em 1.125rem 1fr auto auto;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.1875rem 0.25rem;
+    border-radius: 2px;
+}
+.wdm-weather-control .wdm-wc-cal-part.is-pinned {
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.08);
+    box-shadow: inset 2px 0 0 var(--wdm-amber);
+}
+.wdm-weather-control .wdm-wc-cal-pactions {
+    display: inline-flex;
+    gap: 0.1875rem;
+}
+.wdm-weather-control .wdm-wc-cal-pinbtn,
+.wdm-weather-control .wdm-wc-cal-clearpin {
+    appearance: none;
+    background: rgb(from var(--wdm-bg) r g b / 0.4);
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: 2px;
+    color: var(--wdm-ink-hi);
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    padding: 0.125rem 0.3125rem;
+    cursor: pointer;
+    line-height: 1;
+    transition: color .12s, border-color .12s, background .12s;
+}
+.wdm-weather-control .wdm-wc-cal-pinbtn:hover,
+.wdm-weather-control .wdm-wc-cal-clearpin:hover {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.14);
+}
+.wdm-weather-control .wdm-wc-cal-pinbtn.is-active {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.2);
+}
+.wdm-weather-control .wdm-wc-cal-pineditor {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3125rem;
+    margin-top: 0.375rem;
+    padding: 0.375rem 0.25rem 0.3125rem;
+    border-top: 1px dashed var(--wdm-amber-dim);
+}
+.wdm-weather-control .wdm-wc-pinlayer {
+    display: grid;
+    grid-template-columns: 4.5em 1fr;
+    align-items: center;
+    gap: 0.375rem;
+}
+.wdm-weather-control .wdm-wc-pinlayer-title {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--wdm-amber);
+}
+.wdm-weather-control .wdm-wc-pinlayer-states {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.1875rem;
+}
+.wdm-weather-control .wdm-wc-pinstate {
+    appearance: none;
+    background: rgb(from var(--wdm-bg) r g b / 0.5);
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: 2px;
+    color: var(--wdm-ink-hi);
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    padding: 0.125rem 0.375rem;
+    cursor: pointer;
+    line-height: 1.1;
+    transition: color .12s, border-color .12s, background .12s;
+}
+.wdm-weather-control .wdm-wc-pinstate:hover {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.12);
+}
+.wdm-weather-control .wdm-wc-pinstate.is-active {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.22);
+}
+/* Calendar grid pin badge on day cells. */
+.wdm-weather-control .wdm-wc-cal-cell.is-pinned { box-shadow: inset 0 -2px 0 var(--wdm-amber); }
+.wdm-weather-control .wdm-wc-cal-pin {
+    color: var(--wdm-amber-bright);
+    font-size: calc(0.5rem * var(--wdm-tf, 1));
+    margin-left: 0.1875rem;
+}
+.wdm-weather-control .wdm-wc-cal-part:nth-child(odd) { background: rgb(from var(--wdm-bg) r g b / 0.30); }
+.wdm-weather-control .wdm-wc-cal-pname {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--wdm-amber);
+}
+.wdm-weather-control .wdm-wc-cal-picon { justify-self: center; font-size: calc(0.8125rem * var(--wdm-tf, 1)); color: var(--wdm-amber-hi); }
+.wdm-weather-control .wdm-wc-cal-pcond { font-size: calc(0.6875rem * var(--wdm-tf, 1)); color: var(--wdm-ink-hi); }
+.wdm-weather-control .wdm-wc-cal-ptemp {
+    font-variant-numeric: tabular-nums;
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink-hi);
+}
+.wdm-weather-control .wdm-wc-cal-dsun {
+    display: flex;
+    gap: 0.875rem;
+    padding-top: 0.125rem;
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    font-variant-numeric: tabular-nums;
+    color: var(--wdm-ink-dim);
+}
+.wdm-weather-control .wdm-wc-cal-dsun i { color: var(--wdm-amber-hi); margin-right: 0.1875rem; }
+.wdm-weather-control .wdm-wc-cal-dtags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+.wdm-weather-control .wdm-wc-cal-dtag {
+    padding: 0.0625rem 0.375rem;
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: 0.5rem;
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.04em;
+    color: var(--wdm-ink-dim);
+}
+.wdm-weather-control .wdm-wc-cal-dactions {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+.wdm-weather-control .wdm-wc-cal-goto {
+    appearance: none;
+    margin-right: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.3125rem 0.625rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim);
+    border-radius: var(--wdm-radius-xs, 2px);
+    color: var(--wdm-ink-bright, var(--wdm-ink-hi));
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+.wdm-weather-control .wdm-wc-cal-goto i { color: var(--wdm-amber-hi); }
+.wdm-weather-control .wdm-wc-cal-goto:hover {
+    color: var(--wdm-amber-bright);
+    border-color: var(--wdm-amber);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.12);
+}
+
+/* Lightning is now a real canvas-light flash driven through the scene
+   environment (lightning-fx.mjs → scene-fx.flashEnvironment); the old
+   full-viewport #wdm-lightning DOM overlay was removed. */
+
+/* =========================================================================
+   Weather & Calendar config panel (applications/weatherConfig.mjs)
+   Friendly tabbed GM form. Scoped on the app's own class. The window-content
+   is a flex column: tab nav + footer stay fixed, the active tab scrolls.
+   ========================================================================= */
+.wdm-weather-config .window-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0;
+    background: var(--wdm-bg-deep, #0c0b0a);
+    color: var(--wdm-ink-hi);
+    font-family: var(--wdm-font-body);
+}
+/* Tab strip pinned at the top. */
+.wdm-weather-config nav.tabs {
+    flex: 0 0 auto;
+    padding: 0.375rem 0.625rem 0;
+}
+/* Footer (Save) pinned at the bottom. */
+.wdm-weather-config .form-footer {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    border-top: 1px solid var(--wdm-amber-dim, rgb(from var(--wdm-amber-hi) r g b / 0.3));
+    background: rgba(0,0,0,0.25);
+}
+
+/* Only the active tab shows — and IT is the scroll container. */
+.wdm-weather-config .wdm-cfg-tab { display: none; }
+.wdm-weather-config .wdm-cfg-tab.active {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 1rem 1.125rem;
+}
+
+/* Help banner — the plain-language explanation at the top of each tab. */
+.wdm-weather-config .wdm-cfg-help {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.25rem;
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.08);
+    border-left: 0.1875rem solid var(--wdm-amber, #b89464);
+}
+.wdm-weather-config .wdm-cfg-help i { color: var(--wdm-amber, #b89464); margin-top: 0.125rem; }
+.wdm-weather-config .wdm-cfg-help p {
+    margin: 0;
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    line-height: 1.45;
+    color: var(--wdm-ink-mid, #c4bcae);
+}
+
+.wdm-weather-config .wdm-cfg-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.625rem;
+    margin-top: 0.5rem;
+    padding-bottom: 0.375rem;
+    border-bottom: 1px solid var(--wdm-amber-dim, rgb(from var(--wdm-amber-hi) r g b / 0.18));
+}
+.wdm-weather-config .wdm-cfg-section-head h3 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.4375rem;
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.875rem * var(--wdm-tf, 1));
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--wdm-amber);
+}
+
+/* A biome / season / landsite / condition card. */
+.wdm-weather-config .wdm-cfg-card {
+    border: 1px solid var(--wdm-amber-dim, rgb(from var(--wdm-amber-hi) r g b / 0.3));
+    border-radius: 0.3125rem;
+    padding: 0.875rem 1rem;
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.wdm-weather-config .wdm-cfg-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.wdm-weather-config .wdm-cfg-card-title {
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.9375rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink-hi);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Labelled group inside a card (Temperature / Weather tendencies / Map). */
+.wdm-weather-config .wdm-cfg-group { display: flex; flex-direction: column; gap: 0.375rem; }
+.wdm-weather-config .wdm-cfg-group-label {
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--wdm-amber-bright, #d8b483);
+    border-bottom: 1px dotted var(--wdm-amber-dim, rgb(from var(--wdm-amber-hi) r g b / 0.25));
+    padding-bottom: 0.125rem;
+}
+
+/* Field grid — responsive, wraps to as many columns as fit. */
+.wdm-weather-config .wdm-cfg-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
+    gap: 0.625rem 1rem;
+}
+.wdm-weather-config .wdm-cfg-meta { grid-template-columns: auto 1fr; align-items: end; }
+.wdm-weather-config .wdm-cfg-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1875rem;
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+}
+.wdm-weather-config .wdm-cfg-field-wide { grid-column: span 2; }
+.wdm-weather-config .wdm-cfg-flabel { color: var(--wdm-ink-hi); font-weight: 600; }
+.wdm-weather-config .wdm-cfg-fhint {
+    font-size: calc(0.65625rem * var(--wdm-tf, 1));
+    line-height: 1.3;
+    color: var(--wdm-ink-mid, #968d80);
+    font-style: italic;
+}
+
+/* Number field with a trailing unit. */
+.wdm-weather-config .wdm-cfg-num { display: flex; align-items: center; gap: 0.3125rem; }
+.wdm-weather-config .wdm-cfg-num input { flex: 1 1 auto; min-width: 0; }
+.wdm-weather-config .wdm-cfg-unit {
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink-mid, #968d80);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Word-scale slider: range + a bold plain-word readout. */
+.wdm-weather-config .wdm-cfg-slider { display: flex; align-items: center; gap: 0.5rem; }
+.wdm-weather-config .wdm-cfg-slider input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--wdm-amber, #b89464); }
+.wdm-weather-config .wdm-cfg-word {
+    flex: 0 0 5.25rem;
+    text-align: right;
+    font-size: calc(0.71875rem * var(--wdm-tf, 1));
+    font-weight: 700;
+    color: var(--wdm-amber-bright, #e8c690);
+}
+
+.wdm-weather-config input[type="number"],
+.wdm-weather-config input[type="text"],
+.wdm-weather-config input[type="color"],
+.wdm-weather-config select {
+    background: rgba(0,0,0,0.32);
+    border: 1px solid var(--wdm-amber-dim, rgb(from var(--wdm-amber-hi) r g b / 0.3));
+    color: var(--wdm-ink-hi);
+    border-radius: 0.1875rem;
+    padding: 0.1875rem 0.3125rem;
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+}
+.wdm-weather-config input[type="color"] { padding: 0.0625rem; height: 1.75rem; width: 2.75rem; }
+
+.wdm-weather-config .wdm-cfg-check {
+    display: flex;
+    align-items: center;
+    gap: 0.3125rem;
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink-mid, #c4bcae);
+}
+
+/* Info affordance — replaces the paragraph-under-every-field hints with a
+   hover tooltip, so forms read as a scannable list instead of a wall of
+   prose. Muted until hovered so it never competes with the label. */
+.wdm-weather-config .wdm-cfg-info {
+    color: var(--wdm-amber-dim, #8a7a52);
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    cursor: help;
+    margin-left: 0.25rem;
+    transition: color 0.12s ease;
+}
+.wdm-weather-config .wdm-cfg-info:hover { color: var(--wdm-amber-bright, #e8c690); }
+/* In a checkbox row, push the icon to the far right for a clean aligned edge. */
+.wdm-weather-config .wdm-cfg-check .wdm-cfg-info { margin-left: auto; }
+/* The bare per-level checkbox in a Modifiers row shouldn't stretch to fill
+   its grid column — centre it under the "Per Lvl" header instead. */
+.wdm-weather-config .wdm-cfg-mod-row input[type="checkbox"] {
+    width: auto;
+    justify-self: center;
+}
+
+/* Penalty rows + calendar daylight table grid. */
+.wdm-weather-config .wdm-cfg-mod-head,
+.wdm-weather-config .wdm-cfg-mod-row {
+    display: grid;
+    grid-template-columns: 1.4fr 0.7fr 1.3fr 0.5fr 2fr auto;
+    gap: 0.5rem;
+    align-items: center;
+}
+.wdm-weather-config .wdm-cfg-sun-head,
+.wdm-weather-config .wdm-cfg-sun-row { grid-template-columns: 1.5fr 1fr 1fr; }
+/* Light tab — per-tier penalty grid: tier label + Awareness / Attack / Defense. */
+.wdm-weather-config .wdm-cfg-light-head,
+.wdm-weather-config .wdm-cfg-light-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    gap: 0.5rem;
+    align-items: center;
+}
+.wdm-weather-config .wdm-cfg-light-head {
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.7;
+    padding: 0 0.15rem 0.25rem;
+}
+.wdm-weather-config .wdm-cfg-light-head span:not(:first-child) { text-align: center; }
+.wdm-weather-config .wdm-cfg-light-row { padding: 0.15rem; }
+.wdm-weather-config .wdm-cfg-light-row input { width: 100%; text-align: center; }
+.wdm-weather-config .wdm-cfg-light-tier { font-weight: 600; }
+.wdm-weather-config .wdm-cfg-mod-head {
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--wdm-ink-mid, #968d80);
+}
+.wdm-weather-config .wdm-cfg-mod-row input,
+.wdm-weather-config .wdm-cfg-mod-row select { width: 100%; }
+/* Tiered (byLevel) rule: three compact per-intensity inputs in the value cell. */
+.wdm-weather-config .wdm-cfg-bylevel { display: flex; gap: 3px; }
+.wdm-weather-config .wdm-cfg-bylevel input { flex: 0 0 2rem; width: 2rem; min-width: 0; text-align: center; padding: 0 2px; }
+.wdm-weather-config .wdm-cfg-bylevel-note { font-size: calc(0.6875rem * var(--wdm-tf, 1)); color: var(--wdm-ink-mid, #968d80); opacity: 0.85; }
+.wdm-weather-config .wdm-cfg-sun-name { font-size: calc(0.8125rem * var(--wdm-tf, 1)); }
+
+.wdm-weather-config .wdm-cfg-add,
+.wdm-weather-config .wdm-cfg-reset,
+.wdm-weather-config .wdm-cfg-del {
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.14);
+    border: 1px solid var(--wdm-amber-dim, rgb(from var(--wdm-amber-hi) r g b / 0.35));
+    color: var(--wdm-ink-hi);
+    border-radius: 0.1875rem;
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    padding: 0.25rem 0.625rem;
+    cursor: pointer;
+    width: auto;
+    white-space: nowrap;
+}
+.wdm-weather-config .wdm-cfg-del { color: #d98a8a; padding: 0.25rem 0.4375rem; }
+.wdm-weather-config .wdm-cfg-add:hover,
+.wdm-weather-config .wdm-cfg-reset:hover,
+.wdm-weather-config .wdm-cfg-del:hover { background: rgb(from var(--wdm-amber-hi) r g b / 0.28); }
+
+.wdm-weather-config .wdm-cfg-empty,
+.wdm-weather-config .wdm-cfg-note {
+    margin: 0;
+    font-size: calc(0.71875rem * var(--wdm-tf, 1));
+    font-style: italic;
+    color: var(--wdm-ink-mid, #968d80);
+}
+
+.wdm-weather-config .wdm-cfg-tab-foot {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.625rem;
+    margin-top: auto;
+    padding-top: 0.625rem;
+    border-top: 1px solid var(--wdm-amber-dim, rgb(from var(--wdm-amber-hi) r g b / 0.2));
+}
+.wdm-weather-config .wdm-cfg-custom-flag {
+    margin-right: auto;
+    font-size: calc(0.65625rem * var(--wdm-tf, 1));
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--wdm-amber-bright, #e8c690);
+}
+
+/* =========================================================================
+   Scene-config weather mode (scene-weather-mode.mjs)
+   Two toggle buttons injected into the native SceneConfig "Environment" tab:
+   Indoors / Disable Weather. Quiet at rest, amber when active. Rendered inside
+   Foundry's own dialog (in <body>), so scoped on the injected fieldset class.
+   ========================================================================= */
+.wdm-weather-mode .form-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+.wdm-wc-scenemode-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+.wdm-wc-lightoverride {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.4rem;
+    font-family: var(--wdm-font-display);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    letter-spacing: 0.03em;
+    color: var(--wdm-ink-hi);
+}
+.wdm-wc-lightoverride select { flex: 1; min-width: 0; }
+.wdm-wc-lightoverride i { color: var(--wdm-amber-hi, #c8a063); }
+.wdm-weather-mode-btn {
+    appearance: none;
+    flex: 1 1 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.625rem;
+    background: rgb(from var(--wdm-bg) r g b / 0.55);
+    border: 1px solid var(--wdm-amber-dim, rgb(from var(--wdm-amber-hi) r g b / 0.3));
+    border-radius: var(--wdm-radius-xs, 2px);
+    color: var(--wdm-ink-dim, #968d80);
+    font-family: var(--wdm-font-display, inherit);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+}
+.wdm-weather-mode-btn i { font-size: calc(0.6875rem * var(--wdm-tf, 1)); color: var(--wdm-amber-hi, #c8a063); }
+.wdm-weather-mode-btn:hover {
+    color: var(--wdm-amber-bright, #e8c690);
+    border-color: var(--wdm-amber, #b89464);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.12);
+}
+.wdm-weather-mode-btn.active {
+    color: var(--wdm-amber-bright, #e8c690);
+    border-color: var(--wdm-amber, #b89464);
+    background: rgb(from var(--wdm-amber-hi) r g b / 0.16);
+}
+.wdm-weather-mode-btn.active i {
+    color: var(--wdm-amber-bright, #e8c690);
+    text-shadow: 0 0 0.5rem rgba(214, 160, 80, 0.45);
+}
+
+/* The "Disable Time Darkness" button is an INDEPENDENT toggle, not part of the
+ * mutually-exclusive mode set — give it a flex-break so it sits on its own row,
+ * and a warm "lamp on" active glow distinct from the amber mode-selected look. */
+.wdm-weather-dark-btn { flex-basis: 100%; }
+.wdm-weather-dark-btn.active {
+    color: #ffe6a8;
+    border-color: #d6a050;
+    background: rgba(214, 160, 80, 0.22);
+}
+.wdm-weather-dark-btn.active i {
+    color: #ffd27a;
+    text-shadow: 0 0 0.625rem rgba(255, 200, 90, 0.7);
+}

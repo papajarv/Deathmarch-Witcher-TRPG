@@ -1,0 +1,96 @@
+{{!-- General tab of the WeatherConfigApp. The simple toggles & knobs that used
+      to sit loose in Foundry's Configure Settings → System tab, gathered here.
+      GM-only sections (System, Automation, the debug badge) are gated on isGM;
+      the Display section holds per-client knobs every player may set. Names map
+      to general.<settingKey>; the submit handler routes world keys (GM-only)
+      vs client keys (everyone).
+
+      Per-field hints are hover tooltips on an (i) icon rather than paragraphs
+      under every control, so the form stays scannable. --}}
+<section class="tab wdm-cfg-tab {{tab.cssClass}}" data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+    <div class="wdm-cfg-help">
+        <i class="fa-solid fa-circle-info"></i>
+        <p>{{localize "WITCHER.Weather.Config.GeneralIntro"}}</p>
+    </div>
+
+    {{#if isGM}}
+    <div class="wdm-cfg-section-head">
+        <h3><i class="fa-solid fa-power-off"></i> {{localize "WITCHER.Weather.Config.GenSystem"}}</h3>
+    </div>
+    <div class="wdm-cfg-card">
+        <label class="wdm-cfg-check wdm-cfg-field-wide">
+            <input type="checkbox" name="general.weatherEnabled" {{#if gen.weatherEnabled}}checked{{/if}}>
+            <span>{{localize "WITCHER.Settings.WeatherEnabled.Name"}}</span>
+            <i class="fa-solid fa-circle-info wdm-cfg-info" data-tooltip="{{localize 'WITCHER.Settings.WeatherEnabled.Hint'}}"></i>
+        </label>
+
+        <div class="wdm-cfg-fields">
+            <label class="wdm-cfg-field wdm-cfg-field-wide">
+                <span class="wdm-cfg-flabel">{{localize "WITCHER.Settings.WeatherBiome.Name"}}
+                    <i class="fa-solid fa-circle-info wdm-cfg-info" data-tooltip="{{localize 'WITCHER.Settings.WeatherBiome.Hint'}}"></i>
+                </span>
+                <select name="general.weatherBiome">
+                    {{#each biomeOptions}}<option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>{{/each}}
+                </select>
+            </label>
+            <label class="wdm-cfg-field wdm-cfg-field-wide">
+                <span class="wdm-cfg-flabel">{{localize "WITCHER.Settings.TimeFlowRate.Name"}}
+                    <i class="fa-solid fa-circle-info wdm-cfg-info" data-tooltip="{{localize 'WITCHER.Settings.TimeFlowRate.Hint'}}"></i>
+                </span>
+                <input type="number" name="general.timeFlowRate" value="{{gen.timeFlowRate}}" min="0" step="1">
+            </label>
+        </div>
+    </div>
+
+    <div class="wdm-cfg-section-head">
+        <h3><i class="fa-solid fa-wand-magic-sparkles"></i> {{localize "WITCHER.Weather.Config.GenAutomation"}}</h3>
+    </div>
+    <div class="wdm-cfg-card">
+        <label class="wdm-cfg-check wdm-cfg-field-wide">
+            <input type="checkbox" name="general.autoSceneDarkness" {{#if gen.autoSceneDarkness}}checked{{/if}}>
+            <span>{{localize "WITCHER.Settings.AutoSceneDarkness.Name"}}</span>
+            <i class="fa-solid fa-circle-info wdm-cfg-info" data-tooltip="{{localize 'WITCHER.Settings.AutoSceneDarkness.Hint'}}"></i>
+        </label>
+        <label class="wdm-cfg-check wdm-cfg-field-wide">
+            <input type="checkbox" name="general.autoWeatherFx" {{#if gen.autoWeatherFx}}checked{{/if}}>
+            <span>{{localize "WITCHER.Settings.AutoWeatherFx.Name"}}</span>
+            <i class="fa-solid fa-circle-info wdm-cfg-info" data-tooltip="{{localize 'WITCHER.Settings.AutoWeatherFx.Hint'}}"></i>
+        </label>
+        <label class="wdm-cfg-check wdm-cfg-field-wide">
+            <input type="checkbox" name="general.weatherSound" {{#if gen.weatherSound}}checked{{/if}}>
+            <span>{{localize "WITCHER.Settings.WeatherSound.Name"}}</span>
+            <i class="fa-solid fa-circle-info wdm-cfg-info" data-tooltip="{{localize 'WITCHER.Settings.WeatherSound.Hint'}}"></i>
+        </label>
+    </div>
+    {{/if}}
+
+    <div class="wdm-cfg-section-head">
+        <h3><i class="fa-solid fa-display"></i> {{localize "WITCHER.Weather.Config.GenDisplay"}}</h3>
+    </div>
+    <div class="wdm-cfg-card">
+        <label class="wdm-cfg-check wdm-cfg-field-wide">
+            <input type="checkbox" name="general.weatherThunder" {{#if gen.weatherThunder}}checked{{/if}}>
+            <span>{{localize "WITCHER.Settings.WeatherThunder.Name"}}</span>
+            <i class="fa-solid fa-circle-info wdm-cfg-info" data-tooltip="{{localize 'WITCHER.Settings.WeatherThunder.Hint'}}"></i>
+        </label>
+
+        <div class="wdm-cfg-fields">
+            <label class="wdm-cfg-field wdm-cfg-field-wide">
+                <span class="wdm-cfg-flabel">{{localize "WITCHER.Settings.WeatherMaxParticles.Name"}}
+                    <i class="fa-solid fa-circle-info wdm-cfg-info" data-tooltip="{{localize 'WITCHER.Settings.WeatherMaxParticles.Hint'}}"></i>
+                </span>
+                <input type="number" name="general.weatherMaxParticles" value="{{gen.weatherMaxParticles}}" min="0" step="100">
+            </label>
+        </div>
+
+        {{#if isGM}}
+        <label class="wdm-cfg-check wdm-cfg-field-wide">
+            <input type="checkbox" name="general.weatherDebug" {{#if gen.weatherDebug}}checked{{/if}}>
+            <span>{{localize "WITCHER.Settings.WeatherDebug.Name"}}</span>
+            <i class="fa-solid fa-circle-info wdm-cfg-info" data-tooltip="{{localize 'WITCHER.Settings.WeatherDebug.Hint'}}"></i>
+        </label>
+        {{/if}}
+    </div>
+
+</section>

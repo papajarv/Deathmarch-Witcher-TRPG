@@ -1,0 +1,349 @@
+{{!-- Spell item sheet — two-layer (RAW Core p.99-115):
+        DISPLAY  → Witcher 3 in-game tooltip aesthetic (player reads)
+        CONFIG   → editable form (GM / owner with cog toggle)
+      Violet accent (.is-spell). Fields are structured for the cast flow:
+      STA + cast time are numbers, defense / duration / targeting / school /
+      form / tier are enums, and components are links to real items.
+      STA cost is the hero — it gates whether you can cast in a round. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-spell" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}{{localize 'WITCHER.Sheet.Item.Cog.BackToDisplay'}}{{else}}{{localize 'WITCHER.Sheet.Item.Cog.ConfigureItem'}}{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip layout
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view">
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">{{formLabel}} · {{tierLabel}}{{#if schoolLabel}} · {{schoolLabel}}{{/if}}</div>
+          {{#if authored.any}}
+            {{!-- Which engine will actually run when this is cast. Without it
+                  the two paths are indistinguishable from the sheet. --}}
+            <div class="wdm-w3-authored" title="{{localize 'WITCHER.Sheet.Spell.Tooltip.AuthoredBadge'}}">
+              <i class="fa-solid fa-diagram-project"></i> {{authored.badge}}
+            </div>
+          {{/if}}
+        </div>
+      </header>
+
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value">{{staLabel}}</div>
+        <div class="wdm-w3-hero-label">{{localize 'WITCHER.Sheet.Item.Text.STAMINA'}}</div>
+        <div class="wdm-w3-hero-sub">{{localize 'WITCHER.Sheet.Item.Text.Vs'}} {{defenseLabel}}</div>
+      </div>
+
+      <ul class="wdm-w3-stats">
+        <li class="wdm-w3-stat">
+          <span class="val">{{source.castingTime}}</span>
+          <span class="lbl">{{localize 'WITCHER.Sheet.Spell.Text.ActionsToCast'}}</span>
+        </li>
+        {{#if source.range}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{source.range}}</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Spell.Text.Range'}}</span>
+          </li>
+        {{/if}}
+        <li class="wdm-w3-stat">
+          <span class="val">{{durationLabel}}</span>
+          <span class="lbl">{{localize 'WITCHER.Sheet.Spell.Text.Duration'}}</span>
+        </li>
+        <li class="wdm-w3-stat">
+          <span class="val">{{targetLabel}}</span>
+          <span class="lbl">{{localize 'WITCHER.Sheet.Spell.Text.Targeting'}}</span>
+        </li>
+        {{#if damageLabel}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{damageLabel}}</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Spell.Text.Damage'}}</span>
+          </li>
+        {{/if}}
+        {{#if areaLabel}}
+          <li class="wdm-w3-stat">
+            <span class="val">{{areaLabel}}</span>
+            <span class="lbl">{{localize 'WITCHER.Sheet.Spell.Text.Area'}}</span>
+          </li>
+        {{/if}}
+      </ul>
+
+      {{#if statusRiderRows.length}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Spell.Text.OnHit'}}</div>
+        <ul class="wdm-w3-riders">
+          {{#each statusRiderRows}}
+            <li class="wdm-w3-rider">
+              <img src="{{this.icon}}" alt="" />
+              <span class="nm">{{this.label}}</span>
+              {{#if this.duration.value}}
+                <span class="dur">{{this.duration.value}} {{this.duration.unit}}</span>
+              {{/if}}
+              <span class="qt">{{this.chance}}%</span>
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+      {{#if source.effect}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Spell.Text.Effect'}}</div>
+        <div class="wdm-w3-effects">{{{source.effect}}}</div>
+      {{/if}}
+
+      {{#if componentLinks.length}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Spell.Text.Components'}}</div>
+        <ul class="wdm-w3-ingredients">
+          {{#each componentLinks}}
+            <li class="wdm-w3-ingredient" data-component-index="{{this.index}}" data-uuid="{{this.uuid}}" data-action="openComponent">
+              <img src="{{this.img}}" alt="" />
+              <span class="nm">{{this.name}}</span>
+              {{#if (gte this.qty 2)}}<span class="qt">×{{this.qty}}</span>{{/if}}
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — compact tech form.
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Spell.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Spell.Hint.SpellName'}}" />
+      </div>
+
+      {{!-- Narrative escape hatch at the very top — checking this hides
+            the automated mechanic sections (Damage / Area / Riders /
+            Advanced). Identity & casting, Defense, Duration, Effect,
+            and Components stay visible because a narrative spell still
+            has a stamina cost, a defense to roll against, a duration,
+            a description, and possibly required components. --}}
+      {{!--
+        BEHAVIOUR — the block engine, and the FIRST thing in the config view.
+
+        Not a button that opens a window, and not a collapsed row at the
+        bottom. It was both of those and the result was identical: someone
+        opens a spell, sees the same form they have always seen, and concludes
+        nothing changed. A headline feature below the fold is a feature nobody
+        has.
+
+        The stat fields below it are still the spell's identity — cost, range,
+        school — and they still matter. But what the spell DOES is the reason
+        this sheet exists now, so it goes first and it opens by default.
+      --}}
+      <details class="wdm-cfg-collapse is-canvas" open>
+        <summary class="wdm-cfg-collapse-head">
+          <i class="fa-solid fa-chevron-down wdm-cfg-collapse-chev"></i>
+          <span class="wdm-cfg-collapse-title">{{localize 'WITCHER.Sheet.Spell.Section.Behaviour'}}</span>
+          <span class="wdm-cfg-collapse-sub">
+            {{#if authored.any}}{{authored.badge}}{{else}}{{localize 'WITCHER.Sheet.Spell.Section.BehaviourHint'}}{{/if}}
+          </span>
+        </summary>
+        <div class="wdm-cfg-collapse-body is-canvas-body">
+
+          {{#if authored.problems.length}}
+            <ul class="wdm-authored-problems">
+              {{#each authored.problems}}<li>{{this}}</li>{{/each}}
+            </ul>
+          {{/if}}
+
+          {{{canvasHTML}}}
+
+          {{#if refusal}}
+            <p class="wm-refusal" role="status" aria-live="polite">
+              <span class="wm-refusal-mark" aria-hidden="true">&#10005;</span>
+              <span>{{refusal}}</span>
+            </p>
+          {{/if}}
+
+          <div class="wdm-authored-actions">
+            {{#if entryChoices.length}}
+              {{!-- A trigger is WHEN a stack of blocks runs, and it is the
+                    concept the whole engine turns on: the same blocks under
+                    "when it hits" and under "when damage reaches you" are two
+                    different spells. A bare dropdown labelled "Add a trigger"
+                    said none of that. --}}
+              <details class="wm-trigger-add">
+                <summary>{{localize 'WITCHER.Sheet.Spell.Button.AddTrigger'}}</summary>
+                <p class="wm-trigger-hint">{{localize 'WITCHER.Sheet.Spell.Text.TriggerHint'}}</p>
+                <div class="wm-trigger-list">
+                  {{#each entryChoices}}
+                    <button type="button" class="wm-trigger-option" data-action="addEntry" data-entry="{{this.id}}">
+                      <span class="wm-trigger-name">{{this.label}}</span>
+                      <span class="wm-trigger-when">{{this.hint}}</span>
+                    </button>
+                  {{/each}}
+                </div>
+              </details>
+            {{/if}}
+            <button type="button" class="wdm-authored-start" data-action="startFromBook">
+              <i class="fa-solid fa-book"></i> {{localize 'WITCHER.Sheet.Spell.Button.StartFromBook'}}
+            </button>
+            {{#if authored.any}}
+              <button type="button" class="wdm-authored-clear" data-action="clearSpellCanvas"
+                      title="{{localize 'WITCHER.Sheet.Spell.Tooltip.ClearBehaviour'}}">
+                <i class="fa-solid fa-trash"></i> {{localize 'WITCHER.Sheet.Spell.Button.ClearBehaviour'}}
+              </button>
+            {{/if}}
+          </div>
+        </div>
+      </details>
+
+      <label class="wdm-cfg-row is-checkbox" title="{{localize 'WITCHER.Sheet.Spell.Tooltip.NarrativeSpellsSkipEveryMechanicNoTarget'}}">
+        <span>{{localize 'WITCHER.Sheet.Spell.Text.NarrativeOnly'}}</span>
+        <input type="checkbox" name="system.narrative" {{#if source.narrative}}checked{{/if}} />
+      </label>
+
+      {{!-- ═══════ IDENTITY & CASTING ═══════════════════════════════ --}}
+{{!-- ═══════ DEFENSE ══════════════════════════════════════════ --}}
+{{!-- ═══════ DURATION ═════════════════════════════════════════ --}}
+{{#unless source.narrative}}
+
+      {{!-- ═══════ DAMAGE ══════════════════════════════════════════
+            Formula is the enabling switch — sub-fields only surface
+            when there's a formula authored. Blank formula = non-
+            damaging spell, and element/type/tangible are meaningless. --}}
+      {{!--
+        TARGETING — kept, because these fields DERIVE the frame.
+
+        The damage config that used to sit here is gone: formula, element,
+        armour handling, per-round application, side effects. Blocks say all of
+        that now, and saying it twice means two answers that drift.
+
+        Shape, size and exclusion are different — they are the frame's
+        targeting, which is law rather than behaviour, and the law panel to the
+      {{!-- Everything else — cost, range, defence, element, duration, targeting
+            — is edited in the panel beside the blocks. It was here AND there,
+            eight settings twice on one sheet, which is not redundancy with the
+            block engine but redundancy with itself.
+
+            Cast time stays because it is the one that is not frame law: it is
+            action economy, and the dock reads it. --}}
+      <label class="wdm-cfg-row wdm-cfg-solo">
+        <span title="{{localize 'WITCHER.Sheet.Spell.Tooltip.NumberOfActionsTheCastTakes'}}">{{localize 'WITCHER.Sheet.Spell.Label.CastActions'}}</span>
+        <input type="number" name="system.castingTime" data-dtype="Number"
+               value="{{source.castingTime}}" min="0" step="1" />
+      </label>
+
+      {{!-- Template anchor. Frame shape/size live in the block canvas, but the
+            anchor is a placement preference a LEGACY (non-authored) spell has
+            no canvas to set — and it is exactly the Igni-vs-Alzur's-Thunder
+            difference: a caster-anchored template emanates from your token
+            (aim direction only), a free-placed one drops anywhere in line of
+            sight. Kept here so every spell, authored or not, can choose. --}}
+      <label class="wdm-cfg-row wdm-cfg-solo">
+        <span title="{{localize 'WITCHER.Sheet.Spell.Text.Anchor'}}">{{localize 'WITCHER.Sheet.Spell.Text.Anchor'}}</span>
+        <select name="system.areaAnchor">
+          {{#each WITCHER.magic.areaAnchors}}
+            <option value="{{@key}}" {{#if (eq @key ../source.areaAnchor)}}selected{{/if}}>{{localize this}}</option>
+          {{/each}}
+        </select>
+      </label>
+
+      {{!-- Components. Not behaviour — what the casting CONSUMES, which is
+            the spell's own cost in the world rather than its effect in it. --}}
+      <details class="wdm-cfg-collapse" {{#if spellCfg.openComponents}}open{{/if}}>
+        <summary class="wdm-cfg-collapse-head">
+          <i class="fa-solid fa-chevron-down wdm-cfg-collapse-chev"></i>
+          <span class="wdm-cfg-collapse-title">{{localize 'WITCHER.Sheet.Spell.Text.Components'}}</span>
+          <span class="wdm-cfg-collapse-sub">{{localize 'WITCHER.Sheet.Spell.Section.ComponentsHint'}}</span>
+        </summary>
+        <div class="wdm-cfg-collapse-body">
+          <div class="wdm-drop-zone is-list" data-component-drop>
+            {{#each componentLinks}}
+              <div class="wdm-link-row" data-component-index="{{this.index}}" data-uuid="{{this.uuid}}">
+                <img src="{{this.img}}" alt="" />
+                <span class="wdm-link-name">{{this.name}}</span>
+                <input type="number" class="wdm-link-qty" data-component-qty min="1" value="{{this.qty}}" title="{{localize 'WITCHER.Sheet.Spell.Tooltip.Quantity'}}" />
+                <button type="button" class="wdm-link-remove" data-action="removeComponent" title="{{localize 'WITCHER.Sheet.Spell.Tooltip.Remove'}}"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+            {{/each}}
+            <div class="wdm-drop-hint"><i class="fa-solid fa-plus"></i> {{localize 'WITCHER.Sheet.Spell.Text.DropAnyItemHereAsAComponent'}}</div>
+          </div>
+        </div>
+      </details>
+
+<details class="wdm-cfg-collapse" {{#if spellCfg.openAdvanced}}open{{/if}}>
+        <summary class="wdm-cfg-collapse-head">
+          <i class="fa-solid fa-chevron-down wdm-cfg-collapse-chev"></i>
+          <span class="wdm-cfg-collapse-title">{{localize 'WITCHER.Sheet.Spell.Section.Advanced'}}</span>
+          <span class="wdm-cfg-collapse-sub">{{localize 'WITCHER.Sheet.Spell.Section.AdvancedHint'}}</span>
+        </summary>
+        <div class="wdm-cfg-collapse-body">
+          <div class="wdm-cfg-collapse-sub" style="margin-top:0.25rem;">{{localize 'WITCHER.Sheet.Spell.Section.EmbeddedEffects'}}</div>
+          <p class="wdm-empty" style="margin:0 0 0.35rem;">{{localize 'WITCHER.Sheet.Spell.Text.EmbeddedEffectsNote'}}</p>
+          <div class="wdm-cfg-effects wdm-drop-zone is-list" data-drop-zone="effect">
+            {{#if effects.length}}
+              <ul class="wdm-effect-list">
+                {{#each effects}}
+                  <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                    <div class="wdm-effect-head">
+                      <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                      <span class="wdm-effect-name">{{this.name}}</span>
+                      {{#if this.duration.label}}<span class="wdm-effect-duration">{{this.duration.label}}</span>{{/if}}
+                      <label class="wdm-effect-chance-wrap" title="{{localize 'WITCHER.Sheet.Spell.Tooltip.ApplyChance'}}">
+                        <input type="number" class="wdm-effect-chance" data-effect-id="{{this.id}}"
+                               value="{{this.applyChance}}" min="0" max="100" step="1" />%
+                      </label>
+                      <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                        <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                      </a>
+                      <a data-action="editEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Spell.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+                      <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Spell.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
+                    </div>
+                  </li>
+                {{/each}}
+              </ul>
+            {{else}}
+              <p class="wdm-empty">{{localize 'WITCHER.Sheet.Spell.Text.NoEffectsConfigured'}}</p>
+            {{/if}}
+            <div class="wdm-drop-hint"><i class="fa-solid fa-hand-pointer"></i> {{localize 'WITCHER.Sheet.Spell.Text.DropEffectHint'}}</div>
+            <button type="button" class="wdm-add-effect" data-action="createEffect">
+              <i class="fa-solid fa-plus"></i> {{localize 'WITCHER.Sheet.Item.Button.AddEffect'}}
+            </button>
+          </div>
+        </div>
+      </details>
+{{/unless}}
+
+      {{!--
+        The description, and it sits OUTSIDE the narrative guard on purpose.
+
+        The narrative guard hides every mechanical section for a
+        "description only" spell — which is right, because such a spell has no
+        mechanics. Putting this inside it meant the toggle deleted the
+        description instead: the one thing a narrative spell entirely consists
+        of. Last section, always shown.
+      --}}
+      <details class="wdm-cfg-collapse" {{#if spellCfg.openEffect}}open{{/if}}>
+        <summary class="wdm-cfg-collapse-head">
+          <i class="fa-solid fa-chevron-down wdm-cfg-collapse-chev"></i>
+          <span class="wdm-cfg-collapse-title">{{localize 'WITCHER.Sheet.Spell.Text.Effect'}}</span>
+          <span class="wdm-cfg-collapse-sub">{{localize 'WITCHER.Sheet.Spell.Section.EffectHint'}}</span>
+        </summary>
+        <div class="wdm-cfg-collapse-body">
+          <textarea class="wdm-cfg-textarea" name="system.effect"
+                    placeholder="{{localize 'WITCHER.Sheet.Spell.Hint.MechanicalEffectDamageFormulaOnHitRules'}}">{{source.effect}}</textarea>
+          {{#if spellCfg.isGift}}
+            <div class="wdm-cfg-collapse-sub" style="margin-top:0.4rem;">{{localize "WITCHER.Item.Spell.SideEffect"}}</div>
+            <textarea class="wdm-cfg-textarea" name="system.sideEffect"
+                      placeholder="{{localize 'WITCHER.Sheet.Spell.Hint.TheGiftSMandatorySideEffect'}}">{{source.sideEffect}}</textarea>
+          {{/if}}
+        </div>
+      </details>
+
+    </div>
+  </div>
+
+</div>

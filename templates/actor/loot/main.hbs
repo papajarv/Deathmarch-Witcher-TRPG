@@ -1,0 +1,127 @@
+{{!-- Loot actor sheet — treasure pile / dropped sack / NPC cart.
+      Layout: banner + currency + items + bulk row + notes.
+      No wrapping <form> — ApplicationV2 wraps its frame in one. --}}
+
+<div class="wdm-actor-sheet wdm-loot-v2">
+
+  <header class="wdm-banner wdm-loot-banner">
+    {{!-- `data-edit` intentionally NOT on the <button>: FormDataExtended's
+          #processEditableHTML treats any `[data-edit]` element as a form
+          field, and on a non-<img> element it stringifies innerHTML — which
+          on this button includes the nested <img>+<span> markup and fails
+          FilePathField validation, rejecting the entire update (including
+          currency edits). `_onEditImage` in base.mjs defaults to "img" when
+          `data-edit` is absent, so the click handler still writes to actor.img. --}}
+    <button type="button"
+            class="wdm-loot-portrait-btn"
+            data-action="editImage"
+            title="{{localize 'WITCHER.Sheet.Loot.Tooltip.ClickToChangeImage'}}">
+      <img class="wdm-banner-portrait wdm-loot-portrait" src="{{actor.img}}" alt="" />
+      <span class="wdm-loot-portrait-hint"><i class="fa-solid fa-pen"></i></span>
+    </button>
+    <div class="wdm-banner-id">
+      <input class="wdm-banner-name wdm-loot-name" type="text" name="name" value="{{actor.name}}"
+             placeholder="{{localize 'WITCHER.Sheet.Loot.Hint.LootNameEGBanditStash'}}" />
+      <span class="wdm-banner-sub wdm-loot-meta">
+        <i class="fa-solid fa-boxes-stacked"></i> {{itemCount}} item{{#unless (eq itemCount 1)}}s{{/unless}}
+        <span class="wdm-loot-meta-sep">·</span>
+        <i class="fa-solid fa-weight-hanging"></i> {{totalWeightText}}
+      </span>
+    </div>
+  </header>
+
+  <section class="wdm-loot-section">
+    <h3><i class="fa-solid fa-coins"></i> {{localize 'WITCHER.Sheet.Loot.Text.CoinPouch'}}</h3>
+    <ul class="wdm-loot-coin-list">
+      {{#each coinRows}}
+        <li class="wdm-loot-coin-row {{#unless value}}is-empty{{/unless}}">
+          <span class="wdm-loot-coin-label">{{localize label}}</span>
+          {{#if ../isGM}}
+            <input type="text"
+                   name="system.currency.{{key}}"
+                   value="{{value}}"
+                   class="wdm-loot-coin-input"
+                   title="{{localize 'WITCHER.Sheet.Loot.Tooltip.EnterANumberOrADiceExpressionEG2d103d65P'}}"/>
+          {{else}}
+            <span class="wdm-loot-coin-amount">{{value}}</span>
+          {{/if}}
+          <button type="button"
+                  class="wdm-loot-btn wdm-loot-btn-take"
+                  data-action="takeLootCoin"
+                  data-coin="{{key}}"
+                  {{#unless ../canTake}}disabled{{/unless}}
+                  {{#unless value}}disabled{{/unless}}
+                  title="{{../takeTooltip}}">
+            <i class="fa-solid fa-hand-holding"></i> {{localize 'WITCHER.Sheet.Loot.Button.Take'}}
+          </button>
+        </li>
+      {{/each}}
+    </ul>
+  </section>
+
+  <section class="wdm-loot-section wdm-loot-items">
+    <h3><i class="fa-solid fa-boxes-stacked"></i> {{localize 'WITCHER.Sheet.Loot.Text.Items'}}
+        <span class="wdm-loot-items-count">{{itemCount}}</span></h3>
+    {{#if lootRows.length}}
+      <ul class="wdm-loot-sheet-list">
+        {{#each lootRows}}
+          <li class="wdm-loot-sheet-row" data-item-id="{{id}}">
+            <img class="wdm-loot-sheet-img" src="{{img}}" alt="" draggable="false"/>
+            <span class="wdm-loot-sheet-name">
+              {{name}}
+              {{#if isContainer}}<i class="fa-solid fa-box-archive" title="{{localize 'WITCHER.Sheet.Loot.Tooltip.ContainerTakeMovesTheWholeSubtree'}}" style="margin-left:.25rem;opacity:.7;"></i>{{/if}}
+            </span>
+            <span class="wdm-loot-sheet-qty">×{{quantity}}</span>
+            <button type="button"
+                    class="wdm-loot-btn wdm-loot-btn-take"
+                    data-action="takeLootItem"
+                    data-item-id="{{id}}"
+                    {{#unless ../canTake}}disabled{{/unless}}
+                    title="{{../takeTooltip}}">
+              <i class="fa-solid fa-hand-holding"></i> {{localize 'WITCHER.Sheet.Loot.Button.Take'}}
+            </button>
+          </li>
+        {{/each}}
+      </ul>
+    {{else}}
+      <div class="wdm-loot-sheet-empty">
+        {{#if isGM}}
+          {{localize 'WITCHER.Sheet.Loot.Text.EmptyPileGM'}}
+        {{else}}
+          {{localize 'WITCHER.Sheet.Loot.Text.EmptyPile'}}
+        {{/if}}
+      </div>
+    {{/if}}
+  </section>
+
+  {{#if hasAnyLoot}}
+  <section class="wdm-loot-bulk">
+    <button type="button"
+            class="wdm-loot-btn wdm-loot-btn-primary"
+            data-action="takeAllLoot"
+            {{#unless canTake}}disabled{{/unless}}
+            title="{{takeTooltip}}">
+      <i class="fa-solid fa-hand-holding-dollar"></i> {{localize 'WITCHER.Sheet.Loot.Button.TakeEverything'}}
+    </button>
+    {{#if isGM}}
+      <button type="button"
+              class="wdm-loot-btn wdm-loot-btn-danger"
+              data-action="emptyLootPile"
+              title="{{localize 'WITCHER.Sheet.Loot.Tooltip.DeleteEveryItemAndResetAllCurrencyGmOnly'}}">
+        <i class="fa-solid fa-broom"></i> {{localize 'WITCHER.Sheet.Loot.Button.EmptyPile'}}
+      </button>
+    {{/if}}
+  </section>
+  {{else if isGM}}
+  <section class="wdm-loot-bulk">
+    <span class="wdm-loot-bulk-hint">{{localize 'WITCHER.Sheet.Loot.Text.DropItemsOntoThisSheetOrSetCurrencyToPop'}}</span>
+  </section>
+  {{/if}}
+
+  <section class="wdm-section-block">
+    <h3>{{localize 'WITCHER.Sheet.Loot.Text.Notes'}}</h3>
+    <textarea name="system.notes"
+              placeholder="{{localize 'WITCHER.Sheet.Loot.Hint.WhatSInThePileWhoLeftItNarrativeHooks'}}">{{source.notes}}</textarea>
+  </section>
+
+</div>

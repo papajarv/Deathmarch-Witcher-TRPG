@@ -1,0 +1,183 @@
+{{!-- UI Customizer — one per-section tab (Left / Right / Top / Bottom bar,
+      Middle panels, Foundry UI). Shared by all section PARTS; `section` carries
+      the section-specific data. Controls: Text + Accent colours, Decorative
+      (dividers + ornament), a background (base colour + optional gradient with
+      its own opacity + overall opacity) and — for "full" sections — an image
+      overlay. The Panels tab additionally shows a target selector (global vs a
+      single panel). `data-bgmode` / `data-hasimg` drive which controls show
+      (see ui-customizer-config.css), kept in sync live by #syncSectionUI. --}}
+<section class="tab wdm-cfg-tab wdm-uic-tab wdm-uic-sec {{tab.cssClass}}"
+         data-tab="{{tab.id}}" data-group="{{tab.group}}"
+         data-bgmode="{{section.bgMode}}" {{#if section.hasImg}}data-hasimg="1"{{/if}}>
+
+  {{#if section.isPanelHost}}
+  <div class="wdm-uic-paneltarget" role="group" aria-label="{{localize 'WITCHER.App.UiCustomizer.PanelTargetAria'}}">
+    {{#each section.panelTargets}}
+    <button type="button" class="wdm-uic-pt-btn {{#if selected}}active{{/if}} {{#if overridden}}has-override{{/if}}"
+            data-action="setPanelTarget" data-panel="{{id}}">{{label}}</button>
+    {{/each}}
+  </div>
+  <p class="wdm-uic-tabnote">{{localize 'WITCHER.App.UiCustomizer.PanelsNote'}}</p>
+  {{/if}}
+  {{#unless section.isPanelHost}}{{#if section.desc}}<p class="wdm-uic-tabnote">{{section.desc}}</p>{{/if}}{{/unless}}
+
+  {{!-- ── Text & Accent ─────────────────────────────────────────────── --}}
+  <div class="wdm-uic-color-group">
+    <h4 class="wdm-uic-color-group-head">{{localize 'WITCHER.App.UiCustomizer.Sec.TextAccent'}}</h4>
+    <div class="wdm-uic-colors">
+
+      <div class="wdm-uic-color-row {{#unless section.textOn}}is-inherited{{/unless}}">
+        <label class="wdm-uic-color-toggle" title="{{localize 'WITCHER.App.UiCustomizer.OverrideHint'}}">
+          <input type="checkbox" name="sec.{{section.id}}.textOn" {{#if section.textOn}}checked{{/if}}>
+        </label>
+        <input type="color" class="wdm-uic-color-input" name="sec.{{section.id}}.text" value="{{section.text}}">
+        <div class="wdm-uic-color-meta"><span class="wdm-uic-color-label">{{localize 'WITCHER.App.UiCustomizer.Sec.Text'}}</span></div>
+      </div>
+
+      <div class="wdm-uic-color-row {{#unless section.textHiOn}}is-inherited{{/unless}}">
+        <label class="wdm-uic-color-toggle" title="{{localize 'WITCHER.App.UiCustomizer.OverrideHint'}}">
+          <input type="checkbox" name="sec.{{section.id}}.textHiOn" {{#if section.textHiOn}}checked{{/if}}>
+        </label>
+        <input type="color" class="wdm-uic-color-input" name="sec.{{section.id}}.textHi" value="{{section.textHi}}">
+        <div class="wdm-uic-color-meta"><span class="wdm-uic-color-label">{{localize 'WITCHER.App.UiCustomizer.Sec.TextHi'}}</span></div>
+      </div>
+
+      <div class="wdm-uic-color-row {{#unless section.accentOn}}is-inherited{{/unless}}">
+        <label class="wdm-uic-color-toggle" title="{{localize 'WITCHER.App.UiCustomizer.OverrideHint'}}">
+          <input type="checkbox" name="sec.{{section.id}}.accentOn" {{#if section.accentOn}}checked{{/if}}>
+        </label>
+        <input type="color" class="wdm-uic-color-input" name="sec.{{section.id}}.accent" value="{{section.accent}}">
+        <div class="wdm-uic-color-meta"><span class="wdm-uic-color-label">{{localize 'WITCHER.App.UiCustomizer.Sec.Accent'}}</span></div>
+      </div>
+
+      <div class="wdm-uic-color-row {{#unless section.accentHiOn}}is-inherited{{/unless}}">
+        <label class="wdm-uic-color-toggle" title="{{localize 'WITCHER.App.UiCustomizer.OverrideHint'}}">
+          <input type="checkbox" name="sec.{{section.id}}.accentHiOn" {{#if section.accentHiOn}}checked{{/if}}>
+        </label>
+        <input type="color" class="wdm-uic-color-input" name="sec.{{section.id}}.accentHi" value="{{section.accentHi}}">
+        <div class="wdm-uic-color-meta"><span class="wdm-uic-color-label">{{localize 'WITCHER.App.UiCustomizer.Sec.AccentHi'}}</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ── Decorative (dividers / ornament) ──────────────────────────── --}}
+  <div class="wdm-uic-color-group">
+    <h4 class="wdm-uic-color-group-head">{{localize 'WITCHER.App.UiCustomizer.Sec.Decorative'}}</h4>
+    <div class="wdm-uic-colors">
+
+      <div class="wdm-uic-color-row {{#unless section.dividerOn}}is-inherited{{/unless}}">
+        <label class="wdm-uic-color-toggle" title="{{localize 'WITCHER.App.UiCustomizer.OverrideHint'}}">
+          <input type="checkbox" name="sec.{{section.id}}.dividerOn" {{#if section.dividerOn}}checked{{/if}}>
+        </label>
+        <input type="color" class="wdm-uic-color-input" name="sec.{{section.id}}.divider" value="{{section.divider}}">
+        <div class="wdm-uic-color-meta">
+          <span class="wdm-uic-color-label">{{localize 'WITCHER.App.UiCustomizer.Sec.Divider'}}</span>
+          <div class="wdm-uic-color-desc">{{localize 'WITCHER.App.UiCustomizer.Sec.DividerDesc'}}</div>
+        </div>
+      </div>
+
+      <div class="wdm-uic-color-row {{#unless section.ornamentOn}}is-inherited{{/unless}}">
+        <label class="wdm-uic-color-toggle" title="{{localize 'WITCHER.App.UiCustomizer.OverrideHint'}}">
+          <input type="checkbox" name="sec.{{section.id}}.ornamentOn" {{#if section.ornamentOn}}checked{{/if}}>
+        </label>
+        <input type="color" class="wdm-uic-color-input" name="sec.{{section.id}}.ornament" value="{{section.ornament}}">
+        <div class="wdm-uic-color-meta">
+          <span class="wdm-uic-color-label">{{localize 'WITCHER.App.UiCustomizer.Sec.Ornament'}}</span>
+          <div class="wdm-uic-color-desc">{{localize 'WITCHER.App.UiCustomizer.Sec.OrnamentDesc'}}</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ── Background ────────────────────────────────────────────────── --}}
+  <div class="wdm-uic-color-group">
+    <h4 class="wdm-uic-color-group-head">{{localize 'WITCHER.App.UiCustomizer.Sec.Background'}}</h4>
+
+    <div class="wdm-uic-field">
+      <label class="wdm-uic-field-label">{{localize 'WITCHER.App.UiCustomizer.Sec.BgMode'}}</label>
+      <select class="wdm-uic-bgmode" name="sec.{{section.id}}.bgMode">
+        <option value="none"  {{#if section.bgModeNone}}selected{{/if}}>{{localize 'WITCHER.App.UiCustomizer.Sec.BgNone'}}</option>
+        <option value="solid" {{#if section.bgModeSolid}}selected{{/if}}>{{localize 'WITCHER.App.UiCustomizer.Sec.BgSolid'}}</option>
+        {{#if section.isFull}}
+        <option value="gradient" {{#if section.bgModeGradient}}selected{{/if}}>{{localize 'WITCHER.App.UiCustomizer.Sec.BgGradient'}}</option>
+        {{/if}}
+      </select>
+    </div>
+
+    {{!-- Base colour — shown for both Solid and Gradient (the gradient sits on it). --}}
+    <div class="wdm-uic-field wdm-uic-bg-color">
+      <label class="wdm-uic-field-label">{{localize 'WITCHER.App.UiCustomizer.Sec.BgColor'}}</label>
+      <input type="color" class="wdm-uic-color-input" name="sec.{{section.id}}.bgSolid" value="{{section.bgSolid}}">
+    </div>
+
+    {{#if section.isFull}}
+    <div class="wdm-uic-bg-gradient">
+      <div class="wdm-uic-field">
+        <label class="wdm-uic-field-label">{{localize 'WITCHER.App.UiCustomizer.Sec.GradStops'}}</label>
+        <div class="wdm-uic-grad-stops">
+          <input type="color" class="wdm-uic-color-input" name="sec.{{section.id}}.gradA" value="{{section.gradA}}">
+          <input type="color" class="wdm-uic-color-input" name="sec.{{section.id}}.gradB" value="{{section.gradB}}">
+          <input type="color" class="wdm-uic-color-input" name="sec.{{section.id}}.gradC" value="{{section.gradC}}">
+        </div>
+      </div>
+      <div class="wdm-uic-field">
+        <label class="wdm-uic-field-label">{{localize 'WITCHER.App.UiCustomizer.Sec.Angle'}}</label>
+        <input type="range" min="0" max="360" step="1" class="wdm-uic-range"
+               name="sec.{{section.id}}.gradAngle" value="{{section.gradAngle}}">
+        <span class="wdm-uic-range-val wdm-uic-range-deg" data-for="sec.{{section.id}}.gradAngle">{{section.gradAngle}}°</span>
+      </div>
+      <div class="wdm-uic-field">
+        <label class="wdm-uic-field-label">{{localize 'WITCHER.App.UiCustomizer.Sec.GradOpacity'}}</label>
+        <input type="range" min="0" max="100" step="1" class="wdm-uic-range"
+               name="sec.{{section.id}}.gradOpacity" value="{{section.gradOpacity}}">
+        <span class="wdm-uic-range-val" data-for="sec.{{section.id}}.gradOpacity">{{section.gradOpacity}}%</span>
+      </div>
+    </div>
+    {{/if}}
+
+    <div class="wdm-uic-field wdm-uic-bg-opacity">
+      <label class="wdm-uic-field-label">{{localize 'WITCHER.App.UiCustomizer.Sec.Opacity'}}</label>
+      <input type="range" min="0" max="100" step="1" class="wdm-uic-range"
+             name="sec.{{section.id}}.opacity" value="{{section.opacity}}">
+      <span class="wdm-uic-range-val" data-for="sec.{{section.id}}.opacity">{{section.opacity}}%</span>
+    </div>
+  </div>
+
+  {{!-- ── Image overlay (full sections only) ────────────────────────── --}}
+  {{#if section.isFull}}
+  <div class="wdm-uic-color-group wdm-uic-img-group">
+    <h4 class="wdm-uic-color-group-head">{{localize 'WITCHER.App.UiCustomizer.Sec.Image'}}</h4>
+
+    <div class="wdm-uic-img-row">
+      <input type="text" class="wdm-uic-imgurl" name="sec.{{section.id}}.imgUrl" value="{{section.imgUrl}}"
+             placeholder="{{localize 'WITCHER.App.UiCustomizer.Sec.ImagePlaceholder'}}" spellcheck="false">
+      <button type="button" class="wdm-uic-img-btn" data-action="pickImage" data-target="sec.{{section.id}}.imgUrl"
+              title="{{localize 'WITCHER.App.UiCustomizer.Sec.Browse'}}"><i class="fa-solid fa-folder-open"></i></button>
+      <button type="button" class="wdm-uic-img-btn" data-action="clearImage" data-target="sec.{{section.id}}.imgUrl"
+              title="{{localize 'WITCHER.App.UiCustomizer.Sec.ClearImage'}}"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="wdm-uic-img-opts">
+      <div class="wdm-uic-field">
+        <label class="wdm-uic-field-label">{{localize 'WITCHER.App.UiCustomizer.Sec.ImageOpacity'}}</label>
+        <input type="range" min="0" max="100" step="1" class="wdm-uic-range"
+               name="sec.{{section.id}}.imgOpacity" value="{{section.imgOpacity}}">
+        <span class="wdm-uic-range-val" data-for="sec.{{section.id}}.imgOpacity">{{section.imgOpacity}}%</span>
+      </div>
+      <div class="wdm-uic-field">
+        <label class="wdm-uic-field-label">{{localize 'WITCHER.App.UiCustomizer.Sec.ImageFit'}}</label>
+        <select name="sec.{{section.id}}.imgFit">
+          {{#each section.fitOptions}}<option value="{{v}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+        </select>
+      </div>
+    </div>
+  </div>
+  {{/if}}
+
+  {{#if section.isFoundry}}
+  <p class="wdm-uic-scope-note"><i class="fa-solid fa-circle-info"></i> {{localize 'WITCHER.App.UiCustomizer.Sec.FoundryNote'}}</p>
+  {{/if}}
+
+</section>

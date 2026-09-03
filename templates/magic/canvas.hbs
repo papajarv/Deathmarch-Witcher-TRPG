@@ -1,0 +1,41 @@
+{{!--
+    The spell canvas.
+
+    Deliberately almost empty: every piece of markup is built by pure functions
+    in module/magic/canvas/, which are tested without a browser. A template that
+    grows logic is a template that cannot be tested at all.
+--}}
+<div class="wm-canvas">
+
+    <aside class="wm-rail" aria-label="{{localize 'WITCHER.Magic.Canvas.Palette'}}">
+        {{{railHTML}}}
+    </aside>
+
+    <div class="wm-sheet" role="tree" aria-label="{{localize 'WITCHER.Magic.Canvas.Sheet'}}">
+        {{{entriesHTML}}}
+
+        {{#if entryChoices.length}}
+        <div class="wm-add-entry">
+            <p class="wm-eyebrow">{{localize 'WITCHER.Magic.Canvas.AddTrigger'}}</p>
+            <div class="wm-rail-list">
+                {{#each entryChoices}}
+                <button type="button" class="wm-chip" data-action="addEntry" data-entry="{{this.id}}">
+                    {{this.label}}
+                </button>
+                {{/each}}
+            </div>
+        </div>
+        {{/if}}
+    </div>
+
+    <aside class="wm-law" aria-label="{{localize 'WITCHER.Magic.Canvas.Frame'}}">
+        {{{lawHTML}}}
+    </aside>
+
+    {{#if refusal}}
+    <p class="wm-refusal" role="status" aria-live="polite">
+        <span class="wm-refusal-mark" aria-hidden="true">&#10005;</span>
+        <span>{{refusal}}</span>
+    </p>
+    {{/if}}
+</div>

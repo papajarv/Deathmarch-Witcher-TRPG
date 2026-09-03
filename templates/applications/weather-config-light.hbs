@@ -1,0 +1,36 @@
+{{!-- Light tab. Per-tier light-level penalties: the dim steps / Darkness / Pitch
+      Black map to Awareness / Attack / Defense modifiers. Bright and Lit carry no
+      penalty and aren't listed. Names map to light.<tier>.<field>. --}}
+<section class="tab wdm-cfg-tab {{tab.cssClass}}" data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+    <div class="wdm-cfg-help">
+        <i class="fa-solid fa-circle-info"></i>
+        <p>{{localize "WITCHER.Light.Config.Intro"}}</p>
+    </div>
+
+    <div class="wdm-cfg-card">
+        <div class="wdm-cfg-light-grid">
+            <div class="wdm-cfg-light-head">
+                <span>{{localize "WITCHER.Light.Config.TierCol"}}</span>
+                {{#each lightFields}}<span>{{this.label}}</span>{{/each}}
+            </div>
+            {{#each lightTiers}}
+            <div class="wdm-cfg-light-row">
+                <span class="wdm-cfg-light-tier">{{this.label}}</span>
+                {{#each this.cells}}
+                <input type="number" name="{{this.name}}" value="{{this.value}}" step="1"
+                       data-tooltip="{{localize 'WITCHER.Light.Config.CellHint'}}">
+                {{/each}}
+            </div>
+            {{/each}}
+        </div>
+    </div>
+
+    <div class="wdm-cfg-tab-foot">
+        {{#unless usingDefaults}}<span class="wdm-cfg-custom-flag"><i class="fa-solid fa-pen"></i> {{localize "WITCHER.Weather.Config.Customized"}}</span>{{/unless}}
+        <button type="button" class="wdm-cfg-reset" data-action="resetTab" data-tab="light">
+            <i class="fa-solid fa-rotate-left"></i> {{localize "WITCHER.Weather.Config.ResetTab"}}
+        </button>
+    </div>
+
+</section>

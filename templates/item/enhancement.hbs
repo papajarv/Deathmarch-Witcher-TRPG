@@ -1,0 +1,265 @@
+{{!-- Enhancement item sheet — two-layer (Core p.78-79, gear & craftsman):
+        DISPLAY → Witcher 3 in-game tooltip (player reads the rune/glyph)
+        CONFIG  → editable form (GM / owner with cog toggle)
+      `type` decides the target: rune/weapon → weapon, glyph/armor → armor.
+      The config form shows only the matching side's modifier fields. The
+      parent item recomputes its effective stats from this in
+      prepareDerivedData — nothing here mutates the weapon/armor directly. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-enhancement" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}{{localize 'WITCHER.Sheet.Item.Cog.BackToDisplay'}}{{else}}{{localize 'WITCHER.Sheet.Item.Cog.ConfigureItem'}}{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view{{#if (hasFlair source.flairColor)}} has-flair{{/if}}" data-rarity="{{source.availability}}"{{#if (hasFlair source.flairColor)}} style="--wdm-rar: {{source.flairColor}}"{{/if}}>
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">
+            {{localize (lookup WITCHER.enhancement.types source.type)}}
+            {{#if (eq source.type 'glyph')}}{{#unless (eq source.element 'none')}} · {{localize (lookup WITCHER.magic.schools source.element)}}{{/unless}}{{/if}}
+            {{#if attachedName}} · socketed in {{attachedName}}{{/if}}
+          </div>
+        </div>
+      </header>
+
+      <div class="wdm-w3-hero">
+        <div class="wdm-w3-hero-value">{{heroValue}}</div>
+        <div class="wdm-w3-hero-label">{{heroLabel}}</div>
+      </div>
+
+      {{#if modRows.length}}
+        <ul class="wdm-w3-stats">
+          {{#each modRows}}
+            <li class="wdm-w3-stat {{#if this.positive}}is-positive{{else}}is-negative{{/if}}">
+              <span class="val">{{this.val}}</span>
+              <span class="lbl">{{this.lbl}}</span>
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+      {{#if addedTypeTags.length}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Enhancement.Text.AddsDamageType'}}</div>
+        <div class="wdm-w3-tags">
+          {{#each addedTypeTags}}<span class="wdm-w3-tag">{{this}}</span>{{/each}}
+        </div>
+      {{/if}}
+
+      {{#if resistTags.length}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Enhancement.Text.GrantsResistance'}}</div>
+        <div class="wdm-w3-tags">
+          {{#each resistTags}}<span class="wdm-w3-tag">{{this}}</span>{{/each}}
+        </div>
+      {{/if}}
+
+      {{#if grantedQualityList.length}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Enhancement.Text.GrantsQualities'}}</div>
+        <div class="wdm-w3-tags">
+          {{#each grantedQualityList}}
+            <span class="wdm-w3-tag" data-tooltip="{{this.description}}" data-tooltip-direction="UP">{{this.label}}</span>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if source.effects}}
+        <div class="wdm-w3-effects">{{{source.effects}}}</div>
+      {{/if}}
+
+      {{#if source.description}}
+        <div class="wdm-w3-description">{{{source.description}}}</div>
+      {{/if}}
+
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Enhancement.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        {{#unless (eq source.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Enhancement.Tooltip.Quantity'}}"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+        {{/unless}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="{{localize 'WITCHER.Sheet.Item.Text.Availability'}}">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Sheet.Enhancement.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — editable form
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Enhancement.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Enhancement.Hint.EnhancementName'}}" />
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Enhancement.Text.Details'}}</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Enhancement.Text.Availability'}}</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        {{> "systems/witcher-ttrpg-death-march/templates/item/partials/flair-override.hbs" flairColor=source.flairColor}}
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Enhancement.Text.WeightKg'}}</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Enhancement.Text.Cost'}}</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Enhancement.Text.Quantity'}}</span>
+          <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Enhancement.Text.Classification'}}</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Enhancement.Tooltip.DecidesWhatThisAttachesToRunesWeaponMods'}}">
+          <span>{{localize 'WITCHER.Sheet.Enhancement.Text.Kind'}}</span>
+          <select name="system.type">
+            {{#each WITCHER.enhancement.types}}
+              <option value="{{@key}}" {{#if (eq @key ../source.type)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+      </div>
+
+      {{#if isWeaponSide}}
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Enhancement.Text.WeaponModifiers'}}</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Enhancement.Text.DamageBonus'}}</span>
+            <input type="text" name="system.damageBonus" value="{{source.damageBonus}}" placeholder="+2 or 1d6"
+                   title="{{localize 'WITCHER.Sheet.Enhancement.Tooltip.FormulaFragmentFoldedIntoTheWeaponSDamag'}}" />
+          </label>
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Enhancement.Text.AccuracyWa'}}</span>
+            <input type="number" name="system.accuracyBonus" value="{{source.accuracyBonus}}" />
+          </label>
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Enhancement.Text.Reliability'}}</span>
+            <input type="number" name="system.reliabilityBonus" value="{{source.reliabilityBonus}}"
+                   title="{{localize 'WITCHER.Sheet.Enhancement.Tooltip.AddedToTheWeaponSMaximumReliability'}}" />
+          </label>
+        </div>
+
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Enhancement.Text.AddsDamageTypes'}}</div>
+        <div class="wdm-cfg-checkgrid">
+          {{#each damageTypes}}
+            <label class="wdm-cfg-check">
+              <input type="checkbox" name="system.addedDamageTypes" value="{{@key}}"
+                     data-dtype="String"
+                     {{#if (includes ../source.addedDamageTypes @key)}}checked{{/if}} />
+              <span>{{localize this}}</span>
+            </label>
+          {{/each}}
+        </div>
+      {{else}}
+        {{#if (eq source.type 'glyph')}}
+          <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Enhancement.Text.GlyphElement'}}</div>
+          <label class="wdm-cfg-row" title="{{localize 'WITCHER.Sheet.Enhancement.Tooltip.GlyphElement'}}">
+            <span>{{localize 'WITCHER.Sheet.Enhancement.Text.Element'}}</span>
+            <select name="system.element">
+              <option value="none" {{#if (eq 'none' source.element)}}selected{{/if}}>{{localize 'WITCHER.Sheet.Enhancement.Text.ElementNone'}}</option>
+              {{#each WITCHER.magic.schools}}
+                <option value="{{@key}}" {{#if (eq @key ../source.element)}}selected{{/if}}>{{localize this}}</option>
+              {{/each}}
+            </select>
+          </label>
+        {{/if}}
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Enhancement.Text.ArmorModifiers'}}</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Enhancement.Text.Stopping'}}</span>
+            <input type="number" min="0" name="system.stopping" value="{{source.stopping}}"
+                   title="{{localize 'WITCHER.Sheet.Enhancement.Tooltip.BonusSpAddedToEveryCoveredLocation'}}" />
+          </label>
+          <label class="wdm-cfg-row"><span>{{localize 'WITCHER.Sheet.Enhancement.Text.Encumbrance'}}</span>
+            <input type="number" name="system.encumbranceMod" value="{{source.encumbranceMod}}"
+                   title="{{localize 'WITCHER.Sheet.Enhancement.Tooltip.EvChangeNegativeMakesTheArmorLighter'}}" />
+          </label>
+        </div>
+
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Enhancement.Text.GrantsResistance'}}</div>
+        <div class="wdm-cfg-checkgrid">
+          <label class="wdm-cfg-check">
+            <input type="checkbox" name="system.slashing" {{#if source.slashing}}checked{{/if}} />
+            <span>{{localize 'WITCHER.Sheet.Enhancement.Text.Slashing'}}</span>
+          </label>
+          <label class="wdm-cfg-check">
+            <input type="checkbox" name="system.piercing" {{#if source.piercing}}checked{{/if}} />
+            <span>{{localize 'WITCHER.Sheet.Enhancement.Text.Piercing'}}</span>
+          </label>
+          <label class="wdm-cfg-check">
+            <input type="checkbox" name="system.bludgeoning" {{#if source.bludgeoning}}checked{{/if}} />
+            <span>{{localize 'WITCHER.Sheet.Enhancement.Text.Bludgeoning'}}</span>
+          </label>
+          <label class="wdm-cfg-check">
+            <input type="checkbox" name="system.fire" {{#if source.fire}}checked{{/if}} />
+            <span>{{localize 'WITCHER.Damage.Fire'}}</span>
+          </label>
+          <label class="wdm-cfg-check">
+            <input type="checkbox" name="system.lightning" {{#if source.lightning}}checked{{/if}} />
+            <span>{{localize 'WITCHER.Damage.Lightning'}}</span>
+          </label>
+          <label class="wdm-cfg-check">
+            <input type="checkbox" name="system.cold" {{#if source.cold}}checked{{/if}} />
+            <span>{{localize 'WITCHER.Damage.Cold'}}</span>
+          </label>
+          <label class="wdm-cfg-check">
+            <input type="checkbox" name="system.acid" {{#if source.acid}}checked{{/if}} />
+            <span>{{localize 'WITCHER.Damage.Acid'}}</span>
+          </label>
+        </div>
+      {{/if}}
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Enhancement.Text.GrantsQualities'}} <span class="wdm-cfg-sub">(edit catalog in system settings)</span></div>
+      <div class="wdm-cfg-checkgrid">
+        {{#each qualitiesCatalog}}
+          {{#if this.param}}
+            <div class="wdm-cfg-check is-parameterized" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+              <label class="wdm-cfg-check-label">
+                <input type="checkbox" name="system.grantedQualities" value="{{@key}}"
+                       data-dtype="String"
+                       {{#if (includes ../source.grantedQualities @key)}}checked{{/if}} />
+                <span>{{this.label}}</span>
+              </label>
+              <input type="{{this.param.type}}" class="wdm-cfg-param"
+                     name="system.qualityValues.{{@key}}"
+                     value="{{lookup ../source.qualityValues @key}}"
+                     placeholder="{{this.param.placeholder}}"
+                     title="Parameter for {{this.label}}" />
+              {{#if this.param.suffix}}<span class="wdm-cfg-param-suffix">{{this.param.suffix}}</span>{{/if}}
+            </div>
+          {{else}}
+            <label class="wdm-cfg-check" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+              <input type="checkbox" name="system.grantedQualities" value="{{@key}}"
+                     data-dtype="String"
+                     {{#if (includes ../source.grantedQualities @key)}}checked{{/if}} />
+              <span>{{this.label}}</span>
+            </label>
+          {{/if}}
+        {{/each}}
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Enhancement.Text.Effect'}}</div>
+      <textarea class="wdm-cfg-textarea" name="system.effects" placeholder="{{localize 'WITCHER.Sheet.Enhancement.Hint.MechanicalEffectTextShownOnTheEnhancemen'}}">{{source.effects}}</textarea>
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Enhancement.Text.Description'}}</div>
+      <textarea class="wdm-cfg-textarea" name="system.description" placeholder="{{localize 'WITCHER.Sheet.Enhancement.Hint.FlavorWhereItWasFound'}}">{{source.description}}</textarea>
+
+    </div>
+  </div>
+
+</div>

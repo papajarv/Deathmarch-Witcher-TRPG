@@ -1,0 +1,19 @@
+{{!-- Shared per-item rarity-flair OVERRIDE row. A colour that replaces the
+      availability-derived flair wash on this item's inventory slot, sheet
+      display view and merchant card. Unticked = inherit the tier colour.
+
+      A single `wdm-cfg-row`, meant to drop into an existing `wdm-cfg-grid`
+      right after the Availability control. Caller passes the current value
+      (config views render against `source.*`):
+        {{> "systems/witcher-ttrpg-death-march/templates/item/partials/flair-override.hbs" flairColor=source.flairColor}}
+
+      `flairEnabled` is a UI-only helper consumed in
+      WitcherItemSheet._prepareSubmitData (unticked → system.flairColor=null);
+      the picker always submits under system.flairColor. --}}
+<label class="wdm-cfg-row wdm-flair-row"><span>{{localize "WITCHER.Item.FlairColorOverride"}}</span>
+  <span class="wdm-flair-controls" title="{{localize 'WITCHER.Item.FlairColorHint'}}">
+    <input type="checkbox" name="flairEnabled" class="wdm-flair-toggle" {{#if (hasFlair flairColor)}}checked{{/if}} />
+    <input type="color" name="system.flairColor" class="wdm-flair-input"
+           value="{{#if (hasFlair flairColor)}}{{flairColor}}{{else}}#b0a894{{/if}}" />
+  </span>
+</label>

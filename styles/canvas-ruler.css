@@ -1,0 +1,91 @@
+/* =============================================================================
+   CANVAS TOKEN RULER — Foundry V13's drag-distance HUD
+   ---------------------------------------------------------------------------
+   When you drag a token in V13 a floating label appears at each waypoint of
+   the planned path showing distance / cost / elevation. The label DOM
+   structure is fixed by Foundry (templates/hud/waypoint-label.hbs):
+       <div class="waypoint-label …">
+         <i class="icon …"></i>                  ← action icon (or .img)
+         <span class="total-measurement">5 ft</span>
+         <span class="delta-measurement">(+5)</span>
+         <i class="icon"></i>                    ← elevation icon
+         <span class="total-elevation">0 ft</span>
+       </div>
+   We restyle that DOM to match the chrome dock (dark amber gradients,
+   hairline borders, Bebas-style display font for the numbers). Doesn't
+   touch the PIXI dashed line / waypoint dots — those are restyled by the
+   TokenRuler subclass (witcher-token-style.mjs).
+   =============================================================================*/
+
+/* Immersive Token Camera counter-rotation. immersive-token-camera.mjs
+   patches HeadsUpDisplayContainer#align to add a rotate(θ) to the HUD
+   container so world-coord left/top values land at the correct rotated
+   screen position; that rotation also spins the label text, so we stamp
+   --wdm-immersive-neg-rot: -θrad on the HUD and append rotate(var(...))
+   to each label to cancel out the rotation on the box itself and keep
+   the text upright. Default is 0rad so this is a no-op when immersive
+   is off (or on an unrotated stage). */
+.waypoint-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    padding: 0.25rem 0.5rem;
+    transform: scale(var(--ui-scale, 1))
+               translate(var(--transformX, -50%), var(--transformY, 0%))
+               rotate(var(--wdm-immersive-neg-rot, 0rad));
+    background:
+        radial-gradient(ellipse 8.75rem 3.75rem at 50% 0%, rgb(from var(--wdm-amber-hi) r g b / 0.13), transparent 75%),
+        linear-gradient(180deg, rgba(22, 18, 13, 0.96) 0%, rgb(from var(--wdm-bg) r g b / 0.96) 100%);
+    border: 1px solid var(--wdm-amber-dim, #6e5224);
+    border-radius: 0;
+    box-shadow:
+        0 0.25rem 0.75rem rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(0, 0, 0, 0.4),
+        inset 0 0 0 1px rgb(from var(--wdm-amber-hi) r g b / 0.08);
+    font-family: var(--wdm-font-display, "Bebas Neue", sans-serif);
+    font-size: calc(0.75rem * var(--wdm-tf, 1));
+    letter-spacing: 0.10em;
+    color: var(--wdm-ink-hi, #cac4b0);
+    line-height: 1;
+    white-space: nowrap;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.85);
+    pointer-events: none;
+}
+
+.waypoint-label .icon {
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    color: var(--wdm-amber-hi, #b89464);
+}
+.waypoint-label .img {
+    width: 0.875rem;
+    height: 0.875rem;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    filter: brightness(1.05) drop-shadow(0 0.0625rem 0 rgba(0, 0, 0, 0.6));
+}
+.waypoint-label .action-label {
+    color: var(--wdm-amber-hi, #b89464);
+    text-transform: uppercase;
+}
+
+/* Headline number — the running total. Brighter amber, slightly larger
+ * so it reads at a glance from across the map. */
+.waypoint-label .total-measurement {
+    font-size: calc(0.8125rem * var(--wdm-tf, 1));
+    color: var(--wdm-amber-bright, #c8a878);
+    font-weight: 600;
+}
+
+/* The (+N) delta that follows the total — secondary, dimmer. */
+.waypoint-label .delta-measurement,
+.waypoint-label .delta-elevation {
+    font-size: calc(0.625rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink-dim, #8a857a);
+    opacity: 0.85;
+}
+
+.waypoint-label .total-elevation {
+    font-size: calc(0.6875rem * var(--wdm-tf, 1));
+    color: var(--wdm-ink, #b0a994);
+}

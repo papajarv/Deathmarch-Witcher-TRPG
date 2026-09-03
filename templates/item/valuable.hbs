@@ -1,0 +1,269 @@
+{{!-- Valuable item sheet — miscellaneous gear, subtype-driven:
+        generic · book · map · remains.
+        Two-layer (cog toggle):
+          DISPLAY → Witcher 3 in-game tooltip readout (players read)
+          CONFIG  → editable form (owners only)
+      The subtype select lives in CONFIG and drives both layers. Book detail
+      (DC / filter / skill range / stress steps) is owned by the dedicated
+      "Configure Book" dialog (GM), not inline here. Maps are special: the
+      configured image feeds the full-screen map overlay (chrome/map.js). --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-race" data-mode="{{mode}}" data-subtype="{{subtype}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}{{localize 'WITCHER.Sheet.Item.Cog.BackToDisplay'}}{{else}}{{localize 'WITCHER.Sheet.Item.Cog.ConfigureItem'}}{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW — Witcher 3 tooltip layout
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view{{#if (hasFlair source.flairColor)}} has-flair{{/if}}"{{#if (hasFlair source.flairColor)}} style="--wdm-rar: {{source.flairColor}}"{{/if}}>
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">{{subtypeLabel}}</div>
+        </div>
+      </header>
+
+      {{!-- BOOK — no mechanical readout in the player-facing view; reading
+            progress (below) and the description carry the in-world feel. The
+            only thing worth surfacing is when the system is switched off. --}}
+      {{#if (eq subtype "book")}}
+        {{#unless bookEnabled}}
+          <div class="wdm-w3-effects wdm-empty">{{localize 'WITCHER.Sheet.Valuable.Text.BookSystemIsDisabledInWorldSettings'}}</div>
+        {{/unless}}
+      {{/if}}
+
+      {{!-- MAP --}}
+      {{#if (eq subtype "map")}}
+        {{#if hasMap}}
+          <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Valuable.Text.Map'}}</div>
+          <div class="wdm-valuable-map-preview">
+            <img src="{{mapImage}}" alt="map" />
+          </div>
+          <div class="wdm-w3-subtitle">{{localize 'WITCHER.Sheet.Valuable.Text.OpenItFromYourInventoryToViewTheFullMap'}}</div>
+        {{else}}
+          <div class="wdm-w3-effects wdm-empty">{{localize 'WITCHER.Sheet.Valuable.Text.NoMapImageSet'}}</div>
+        {{/if}}
+      {{/if}}
+
+      {{!-- REMAINS — the name + icon already identify the carcass, so the
+            display layer tracks only what's been DONE to it. --}}
+      {{#if (eq subtype "remains")}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Valuable.Text.Carcass'}}</div>
+        <div class="wdm-remains-state">
+          <span class="wdm-remains-tag{{#if remainsState.harvested}} is-done{{/if}}">
+            <i class="fa-solid {{#if remainsState.harvested}}fa-check{{else}}fa-xmark{{/if}}"></i> {{localize 'WITCHER.Sheet.Valuable.Text.Harvested'}}
+          </span>
+          {{#if remainsState.hasMutagen}}
+          <span class="wdm-remains-tag{{#if remainsState.extracted}} is-done{{/if}}">
+            <i class="fa-solid {{#if remainsState.extracted}}fa-check{{else}}fa-xmark{{/if}}"></i> {{localize 'WITCHER.Sheet.Valuable.Text.MutagenExtracted'}}
+          </span>
+          {{/if}}
+          <span class="wdm-remains-tag wdm-remains-charges" title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.EachHarvestExtractCosts1ChargeDissectCos'}}">
+            <i class="fa-solid fa-droplet"></i> {{remainsState.charges}}/{{remainsState.chargesMax}} {{localize 'WITCHER.Sheet.Valuable.Text.Charges'}}
+          </span>
+        </div>
+      {{/if}}
+
+      {{!-- TROPHY — monster category; the benefit is its own Active Effects --}}
+      {{#if (eq subtype "trophy")}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Valuable.Text.Trophy'}}{{#if trophy.monsterCategory}} · {{trophy.monsterCategory}}{{/if}}</div>
+      {{/if}}
+
+      {{!-- READING PROGRESS (books, owned by an actor) — shown above the description --}}
+      {{#if bookProgress}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Valuable.Text.ReadingProgress'}}</div>
+        <div class="wdm-book-progress{{#if bookProgress.completed}} is-complete{{/if}}">
+          <div class="wdm-book-progress-bar"><span style="width:{{bookProgress.percent}}%"></span></div>
+          <div class="wdm-book-progress-pct">{{bookProgress.percent}}%{{#if bookProgress.completed}} · {{localize 'WITCHER.Sheet.Valuable.Text.Complete'}}{{/if}}</div>
+        </div>
+      {{/if}}
+
+      {{!-- DESCRIPTION — remains have no description/value/availability; they
+            are just monster leavings, so skip everything but weight below. --}}
+      {{#unless (eq subtype "remains")}}
+        {{#if source.description}}
+          <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Valuable.Text.Description'}}</div>
+          <div class="wdm-w3-effects">{{{source.description}}}</div>
+        {{/if}}
+      {{/unless}}
+
+      {{!-- FOOTER — full gear footer for generic/book/map; remains show weight only --}}
+      {{#if (eq subtype "remains")}}
+        <div class="wdm-w3-footer">
+          <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        </div>
+      {{else}}
+        <div class="wdm-w3-footer">
+          <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+          {{#unless (eq source.quantity 1)}}
+            <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.Quantity'}}"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+          {{/unless}}
+          <span class="wdm-w3-foot-spacer"></span>
+          <span class="wdm-w3-foot-cell wdm-w3-rarity" title="{{localize 'WITCHER.Sheet.Item.Text.Availability'}}">{{localize (lookup WITCHER.availability source.availability)}}</span>
+          <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+        </div>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW — editable form
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Valuable.Hint.ValuableName'}}" />
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Valuable.Text.Details'}}</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.StackSize'}}">{{localize 'WITCHER.Sheet.Valuable.Label.Quantity'}}</span>
+          <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.WeightPerUnit'}}">{{localize 'WITCHER.Sheet.Valuable.Label.WeightKg'}}</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.SaleValuePerUnit'}}">{{localize 'WITCHER.Sheet.Valuable.Label.Cost'}}</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.MarketRarityOnTheRawAvailabilityScale'}}">{{localize 'WITCHER.Sheet.Valuable.Label.Availability'}}</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        {{> "systems/witcher-ttrpg-death-march/templates/item/partials/flair-override.hbs" flairColor=source.flairColor}}
+      </div>
+
+      {{#if showSubtypeSelect}}
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Valuable.Text.Subtype'}}</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.WhatKindOfValuableThisIs'}}">{{localize 'WITCHER.Sheet.Valuable.Label.Type'}}</span>
+            <select name="system.type">
+              <option value=""        {{#if (eq subtype "")       }}selected{{/if}}>{{localize 'WITCHER.Sheet.Valuable.Text.Generic'}}</option>
+              {{!-- "Book" is no longer a valuable subtype — it's a first-class
+                    item type. Legacy items still rendered here while waiting
+                    for migration keep their "book" string until then. --}}
+              {{#if (eq subtype "book")}}
+                <option value="book" selected>{{localize 'WITCHER.Sheet.Valuable.Text.BookLegacyWillMigrate'}}</option>
+              {{/if}}
+              <option value="trophy"  {{#if (eq subtype "trophy") }}selected{{/if}}>{{localize 'WITCHER.Sheet.Valuable.Text.Trophy'}}</option>
+            </select>
+          </label>
+        </div>
+      {{/if}}
+
+      {{!-- BOOK CONFIG — rich detail lives in the dialog --}}
+      {{#if (eq subtype "book")}}
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Valuable.Text.BookSetup'}}</div>
+        {{#if bookEnabled}}
+          <div class="wdm-cfg-grid">
+            <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.WhichBookMechanicThisDrives'}}">{{localize 'WITCHER.Sheet.Valuable.Label.BookType'}}</span>
+              <select name="system.bookConfig.bookType">
+                <option value="monster" {{#if (eq bookType "monster")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Valuable.Text.MonsterLore'}}</option>
+                <option value="skill"   {{#if (eq bookType "skill")  }}selected{{/if}}>{{localize 'WITCHER.Sheet.Valuable.Text.Skill'}}</option>
+                {{!-- Stress books only when the stress homebrew is on; still
+                      shown if this book is ALREADY stress-typed so the GM can
+                      see/change it rather than silently losing the type. --}}
+                {{#if (or (homebrew "stress") (eq bookType "stress"))}}
+                <option value="stress"  {{#if (eq bookType "stress") }}selected{{/if}}>{{localize 'WITCHER.Sheet.Valuable.Text.NovelLoreStress'}}</option>
+                {{/if}}
+              </select>
+            </label>
+          </div>
+          <button type="button" class="wdm-cfg-action-btn" data-action="configureBook">
+            <i class="fa-solid fa-book-bookmark"></i> Configure Book…
+          </button>
+          <p class="wdm-cfg-hint">{{bookSummary}}</p>
+        {{else}}
+          <p class="wdm-cfg-hint">{{localize 'WITCHER.Sheet.Valuable.Text.BookSystemHomebrewIsOffEnableItInWorldSe'}}</p>
+        {{/if}}
+      {{/if}}
+
+      {{!-- MAP CONFIG — image picker --}}
+      {{#if (eq subtype "map")}}
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Valuable.Text.MapImage'}}</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row is-wide"><span title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.ImageShownInTheFullScreenMapOverlay'}}">{{localize 'WITCHER.Sheet.Valuable.Label.ImagePath'}}</span>
+            <input type="text" name="system.mapImage" value="{{source.mapImage}}" placeholder="path/to/map.webp" />
+          </label>
+          <button type="button" class="wdm-cfg-action-btn" data-action="editImage" data-edit="system.mapImage">
+            <i class="fa-solid fa-image"></i> {{#if hasMap}}{{localize 'WITCHER.Sheet.Valuable.Text.ChangeImage'}}{{else}}{{localize 'WITCHER.Sheet.Valuable.Text.ChooseImage'}}{{/if}}
+          </button>
+        </div>
+        {{#if hasMap}}
+          <img class="wdm-valuable-map-thumb" src="{{mapImage}}" data-action="editImage" data-edit="system.mapImage" alt="" title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.ClickToChangeMapImage'}}" />
+        {{/if}}
+      {{/if}}
+
+      {{!-- REMAINS CONFIG — source monster link --}}
+      {{#if (eq subtype "remains")}}
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Valuable.Text.SourceMonster'}}</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row is-wide"><span title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.UuidOfTheMonsterTheseRemainsCameFrom'}}">{{localize 'WITCHER.Sheet.Valuable.Label.MonsterUUID'}}</span>
+            <input type="text" name="system.monsterUuid" value="{{source.monsterUuid}}" placeholder="Actor.xxxxxxxxxxxxxxxx" />
+          </label>
+        </div>
+        {{#if remainsMonsterName}}<p class="wdm-cfg-hint">{{localize 'WITCHER.Sheet.Valuable.Text.Linked'}} {{remainsMonsterName}}</p>{{/if}}
+      {{/if}}
+
+      {{!-- TROPHY CONFIG — magical monster trophy (Imbue Trophy ritual). The
+            benefit is authored as transfer Active Effects below; they apply to
+            the holder while the trophy is carried. --}}
+      {{#if (eq subtype "trophy")}}
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Valuable.Text.Trophy'}}</div>
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.TheMonsterCategoryThisTrophyComesFrom'}}">{{localize 'WITCHER.Sheet.Valuable.Label.MonsterCategory'}}</span>
+            <input type="text" name="system.trophyConfig.monsterCategory" value="{{source.trophyConfig.monsterCategory}}" placeholder="{{localize 'WITCHER.Sheet.Valuable.Hint.VampireRelict'}}" />
+          </label>
+        </div>
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Valuable.Text.Effects'}} <span class="wdm-cfg-sub">{{localize 'WITCHER.Sheet.Valuable.Text.FoundryActiveEffectsSub'}}</span></div>
+        <div class="wdm-cfg-effects">
+          {{#if effects.length}}
+            <ul class="wdm-effect-list">
+              {{#each effects}}
+                <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                  <div class="wdm-effect-head">
+                    <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                    <span class="wdm-effect-name">{{this.name}}</span>
+                    {{#if this.duration.label}}<span class="wdm-effect-duration">{{this.duration.label}}</span>{{/if}}
+                    <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}{{localize 'WITCHER.Sheet.Valuable.Text.Enable'}}{{else}}{{localize 'WITCHER.Sheet.Valuable.Text.Disable'}}{{/if}}">
+                      <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                    </a>
+                    <a data-action="editEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+                    <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Valuable.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
+                  </div>
+                </li>
+              {{/each}}
+            </ul>
+          {{else}}
+            <p class="wdm-empty">{{localize 'WITCHER.Sheet.Valuable.Text.NoEffectsConfigured'}}</p>
+          {{/if}}
+          <button type="button" class="wdm-add-effect" data-action="createEffect">
+            <i class="fa-solid fa-plus"></i> {{localize 'WITCHER.Sheet.Valuable.Text.AddEffect'}}
+          </button>
+        </div>
+      {{/if}}
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Valuable.Text.Description'}}</div>
+      <textarea class="wdm-cfg-textarea is-tall" name="system.description"
+                placeholder="{{localize 'WITCHER.Sheet.Valuable.Hint.WhatThisItemIsWhereItCameFromWhatItSWort'}}">{{source.description}}</textarea>
+
+    </div>
+  </div>
+
+</div>

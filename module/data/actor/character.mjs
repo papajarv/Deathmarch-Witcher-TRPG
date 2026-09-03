@@ -1,0 +1,695 @@
+/**
+ * CharacterData — TypeDataModel for player characters.
+ *
+ * Composes the shared actor templates (stats, skills, derived stats,
+ * currency, lifepath, counters) and adds homebrew fields per ADR 0003.
+ *
+ * Per the homebrew toggle convention: schema fields are always present;
+ * runtime *behavior* gates on `isHomebrewEnabled(...)`. Disabling a
+ * homebrew toggle therefore never loses data.
+ */
+
+import { statsSchema }        from "./templates/stats.mjs";
+import { skillsSchema }       from "./templates/skills.mjs";
+import { derivedStatsSchema } from "./templates/derivedStats.mjs";
+import { currencySchema, calcCurrencyWeight } from "./templates/currency.mjs";
+import { lifepathSchema }     from "./templates/lifepath.mjs";
+import { countersSchema }     from "./templates/counters.mjs";
+import { combatRoundSchema }  from "./templates/combatRound.mjs";
+import { combatModsSchema }   from "./templates/combatMods.mjs";
+import { guardSchema }        from "./templates/guard.mjs";
+import { applyConditionActions, applyEventLedger } from "../../setup/config.mjs";
+import { derivedMods } from "../../mechanics/statusEngine.mjs";
+import { isEoArmorModelOn, totalEffectiveEv, EO_HALF_EV_SKILLS } from "../../mechanics/eoArmorModel.mjs";
+import { layeringEvSurcharge } from "../../mechanics/armorLayering.mjs";
+import { hrContainerEquipEV, containerEquipLimit } from "../../mechanics/house-rules-config.mjs";
+
+const fields = foundry.data.fields;
+
+const SYSTEM_ID = "witcher-ttrpg-death-march";
+
+/* Skills the armor EV penalty folds into (Core p.78 "EV & Magic"). The
+ * penalty lands on each skill's `modifier` in prepareDerivedData so it
+ * surfaces on the sheet and in the roll total, not just at roll time. */
+const EV_MAGIC_SKILLS = new Set(["spellcast", "hexweave", "ritcraft"]);
+
+export class CharacterData extends foundry.abstract.TypeDataModel {
+
+    static defineSchema() {
+        return {
+            ...statsSchema(),
+            ...skillsSchema(),
+            ...derivedStatsSchema(),
+            ...currencySchema(),
+            ...lifepathSchema(),
+            ...countersSchema(),
+            ...combatRoundSchema(),
+            ...combatModsSchema(),
+            // Combat Extended guard-stance state (gated on the
+            // extendedCombat homebrew toggle at runtime; schema present
+            // unconditionally so values survive a toggle flip).
+            ...guardSchema(),
+
+            // Homebrew (ADR 0003): stress mechanic. Schema always present;
+            // sheet renders the stress tab + accumulation logic gates on
+            // isHomebrewEnabled("stress").
+            stress: new fields.NumberField({ initial: 0, integer: true, min: 0 }),
+
+            // Homebrew (ADR 0003): food & drink — current satiety pool. Range
+            // is BODY-scaled: MAX = drain × 24 (roughly one day of BMR), FLOOR
+            // = -MAX (up to a full day of starvation depth). Default 100 = Full
+            // for a BODY 5 character under legacy defaults; the food-and-drink
+            // mechanic re-clamps per-actor on every adjustSatiety call.
+            // Fractional values valid (combat STA→satiety drain is -0.5 per
+            // STA). The hunger TIER is NOT stored — it derives from satiety
+            // as a percentage of the actor's MAX every reconcile cycle.
+            satiety: new fields.NumberField({ initial: 72, min: -288, max: 288 }),
+
+            // Locked hunger stress: the portion of the actor's total stress
+            // that was granted by the hunger cascade (Hungry → Famished 4).
+            // Counts toward every stress-based DC / trigger just like normal
+            // stress, BUT cannot be removed by voluntary means (meditation,
+            // therapy, roleplay). The ONLY way this decreases is by eating
+            // back UP through the tier that granted it. Range 0..5:
+            //   +1 crossing DOWN into Hungry / Famished 1 / 2 / 3 / 4
+            //   -1 crossing UP out of each tier
+            // See mechanics/foodAndDrink.mjs `hungerDepthFor()` /
+            // `applyHungerDepthStress()` for the debt-model implementation.
+            hungerStress: new fields.NumberField({ initial: 0, min: 0, max: 5, integer: true }),
+
+            // Per-actor satiety drain modifiers. ActiveEffects target these
+            // paths via the standard AE change pipeline — e.g. an "Iron
+            // Stomach" perk multiplies `scale` by 0.5 to halve the per-hour
+            // and per-combat-STA drain; a "Cursed Appetite" effect ADDs 3
+            // to `flatPerHour` to make the actor lose extra satiety on top
+            // of the normal formula. Schema is always present (ADR 0003);
+            // only the reading code paths gate on foodAndDrink.
+            satietyDrain: new fields.SchemaField({
+                scale:       new fields.NumberField({ initial: 1, min: 0 }),
+                flatPerHour: new fields.NumberField({ initial: 0 })
+            }),
+
+            // Per-character bestiary knowledge tracking. Bestiary research is
+            // always on (no toggle). NOTE: the live chrome bestiary stores
+            // per-character progress in flags[SYSTEM_ID].bestiary, not here;
+            // this field is retained only so legacy data on existing worlds
+            // isn't dropped by schema validation.
+            bestiary: new fields.ObjectField({ initial: {} }),
+
+            // Homebrew (ADR 0003): per-book reading state. Keyed by encoded
+            // book item UUID. { lastAttemptDay, hits, currentStep, completed }.
+            bookUsage: new fields.ObjectField({ initial: {} }),
+
+            // Variable portrait config. Schema always present; the feature is
+            // enabled per-actor by owning a race with system.variablePortrait
+            // checked (gate lives on the race item, not here). `base` holds one
+            // image path per toxicity tier (index 0..6); `conditions` are
+            // user-defined override columns matched against active-effect /
+            // status names, each carrying its own per-tier image array. See
+            // module/chrome/integrations/portrait-toxicity.js.
+            variablePortrait: new fields.SchemaField({
+                base: new fields.ArrayField(new fields.StringField({ initial: "" }), { initial: [] }),
+                conditions: new fields.ArrayField(new fields.SchemaField({
+                    name:    new fields.StringField({ initial: "" }),
+                    /* Match ROWS. Each row has a value (effect name / status id
+                     * substring) and a join operator ("and" | "or") that says
+                     * how it combines with the accumulated result of the rows
+                     * ABOVE it. Row 0's join is meaningless — the first row
+                     * seeds the result. Left-to-right folding: no operator
+                     * precedence to trip over. GMs pick AND / OR from a
+                     * dropdown next to each row, so they don't have to know
+                     * `&&` / `||` syntax. Legacy `match` string from the
+                     * pre-array schema still round-trips through
+                     * portrait-toxicity.js's normalizer. */
+                    /* No `choices:` on `join` — Foundry's StringField
+                     * validator rejects out-of-choices values on the
+                     * whole document, and any legacy save that carries
+                     * a garbage join (blank string from a partial
+                     * migration, uppercase "AND" from a manual edit,
+                     * numeric 1/0 from an experiment) would make the
+                     * doc fail its full-diff validation. That failure
+                     * fires on EVERY actor.update — including manual
+                     * toxicity edits from the chrome / GM tools / sheet
+                     * that don't touch variablePortrait at all — so
+                     * one bad row silently blocks unrelated writes.
+                     * Instead, keep the field free-form here and
+                     * normalize to "and" | "or" at read time in
+                     * portrait-toxicity.js's `normalizeMatches`. */
+                    matches: new fields.ArrayField(new fields.SchemaField({
+                        value: new fields.StringField({ initial: "" }),
+                        join:  new fields.StringField({ initial: "and", blank: true }),
+                        /* Per-row source selector — which actor surface to scan
+                         * for this term. See MATCH_SOURCES in
+                         * portrait-toxicity.js for the accepted values. Kept
+                         * free-form (no `choices`) for the same reason `join`
+                         * is — one legacy value can't invalidate the whole doc
+                         * and block unrelated actor.update writes. Legacy rows
+                         * without a source get "auto" via normalizeMatches. */
+                        source: new fields.StringField({ initial: "auto", blank: true }),
+                        /* Optional data path used only when `source === "path"`.
+                         * Read via foundry.utils.getProperty at match time. */
+                        path:   new fields.StringField({ initial: "", blank: true }),
+                        /* Per-row match mode: "substring" (contains — legacy),
+                         * "exact" (case-insensitive equality), or "regex" (JS
+                         * regex source, case-insensitive). Only meaningful for
+                         * named sources; `source: "auto"` always uses substring
+                         * regardless. See MATCH_MODES in portrait-toxicity.js. */
+                        mode:   new fields.StringField({ initial: "substring", blank: true })
+                    }), { initial: [] }),
+                    tiers:   new fields.ArrayField(new fields.StringField({ initial: "" }), { initial: [] })
+                }), { initial: [] })
+            })
+        };
+    }
+
+    /**
+     * Sum the weight of all carried coinage.
+     * Read at overhaul-ui topbar.js:221 as `actor.system.calcCurrencyWeight()`.
+     */
+    calcCurrencyWeight() {
+        return calcCurrencyWeight(this.currency);
+    }
+
+    /**
+     * Pre-AE preparation — runs BEFORE the "initial" AE phase. Used to seed
+     * any field that AEs are expected to add on top of, so a +N AE landing
+     * on the field stacks instead of being absorbed by a floor.
+     *
+     * Vigor (Core p.38) is fully ADDITIVE:
+     *      displayed_vigor = profession_baseline + source_invested + AE_bonus
+     * No floor / max — every term contributes its full value. The profession
+     * grants its baseline regardless of investment; the player invests source
+     * on top of (not in place of) that baseline; AE perks add on top of both.
+     *
+     * Mechanics of the stack:
+     *   - source.derivedStats.vigor is the player's invested points (what the
+     *     stepper writes). Read here as `this.derivedStats.vigor` because
+     *     no AE has applied yet — the value is the unmodified source.
+     *   - profession_baseline comes from the highest-vigor profession on the
+     *     actor (multi-profession is an edge case; highest wins).
+     *   - AE_bonus comes from the "initial" phase that runs after this hook.
+     *
+     * Concretely with profession=2, AE=+2, source=0:
+     *      prepareBaseData → vigor = 0 + 2 = 2
+     *      AE initial      → vigor = 2 + 2 = 4
+     *   +1 click: source 0→1, vigor = 1+2 = 3, AE adds 2 → 5  (display +1)
+     *   +1 click: source 1→2, vigor = 2+2 = 4, AE adds 2 → 6  (display +1)
+     *   −1 click: source N→N-1, vigor drops by 1 cleanly.
+     */
+    prepareBaseData() {
+        super.prepareBaseData?.();
+        if (!this.derivedStats) return;
+        let profVigor = 0;
+        for (const it of this.parent?.items ?? []) {
+            if (it.type === "profession") profVigor = Math.max(profVigor, Number(it.system?.vigor) || 0);
+        }
+        const invested = Number(this.derivedStats.vigor) || 0;
+        this.derivedStats.vigor = invested + profVigor;
+    }
+
+    /**
+     * Derived data — RAW Witcher TRPG (Core p.48 master table, p.176
+     * verbal combat, p.156 wound threshold, p.162 death state).
+     *
+     * Pipeline:
+     *   1. Snapshot post-AE stats and compute base wound threshold.
+     *   2. Decide health state by comparing hp.value to threshold:
+     *        - hp ≤ 0  → dying    → ALL stats × 1/3 (p.162)
+     *        - hp < wt → wounded  → REF/DEX/INT/WILL × 1/2 (p.156)
+     *      Penalties mutate `this.stats[k].value` in place so every
+     *      downstream calculation (derived numbers AND skill totals)
+     *      reads the reduced number without further work.
+     *   3. Compute all derived numbers from the (possibly penalized)
+     *      stat values. HP/STA max therefore also reduce when dying —
+     *      that's the RAW behavior ("primary AND derived drop to 1/3").
+     *   4. Compute Punch / Kick / Bonus Melee from the BODY table.
+     *   5. Recompute skill totals = stat.value + rank + modifier.
+     *
+     * Auto-derived (player can't edit):
+     *   hp.max / sta.max  = ((BODY+WILL)/2) × 5         p.48
+     *   resolve            = ((WILL+INT)/2) × 5         p.176
+     *   focus.max          = ((WILL+INT)/2) × 3         Journal p.145
+     *   stun               = clamp((BODY+WILL)/2,1,10)  p.48
+     *   rec / woundThr     = (BODY+WILL)/2              p.48/p.156
+     *   enc                = BODY × 10                  p.47
+     *   run/leap           = SPD×3 / Run÷5              p.47
+     *   meleeBonus         = ceil((BODY-6)/2)×2         p.48
+     *   punch / kick       = 1d6+meleeBonus / +4        p.48
+     *
+     * Player-set: hp.value, sta.value, shield, vigor.
+     */
+    /** Pre-validation migration. Runs once per load before schema validation,
+     *  so legacy stored shapes are reshaped silently:
+     *    - `lifepathModifiers.ignoredArmorEncumbrance: true`  → 99 (full ignore)
+     *    - `lifepathModifiers.ignoredArmorEncumbrance: false` →  0
+     *    The field was BooleanField until Witchers Reborn added Bear · Juggernaut
+     *    which needs a partial-ignore (6 EV). The type flipped to NumberField;
+     *    this coercion keeps existing worlds loading without validation errors. */
+    static migrateData(data) {
+        const lp = data?.lifepathModifiers;
+        if (lp && typeof lp.ignoredArmorEncumbrance === "boolean") {
+            lp.ignoredArmorEncumbrance = lp.ignoredArmorEncumbrance ? 99 : 0;
+        }
+        /* Variable-portrait data self-heal. The schema changed shape
+         * (single `match` string → `matches` array of `{value, join}`)
+         * and any partially-migrated document with a mismatched sub-shape
+         * would fail the doc-level validation Foundry runs on EVERY
+         * actor.update — silently blocking unrelated writes like a manual
+         * toxicity edit. Coerce anything unexpected into the current
+         * shape so partial updates always find a validation-clean source. */
+        const vp = data?.variablePortrait;
+        if (vp && typeof vp === "object") {
+            if (!Array.isArray(vp.base)) vp.base = [];
+            if (!Array.isArray(vp.conditions)) vp.conditions = [];
+            for (const c of vp.conditions) {
+                if (!c || typeof c !== "object") continue;
+                if (typeof c.name !== "string") c.name = String(c.name ?? "");
+                if (!Array.isArray(c.tiers)) c.tiers = [];
+                /* Legacy single-string `match` → one-row matches array. */
+                if (!Array.isArray(c.matches)) {
+                    const legacy = String(c.match ?? "").trim();
+                    c.matches = legacy ? [{ value: legacy, join: "and" }] : [];
+                }
+                delete c.match;
+                for (const r of c.matches) {
+                    if (!r || typeof r !== "object") continue;
+                    if (typeof r.value !== "string") r.value = String(r.value ?? "");
+                    r.join = r.join === "or" ? "or" : "and";
+                }
+                /* Strip malformed entries (non-objects) so ArrayField's
+                 * SchemaField cleaner doesn't choke on them. */
+                c.matches = c.matches.filter(r => r && typeof r === "object");
+            }
+        }
+        return super.migrateData(data);
+    }
+
+    prepareDerivedData() {
+        // (0a) Fold each core stat's ActiveEffect `modifier` into its prepared
+        //      `value`. The base value is clamped 1-10 at the schema (IP can't
+        //      exceed RAW range), but the modifier field is unbounded — so a
+        //      buff/debuff can take the PREPARED stat above 10 or below 1.
+        //      Done FIRST so every downstream calc (armor EV, wound/death,
+        //      derived numbers, skill totals) reads the modified stat. Only
+        //      stats carrying a `.modifier` field participate (luck/toxicity
+        //      are pools and don't). The statblock's delta readout then shows
+        //      `modified - base` = the net modifier.
+        for (const stat of Object.values(this.stats ?? {})) {
+            if (typeof stat?.modifier === "number" && stat.modifier !== 0) {
+                stat.value = (Number(stat.value) || 0) + stat.modifier;
+            }
+        }
+
+        // (0a′) Empathy floors at 1 no matter how deep the penalty runs — the
+        //       witcher mutation's −4 "cannot reduce Empathy below 1" (Core
+        //       p.47). The fold above is otherwise uncapped, so clamp the
+        //       prepared EMP value here.
+        if (this.stats?.emp) {
+            this.stats.emp.value = Math.max(1, Number(this.stats.emp.value) || 1);
+        }
+
+        // (0) Armor EV penalty (Core p.78). Sum the encumbranceValue from
+        //     all equipped armor pieces (shields excluded — they're held,
+        //     not worn). Subtracted from REF and DEX with a floor of 1.
+        //     Applied BEFORE wound / death state so all downstream math
+        //     reflects the encumbered numbers. Per the "EV & Magic" sidebar
+        //     the same total is ALSO subtracted from Spell Casting, Hex
+        //     Weaving, and Ritual Crafting rolls (it does NOT touch Vigor).
+        //     We expose the total on `this.armorEV` so the casting flow can
+        //     apply that roll penalty; we don't fold it into the skill
+        //     totals here because it only applies to magic rolls, not the
+        //     general skill check.
+        /* Full-ignore lifepath modifier (99+ = "skip EV entirely") short-circuits
+         * the whole calc. Numeric values below 99 subtract from the running total
+         * further down, so Witchers Reborn's Bear · Juggernaut (`+6`) composes
+         * cleanly with the RAW check without needing its own branch. */
+        const ignoreEV = Number(this.lifepathModifiers?.ignoredArmorEncumbrance) || 0;
+        const armorPieces = ignoreEV >= 99
+            ? []
+            : (this.parent?.items?.filter?.(
+                i => i.type === "armor" && i.system?.equipped &&
+                     (i.system?.location !== "Shield" && i.system?.armorType !== "shield") &&
+                     /* Clothes occupy the armor slot (for layering rules) but
+                      * contribute nothing to SP/EV — their whole gameplay
+                      * effect is carried by transferred ActiveEffects (which
+                      * apply through the actor's normal AE pipeline, not
+                      * through this armor-piece list). Filter here so legacy
+                      * clothes items with residual SP/EV values from before
+                      * the schema tightening don't sneak into the total. */
+                     i.system?.armorType !== "clothes"
+            ) ?? []);
+        /* EV total — under the EO model a worn Superior Arming Suit
+         * reduces each worn Difficult piece's contributed EV by 1.
+         * Under RAW the sum is straight. The CE toggle check returns
+         * false in non-Foundry contexts (tests), defaulting to RAW.
+         *
+         * Read the EFFECTIVE EV (post-socketed-enhancement) when it's
+         * been derived — e.g. a Gnomish enhancement applies `evMod: -1`
+         * via deriveArmorEffective. Falls back to base EV when no
+         * effective overlay is present. */
+        const evOf = (a) => Number(a?.system?.effective?.encumbranceValue ?? a?.system?.encumbranceValue) || 0;
+        const eoOn = isEoArmorModelOn();
+        let evTotal = eoOn
+            ? totalEffectiveEv(armorPieces, { evOf })
+            : armorPieces.reduce((s, a) => s + evOf(a), 0);
+        /* RAW layering surcharge (Core p.154): once you stack layers on a body
+         * zone, each medium layer adds +1 EV and each heavy layer +2. Applied
+         * ONLY to pieces that actually overlap another worn piece, so a lone
+         * armor keeps its base EV (no change to unlayered loadouts). RAW-only —
+         * the Combat Extended / Equipment-Overhaul model has its own encumbrance
+         * rules, so the surcharge is suppressed there. */
+        const _layerEv = eoOn ? 0 : layeringEvSurcharge(armorPieces);
+        evTotal += _layerEv;
+        this.armorLayerEV = _layerEv;   // exposed for the inventory layering readout
+        /* Partial ignore from lifepath modifier — subtract from the pre-tolerance
+         * total. `ignoreEV >= 99` was already short-circuited above (armorPieces
+         * is empty), so this branch only fires for numeric partial-ignore values
+         * like Juggernaut's 6. */
+        if (ignoreEV > 0 && ignoreEV < 99) {
+            evTotal = Math.max(0, evTotal - ignoreEV);
+        }
+        // Schools that tolerate encumbrance (combatMods.evTolerance) ignore that
+        // many points of EV (Bear School ignores armor penalties entirely).
+        evTotal = Math.max(0, evTotal - (Number(this.combatMods?.evTolerance) || 0));
+        /* House rule (containerEquipEV, default off): a character may equip up
+         * to 1 + ceil(BODY/3) containers for free; each one beyond that adds
+         * +1 EV. Added AFTER the armor-EV tolerance so it's a flat carry
+         * penalty (Bear School's armor tolerance doesn't excuse over-packing).
+         * Counts equipped (railed) containers. Exposed on `this.containerEV`
+         * for the inventory readout. */
+        let containerEV = 0;
+        if (hrContainerEquipEV()) {
+            // Budget by the equipped containers' EMPTY WEIGHT (system.weight —
+            // the "Empty Weight (kg)" sheet field), not their count: a 1-kg
+            // backpack counts 1 toward the limit. Each point over 1 + ⌈BODY/3⌉
+            // adds +1 EV. (system.encumb is unused for containers.)
+            const equippedContainerEnc = Math.round((this.parent?.items ?? [])
+                .filter(i => i.type === "container" && i.system?.equipped)
+                .reduce((sum, c) => sum + (Number(c.system?.weight) || 0) * (Number(c.system?.quantity) || 1), 0) * 10) / 10;
+            // EV is a whole-number penalty — round UP any fractional overload
+            // (0.5 over the limit still costs a full +1 EV).
+            containerEV = Math.ceil(Math.max(0, equippedContainerEnc - containerEquipLimit(this.stats?.body?.value)));
+            evTotal += containerEV;
+        }
+        this.containerEV = containerEV;
+        /* RAW: subtract EV from REF and DEX with a floor of 1.
+         * EO:  EV does NOT touch REF/DEX — it reduces max STA + RUN and
+         *      applies a half-EV penalty to a specific set of skills
+         *      (handled below in the STA/RUN derive and skill loop). */
+        if (!eoOn && evTotal > 0) {
+            for (const k of ["ref", "dex"]) {
+                if (this.stats?.[k]) {
+                    this.stats[k].value = Math.max(1, (Number(this.stats[k].value) || 0) - evTotal);
+                }
+            }
+        }
+        this.armorEV = evTotal;
+        this._eoArmorModelOn = eoOn;     // consumed in the STA/RUN derive + skill loop
+
+        // (1) Base wound threshold — needed BEFORE any penalty is applied
+        //     so the dying/wounded decision uses the un-penalized number.
+        const baseBody = Number(this.stats?.body?.value) || 0;
+        const baseWill = Number(this.stats?.will?.value) || 0;
+        const baseWoundThreshold = Math.floor((baseBody + baseWill) / 2);
+
+        // (2) Health state — RAW penalties stack as floor division on the
+        //     stat.value. Dying supersedes wounded (you can only be one).
+        //     Temp HP is effective HP: it absorbs damage before real HP, so it
+        //     also counts toward the wound/death decision — a big enough temp
+        //     buffer pulls you back above the threshold and out of death state.
+        const hpVal   = Number(this.derivedStats?.hp?.value) || 0;
+        const hpTemp  = Math.max(0, Number(this.derivedStats?.hp?.temp) || 0);
+        const hpEff   = hpVal + hpTemp;
+        const hpMax   = baseWoundThreshold * 5;  // would-be max before penalty
+        // Death state needs a *filled* character — fresh sheets are 0/0,
+        // and applying ×⅓ to a zeroed character would just lock them at 0.
+        // Same logic for wounded: no threshold means no penalty.
+        // House rule: Death State is STRICTLY negative HP — exactly 0 does NOT
+        // count (a character sitting at 0 is down but not yet dying). Drives
+        // both `healthState.dying` (the per-turn death-save prompt) and the ×⅓
+        // stat penalty via `applyDeath` below.
+        const dying   = hpMax > 0 && hpEff < 0;
+        const wounded = !dying && baseWoundThreshold > 0 && hpEff > 0 && hpEff < baseWoundThreshold;
+
+        // State-penalty suppression — alchemical effects (e.g. Golden Oriole,
+        // bespoke potions) can carry AE flags that switch off the RAW death /
+        // wound stat reductions. Scanned from the active applicable effects;
+        // the "initial" AE phase has already run, so flags are settled on the
+        // documents. The dying / wounded *state* still reports true — only the
+        // stat mutation is gated, so the rest of the sheet still shows the
+        // condition.
+        let suppressDeath = false, suppressWound = false;
+        for (const e of this.parent?.allApplicableEffects?.() ?? []) {
+            if (!e.active) continue;
+            // Unified action model: suppress-type rows in flags.<sys>.actions.
+            const actions = e.flags?.[SYSTEM_ID]?.actions;
+            if (Array.isArray(actions)) {
+                for (const a of actions) {
+                    if (a?.type !== "suppress") continue;
+                    if (a.what === "death") suppressDeath = true;
+                    if (a.what === "wound") suppressWound = true;
+                }
+            }
+            // Legacy flat flags — honored until the effect is re-saved.
+            if (e.getFlag(SYSTEM_ID, "suppressDeathPenalty")) suppressDeath = true;
+            if (e.getFlag(SYSTEM_ID, "suppressWoundPenalty")) suppressWound = true;
+        }
+        this.healthState = { wounded, dying, woundThreshold: baseWoundThreshold, suppressDeath, suppressWound };
+
+        // A dying character is also below the wound threshold. If only the
+        // DEATH penalty is suppressed, they still take the (lighter) WOUND
+        // penalty — otherwise dropping to 0 HP would make you BETTER off than
+        // sitting at 1 HP. The wound penalty only goes away if it's
+        // suppressed in its own right.
+        const applyDeath = dying && !suppressDeath;
+        const applyWound = !applyDeath && (wounded || dying) && !suppressWound;
+
+        /* Snapshot the unmodified stat values BEFORE the wound/death halving
+         * mutates them. Mirrors the monster.mjs snapshot so consumers that
+         * compute `penalty = unmodified − current` (e.g. monsterVirtualWeapon
+         * for flat-bonus attacks) work uniformly across actor types. PCs
+         * don't currently route attacks through the flat-bonus path, but
+         * keeping the schema field populated avoids a silent 0 for any
+         * future feature that does. */
+        this.derivedStats.refUnmodified  = Number(this.stats?.ref?.value)  || 0;
+        this.derivedStats.dexUnmodified  = Number(this.stats?.dex?.value)  || 0;
+        this.derivedStats.intUnmodified  = Number(this.stats?.int?.value)  || 0;
+        this.derivedStats.willUnmodified = Number(this.stats?.will?.value) || 0;
+
+        if (applyDeath) {
+            // All primary stats (incl. SPD, LUCK) × 1/3. Toxicity is a pool
+            // that tracks a real substance load; halving it because the
+            // bearer is dying doesn't reflect anything physical (the
+            // alchemy in their bloodstream doesn't dilute when they take
+            // their killing blow), and it made every editable tox input
+            // display a divided number while writes went to the source —
+            // typing 100 and seeing 33 come back looked like the input was
+            // broken. Derived numbers will reduce on their own once stats
+            // reduce.
+            for (const k of ["int","ref","dex","body","spd","emp","cra","will","luck"]) {
+                if (this.stats?.[k]) {
+                    this.stats[k].value = Math.floor((Number(this.stats[k].value) || 0) / 3);
+                }
+            }
+        } else if (applyWound) {
+            // REF / DEX / INT / WILL × 1/2 (p.156). BODY/EMP/CRA/SPD/LUCK
+            // are unaffected by the wound penalty per RAW.
+            for (const k of ["ref","dex","int","will"]) {
+                if (this.stats?.[k]) {
+                    this.stats[k].value = Math.floor((Number(this.stats[k].value) || 0) / 2);
+                }
+            }
+        }
+
+        // (3) Derived numbers — read from CURRENT (possibly penalized) stats.
+        const body = Number(this.stats?.body?.value) || 0;
+        const will = Number(this.stats?.will?.value) || 0;
+        const intl = Number(this.stats?.int?.value)  || 0;
+        /* Phase 8 — Armor SPD Penalty (EO p.8): equipped armor pieces with
+         * the `spdPenalty` quality subtract their authored magnitude from
+         * SPD before any derived numbers (RUN / leap) compute. Mutates
+         * `stats.spd.value` like EV/wound do for REF/DEX. Floor at 1 so
+         * RUN never goes negative. */
+        let spdPenSum = 0;
+        for (const a of (this.parent?.items ?? [])) {
+            if (a.type !== "armor" || !a.system?.equipped) continue;
+            const qs = a.system?.effective?.qualities ?? a.system?.qualities ?? [];
+            if (!qs.includes("spdPenalty")) continue;
+            const vals = a.system?.effective?.qualityValues ?? a.system?.qualityValues ?? {};
+            const v = Number(vals.spdPenalty);
+            if (Number.isFinite(v) && v !== 0) spdPenSum += (v > 0 ? v : -v);
+        }
+        if (spdPenSum > 0 && this.stats?.spd) {
+            this.stats.spd.value = Math.max(1, (Number(this.stats.spd.value) || 0) - spdPenSum);
+        }
+
+        /* Encumbrance penalty (Core p.161): carrying more than your capacity
+         * (BODY×10 kg) subtracts 1 from REF, DEX and SPD for every 5 kg you
+         * exceed it — a minimum of 1 the moment you go over at all. Applied to
+         * the live stat values here (before RUN / leap / initiative read them),
+         * floored at 1 like the wound / EV / SPD-quality penalties above.
+         * `encPenalty` is exposed for a sheet / dock readout. */
+        {
+            const encMax  = body * 10;
+            const carried = (typeof this.parent?.getTotalWeight === "function")
+                ? (Number(this.parent.getTotalWeight()) || 0) : 0;
+            const over    = carried - encMax;
+            const encPen  = (encMax > 0 && over > 0) ? Math.max(1, Math.floor(over / 5)) : 0;
+            this.derivedStats.encPenalty = encPen;
+            if (encPen > 0) {
+                for (const k of ["ref", "dex", "spd"]) {
+                    if (this.stats?.[k]) this.stats[k].value = Math.max(1, (Number(this.stats[k].value) || 0) - encPen);
+                }
+            }
+        }
+
+        const spd  = Number(this.stats?.spd?.value)  || 0;
+        const bwHalf = Math.floor((body + will) / 2);
+        const wiHalf = Math.floor((will + intl) / 2);
+
+        this.derivedStats.hp.max         = bwHalf * 5;
+        this.derivedStats.sta.max        = bwHalf * 5;
+        // Engine-driven derived modifiers (mechanics/statusEngine.derivedMods).
+        // Sums every active status's `mods.derived.*` aggregate — currently:
+        //   staMaxFraction  shrinks sta.max multiplicatively (hungry: -0.2,
+        //                   famished: -0.4). Floor at 0 so a stacked debuff
+        //                   never goes negative.
+        //   recBonus        flat REC add (gorged: +2). Composed with the BODY/
+        //                   WILL base below.
+        // This is the food-and-drink (hunger / gorged) hook. Any other future
+        // status can declare the same clause fields to ride the same pipe.
+        const sMods = derivedMods(this.parent);
+        if (sMods.staMaxFraction !== 0) {
+            this.derivedStats.sta.max = Math.max(0,
+                Math.floor(this.derivedStats.sta.max * (1 + sMods.staMaxFraction)));
+        }
+        this.derivedStats.resolve        = wiHalf * 5;
+        // Investigation Focus pool (A Witcher's Journal p.145): max is derived,
+        // value is player-set and drained by failed Evidence checks / obstacles.
+        this.derivedStats.focus.max      = wiHalf * 3;
+        this.derivedStats.stun           = Math.max(1, Math.min(10, bwHalf));
+        // Unmodified stun = from the pre death/wound-penalty BODY+WILL
+        // (baseWoundThreshold). Death saves use this so the death-state ×⅓
+        // debuff doesn't also drag down the save made to survive it.
+        this.derivedStats.stunUnmodified = Math.max(1, Math.min(10, baseWoundThreshold));
+        // REC = daily HP recovery (p.173). The wound penalty (p.156) halves
+        // only REF/DEX/INT/WILL and does NOT recalc derived stats, so REC stays
+        // on the FULL BODY+WILL when wounded. Death State is the lone exception:
+        // "all stats (both primary & derived) fall to 1/3" (p.158). This stays
+        // the canonical value — final-phase AEs (DERIVED_STAT_TARGETS) fold on
+        // top of it, so REC remains modifiable by effects/items.
+        this.derivedStats.rec            = (applyDeath ? Math.floor(baseWoundThreshold / 3) : baseWoundThreshold)
+                                            + (sMods.recBonus || 0);
+        this.derivedStats.woundThreshold = bwHalf;
+        this.derivedStats.enc            = body * 10;
+        this.derivedStats.run            = spd * 3;
+        this.derivedStats.leap           = Math.floor((spd * 3) / 5);
+
+        /* EO armor model: EV reduces max STA by totalEv and RUN by
+         * totalEv (RUN floor = 2×SPD). Applied AFTER the base derives so
+         * the food/drink staMaxFraction multiplier compounds with the
+         * EV reduction. The half-EV skill penalty lands in the skill
+         * loop below via EO_HALF_EV_SKILLS. Leap derives from run/5 so
+         * it must be recomputed AFTER the RUN reduction or it'd report
+         * the pre-EO distance. STA current value is clamped down so the
+         * EV reduction doesn't leave the player with above-cap stamina. */
+        if (this._eoArmorModelOn && evTotal > 0) {
+            this.derivedStats.sta.max = Math.max(0, this.derivedStats.sta.max - evTotal);
+            if ((Number(this.derivedStats.sta.value) || 0) > this.derivedStats.sta.max) {
+                this.derivedStats.sta.value = this.derivedStats.sta.max;
+            }
+            const runFloor = spd * 2;
+            this.derivedStats.run  = Math.max(runFloor, this.derivedStats.run - evTotal);
+            this.derivedStats.leap = Math.floor(this.derivedStats.run / 5);
+        }
+
+        // Vigor floor — applied PRE-AE in prepareBaseData() so AE bonuses
+        // (Gryphon Witcher +2, etc.) stack on the floor rather than racing
+        // it. Nothing to do here.
+
+        // (4) BODY-table brawling math (p.48). Formula derived to match
+        //     the printed table exactly:
+        //       BODY 1-2  → -4  (1d6-4 punch / 1d6 kick)
+        //       BODY 3-4  → -2
+        //       BODY 5-6  →  0
+        //       BODY 7-8  → +2
+        //       BODY 9-10 → +4   etc.
+        const meleeBonus = Math.ceil((body - 6) / 2) * 2;
+        this.derivedStats.meleeBonus = meleeBonus;
+        this.derivedStats.punch = `1d6${meleeBonus >= 0 ? "+" : ""}${meleeBonus}`;
+        this.derivedStats.kick  = `1d6+${meleeBonus + 4}`;
+
+        // (5) Skill totals + difficulty flag. Totals pick up any wound /
+        //     death penalties via the reduced stats.X.value snapshot.
+        //     isDifficult mirrors SKILL_MAP[key].costMultiplier === 2
+        //     (RAW Core p.49 — the 10 two-cost skills) so the sheet can
+        //     mark them without re-reading config in the template.
+        const skillMap = globalThis.CONFIG?.WITCHER?.skillMap ?? {};
+        /* Pre-compute the EO half-EV penalty so the inner loop stays tight.
+         * RAW uses the full EV total on magic skills only; EO uses half EV
+         * on a larger explicit skill set (EO_HALF_EV_SKILLS).
+         *
+         * IMPORTANT: the EV penalty lands on `skill.total` (not by
+         * mutating `skill.modifier`). prepareDerivedData runs every time
+         * an item / system field changes — mutating the source-derived
+         * field stacks the penalty on each call. Folding into `total`
+         * keeps the math idempotent. The penalty is also surfaced as
+         * `skill.evPenalty` so sheet templates / roll dialogs can
+         * label the contribution. */
+        const halfEvPenalty = (this._eoArmorModelOn && evTotal > 0) ? Math.floor(evTotal / 2) : 0;
+        /* Snapshot pre-AE (source) rank values so we can compute how much
+         * an ActiveEffect adds to `skill.value`. Displayed on the sheet so
+         * the user knows why the effective rank is what it is, and used to
+         * cap the input's `max` at `10 - aeAddend` so total rank can't be
+         * pushed past 10 by editing the base while an AE is active. */
+        const srcSkills = this.parent?._source?.system?.skills ?? this._source?.skills ?? {};
+        for (const [statKey, group] of Object.entries(this.skills ?? {})) {
+            const statVal = Number(this.stats?.[statKey]?.value) || 0;
+            for (const [skillKey, skill] of Object.entries(group)) {
+                let evSkillPen = 0;
+                /* RAW: full EV penalty on the three magic skills (Core p.78). */
+                if (!this._eoArmorModelOn && evTotal > 0 && EV_MAGIC_SKILLS.has(skillKey)) {
+                    evSkillPen += evTotal;
+                }
+                /* EO: half-EV on the listed set (covers magic + the wider
+                 * physical-skill set). */
+                if (halfEvPenalty > 0 && EO_HALF_EV_SKILLS.has(skillKey)) {
+                    evSkillPen += halfEvPenalty;
+                }
+                /* AE contribution to `.value` = post-AE minus source. Only
+                 * positive contributions count (a debuff AE would target
+                 * `.modifier`, not `.value`, in practice). */
+                const srcRank = Number(srcSkills?.[statKey]?.[skillKey]?.value) || 0;
+                const postAeRank = Number(skill?.value) || 0;
+                const aeAddend = Math.max(0, postAeRank - srcRank);
+                /* RAW rank cap: 10. AE addend can push post-AE above 10 (the
+                 * schema max applies to source, not derived), so clamp for
+                 * both the sheet display AND the roll math. Without this, an
+                 * item AE that ADDs +2 on top of a source-10 rank would sail
+                 * to 12 and roll with +12 — over the RAW cap. */
+                const rank = Math.max(0, Math.min(10, postAeRank));
+                const mod  = Number(skill?.modifier) || 0;
+                skill.value = rank;                        // clamp visible + downstream reads
+                skill.aeAddend = aeAddend;                 // how much AE contributed
+                skill.baseRankMax = Math.max(0, 10 - aeAddend); // sheet input cap
+                skill.evPenalty = evSkillPen;
+                /* `effectiveModifier` = the modifier value the UI /
+                 * dock should surface (per-skill modifier folded
+                 * with the EV penalty). Kept SEPARATE from `skill
+                 * .modifier` so AE addend arithmetic stays idempotent
+                 * — mutating `.modifier` would re-subtract EV on
+                 * every prepareDerivedData pass. */
+                skill.effectiveModifier = mod - evSkillPen;
+                skill.total = statVal + rank + skill.effectiveModifier;
+                skill.isDifficult = skillMap[skillKey]?.costMultiplier === 2;
+            }
+        }
+
+        // (6) Event-triggered accumulations (adrenalineGain, eachTurn, …) from
+        //     the engine's persistent ledger, then conditional actions — both
+        //     applied last so they see the fully-derived values. Ledger first
+        //     so a condition can test an event-modified value.
+        applyEventLedger(this.parent);
+        applyConditionActions(this.parent);
+    }
+}

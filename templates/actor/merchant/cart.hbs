@@ -1,0 +1,82 @@
+{{!-- Shop basket. Companion window to buy.hbs; lines come from the parent
+      MerchantBuySheet's cart Map, so this template never owns state. --}}
+<div class="merchant-cart-root">
+
+  <div class="mc-header">
+    <div class="mc-header-title"><i class="fas fa-basket-shopping"></i> {{localize "WITCHER.Merchant.Cart"}}</div>
+    {{#if hasBuyer}}
+      <div class="mc-header-buyer">{{buyerName}}</div>
+    {{/if}}
+  </div>
+
+  {{#if hasLines}}
+    <div class="mc-lines">
+      {{#each lines}}
+        {{#if this.stale}}
+          <div class="mc-line is-stale" data-item-id="{{this.id}}">
+            <div class="mc-line-slot"><i class="fas fa-triangle-exclamation"></i></div>
+            <div class="mc-line-body">
+              <div class="mc-line-name">{{this.name}}</div>
+              <div class="mc-line-meta">{{localize "WITCHER.Merchant.CartLineGoneHint"}}</div>
+            </div>
+            <button type="button" class="mc-btn remove" data-action="cartRemove" data-item-id="{{this.id}}"
+              title="{{localize "WITCHER.Merchant.CartRemove"}}"><i class="fas fa-xmark"></i></button>
+          </div>
+        {{else}}
+          <div class="mc-line" data-item-id="{{this.id}}">
+            <div class="mc-line-slot"><img class="mc-line-img" src="{{this.img}}" alt="" /></div>
+            <div class="mc-line-body">
+              <div class="mc-line-name">{{this.name}}</div>
+              <div class="mc-line-meta">
+                <span class="mc-line-unit">{{this.unit}} {{../currency}} {{localize "WITCHER.Merchant.PerUnit"}}</span>
+                {{#if this.isService}}<span class="mc-line-service"><i class="fas fa-handshake"></i> {{localize "WITCHER.Merchant.ServiceBadge"}}</span>{{/if}}
+              </div>
+            </div>
+            <div class="mc-line-qty">
+              <button type="button" class="mc-step" data-action="cartDec" data-item-id="{{this.id}}"
+                title="{{localize "WITCHER.Merchant.CartFewer"}}"><i class="fas fa-minus"></i></button>
+              <span class="mc-qty-value">{{this.qty}}</span>
+              <button type="button" class="mc-step" data-action="cartInc" data-item-id="{{this.id}}"
+                {{#if this.atMax}}disabled title="{{localize "WITCHER.Merchant.CartAtStock"}}"{{else}}title="{{localize "WITCHER.Merchant.CartMore"}}"{{/if}}><i class="fas fa-plus"></i></button>
+            </div>
+            <div class="mc-line-total">{{this.lineTotal}}</div>
+            <button type="button" class="mc-btn remove" data-action="cartRemove" data-item-id="{{this.id}}"
+              title="{{localize "WITCHER.Merchant.CartRemove"}}"><i class="fas fa-xmark"></i></button>
+          </div>
+        {{/if}}
+      {{/each}}
+    </div>
+
+    <div class="mc-footer">
+      <div class="mc-total-row">
+        <span class="mc-total-label">{{localize "WITCHER.Merchant.CartAsking"}}</span>
+        <span class="mc-total-amount {{#unless canAfford}}is-short{{/unless}}">{{total}}</span>
+        <span class="mc-total-currency">{{currency}}</span>
+      </div>
+      <div class="mc-purse-row {{#unless canAfford}}is-short{{/unless}}">
+        <i class="fas fa-coins"></i>
+        <span>{{localize "WITCHER.Merchant.CartPurse"}}: {{buyerCoin}} {{currency}}</span>
+        {{#if canAfford}}
+          <span class="mc-remainder">({{localize "WITCHER.Merchant.CartAfter"}} {{remainder}})</span>
+        {{else}}
+          <span class="mc-remainder">({{localize "WITCHER.Merchant.CartShort"}} {{remainder}})</span>
+        {{/if}}
+      </div>
+      <div class="mc-actions">
+        <button type="button" class="mc-action clear" data-action="cartClear">
+          <i class="fas fa-trash"></i> {{localize "WITCHER.Merchant.CartClear"}}
+        </button>
+        <button type="button" class="mc-action checkout" data-action="cartCheckout"
+          {{#unless canAfford}}disabled{{/unless}}{{#if busy}} disabled{{/if}}{{#unless hasBuyer}} disabled{{/unless}}>
+          <i class="fas fa-handshake"></i> {{localize "WITCHER.Merchant.CartCheckout"}}
+        </button>
+      </div>
+    </div>
+  {{else}}
+    <div class="mc-empty">
+      <i class="fas fa-basket-shopping"></i>
+      <p>{{localize "WITCHER.Merchant.CartEmptyHint"}}</p>
+    </div>
+  {{/if}}
+
+</div>

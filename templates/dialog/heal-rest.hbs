@@ -1,0 +1,26 @@
+{{!-- Heal / Rest dialog. The script in healSheetMixin populates totalRec
+      live as checkboxes toggle (see #extra-info). --}}
+
+<div class="wdm-heal-dialog">
+  <p class="wdm-heal-desc">
+    {{localize 'WITCHER.Dialog.HealRest.Blurb'}}
+  </p>
+
+  <div class="wdm-heal-options">
+    <label><input type="checkbox" id="resting"     /> {{localize 'WITCHER.Dialog.HealRest.Text.FullRestRecInsteadOfRec2'}}</label>
+    <label><input type="checkbox" id="sterilized"  /> {{localize 'WITCHER.Dialog.HealRest.Text.SterilizedWounds2Hp2DaysEachNewWound'}}</label>
+    <label><input type="checkbox" id="healing-hand"/> {{localize 'WITCHER.Dialog.HealRest.Text.HealingHand3Hp'}}</label>
+    <label><input type="checkbox" id="healing-tent"/> {{localize 'WITCHER.Dialog.HealRest.Text.HealingTent2Hp'}}</label>
+  </div>
+
+  {{#if stressPenalty}}
+    <p class="wdm-heal-warning">
+      <strong>{{localize 'WITCHER.Dialog.HealRest.Text.StressPenalty'}}</strong> −{{stressPenalty}} HP (stress {{stress}} over WILL {{will}}).
+    </p>
+  {{/if}}
+
+  <p id="extra-info" class="wdm-heal-readout">Total recover + {{totalRec}}</p>
+  <p id="sterilized-info" class="wdm-heal-sub invisible">
+    {{daysHealed}} day(s) of healing on each tended wound.
+  </p>
+</div>

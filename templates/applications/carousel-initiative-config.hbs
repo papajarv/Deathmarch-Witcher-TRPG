@@ -1,0 +1,192 @@
+{{!-- Carousel Initiative Configuration — GM-only. Edits one Object
+      setting (`carouselInitiativeConfig`). Consumers read the LIVE
+      setting on every render so most edits take effect immediately;
+      the master `enabled` toggle prompts a reload since it gates
+      hook registration at load time.
+
+      Body carries the same `wdm-stealth-config-body wdm-stress-config-body`
+      class stack the house-rules / stealth dialogs use, so the shared
+      `wdm-se-*` (statuses.css) + `wdm-sc-*` (stealth-config.css) form
+      primitives style every check / numeric / section header uniformly.
+      Only the color-picker widget carries carousel-specific classes
+      (wdm-cic-color, wdm-cic-color-row) — no equivalent exists in the
+      shared vocabulary. --}}
+<div class="wdm-carousel-config-body wdm-stealth-config-body wdm-stress-config-body">
+
+  <header class="wdm-se-head">
+    <h2><i class="fa-solid fa-people-arrows"></i> {{localize 'WITCHER.App.CarouselInitiativeConfig.Title'}}</h2>
+    <p class="wdm-se-blurb">{{localize 'WITCHER.App.CarouselInitiativeConfig.Blurb'}}</p>
+  </header>
+
+  {{!-- ================= GENERAL ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-toggle-on"></i> {{localize 'WITCHER.App.CarouselInitiativeConfig.Section.General'}}</summary>
+
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="enabled" {{#if values.enabled}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.EnabledName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.EnabledDesc'}}</small></span>
+      </label>
+
+      <label class="wdm-se-check">
+        <input type="checkbox" name="showForTokenCombat" {{#if values.showForTokenCombat}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.ShowTokenCombatName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.ShowTokenCombatDesc'}}</small></span>
+      </label>
+
+      <label class="wdm-se-check">
+        <input type="checkbox" name="showForTheaterOfMind" {{#if values.showForTheaterOfMind}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.ShowTheaterName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.ShowTheaterDesc'}}</small></span>
+      </label>
+
+      <label class="wdm-se-check">
+        <input type="checkbox" name="showForGM" {{#if values.showForGM}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.ShowForGMName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.ShowForGMDesc'}}</small></span>
+      </label>
+
+      <label class="wdm-se-check">
+        <input type="checkbox" name="showForPlayers" {{#if values.showForPlayers}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.ShowForPlayersName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.ShowForPlayersDesc'}}</small></span>
+      </label>
+    </div>
+  </details>
+
+  {{!-- ================= LAYOUT ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-ruler-combined"></i> {{localize 'WITCHER.App.CarouselInitiativeConfig.Section.Layout'}}</summary>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.CardWidth'}} ({{localize 'WITCHER.App.CarouselInitiativeConfig.Unit.Rem'}})</span>
+        <input type="number" name="cardWidth" step="0.25" min="2" max="12" value="{{values.cardWidth}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.CardHeight'}} ({{localize 'WITCHER.App.CarouselInitiativeConfig.Unit.Rem'}})</span>
+        <input type="number" name="cardHeight" step="0.25" min="3" max="16" value="{{values.cardHeight}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.PortraitHeight'}} ({{localize 'WITCHER.App.CarouselInitiativeConfig.Unit.Rem'}})</span>
+        <input type="number" name="portraitHeight" step="0.25" min="2" max="14" value="{{values.portraitHeight}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.ActiveScale'}} ({{localize 'WITCHER.App.CarouselInitiativeConfig.Unit.Multiplier'}})</span>
+        <input type="number" name="activeScale" step="0.05" min="1.0" max="2.5" value="{{values.activeScale}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.ContainerMaxWidth'}} ({{localize 'WITCHER.App.CarouselInitiativeConfig.Unit.Rem'}})</span>
+        <input type="number" name="containerMaxWidth" step="1" min="20" max="120" value="{{values.containerMaxWidth}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.CardGap'}} ({{localize 'WITCHER.App.CarouselInitiativeConfig.Unit.Rem'}})</span>
+        <input type="number" name="cardGap" step="0.05" min="0" max="3" value="{{values.cardGap}}" />
+      </label>
+    </div>
+  </details>
+
+  {{!-- ================= MOTION ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-arrows-left-right"></i> {{localize 'WITCHER.App.CarouselInitiativeConfig.Section.Motion'}}</summary>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.TransitionMs'}} ({{localize 'WITCHER.App.CarouselInitiativeConfig.Unit.Ms'}})</span>
+        <input type="number" name="transitionMs" step="10" min="0" max="2000" value="{{values.transitionMs}}" />
+      </label>
+    </div>
+
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="snapOnRoundWrap" {{#if values.snapOnRoundWrap}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.SnapWrapName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.SnapWrapDesc'}}</small></span>
+      </label>
+    </div>
+  </details>
+
+  {{!-- ================= COLORS ================= --}}
+  <details class="wdm-se-group">
+    <summary><i class="fa-solid fa-palette"></i> {{localize 'WITCHER.App.CarouselInitiativeConfig.Section.Colors'}}</summary>
+
+    <div class="wdm-cic-color-grid">
+      <label class="wdm-cic-color" data-color-pair>
+        <span>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.HostileColor'}}</span>
+        <div class="wdm-cic-color-row">
+          <input type="color" name="hostileColor" value="{{values.hostileColor}}" />
+          <input type="text" value="{{values.hostileColor}}" aria-label="hex" />
+        </div>
+      </label>
+
+      <label class="wdm-cic-color" data-color-pair>
+        <span>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.FriendlyColor'}}</span>
+        <div class="wdm-cic-color-row">
+          <input type="color" name="friendlyColor" value="{{values.friendlyColor}}" />
+          <input type="text" value="{{values.friendlyColor}}" aria-label="hex" />
+        </div>
+      </label>
+
+      <label class="wdm-cic-color" data-color-pair>
+        <span>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.SecretColor'}}</span>
+        <div class="wdm-cic-color-row">
+          <input type="color" name="secretColor" value="{{values.secretColor}}" />
+          <input type="text" value="{{values.secretColor}}" aria-label="hex" />
+        </div>
+      </label>
+
+      <label class="wdm-cic-color" data-color-pair>
+        <span>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.ActiveGlowColor'}}</span>
+        <div class="wdm-cic-color-row">
+          <input type="color" name="activeGlowColor" value="{{values.activeGlowColor}}" />
+          <input type="text" value="{{values.activeGlowColor}}" aria-label="hex" />
+        </div>
+      </label>
+    </div>
+
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="neutralShowFrame" {{#if values.neutralShowFrame}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.NeutralShowFrameName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.NeutralShowFrameDesc'}}</small></span>
+      </label>
+    </div>
+
+    <div class="wdm-cic-color-grid" data-depends-on="neutralShowFrame">
+      <label class="wdm-cic-color" data-color-pair>
+        <span>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.NeutralColor'}}</span>
+        <div class="wdm-cic-color-row">
+          <input type="color" name="neutralColor" value="{{values.neutralColor}}" />
+          <input type="text" value="{{values.neutralColor}}" aria-label="hex" />
+        </div>
+      </label>
+    </div>
+  </details>
+
+  {{!-- ================= FILTERING (PRIVACY) ================= --}}
+  <details class="wdm-se-group">
+    <summary><i class="fa-solid fa-user-shield"></i> {{localize 'WITCHER.App.CarouselInitiativeConfig.Section.Filtering'}}</summary>
+
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="hideStealthFromPlayers" {{#if values.hideStealthFromPlayers}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.HideStealthName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.HideStealthDesc'}}</small></span>
+      </label>
+
+      <label class="wdm-se-check">
+        <input type="checkbox" name="hideSecretFromPlayers" {{#if values.hideSecretFromPlayers}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.HideSecretName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.HideSecretDesc'}}</small></span>
+      </label>
+
+      <label class="wdm-se-check">
+        <input type="checkbox" name="respectSpotterVisibility" {{#if values.respectSpotterVisibility}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.SpotterVisibilityName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.CarouselInitiativeConfig.Text.SpotterVisibilityDesc'}}</small></span>
+      </label>
+    </div>
+  </details>
+
+</div>

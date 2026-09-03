@@ -1,0 +1,645 @@
+/**
+ * brawlDialog — the unarmed / brawling action dialog.
+ *
+ * Opened by brawlMixin.brawlAttack before the roll (the dock's Brawl button).
+ * Surfaces every unarmed action from Core p.159-160 ("Fist Fighting" +
+ * grappling) under one picker, plus a live to-hit total and an info box that
+ * describes the selected action (rebuilt whenever the pick changes).
+ *
+ *   Strikes   Punch / Kick (strong/fast + called shot) · Push Kick
+ *   Special   Charge · Disarm
+ *   Grapple   Grapple · Pin · Choke · Throw · Trip
+ *   Defense   Block (rolls Brawling as a defensive reaction)
+ *
+ * Brawling rolls REF + Brawling to hit and deals NON-LETHAL damage from the
+ * actor's derived Punch/Kick formula. The dialog returns a structured
+ * declaration the mixin turns into the roll + chat card; null on cancel.
+ */
+
+import {
+    BRAWL_ACTIONS, BRAWL_GROUPS, STRIKE_TYPES, ATTACK_LOCATIONS,
+    ATTACK_MODIFIERS, EXTRA_ACTION
+} from "../setup/config.mjs";
+import { getHoldsSync } from "../mechanics/holdRegistry.mjs";
+import { normalizedActorUuid } from "../mechanics/holdLink.mjs";
+import { isTokenAgainstWall } from "../mechanics/pushToken.mjs";
+import { isCombatExtendedEnabled } from "../api/homebrew.mjs";
+import { hrExtraActionToHit, hrExtraActionStaCost, hrStrongStrikePenalty } from "../mechanics/house-rules-config.mjs";
+
+const esc = (s) => Handlebars.escapeExpression(String(s ?? ""));
+const L   = (k) => game.i18n.localize(k);
+const signed = (n) => `${n >= 0 ? "+" : ""}${n}`;
+
+/** The basic strike variants a punch/kick may use (normal/strong/fast). */
+const BRAWL_STRIKES = ["normal", "strong", "fast"];
+
+/** Resolve which UI sections an action shows. */
+function actionView(meta) {
+    const isStrike = meta.kind === "attack";
+    return {
+        isDefense:  meta.kind === "defense",
+        isGrapple:  meta.kind === "grapple",
+        showStrike: !!meta.strikes && !meta.forceStrike,
+        /* `randomLoc: true` forces random hit location — no picker.
+         * RAW-mandated for Trip (kick lands at a random spot). */
+        showLocation: !!meta.location && !meta.randomLoc,
+        showSituational: meta.kind !== "defense",
+        forcedStrike: meta.forceStrike ?? null
+    };
+}
+
+/* ── HTML builders ─────────────────────────────────────────────────────── */
+
+function buildContent(ctx) {
+    const { actionKey, aimMod, forcedExtra } = ctx;
+    const meta = BRAWL_ACTIONS[actionKey] ?? BRAWL_ACTIONS.punch;
+    const view = actionView(meta);
+
+    // Action picker — grouped exactly as BRAWL_GROUPS, with a short to-hit /
+    // damage tag per option so the player sees the shape before choosing.
+    /* One-time reads used by the picker's gating logic below.
+     *
+     *   • holdsAnyGrapple — is this actor currently the HOLDER of any
+     *     `grappled` pair? Drives the "grapple prereq" grey-out for
+     *     Pin / Choke / Throw (RAW + CE) and Trip / Disarm / Ride
+     *     (CE additions).
+     *   • _ceOn — the master extendedCombat toggle. Trip / Disarm /
+     *     Ride are standalone in RAW; only CE flips them to
+     *     grapple-gated. */
+    const actorUuid = normalizedActorUuid(ctx.actor);
+    /* Read the hold registry ONCE. All grapple gating below derives from these
+     * pairs (normalized WORLD uuids) rather than `ctx.actor.statuses`: for an
+     * unlinked token the "grappled" status lives on the synthetic token actor,
+     * so a `ctx.actor.statuses.has("grappled")` read is a false negative when
+     * ctx.actor resolved to the world actor. The registry is representation-
+     * proof — this is what makes Reverse actually appear. */
+    const _myHolds = actorUuid ? getHoldsSync(actorUuid) : [];
+    const holdsAnyGrapple = _myHolds.some(p => p.holderUuid === actorUuid && p.kind === "grappled");
+    /* Reverse Grapple targets the SPECIFIC foe grappling you — it's only
+     * offered when your CURRENT target is the holder of a grapple on you,
+     * you're grappled, and not also pinned/choked. */
+    /* Reverse works while grappled OR pinned (a pin reverses the whole stack).
+     * Only a CHOKEHOLD blocks it — you're suffocating, so Escape is the only
+     * way out of a choke. */
+    const _revChoked = _myHolds.some(p =>
+        p.kind === "chokeheld" && p.targetUuid === actorUuid);
+    /* Target comes from the tile-targeting overlay that opened this brawl
+     * (brawl button → beginWeaponTargeting → runBrawlAction(defender) →
+     * brawlAttack{forceDefender} → openBrawlDialog{targetActor}). Sole target
+     * source in this system — no reticle / T-targeting. */
+    const _revTargetActor = ctx.targetActor ?? null;
+    const _revTargetUuid = _revTargetActor ? normalizedActorUuid(_revTargetActor) : null;
+    const _revTargetIsGrappler = !!(actorUuid && _revTargetUuid) &&
+        _myHolds.some(p => p.kind === "grappled" && p.targetUuid === actorUuid && p.holderUuid === _revTargetUuid);
+    /* Follow-up grappling actions (pin/choke/throw/trip/ride) may only be used
+     * on the foe you're ACTUALLY holding — not just "anyone while you hold
+     * someone". Target-specific gate that mirrors the melee dialog + the runtime
+     * attackerHoldsTarget check, so the option doesn't even appear vs a third
+     * party. */
+    const _holdsSelectedTarget = !!(actorUuid && _revTargetUuid) &&
+        _myHolds.some(p => p.holderUuid === actorUuid
+            && (p.kind === "grappled" || p.kind === "pinned") && p.targetUuid === _revTargetUuid);
+    /* Pin exclusivity: you can only pin one foe at a time. Hide Pin entirely
+     * while you already hold a pin on anyone. */
+    const _isPinner = _myHolds.some(p => p.holderUuid === actorUuid && p.kind === "pinned");
+    /* Either-role grapple test (Takedown): in a grapple/pin/choke with a foe as
+     * holder OR grapplee. Registry-based so unlinked-token statuses don't
+     * false-negative. */
+    const _inGrappleWith = (uuid) => !!(actorUuid && uuid) && _myHolds.some(p =>
+        (p.kind === "grappled" || p.kind === "pinned" || p.kind === "chokeheld")
+        && ((p.holderUuid === actorUuid && p.targetUuid === uuid)
+         || (p.targetUuid === actorUuid && p.holderUuid === uuid)));
+    const _inAnyGrapple = _myHolds.some(p =>
+        (p.kind === "grappled" || p.kind === "pinned" || p.kind === "chokeheld")
+        && (p.holderUuid === actorUuid || p.targetUuid === actorUuid));
+    /* Reverse shows while grappled or pinned (NOT choked) AND your selected
+     * target is the foe holding you. `_revTargetIsGrappler` proves "grappled
+     * BY this target" (the grapple layer persists under a pin), so it also
+     * covers the pinned case. */
+    const canReverse = _revTargetIsGrappler && !_revChoked;
+    /* Route through the canonical `isCombatExtendedEnabled()` helper so
+     * this stays in step with everywhere else that reads the CE toggle
+     * (brawlMixin, holdModifiers, statusOverrides). Direct
+     * `game.settings.get(...) === true` had a subtle failure mode: the
+     * setting object's stored value can come back as truthy-but-not-
+     * strict-true depending on how a GM edited it (e.g. a JSON import
+     * that landed `1`), which the strict compare silently dropped. */
+    let _ceOn = false;
+    try { _ceOn = !!isCombatExtendedEnabled(); }
+    catch (_) { /* settings not ready — default to RAW-only gating */ }
+    /* CE grapple-gated actions. Per the user-supplied CE spec:
+     *   Ride  — "You can attempt to climb onto a larger enemy if you're
+     *           grappling them OR on higher ground." Grapple is one of
+     *           two prereqs (the runtime prompt covers the higher-ground
+     *           alternative when the actor isn't currently grappling).
+     *
+     * Trip and Disarm are NOT in this set — per the CE spec they're
+     * STANDALONE actions with enhancements when grappling (Trip gets
+     * double kick + 1d6m tumble + Stun save; Disarm gets a DC 18 steal +
+     * random toss rider). The runtime `ceTripEnhanced` / disarm rider
+     * hooks handle the enhancement; gating them on grapple would break
+     * their standalone use. */
+    const CE_GRAPPLE_GATED = new Set(["ride"]);
+    /* Actions that only exist as valid picks when Combat Extended is on.
+     * Trip / Disarm stay visible under RAW (Core p.163 lists both as
+     * standalone options); the CE-only additions are the ones RAW has
+     * no analogue for. Filtered out of the picker entirely rather than
+     * shown greyed — under RAW they're conceptually not offered at all,
+     * so a "you can't do that" grey-out would misrepresent the ruleset. */
+    const CE_ONLY_ACTIONS = new Set(["reverseGrapple", "push", "slam", "takedown", "drag"]);
+    /* Grapple / Release Grapple contextual visibility. A grappler is
+     * conceptually COMMITTED to their current hold — they don't stand
+     * around looking for a new opponent to grab while still holding the
+     * first one. So when the actor is already the holder of any
+     * grappled pair:
+     *   • the `grapple` (initiate) action is HIDDEN — you're already in
+     *     a grapple, offering a fresh Grapple button here misleads.
+     *   • the `releaseGrapple` action becomes VISIBLE — the voluntary
+     *     end of the hold, which we only offer while there's a hold to
+     *     let go of. Inverse gate: hidden when there's nothing held.
+     * Filtered out (not just greyed) — an unavailable-by-context action
+     * shouldn't take up a picker slot. */
+    const isHolder = holdsAnyGrapple;
+
+    const optionFor = (key) => {
+        const a = BRAWL_ACTIONS[key];
+        const bits = [];
+        if (a.kind === "defense") bits.push("defend");
+        /* Slam / Takedown are grapple finishers, not a "kick"/"punch" — their
+         * notes explain the damage, so don't tag the option "(kick)"/"(punch)". */
+        if (a.damage && key !== "slam" && key !== "takedown")  bits.push(a.half ? `½ ${a.damage}` : a.damage);
+        if (a.kind === "grapple" && !a.damage) bits.push("no dmg");
+        if (a.fullRound) bits.push("full round");
+        // Action economy: attacks/grapples need an action slot; Block is a
+        // defensive reaction and stays available. Charge additionally needs the
+        // whole turn free.
+        const needsSlot = a.kind !== "defense";
+        /* Escape (RAW Core "Brawling & Wrestling") requires the actor to
+         * currently be in a hold pair. Gate the option so it's greyed
+         * out when there's nothing to escape from. The status set on the
+         * escaping actor mirrors HOLD_STATUSES in mechanics/holdLink. */
+        const heldStatuses = ["grappled", "pinned", "clinched", "chokeheld"];
+        const isHeld = heldStatuses.some(s => ctx.actor?.statuses?.has?.(s));
+        const escapeBlocked = a.requiresHeld && !isHeld;
+        /* Reverse Grapple (CE Combat Extended 2026-07-03) requires the
+         * actor to be grappled but NOT also pinned or choked. Grey out
+         * when either condition fails so the picker mirrors Escape's
+         * "not held" affordance. Same self-state check — no target
+         * lookup needed because reversal is on the actor's own hold. */
+        const isGrappled = ctx.actor?.statuses?.has?.("grappled") === true;
+        const isChoked   = ctx.actor?.statuses?.has?.("chokeheld") === true;
+        /* Reverse needs a grapple layer (present under a pin too) and is blocked
+         * only by a chokehold — pin is reversible. */
+        const reverseBlocked = a.requiresGrappledOnly && (!isGrappled || isChoked);
+        /* Grapple-prereq gate (CE + RAW). Pin / Choke / Throw carry
+         * `needsGrapple: true` in BRAWL_ACTIONS; Trip / Disarm / Ride
+         * flip to grapple-gated under CE via CE_GRAPPLE_GATED. Grey out
+         * when the actor isn't currently the holder of any `grappled`
+         * pair — the picker doesn't know the target yet, so this is
+         * the loose gate (holds ANYONE); the runtime check in
+         * brawlMixin tightens to "holds THIS target" and warns if not. */
+        const wantsGrapple = a.needsGrapple === true || (_ceOn && CE_GRAPPLE_GATED.has(key));
+        /* Target-specific: the follow-up needs you to be holding THIS foe, not
+         * just holding someone. Falls back to "hold anyone" only when no target
+         * is selected yet (so the option isn't hidden purely for lack of a
+         * target — the runtime still tightens to the specific foe). */
+        /* Push and Slam are grappler-only follow-ups — they carry needsGrapple,
+         * so `grappleBlocked` above already greys them unless you're HOLDING the
+         * selected foe. The grapplee can't push or slam. */
+        const grappleBlocked = wantsGrapple && (_revTargetUuid ? !_holdsSelectedTarget : !holdsAnyGrapple);
+        /* Can't slam anyone while you're on the ground — Slam needs you upright. */
+        const slamProneBlocked = key === "slam" && ctx.actor?.statuses?.has?.("prone") === true;
+        /* Takedown — usable from a grapple by EITHER role; greyed when you're not
+         * locked with the selected foe. Both fighters must be STANDING: you
+         * can't take down someone already prone, and you need to be upright. */
+        const takedownBlocked = key === "takedown"
+            && (_revTargetUuid ? !_inGrappleWith(_revTargetUuid) : !_inAnyGrapple);
+        const takedownSelfProne   = key === "takedown" && ctx.actor?.statuses?.has?.("prone") === true;
+        const takedownTargetProne = key === "takedown" && _revTargetActor?.statuses?.has?.("prone") === true;
+        /* Drag — usable from a grapple by EITHER role; greyed when you're not
+         * locked with the selected foe (no prone requirement — it's a Physique
+         * contest, not a strike). */
+        const dragBlocked = key === "drag"
+            && (_revTargetUuid ? !_inGrappleWith(_revTargetUuid) : !_inAnyGrapple);
+        /* A pin locks both parties down — can't drag while pinned or pinning. */
+        const dragPinnedBlocked = key === "drag" && _myHolds.some(p =>
+            p.kind === "pinned" && (p.holderUuid === actorUuid || p.targetUuid === actorUuid));
+        /* Pin only lands on a foe that's prone or backed against a wall. Greyed
+         * (with a selected target) otherwise. */
+        const pinPlacementBlocked = key === "pin" && _revTargetActor && !(
+            _revTargetActor.statuses?.has?.("prone")
+            || isTokenAgainstWall(_revTargetActor.getActiveTokens?.()?.[0])
+        );
+        /* Can't push a prone target — they're already down, nothing to shove. */
+        const pushTargetProneBlocked = key === "push" && _revTargetActor?.statuses?.has?.("prone") === true;
+        /* Trip — grappler-only (greyed via grappleBlocked already); also can't
+         * trip a foe who's already prone. Only the target goes prone, so no
+         * self check. */
+        const tripTargetProneBlocked = key === "trip" && _revTargetActor?.statuses?.has?.("prone") === true;
+        /* Choke gate. Combat Extended: greyed until you PIN the selected foe.
+         * RAW: greyed until you're GRAPPLING them (RAW choke needs only a grapple). */
+        const _pinsSelected = !!(actorUuid && _revTargetUuid) && _myHolds.some(p =>
+            p.kind === "pinned" && p.holderUuid === actorUuid && p.targetUuid === _revTargetUuid);
+        const _pinsAny = _myHolds.some(p => p.kind === "pinned" && p.holderUuid === actorUuid);
+        const chokeNeedsPinBlocked = a.needsPin === true && (_ceOn
+            ? (_revTargetUuid ? !_pinsSelected : !_pinsAny)
+            : (_revTargetUuid ? !_holdsSelectedTarget : !holdsAnyGrapple));
+        /* Escape + Reverse stay available to a HELD actor even when the hold
+         * itself action-locks them (a pinned actor has no normal action slot,
+         * yet Escape and Reverse are precisely the two things they CAN still
+         * do). Exempt those two from the action-slot block when held. */
+        const heldActionExempt = (a.requiresHeld || a.requiresGrappledOnly) && isHeld;
+        const blocked = (needsSlot && !ctx.canAct && !heldActionExempt) || (a.fullRound && !ctx.canFullRound) || escapeBlocked || reverseBlocked || grappleBlocked || slamProneBlocked || takedownBlocked || takedownSelfProne || takedownTargetProne || pinPlacementBlocked || pushTargetProneBlocked || tripTargetProneBlocked || chokeNeedsPinBlocked || dragBlocked || dragPinnedBlocked;
+        if (needsSlot && !ctx.canAct) bits.push(L("WITCHER.Attack.NeedsAction"));
+        else if (a.fullRound && !ctx.canFullRound) bits.push(L("WITCHER.Attack.NeedsFullRound"));
+        else if (escapeBlocked) bits.push("not held");
+        else if (reverseBlocked) bits.push(isChoked ? "choke first" : "not grappled");
+        else if (grappleBlocked) bits.push("no grapple");
+        else if (slamProneBlocked) bits.push("prone");
+        else if (takedownBlocked) bits.push("not grappling");
+        else if (takedownSelfProne) bits.push("prone");
+        else if (takedownTargetProne) bits.push("target prone");
+        else if (pinPlacementBlocked) bits.push("need prone/wall");
+        else if (pushTargetProneBlocked) bits.push("target prone");
+        else if (tripTargetProneBlocked) bits.push("target prone");
+        else if (chokeNeedsPinBlocked) bits.push(_ceOn ? "needs pinned target" : "no grapple");
+        else if (dragPinnedBlocked) bits.push("pinned");
+        else if (dragBlocked) bits.push("not grappling");
+        /* Wall-pin available — flag WHY Pin is allowed against a standing foe. */
+        if (key === "pin" && !blocked && _revTargetActor
+            && !_revTargetActor.statuses?.has?.("prone")
+            && isTokenAgainstWall(_revTargetActor.getActiveTokens?.()?.[0])) {
+            bits.push("Adjacent Wall");
+        }
+        const tail = bits.length ? ` (${bits.join(", ")})` : "";
+        const sel  = (key === actionKey && !blocked) ? " selected" : "";
+        /* `data-blocked="1"` is a secondary JS hook: some Chromium/Electron
+         * builds ignore CSS colors on <option> and render disabled options
+         * indistinguishably from enabled ones. The render() handler reads
+         * this attribute on change to snap the picker back to the previous
+         * valid action, so the "non-selectable" contract holds even when the
+         * visual `disabled` fade doesn't paint. Prefixing the label with "⊘"
+         * gives a text-level cue that never depends on the theme. */
+        const prefix = blocked ? "⊘ " : "";
+        return `<option value="${key}"${sel}${blocked ? ' disabled data-blocked="1"' : ""}>${esc(prefix + L(a.labelKey))}${esc(tail)}</option>`;
+    };
+    /* Charging status (from dock's Full Round → Charge) locks the
+     * brawl picker to the Charge action only — user's spec: "only
+     * let me select strong strike". BRAWL_ACTIONS.charge forces
+     * strong strike internally; the fullRound + prone-on-block
+     * rider fire the same way as if picked from a normal menu. */
+    const _isCharging = !!ctx.actor?.statuses?.has?.("charging");
+    /* Filter picker entries by static + contextual visibility. Empty
+     * groups (all their entries filtered out) are also dropped so we
+     * don't render a labeled optgroup with zero children. */
+    const visibleActionsFor = (group) =>
+        group.actions.filter(k => {
+            /* CE-only actions vanish under RAW. */
+            if (!_ceOn && CE_ONLY_ACTIONS.has(k)) return false;
+            /* `grapple` (initiate) hides when the actor is already holding
+             * someone — a fresh Grapple button while committed to a hold
+             * misleads. `releaseGrapple` mirrors: only visible while there
+             * IS a hold to voluntarily let go of. */
+            /* Grapple hides when you already hold someone (isHolder) OR when
+             * the selected target is the foe already grappling YOU — you can't
+             * grapple your own grappler; Reverse Grapple is that path instead. */
+            if (k === "grapple" && (isHolder || _revTargetIsGrappler)) return false;
+            /* Release Grapple is retired from the combat flow — holds are
+             * managed from the holds pips above the dock (free Break Grapple
+             * for the holder). Never show it here. */
+            if (k === "releaseGrapple") return false;
+            /* Reverse only when the current target is the foe grappling you. */
+            if (k === "reverseGrapple" && !canReverse) return false;
+            /* Pin exclusivity — hide Pin while you're already pinning someone. */
+            if (k === "pin" && _isPinner) return false;
+            /* Choke is applied ONCE — hide it entirely while you already choke
+             * the selected foe (it's maintained via the turn-start prompt). */
+            if (k === "choke" && _revTargetUuid && _myHolds.some(p =>
+                p.kind === "chokeheld" && p.holderUuid === actorUuid && p.targetUuid === _revTargetUuid)) return false;
+            return true;
+        });
+    const actionOpts = _isCharging
+        ? `<optgroup label="${esc(L("WITCHER.Brawl.GroupSpecial"))}">${optionFor("charge")}</optgroup>`
+        : BRAWL_GROUPS.map(g => {
+            const keys = visibleActionsFor(g);
+            if (!keys.length) return "";
+            return `<optgroup label="${esc(L(g.labelKey))}">${keys.map(optionFor).join("")}</optgroup>`;
+        }).join("");
+
+    // Strike-type picker (punch/kick only). Charge forces a strong strike and
+    // shows it read-only instead.
+    const strikeOption = (key) => {
+        const s = STRIKE_TYPES[key];
+        const bits = [];
+        /* Per-strike to-hit penalty deliberately OMITTED — the
+         * modifier breakdown at the bottom of the dialog already
+         * surfaces it, so duplicating "-3" in the picker just
+         * clutters the label. Damage multiplier + attack count stay
+         * because they are OUTCOME info the player uses to pick,
+         * not repeat of a penalty. */
+        if (s.dmgMult !== 1) bits.push(`×${s.dmgMult} dmg`);
+        if (s.attacks > 1) bits.push(`${s.attacks} attacks`);
+        const tail = bits.length ? ` (${bits.join(", ")})` : "";
+        return `<option value="${key}"${key === "normal" ? " selected" : ""}>${esc(L(s.labelKey))}${esc(tail)}</option>`;
+    };
+    const strikeField = view.showStrike ? `
+        <div class="wdm-atk-field">
+            <label>${esc(L("WITCHER.Attack.Strike"))}</label>
+            <select name="strike">${BRAWL_STRIKES.map(strikeOption).join("")}</select>
+        </div>` : "";
+    const forcedStrikeField = view.forcedStrike ? `
+        <div class="wdm-atk-field">
+            <label>${esc(L("WITCHER.Attack.Strike"))}</label>
+            <div class="wdm-atk-readonly">${esc(L(STRIKE_TYPES[view.forcedStrike].labelKey))}</div>
+        </div>` : "";
+
+    // Hit-location picker (punch/kick). Push Kick forces the torso.
+    const locOpts = [
+        `<option value="random:human">${esc(L("WITCHER.Attack.LocRandomHuman"))}</option>`,
+        `<option value="random:monster">${esc(L("WITCHER.Attack.LocRandomMonster"))}</option>`,
+        ...Object.entries(ATTACK_LOCATIONS).map(([key, loc]) => {
+            const pen = loc.penalty + aimMod;
+            const penTxt = pen ? ` (${signed(pen)})` : "";
+            const multTxt = loc.mult !== 1 ? ` ×${loc.mult}` : "";
+            return `<option value="loc:${key}">${esc(L(loc.labelKey))}${esc(penTxt)}${esc(multTxt)}</option>`;
+        })
+    ].join("");
+    const locField = view.showLocation ? `
+        <div class="wdm-atk-field wdm-atk-field-wide" data-loc-field>
+            <label>${esc(L("WITCHER.Attack.Location"))}</label>
+            <select name="location">${locOpts}</select>
+        </div>` : "";
+
+    /* Damage-type picker — only when a multi-type natural weapon is in play
+     * AND this action actually deals damage (a strike). Like a multi-type
+     * weapon, the strike lands as ONE type per hit: radio buttons, first
+     * checked by default (collect() reads the single choice). */
+    const nwTypes = ctx.naturalWeaponTypes ?? [];
+    const showDmgType = nwTypes.length > 1 && meta.kind === "attack" && !!meta.damage;
+    const dmgTypeRows = nwTypes.map((k, i) => {
+        /* "nonlethal" is a natural-weapon-only pseudo-type (blunt → Stamina);
+         * it isn't in the global damage-type map, so label it directly. */
+        const label = k === "nonlethal"
+            ? L("WITCHER.Damage.Nonlethal")
+            : L(CONFIG.WITCHER?.damageTypes?.[k] ?? k);
+        return `<label class="wdm-atk-check">
+            <input type="radio" name="dmgType" value="${esc(k)}"${i === 0 ? " checked" : ""} />
+            <span>${esc(label)}</span>
+        </label>`;
+    }).join("");
+    const dmgTypeBlock = showDmgType ? `
+        <div class="wdm-atk-sit-block" data-dmgtype-block>
+            <div class="wdm-atk-section-label">${esc(L("WITCHER.Sheet.Weapon.Text.DamageTypes"))}</div>
+            <div class="wdm-atk-checks">${dmgTypeRows}</div>
+        </div>` : "";
+
+    // Situational toggles (melee subset — drop the ranged-only ones).
+    const sitRows = ATTACK_MODIFIERS
+        .filter(m => !m.rangedOnly)
+        .map(m => `<label class="wdm-atk-check">
+            <input type="checkbox" name="sit" value="${m.value}" data-mod="${m.mod}" />
+            <span>${esc(L(m.labelKey))} <em>${signed(m.mod)}</em></span>
+        </label>`).join("");
+    const sitBlock = view.showSituational ? `
+        <div class="wdm-atk-sit-block" data-sit-block>
+            <div class="wdm-atk-section-label">${esc(L("WITCHER.Attack.Situational"))}</div>
+            <div class="wdm-atk-checks">${sitRows}</div>
+        </div>` : "";
+
+    const otherModField = !view.isDefense ? `
+        <div class="wdm-atk-field">
+            <label>${esc(L("WITCHER.Attack.OtherMod"))}</label>
+            <input type="number" name="otherMod" step="1" value="0" />
+        </div>` : "";
+
+    const extraActionBlock = (forcedExtra && !view.isDefense) ? `
+        <div class="wdm-atk-weather wdm-atk-extra">
+            <span class="wdm-atk-weather-k"><i class="fa-solid fa-bolt-lightning"></i> ${esc(L("WITCHER.Attack.ExtraActionForced"))}</span>
+            <span class="wdm-atk-weather-v">${signed(hrExtraActionToHit())}, ${hrExtraActionStaCost()} STA</span>
+        </div>` : "";
+
+    // The selected action's own rider note (what it does / what happens on a
+    // hit). Rebuilt with the card on every action change, so it always describes
+    // the current pick — this is the in-dialog explanation of each action.
+    // RAW mode shows the action's `rawNote` (plain rulebook wording) when it has
+    // one; CE mode always shows the CE `note`.
+    const _noteKey = (!_ceOn && meta.rawNote) ? meta.rawNote : meta.note;
+    const noteBlock = _noteKey ? `
+        <div class="wdm-atk-note" data-action-note>
+            <i class="fa-solid fa-circle-info"></i> ${esc(L(_noteKey))}
+        </div>` : "";
+
+    // The total readout only matters for rolls that have a to-hit (every
+    // action does — block included, as a defensive Brawling roll).
+    const totalBlock = `
+        <div class="wdm-atk-total">
+            <span class="wdm-atk-total-k">${esc(L(view.isDefense ? "WITCHER.Brawl.DefenseTotal" : "WITCHER.Attack.TotalToHit"))}</span>
+            <span class="wdm-atk-total-v" data-total>1d10</span>
+        </div>
+        <div class="wdm-atk-breakdown" data-breakdown></div>`;
+
+    return `
+    <div class="wdm-atk wdm-brawl" data-action="${esc(actionKey)}">
+        <div class="wdm-atk-grid">
+            <div class="wdm-atk-field wdm-atk-field-wide">
+                <label>${esc(L("WITCHER.Brawl.Action"))}</label>
+                <select name="action">${actionOpts}</select>
+            </div>
+            ${strikeField}
+            ${forcedStrikeField}
+            ${locField}
+            ${otherModField}
+        </div>
+        ${noteBlock}
+        ${extraActionBlock}
+        ${dmgTypeBlock}
+        ${sitBlock}
+        ${totalBlock}
+    </div>`;
+}
+
+/* ── Read + compute ────────────────────────────────────────────────────── */
+
+function collect(root, ctx) {
+    const { aimMod, forcedExtra } = ctx;
+    const q = (sel) => root.querySelector(sel);
+
+    const actionKey = q('[name="action"]')?.value || ctx.actionKey || "punch";
+    const meta = BRAWL_ACTIONS[actionKey] ?? BRAWL_ACTIONS.punch;
+    const view = actionView(meta);
+
+    // Strike type: the picker for punch/kick, the forced strike for charge,
+    // else a plain normal strike.
+    const strikeKey = view.forcedStrike
+        ? view.forcedStrike
+        : (view.showStrike ? (q('[name="strike"]')?.value || "normal") : "normal");
+    const strike = STRIKE_TYPES[strikeKey] ?? STRIKE_TYPES.normal;
+
+    // Location (punch/kick) or the action's fixed location (push kick → torso).
+    let location = { mode: "none", penalty: 0, mult: 1, label: "" };
+    if (meta.fixedLoc) {
+        const loc = ATTACK_LOCATIONS[meta.fixedLoc];
+        location = { mode: "specific", key: meta.fixedLoc, penalty: 0, mult: loc?.mult ?? 1, label: L(loc?.labelKey ?? meta.fixedLoc) };
+    } else if (meta.randomLoc) {
+        /* Trip (RAW): kick damage to a RANDOM hit location — no picker.
+         * brawlMixin rolls the d10 face after the dialog closes. */
+        location = { mode: "random", kind: "human", penalty: 0, mult: null, label: L("WITCHER.Attack.LocRandomHuman") };
+    } else if (view.showLocation) {
+        const locVal = q('[name="location"]')?.value || "random:human";
+        if (locVal.startsWith("random:")) {
+            location = { mode: "random", kind: locVal.split(":")[1] || "human", penalty: 0, mult: null, label: L(locVal.endsWith("monster") ? "WITCHER.Attack.LocRandomMonster" : "WITCHER.Attack.LocRandomHuman") };
+        } else {
+            const key = locVal.split(":")[1];
+            const loc = ATTACK_LOCATIONS[key];
+            location = { mode: "specific", key, penalty: (loc?.penalty ?? 0) + aimMod, mult: loc?.mult ?? 1, label: L(loc?.labelKey ?? key) };
+        }
+    }
+
+    const situational = view.showSituational
+        ? [...root.querySelectorAll('[name="sit"]:checked')].map(el => {
+            const def = ATTACK_MODIFIERS.find(m => m.value === el.value);
+            return { value: el.value, mod: Number(el.dataset.mod) || 0, label: L(def?.labelKey ?? el.value) };
+          })
+        : [];
+
+    const otherMod = view.isDefense ? 0 : Math.round(Number(q('[name="otherMod"]')?.value) || 0);
+    const extraAction = !!forcedExtra && !view.isDefense;
+
+    /* Selected natural-weapon damage type (single-choice, like a multi-type
+     * weapon). Empty when the picker isn't shown; brawlDamage then applies the
+     * weapon's configured types. */
+    const pickedType = root.querySelector('[name="dmgType"]:checked')?.value;
+    const damageTypes = pickedType ? [pickedType] : [];
+
+    // Assemble the modifier breakdown + total. Block is a Brawling defense roll
+    // with no attack modifiers, so only its base applies.
+    const chips = [];
+    let modTotal = 0;
+    const add = (label, value) => { if (value) { modTotal += value; chips.push({ label, value }); } };
+
+    if (!view.isDefense) {
+        if (strike.toHit) {
+            /* House-rules strong-strike substitution for the roll math
+             * (Brawl uses `strong` for punch/kick power hits; there's
+             * no CE `strongAttack` variant in brawl, but check both
+             * for future-proofing). */
+            const strikeCat = (strikeKey === "strong" || strikeKey === "strongAttack") ? "strong" : strikeKey;
+            const strikeToHit = (strikeCat === "strong") ? hrStrongStrikePenalty() : strike.toHit;
+            add(L(strike.labelKey), strikeToHit);
+        }
+        /* Action-level to-hit penalty (e.g. Slam's −3) — a standalone modifier,
+         * NOT tied to the strong-strike mechanic. */
+        if (meta.toHitMod) add(L(meta.labelKey), meta.toHitMod);
+        /* CE-only to-hit penalty (e.g. Disarm's −4) — applies only with Combat
+         * Extended on; RAW mode runs the plainer version at no penalty. */
+        if (meta.ceToHitMod && _ceOn) add(L(meta.labelKey), meta.ceToHitMod);
+        if (extraAction)  add(L("WITCHER.Attack.ExtraAction"), hrExtraActionToHit());
+        if (location.mode === "specific" && location.penalty) add(location.label, location.penalty);
+        for (const s of situational) add(s.label, s.mod);
+        if (otherMod) add(L("WITCHER.Attack.OtherMod"), otherMod);
+    }
+
+    return {
+        action: actionKey, actionMeta: meta,
+        strike: strikeKey, strikeMeta: strike,
+        location, situational, otherMod, extraAction, damageTypes,
+        chips, modTotal,
+        grandMod: (ctx.base?.total ?? 0) + modTotal
+    };
+}
+
+function refresh(root, ctx) {
+    const r = collect(root, ctx);
+    const totalEl = root.querySelector("[data-total]");
+    if (totalEl) totalEl.textContent = r.grandMod ? `1d10 ${signed(r.grandMod)}` : "1d10";
+
+    const bdEl = root.querySelector("[data-breakdown]");
+    if (bdEl) {
+        const baseChips = (ctx.base?.chips ?? []).map(c =>
+            `<span class="wdm-atk-chip is-base"><span class="k">${esc(c.label)}</span><span class="v">${esc(c.value)}</span></span>`);
+        const modChips = r.chips.map(c =>
+            `<span class="wdm-atk-chip ${c.value < 0 ? "is-neg" : "is-pos"}"><span class="k">${esc(c.label)}</span><span class="v">${signed(c.value)}</span></span>`);
+        bdEl.innerHTML = [...baseChips, ...modChips].join("");
+    }
+}
+
+/* ── Public entry ──────────────────────────────────────────────────────── */
+
+/**
+ * Open the brawl dialog.
+ * @param {Actor}  actor  the attacker
+ * @param {object} opts   { base:{ total, chips } } — the Brawling skill portion,
+ *                        shown read-only in the breakdown
+ * @returns {Promise<object|null>}  the collect() result, or null on cancel
+ */
+export async function openBrawlDialog(actor, opts = {}) {
+    const aimMod = Number(actor?.system?.derivedStats?.aimMod) || 0;
+    const forcedExtra = actor?.nextActionSlot === "extra";
+
+    // Action economy: with no action slot left, attacks/grapples are disabled and
+    // only Block (a defensive reaction) remains — so default the picker to it.
+    const canAct = actor?.hasActionSlot !== false;
+    /* Charging (from dock's Full Round → Charge) forces the picker to
+     * Charge only — default the initial actionKey so the dialog opens
+     * pre-selected on it. */
+    const isCharging = !!actor?.statuses?.has?.("charging");
+    const initialAction = isCharging ? "charge" : (canAct ? "punch" : "block");
+    const ctx = {
+        actor, actionKey: initialAction,
+        /* Target picked by the tile-targeting overlay before this dialog
+         * (brawl button → beginWeaponTargeting → runBrawlAction(defender) →
+         * brawlAttack{forceDefender} → openBrawlDialog{targetActor}). Sole
+         * target source — gates CE Reverse Grapple visibility. */
+        targetActor: opts.targetActor ?? null,
+        base: opts.base ?? { total: 0, chips: [] },
+        aimMod, forcedExtra, canAct,
+        // Multi-type natural weapon: keys to offer in the damage-type picker.
+        // Empty ⇒ no picker (single-type or plain unarmed).
+        naturalWeaponTypes: Array.isArray(opts.naturalWeaponTypes) ? opts.naturalWeaponTypes : [],
+        // Gates the full-round Charge action in the picker.
+        canFullRound: actor?.canTakeFullRound !== false
+    };
+
+    const result = await foundry.applications.api.DialogV2.wait({
+        window: { title: L("WITCHER.Brawl.DialogTitle"), icon: "fa-solid fa-hand-fist", resizable: true },
+        /* Fixed starting width so a long action description wraps instead of
+         * expanding the window; resizable adds the bottom-right corner handle. */
+        position: { width: 480 },
+        content: buildContent(ctx),
+        classes: ["wdm-atk-dialog", "wdm-brawl-dialog"],
+        buttons: [
+            { action: "roll", label: L("WITCHER.Brawl.RollButton"), icon: "fa-solid fa-hand-fist", default: true,
+              callback: (_event, _button, dialog) => collect(dialog.element, ctx) },
+            { action: "cancel", label: L("WITCHER.Cancel"), icon: "fa-solid fa-xmark" }
+        ],
+        rejectClose: false,
+        render: (_event, dialog) => {
+            const root = dialog.element;
+            refresh(root, ctx);
+            root.addEventListener("change", (e) => {
+                // Changing the action swaps which fields apply (strike/location
+                // appear for punch/kick, vanish for grapple/block), so rebuild.
+                if (e.target?.name === "action") {
+                    /* Belt-and-suspenders for the disabled-option contract:
+                     * if the newly-selected option carries data-blocked, snap
+                     * the picker back to the previous valid action and skip
+                     * the rebuild. Handles the Electron/Chromium edge where
+                     * `disabled` on <option> is honored by the OS dropdown
+                     * paint but somehow still commits a value change. */
+                    const opt = e.target.selectedOptions?.[0];
+                    if (opt?.dataset?.blocked === "1") {
+                        e.target.value = ctx.actionKey;
+                        return;
+                    }
+                    ctx.actionKey = e.target.value;
+                    const host = root.querySelector(".wdm-atk");
+                    if (host) host.outerHTML = buildContent(ctx);
+                }
+                refresh(root, ctx);
+            });
+            root.addEventListener("input", () => refresh(root, ctx));
+        }
+    }).catch(() => null);
+
+    return (result && typeof result === "object") ? result : null;
+}

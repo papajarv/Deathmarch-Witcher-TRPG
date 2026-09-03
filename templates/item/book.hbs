@@ -1,0 +1,138 @@
+{{!-- Book item sheet — first-class book document. Display layer mirrors the
+      Witcher 3 in-game tooltip readout; config layer carries book-type choice
+      and a launcher for the dedicated "Configure Book" dialog (DC / monster
+      filter / skill range / stress steps). The dialog lives in
+      module/chrome/sheets/valuable-study.js. --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-book" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}{{localize 'WITCHER.Sheet.Item.Cog.BackToDisplay'}}{{else}}{{localize 'WITCHER.Sheet.Item.Cog.ConfigureItem'}}{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- DISPLAY VIEW --}}
+  <div class="wdm-display-view{{#if (hasFlair source.flairColor)}} has-flair{{/if}}"{{#if (hasFlair source.flairColor)}} style="--wdm-rar: {{source.flairColor}}"{{/if}}>
+    <div class="wdm-w3">
+
+      <header class="wdm-w3-head">
+        <img class="wdm-w3-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-w3-titles">
+          <h1 class="wdm-w3-title">{{item.name}}</h1>
+          <div class="wdm-w3-subtitle">{{bookTypeLabel}}</div>
+        </div>
+      </header>
+
+      {{#unless bookEnabled}}
+        <div class="wdm-w3-effects wdm-empty">{{localize 'WITCHER.Sheet.Book.Text.BookSystemIsDisabledInWorldSettings'}}</div>
+      {{/unless}}
+
+      {{#if languageFlavor}}
+        <div class="wdm-w3-effects wdm-book-lang is-{{languageFlavor.tone}}"><em>{{languageFlavor.text}}</em></div>
+      {{/if}}
+
+      {{!-- READING PROGRESS (owned by an actor) — above the description --}}
+      {{#if bookProgress}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Book.Text.ReadingProgress'}}</div>
+        <div class="wdm-book-progress{{#if bookProgress.completed}} is-complete{{/if}}">
+          <div class="wdm-book-progress-bar"><span style="width:{{bookProgress.percent}}%"></span></div>
+          <div class="wdm-book-progress-pct">{{bookProgress.percent}}%{{#if bookProgress.completed}} · {{localize 'WITCHER.Sheet.Book.Text.Complete'}}{{/if}}</div>
+        </div>
+      {{/if}}
+
+      {{#if source.description}}
+        <div class="wdm-w3-section-label">{{localize 'WITCHER.Sheet.Book.Text.Description'}}</div>
+        <div class="wdm-w3-effects">{{{source.description}}}</div>
+      {{/if}}
+
+      <div class="wdm-w3-footer">
+        <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Book.Tooltip.WeightKg'}}"><i class="fa-solid fa-weight-hanging"></i>{{source.weight}}</span>
+        {{#unless (eq source.quantity 1)}}
+          <span class="wdm-w3-foot-cell" title="{{localize 'WITCHER.Sheet.Book.Tooltip.Quantity'}}"><i class="fa-solid fa-layer-group"></i>×{{source.quantity}}</span>
+        {{/unless}}
+        <span class="wdm-w3-foot-spacer"></span>
+        <span class="wdm-w3-foot-cell wdm-w3-rarity" title="{{localize 'WITCHER.Sheet.Item.Text.Availability'}}">{{localize (lookup WITCHER.availability source.availability)}}</span>
+        <span class="wdm-w3-foot-cell wdm-w3-price" title="{{localize 'WITCHER.Sheet.Book.Tooltip.Crowns'}}"><i class="fa-solid fa-coins"></i>{{source.cost}}</span>
+      </div>
+
+    </div>
+  </div>
+
+  {{!-- CONFIG VIEW --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Book.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Book.Hint.BookTitle'}}" />
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Book.Text.Details'}}</div>
+      <div class="wdm-cfg-grid">
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Book.Tooltip.StackSize'}}">{{localize 'WITCHER.Sheet.Book.Label.Quantity'}}</span>
+          <input type="number" min="0" name="system.quantity" value="{{source.quantity}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Book.Tooltip.WeightPerUnit'}}">{{localize 'WITCHER.Sheet.Book.Label.WeightKg'}}</span>
+          <input type="number" step="0.01" min="0" name="system.weight" value="{{source.weight}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Book.Tooltip.SaleValuePerUnit'}}">{{localize 'WITCHER.Sheet.Book.Label.Cost'}}</span>
+          <input type="number" min="0" name="system.cost" value="{{source.cost}}" />
+        </label>
+        <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Book.Tooltip.MarketRarityOnTheRawAvailabilityScale'}}">{{localize 'WITCHER.Sheet.Book.Label.Availability'}}</span>
+          <select name="system.availability">
+            {{#each WITCHER.availability}}
+              <option value="{{@key}}" {{#if (eq @key ../source.availability)}}selected{{/if}}>{{localize this}}</option>
+            {{/each}}
+          </select>
+        </label>
+        {{> "systems/witcher-ttrpg-death-march/templates/item/partials/flair-override.hbs" flairColor=source.flairColor}}
+      </div>
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Book.Text.BookSetup'}}</div>
+      {{#if bookEnabled}}
+        <div class="wdm-cfg-grid">
+          <label class="wdm-cfg-row"><span title="{{localize 'WITCHER.Sheet.Book.Tooltip.WhichBookMechanicThisDrives'}}">{{localize 'WITCHER.Sheet.Book.Label.BookType'}}</span>
+            <select name="system.bookConfig.bookType">
+              <option value="monster" {{#if (eq bookType "monster")}}selected{{/if}}>{{localize 'WITCHER.Sheet.Book.Text.MonsterLore'}}</option>
+              <option value="skill"   {{#if (eq bookType "skill")  }}selected{{/if}}>{{localize 'WITCHER.Sheet.Book.Text.Skill'}}</option>
+              {{!-- Stress books only when the stress homebrew is on; still
+                    shown if this book is ALREADY stress-typed so the GM can
+                    see/change it rather than silently losing the type. --}}
+              {{#if (or (homebrew "stress") (eq bookType "stress"))}}
+              <option value="stress"  {{#if (eq bookType "stress") }}selected{{/if}}>{{localize 'WITCHER.Sheet.Book.Text.NovelLoreStress'}}</option>
+              {{/if}}
+            </select>
+          </label>
+        </div>
+        <button type="button" class="wdm-cfg-action-btn" data-action="configureBook">
+          <i class="fa-solid fa-book-bookmark"></i> {{localize 'WITCHER.Sheet.Book.Button.ConfigureBook'}}
+        </button>
+        <p class="wdm-cfg-hint">{{bookSummary}}</p>
+      {{else}}
+        <p class="wdm-cfg-hint">{{localize 'WITCHER.Sheet.Book.Text.BookSystemHomebrewIsOffEnableItInWorldSe'}}</p>
+      {{/if}}
+
+      {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+
+      <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Book.Text.Description'}}</div>
+      <textarea class="wdm-cfg-textarea is-tall" name="system.description"
+                placeholder="{{localize 'WITCHER.Sheet.Book.Hint.WhatThisBookIsAboutWhereItCameFromWhatIt'}}">{{source.description}}</textarea>
+
+      {{#if (eq bookType "stress")}}
+        {{!-- Flip-Through description: short summary surfaced by the
+              inventory context-menu "Flip Through" action so a reader
+              can peek at what the book is about without spending the
+              full in-world reading time. Only shown for novel/lore
+              (stress) books — monster/skill books don't offer the
+              flip-through affordance. --}}
+        <div class="wdm-cfg-section">{{localize 'WITCHER.Sheet.Book.Text.FlipThroughDescription'}}</div>
+        <textarea class="wdm-cfg-textarea" name="system.flipThroughDescription"
+                  placeholder="{{localize 'WITCHER.Sheet.Book.Hint.FlipThroughDescription'}}">{{source.flipThroughDescription}}</textarea>
+      {{/if}}
+
+    </div>
+  </div>
+
+</div>

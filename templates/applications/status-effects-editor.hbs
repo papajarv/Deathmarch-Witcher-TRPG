@@ -1,0 +1,300 @@
+{{!-- Status Effects Editor — GM-only world settings form.
+      One card per status, every clause mechanic exposed as a friendly
+      control. Field names are `s.<index>.<field>`; the app reads them back
+      with FormDataExtended + expandObject. Saving diffs each card against the
+      RAW default and writes only the changes to `statusEffectsOverride`. --}}
+
+<div class="wdm-se">
+
+  <header class="wdm-se-head">
+    <h2>{{localize 'WITCHER.App.StatusEffectsEditor.Text.StatusEffects'}}</h2>
+    <p class="wdm-se-blurb">
+    {{localize 'WITCHER.App.StatusEffectsEditor.Blurb'}}
+  </p>
+    <div class="wdm-se-toolbar">
+      <button type="button" class="wdm-se-btn" data-action="addStatus">
+        <i class="fa-solid fa-plus"></i> {{localize 'WITCHER.App.StatusEffectsEditor.Button.AddStatus'}}
+      </button>
+      <button type="button" class="wdm-se-btn wdm-se-btn-danger" data-action="resetAll">
+        <i class="fa-solid fa-arrow-rotate-left"></i> {{localize 'WITCHER.App.StatusEffectsEditor.Button.RestoreRAWDefaults'}}
+      </button>
+    </div>
+  </header>
+
+  <div class="wdm-se-list">
+    {{#each statuses as |s|}}
+    <details class="wdm-se-card">
+      <summary class="wdm-se-card-summary">
+        <img class="wdm-se-sum-icon" src="{{s.img}}" alt="" />
+        <span class="wdm-se-sum-name">{{s.name}}</span>
+        <code class="wdm-se-sum-id">{{s.id}}</code>
+      </summary>
+      <div class="wdm-se-card-body">
+
+      <input type="hidden" name="s.{{s.index}}.isDefault" value="{{s.isDefault}}" />
+
+      <div class="wdm-se-card-head">
+        <button type="button" class="wdm-se-icon" data-action="pickIcon" data-index="{{s.index}}"
+                title="{{localize 'WITCHER.App.StatusEffectsEditor.Tooltip.ChooseAnIcon'}}">
+          <img data-preview="{{s.index}}" src="{{s.img}}" alt="" />
+        </button>
+
+        <div class="wdm-se-id-name">
+          <label class="wdm-se-field">
+            <span class="wdm-se-label">{{localize 'WITCHER.App.StatusEffectsEditor.Text.Name'}}</span>
+            <input type="text" name="s.{{s.index}}.name" value="{{s.name}}" />
+          </label>
+          <label class="wdm-se-field">
+            <span class="wdm-se-label">ID
+              {{#if s.isDefault}}<span class="wdm-se-tag">built-in</span>{{/if}}
+            </span>
+            <input type="text" name="s.{{s.index}}.id" value="{{s.id}}"
+                   {{#if s.isDefault}}readonly{{/if}}
+                   placeholder="lowercase-id" />
+          </label>
+        </div>
+
+        <button type="button" class="wdm-se-remove" data-action="removeStatus" data-index="{{s.index}}"
+                title="{{localize 'WITCHER.App.StatusEffectsEditor.Tooltip.RemoveThisStatus'}}">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+
+      {{!-- Icon path / FontAwesome class. Editable text field so the GM can
+            type any FA class ("fa-solid fa-brain", "fa-regular fa-star",
+            etc.). The icon picker button up top also writes here when used
+            for file-path selection. The preview re-renders to an <i> tag
+            automatically on save & reload. --}}
+      <label class="wdm-se-field">
+        <span class="wdm-se-label">{{localize 'WITCHER.App.StatusEffectsEditor.Text.Icon'}}</span>
+        <input type="text" name="s.{{s.index}}.img" value="{{s.img}}"
+               data-img-input="{{s.index}}"
+               placeholder="fa-solid fa-brain  or  icons/svg/foo.svg" />
+      </label>
+
+      <label class="wdm-se-field">
+        <span class="wdm-se-label">{{localize 'WITCHER.App.StatusEffectsEditor.Text.Description'}}</span>
+        <textarea name="s.{{s.index}}.description" rows="2" spellcheck="false">{{s.description}}</textarea>
+      </label>
+
+      {{!-- Token-ring visibility gate. Default TRUE — every status
+            paints a status ring on the token portrait as usual. Unchecked
+            means the status still applies mechanically (its clause runs
+            normally) but the token doesn't display a ring for it, so
+            narrative / bookkeeping statuses can be kept off-token
+            without disabling their mechanics. --}}
+      <div class="wdm-se-checks">
+        <label class="wdm-se-check" title="{{localize 'WITCHER.App.StatusEffectsEditor.Tooltip.VisibleOnToken'}}">
+          <input type="checkbox" name="s.{{s.index}}.showOnToken" {{#if s.showOnToken}}checked{{/if}} />
+          <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.VisibleOnToken'}}</span>
+        </label>
+      </div>
+
+      {{!-- Optional per-status rim color override for the chrome dock status
+            badge. Empty = inherit the family default (red for stress breaks,
+            green for boons, orange for food/drink, amber for everything else).
+            The text field is the canonical value; the color picker is a visual
+            aid that syncs into the text on input. --}}
+      <div class="wdm-se-row">
+        <label class="wdm-se-mini wdm-se-rim" title="{{localize 'WITCHER.App.StatusEffectsEditor.Tooltip.ColorOfTheCountdownRingOnTheChromeDockSt'}}">
+          <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.RimColorChromeDockRing'}}</span>
+          <div class="wdm-se-rim-row">
+            <input type="color"
+                   value="{{#if s.rimColor}}{{s.rimColor}}{{else}}#c8a878{{/if}}"
+                   data-rim-picker="{{s.index}}"
+                   aria-label="{{localize 'WITCHER.App.StatusEffectsEditor.Aria.RimColorPicker'}}" />
+            <input type="text"
+                   name="s.{{s.index}}.rimColor"
+                   value="{{s.rimColor}}"
+                   placeholder="#rrggbb — blank to inherit family default"
+                   data-rim-text="{{s.index}}" />
+            <button type="button" class="wdm-se-btn wdm-se-rim-clear"
+                    data-action="clearRim" data-index="{{s.index}}"
+                    title="{{localize 'WITCHER.App.StatusEffectsEditor.Tooltip.ClearOverrideAndFallBackToFamilyDefault'}}">×</button>
+          </div>
+        </label>
+      </div>
+
+      <details class="wdm-se-group">
+        <summary>{{localize 'WITCHER.App.StatusEffectsEditor.Text.StatModifiers'}}</summary>
+        <div class="wdm-se-grid">
+          {{#each s.statRows as |stat|}}
+          <label class="wdm-se-mini">
+            <span>{{stat.label}}</span>
+            <input type="number" step="1" name="s.{{s.index}}.stats.{{stat.key}}" value="{{stat.value}}" />
+          </label>
+          {{/each}}
+        </div>
+      </details>
+
+      <details class="wdm-se-group">
+        <summary>{{localize 'WITCHER.App.StatusEffectsEditor.Text.RollModifiers'}}</summary>
+        <div class="wdm-se-grid">
+          {{#each s.rollRows as |r|}}
+          <label class="wdm-se-mini">
+            <span>{{r.label}}</span>
+            <input type="number" step="1" name="s.{{s.index}}.roll.{{r.key}}" value="{{r.value}}" />
+          </label>
+          {{/each}}
+        </div>
+      </details>
+
+      <details class="wdm-se-group">
+        <summary>{{localize 'WITCHER.App.StatusEffectsEditor.Text.DamageOverTime'}}</summary>
+        <div class="wdm-se-row">
+          <label class="wdm-se-mini">
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.AmountTurn'}}</span>
+            <input type="text" name="s.{{s.index}}.dotAmount" value="{{s.dotAmount}}" placeholder="3 or 1d6+2" />
+          </label>
+          <label class="wdm-se-mini" title="{{localize 'WITCHER.App.StatusEffectsEditor.Tooltip.ErodeThisMuchStoppingPowerOffTheArmorAtE'}}">
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.AblateArmorTurn'}}</span>
+            <input type="text" name="s.{{s.index}}.dotAblateArmor" value="{{s.dotAblateArmor}}"
+                   placeholder="3 or 1d6" />
+          </label>
+          <label class="wdm-se-mini" title="{{localize 'WITCHER.App.StatusEffectsEditor.Tooltip.ErodeThisMuchReliabilityOffEquippedWeapons'}}">
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.AblateWeaponTurn'}}</span>
+            <input type="text" name="s.{{s.index}}.dotAblateWeapon" value="{{s.dotAblateWeapon}}"
+                   placeholder="1 or 1d3" />
+          </label>
+        </div>
+        <div class="wdm-se-checks">
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.dotBypassArmor" {{#if s.dotBypassArmor}}checked{{/if}} />
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.BypassesArmor'}}</span>
+          </label>
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.dotEveryLocation" {{#if s.dotEveryLocation}}checked{{/if}} />
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.HitsEveryLocation'}}</span>
+          </label>
+          <label class="wdm-se-check" title="{{localize 'WITCHER.Effect.TickAblateOnlyIfPenetratedHint'}}">
+            <input type="checkbox" name="s.{{s.index}}.dotAblateArmorOnlyIfPenetrated" {{#if s.dotAblateArmorOnlyIfPenetrated}}checked{{/if}} />
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.AblateArmorOnlyIfPenetrated'}}</span>
+          </label>
+          <label class="wdm-se-check" title="{{localize 'WITCHER.Effect.TickAblateOnlyIfPenetratedHint'}}">
+            <input type="checkbox" name="s.{{s.index}}.dotAblateWeaponOnlyIfPenetrated" {{#if s.dotAblateWeaponOnlyIfPenetrated}}checked{{/if}} />
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.AblateWeaponOnlyIfPenetrated'}}</span>
+          </label>
+        </div>
+      </details>
+
+      <details class="wdm-se-group">
+        <summary>{{localize 'WITCHER.App.StatusEffectsEditor.Text.LocksAutoHit'}}</summary>
+        <div class="wdm-se-checks">
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.restrictAct" {{#if s.restrictAct}}checked{{/if}} />
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.CannotAct'}}</span>
+          </label>
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.restrictDefend" {{#if s.restrictDefend}}checked{{/if}} />
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.CannotDefend'}}</span>
+          </label>
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.restrictHard" {{#if s.restrictHard}}checked{{/if}} />
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.HardIncapacitation'}}</span>
+          </label>
+        </div>
+        <label class="wdm-se-mini">
+          <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.IncomingAttacksAutoHitUnderDc'}}</span>
+          <input type="number" step="1" min="0" name="s.{{s.index}}.incomingDC" value="{{s.incomingDC}}"
+                 placeholder="(none)" />
+        </label>
+      </details>
+
+      <details class="wdm-se-group">
+        <summary>{{localize 'WITCHER.App.StatusEffectsEditor.Text.EndingCheck'}}</summary>
+        <div class="wdm-se-row">
+          <label class="wdm-se-mini">
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.Kind'}}</span>
+            <select name="s.{{s.index}}.endKind">
+              {{#each s.endKindOptions as |o|}}
+              <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
+              {{/each}}
+            </select>
+          </label>
+          <label class="wdm-se-mini">
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.SkillWhenKindSkill'}}</span>
+            <select name="s.{{s.index}}.endSkill">
+              <option value="">—</option>
+              {{#each s.skillOptions as |o|}}
+              <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
+              {{/each}}
+            </select>
+          </label>
+          <label class="wdm-se-mini">
+            <span>DC</span>
+            <input type="number" step="1" min="0" name="s.{{s.index}}.endDC" value="{{s.endDC}}" />
+          </label>
+          <label class="wdm-se-mini">
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.ActionCostInCombat'}}</span>
+            <input type="number" step="1" min="0" name="s.{{s.index}}.endActionCost" value="{{s.endActionCost}}" />
+          </label>
+        </div>
+      </details>
+
+      {{!-- Stress shield (Stoic / Hopeful pattern). When kind is "points" or
+            "sources", statusEngine.onApply parses the Value as a Roll formula
+            (dice OR a flat number) and stamps an absorb buffer onto the AE
+            when this status lands. The preUpdate gate consumes the buffer on
+            every stress raise. Setting "none" removes the shield entirely.
+            The whole section is gated behind the stress homebrew toggle —
+            no toggle, no controls. --}}
+      {{#if @root.showStressShield}}
+      <details class="wdm-se-group">
+        <summary>{{localize 'WITCHER.App.StatusEffectsEditor.Text.StressShield'}}</summary>
+        <div class="wdm-se-row">
+          <label class="wdm-se-mini" title="{{localize 'WITCHER.App.StatusEffectsEditor.Tooltip.WhatTheBufferCountsPointsSubtractsFromEa'}}">
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.Kind'}}</span>
+            <select name="s.{{s.index}}.stressShieldKind">
+              {{#each s.stressShieldOptions as |o|}}
+              <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
+              {{/each}}
+            </select>
+          </label>
+          <label class="wdm-se-mini" title="{{localize 'WITCHER.App.StatusEffectsEditor.Tooltip.BufferSizeRolledOnApplyAcceptsAnyRollFor'}}">
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.Value'}}</span>
+            <input type="text" name="s.{{s.index}}.stressShieldDice" value="{{s.stressShieldDice}}"
+                   placeholder="1d6 / 2d6 / 3" spellcheck="false" />
+          </label>
+        </div>
+      </details>
+      {{/if}}
+
+      <details class="wdm-se-group">
+        <summary>{{localize 'WITCHER.App.StatusEffectsEditor.Text.AutoClearPeriodic'}}</summary>
+        <div class="wdm-se-checks">
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.clearsAtOwnTurn" {{#if s.clearsAtOwnTurn}}checked{{/if}} />
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.ClearsAtOwnTurnStart'}}</span>
+          </label>
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.clearsAtOwnTurnEnd" {{#if s.clearsAtOwnTurnEnd}}checked{{/if}} />
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.ClearsAtOwnTurnEnd'}}</span>
+          </label>
+          <label class="wdm-se-check">
+            <input type="checkbox" name="s.{{s.index}}.clearOnHit" {{#if s.clearOnHit}}checked{{/if}} />
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.ClearsWhenHit'}}</span>
+          </label>
+        </div>
+        <div class="wdm-se-row">
+          <label class="wdm-se-mini">
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.PeriodicSaveEveryRounds'}}</span>
+            <input type="number" step="1" min="0" name="s.{{s.index}}.periodicEvery" value="{{s.periodicEvery}}"
+                   placeholder="(none)" />
+          </label>
+          <label class="wdm-se-mini">
+            <span>{{localize 'WITCHER.App.StatusEffectsEditor.Text.RollUnderStat'}}</span>
+            <select name="s.{{s.index}}.periodicRollUnder">
+              {{#each s.rollUnderOptions as |o|}}
+              <option value="{{o.value}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
+              {{/each}}
+            </select>
+          </label>
+        </div>
+      </details>
+
+      </div>
+    </details>
+    {{/each}}
+  </div>
+
+</div>

@@ -1,0 +1,27 @@
+{{!-- Homebrew Content editor — GM-only world settings form.
+      One toggle row per content subsystem. Field names are
+      `enabled.<key>`; the app reads them back with FormDataExtended and
+      writes only the `homebrew.<key>` settings that changed. --}}
+
+<div class="wdm-hb">
+
+  <header class="wdm-hb-head">
+    <h2>{{localize 'WITCHER.App.HomebrewContentEditor.Text.HomebrewContent'}}</h2>
+    <p class="wdm-hb-blurb">
+    {{localize 'WITCHER.App.HomebrewContentEditor.Blurb'}}
+  </p>
+  </header>
+
+  <div class="wdm-hb-list">
+    {{#each rows as |r|}}
+    <label class="wdm-hb-row">
+      <input type="checkbox" name="enabled.{{r.key}}" {{#if r.checked}}checked{{/if}} />
+      <span class="wdm-hb-text">
+        <span class="wdm-hb-name">{{r.name}}</span>
+        {{#if r.hint}}<span class="wdm-hb-hint">{{r.hint}}</span>{{/if}}
+      </span>
+    </label>
+    {{/each}}
+  </div>
+
+</div>

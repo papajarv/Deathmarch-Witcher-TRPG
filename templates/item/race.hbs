@@ -1,0 +1,314 @@
+{{!-- Race item sheet — two-layer:
+        DISPLAY → reads the race: four quality boxes + the transferring
+                  Active Effects it grants.
+        CONFIG  → edit the four boxes + manage effects (cog toggle).
+      A race item is dropped on a character; its effects transfer to the
+      actor (transfer:true, the sheet default). --}}
+
+<div class="wdm-item-sheet wdm-item-v2 is-race" data-mode="{{mode}}">
+
+  {{#if canEdit}}
+    <button type="button" class="wdm-item-cog" data-action="toggleItemMode"
+            title="{{#if (eq mode 'config')}}{{localize 'WITCHER.Sheet.Item.Cog.BackToDisplay'}}{{else}}{{localize 'WITCHER.Sheet.Item.Cog.ConfigureRace'}}{{/if}}">
+      <i class="fa-solid {{#if (eq mode 'config')}}fa-eye{{else}}fa-gear{{/if}}"></i>
+    </button>
+  {{/if}}
+
+  {{!-- ════════════════════════════════════════════════════════════
+       DISPLAY VIEW
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-display-view">
+    <div class="wdm-race">
+
+      <header class="wdm-race-head">
+        <img class="wdm-race-portrait" src="{{item.img}}" alt="" />
+        <div class="wdm-race-head-titles">
+          <div class="wdm-race-eyebrow">{{localize 'WITCHER.Sheet.Race.Text.Race'}}{{#if creatureTypeLabel}} <span class="wdm-race-ctype">· {{creatureTypeLabel}}</span>{{/if}}</div>
+          <h1 class="wdm-race-title">{{item.name}}</h1>
+        </div>
+      </header>
+
+      {{#if source.description}}
+        <div class="wdm-race-flavor">{{{source.description}}}</div>
+      {{/if}}
+
+      {{#if filledQualities.length}}
+        <div class="wdm-race-quals">
+          {{#each filledQualities}}
+            <section class="wdm-race-qual">
+              {{#if name}}<header class="wdm-race-qual-name">{{name}}</header>{{/if}}
+              {{#if description}}<div class="wdm-race-qual-desc">{{{description}}}</div>{{/if}}
+            </section>
+          {{/each}}
+        </div>
+      {{/if}}
+
+      {{#if source.naturalWeapons}}
+        <div class="wdm-prof-section-label">{{localize 'WITCHER.Sheet.Race.Text.NaturalWeapons'}}</div>
+        <div class="wdm-race-qual-desc">
+          <b>{{source.naturalWeaponDamage}}</b>
+          {{#if source.naturalWeaponTypes.length}} · {{#each source.naturalWeaponTypes}}{{#unless @first}} / {{/unless}}{{localize (lookup ../naturalWeaponTypes this)}}{{/each}}{{/if}}
+          · {{#if source.naturalWeaponLethal}}{{localize 'WITCHER.Sheet.Race.Text.Lethal'}}{{else}}{{localize 'WITCHER.Brawl.NonLethal'}}{{/if}}
+          {{#if naturalWeaponQualityList.length}} · {{#each naturalWeaponQualityList}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}{{/if}}
+        </div>
+      {{/if}}
+
+      {{#if effects.length}}
+        <div class="wdm-prof-section-label">{{localize 'WITCHER.Sheet.Race.Text.GrantedEffects'}}</div>
+        <ul class="wdm-race-effects">
+          {{#each effects}}
+            <li class="wdm-race-effect {{#if this.disabled}}is-disabled{{/if}}">
+              <img class="wdm-race-effect-img" src="{{this.img}}" alt="" />
+              <span class="wdm-race-effect-name">{{this.name}}</span>
+              {{#if this.duration.label}}<span class="wdm-race-effect-dur">{{this.duration.label}}</span>{{/if}}
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+
+    </div>
+  </div>
+
+  {{!-- ════════════════════════════════════════════════════════════
+       CONFIG VIEW
+       ═══════════════════════════════════════════════════════════ --}}
+  <div class="wdm-config-view">
+    <div class="wdm-cfg-form wdm-cfg-paneled">
+
+      <div class="wdm-cfg-head">
+        <img class="wdm-cfg-portrait" src="{{item.img}}" data-action="editImage" data-edit="img" alt="" title="{{localize 'WITCHER.Sheet.Race.Tooltip.ClickToChangeIcon'}}" />
+        <input class="wdm-cfg-name" type="text" name="name" value="{{item.name}}" placeholder="{{localize 'WITCHER.Sheet.Race.Hint.RaceEGWitcherElfDwarf'}}" />
+      </div>
+
+      {{!-- ── Lineage ─────────────────────────────────────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Race.Text.CreatureType'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          <div class="wdm-race-field">
+            <label class="wdm-race-field-label">{{localize 'WITCHER.Sheet.Race.Text.CreatureType'}}</label>
+            <select name="system.creatureType">
+              {{#each creatureTypeOptions}}
+                <option value="{{this.value}}" {{#if (eq this.value ../creatureType)}}selected{{/if}}>{{this.label}}</option>
+              {{/each}}
+            </select>
+            <span class="wdm-race-field-hint">{{localize 'WITCHER.Sheet.Race.Text.CreatureTypeHint'}}</span>
+          </div>
+        </div>
+      </section>
+
+      {{!-- ── Race Qualities ──────────────────────────────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Race.Text.RaceQualities'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          <div class="wdm-race-qual-grid">
+            {{#each qualityBoxes}}
+              <div class="wdm-race-qual-box">
+                <input type="text" class="wdm-race-qual-input" name="system.qualities.{{key}}.name"
+                       value="{{name}}" placeholder="Quality {{n}}" />
+                <textarea class="wdm-cfg-textarea" name="system.qualities.{{key}}.description"
+                          placeholder="{{localize 'WITCHER.Sheet.Race.Hint.WhatThisQualityDoes'}}">{{description}}</textarea>
+              </div>
+            {{/each}}
+          </div>
+        </div>
+      </section>
+
+      {{!-- ── Physiology (constitution / immunities) ──────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Race.Text.Physiology'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          <label class="wdm-race-toggle">
+            <input type="checkbox" name="system.variablePortrait" {{#if source.variablePortrait}}checked{{/if}} />
+            <span class="wdm-race-toggle-text"><span class="wdm-race-toggle-label">{{localize 'WITCHER.Sheet.Race.Text.VariablePortrait'}}</span><span class="wdm-race-toggle-hint">Adds a toxicity-portrait button to the character chrome.</span></span>
+          </label>
+          <label class="wdm-race-toggle">
+            <input type="checkbox" name="system.foodSicknessImmune" {{#if source.foodSicknessImmune}}checked{{/if}} />
+            <span class="wdm-race-toggle-text"><span class="wdm-race-toggle-label">{{localize 'WITCHER.Sheet.Race.Text.ImmuneToFoodSickness'}}</span><span class="wdm-race-toggle-hint">Spoiled food never triggers the Endurance hazard for this race.</span></span>
+          </label>
+          <label class="wdm-race-toggle">
+            <input type="checkbox" name="system.infectionImmune" {{#if source.infectionImmune}}checked{{/if}} />
+            <span class="wdm-race-toggle-text"><span class="wdm-race-toggle-label">{{localize 'WITCHER.Sheet.Race.Text.ResistanceToInfection'}}</span><span class="wdm-race-toggle-hint">Always benefits from the Sterilized Wounds +2 healing bonus — auto-ticked and locked in the Rest dialog.</span></span>
+          </label>
+          {{#if foodAndDrinkOn}}
+          <div class="wdm-race-field">
+            <label class="wdm-race-field-label">{{localize 'WITCHER.Sheet.Race.Text.AlcoholResistance'}}</label>
+            <select name="system.alcoholResistance">
+              <option value="none" {{#if (eq source.alcoholResistance 'none')}}selected{{/if}}>{{localize 'WITCHER.Sheet.Race.Text.None'}}</option>
+              <option value="half" {{#if (eq source.alcoholResistance 'half')}}selected{{/if}}>{{localize 'WITCHER.Sheet.Race.Text.HalfSoberEvery30MinHangover05'}}</option>
+              <option value="full" {{#if (eq source.alcoholResistance 'full')}}selected{{/if}}>{{localize 'WITCHER.Sheet.Race.Text.FullSoberEvery15MinHangover025'}}</option>
+            </select>
+            <span class="wdm-race-field-hint">Faster auto-sober cadence and reduced hangover duration.</span>
+          </div>
+          {{/if}}
+        </div>
+      </section>
+
+      {{!-- ── Senses (vision) ─────────────────────────────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Race.Text.NightVision'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          <div class="wdm-race-field">
+            <label class="wdm-race-field-label">{{localize 'WITCHER.Sheet.Race.Text.NightVision'}}</label>
+            <select name="system.nightVision">
+              <option value=""         {{#if (eq source.nightVision '')}}selected{{/if}}>{{localize 'WITCHER.Sheet.Race.Text.NightVisionNone'}}</option>
+              <option value="night"    {{#if (eq source.nightVision 'night')}}selected{{/if}}>{{localize 'WITCHER.Sheet.Race.Text.NightVisionNight'}}</option>
+              <option value="improved" {{#if (eq source.nightVision 'improved')}}selected{{/if}}>{{localize 'WITCHER.Sheet.Race.Text.NightVisionImproved'}}</option>
+              <option value="dark"     {{#if (eq source.nightVision 'dark')}}selected{{/if}}>{{localize 'WITCHER.Sheet.Race.Text.NightVisionDark'}}</option>
+            </select>
+            <span class="wdm-race-field-hint">{{localize 'WITCHER.Sheet.Race.Text.NightVisionHint'}}</span>
+          </div>
+          {{#if (eq source.nightVision 'dark')}}
+          <div class="wdm-race-subfields">
+            <div class="wdm-race-field">
+              <label class="wdm-race-field-label">{{localize 'WITCHER.Sheet.Race.Text.DarkVisionRange'}}</label>
+              <input type="number" name="system.darkVisionRange" value="{{source.darkVisionRange}}" min="0" step="1" class="wdm-race-num" />
+              <span class="wdm-race-field-hint">{{localize 'WITCHER.Sheet.Race.Text.DarkVisionRangeHint'}}</span>
+            </div>
+            <div class="wdm-race-field">
+              <label class="wdm-race-field-label">{{localize 'WITCHER.Sheet.Race.Text.DarkVisionMode'}}</label>
+              <select name="system.darkVisionMode">
+                {{#each darkVisionModes}}
+                <option value="{{this.value}}" {{#if this.selected}}selected{{/if}} title="{{this.hint}}">{{this.label}}</option>
+                {{/each}}
+              </select>
+              <span class="wdm-race-field-hint">{{localize 'WITCHER.Sheet.Race.Text.DarkVisionModeHint'}}</span>
+            </div>
+          </div>
+          {{/if}}
+        </div>
+      </section>
+
+      {{!-- ── Natural Armament (armor + natural weapons) ──────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Race.Text.NaturalWeapons'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          <div class="wdm-race-field">
+            <label class="wdm-race-field-label">{{localize 'WITCHER.Sheet.Race.Text.NaturalArmor'}}</label>
+            <input type="number" name="system.naturalArmorSP" value="{{source.naturalArmorSP}}" min="0" step="1" class="wdm-race-num" />
+            <span class="wdm-race-field-hint">{{localize 'WITCHER.Sheet.Race.Text.NaturalArmorHint'}}</span>
+          </div>
+
+          <label class="wdm-race-toggle">
+            <input type="checkbox" name="system.naturalWeapons" {{#if source.naturalWeapons}}checked{{/if}} />
+            <span class="wdm-race-toggle-text"><span class="wdm-race-toggle-label">{{localize 'WITCHER.Sheet.Race.Text.NaturalWeaponsToggle'}}</span><span class="wdm-race-toggle-hint">Replaces the core unarmed punch/kick damage code + qualities; kick still adds +4, Melee Bonus still applies.</span></span>
+          </label>
+
+          {{#if source.naturalWeapons}}
+          <div class="wdm-race-nw-body">
+            <div class="wdm-race-field">
+              <label class="wdm-race-field-label">{{localize 'WITCHER.Sheet.Race.Text.NaturalWeaponDamage'}}</label>
+              <input type="text" name="system.naturalWeaponDamage" value="{{source.naturalWeaponDamage}}" placeholder="1d6" class="wdm-race-num" />
+            </div>
+
+            <details class="wdm-cfg-collapse" open>
+              <summary class="wdm-cfg-collapse-head">
+                <i class="fa-solid fa-chevron-down wdm-cfg-collapse-chev"></i>
+                <span class="wdm-cfg-collapse-title">{{localize 'WITCHER.Sheet.Race.Text.DamageType'}}</span>
+                {{#if source.naturalWeaponTypes.length}}<span class="wdm-cfg-collapse-sub">{{#each source.naturalWeaponTypes}}{{#unless @first}}, {{/unless}}{{localize (lookup ../naturalWeaponTypes this)}}{{/each}}</span>{{/if}}
+              </summary>
+              <div class="wdm-cfg-collapse-body">
+                <div class="wdm-cfg-checkgrid">
+                  {{#each naturalWeaponTypes}}
+                    <label class="wdm-cfg-check">
+                      <input type="checkbox" name="system.naturalWeaponTypes" value="{{@key}}"
+                             data-dtype="String"
+                             {{#if (includes ../source.naturalWeaponTypes @key)}}checked{{/if}} />
+                      <span>{{localize this}}</span>
+                    </label>
+                  {{/each}}
+                </div>
+              </div>
+            </details>
+
+            <label class="wdm-race-toggle is-compact">
+              <input type="checkbox" name="system.naturalWeaponLethal" {{#if source.naturalWeaponLethal}}checked{{/if}} />
+              <span class="wdm-race-toggle-text"><span class="wdm-race-toggle-label">{{localize 'WITCHER.Sheet.Race.Text.Lethal'}}</span><span class="wdm-race-toggle-hint">Unchecked = non-lethal → dealt to Stamina.</span></span>
+            </label>
+            <label class="wdm-race-toggle is-compact">
+              <input type="checkbox" name="system.naturalWeaponCanParry" {{#if source.naturalWeaponCanParry}}checked{{/if}} />
+              <span class="wdm-race-toggle-text"><span class="wdm-race-toggle-label">{{localize 'WITCHER.Sheet.Race.Text.NaturalWeaponCanParry'}}</span><span class="wdm-race-toggle-hint">Can be used to parry melee attacks.</span></span>
+            </label>
+            <label class="wdm-race-toggle is-compact">
+              <input type="checkbox" name="system.naturalWeaponCanBlock" {{#if source.naturalWeaponCanBlock}}checked{{/if}} />
+              <span class="wdm-race-toggle-text"><span class="wdm-race-toggle-label">{{localize 'WITCHER.Sheet.Race.Text.NaturalWeaponCanBlock'}}</span><span class="wdm-race-toggle-hint">Can block melee attacks — costs 1 HP per block.</span></span>
+            </label>
+
+            <details class="wdm-cfg-collapse">
+              <summary class="wdm-cfg-collapse-head">
+                <i class="fa-solid fa-chevron-down wdm-cfg-collapse-chev"></i>
+                <span class="wdm-cfg-collapse-title">{{localize 'WITCHER.Sheet.Race.Text.NaturalWeaponQualities'}}</span>
+                {{#if naturalWeaponQualityList.length}}<span class="wdm-cfg-collapse-sub">{{#each naturalWeaponQualityList}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}</span>{{/if}}
+              </summary>
+              <div class="wdm-cfg-collapse-body">
+                <div class="wdm-cfg-checkgrid">
+                  {{#each naturalWeaponQualitiesCatalog}}
+                    {{#if this.param}}
+                      <div class="wdm-cfg-check is-parameterized" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+                        <label class="wdm-cfg-check-label">
+                          <input type="checkbox" name="system.naturalWeaponQualities" value="{{@key}}" data-dtype="String" {{#if (includes ../source.naturalWeaponQualities @key)}}checked{{/if}} />
+                          <span>{{this.label}}</span>
+                        </label>
+                        <input type="{{this.param.type}}" class="wdm-cfg-param" name="system.naturalWeaponQualityValues.{{@key}}" value="{{lookup ../source.naturalWeaponQualityValues @key}}" placeholder="{{this.param.placeholder}}" />
+                        {{#if this.param.suffix}}<span class="wdm-cfg-param-suffix">{{this.param.suffix}}</span>{{/if}}
+                      </div>
+                    {{else}}
+                      <label class="wdm-cfg-check" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+                        <input type="checkbox" name="system.naturalWeaponQualities" value="{{@key}}" data-dtype="String" {{#if (includes ../source.naturalWeaponQualities @key)}}checked{{/if}} />
+                        <span>{{this.label}}</span>
+                      </label>
+                    {{/if}}
+                  {{/each}}
+                </div>
+              </div>
+            </details>
+          </div>
+          {{/if}}
+        </div>
+      </section>
+
+      {{!-- ── Granted Effects ─────────────────────────────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Race.Text.GrantedEffects'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          <div class="wdm-cfg-effects">
+            {{#if effects.length}}
+              <ul class="wdm-effect-list">
+                {{#each effects}}
+                  <li class="wdm-effect-row {{#if this.disabled}}is-disabled{{/if}}" data-effect-id="{{this.id}}">
+                    <div class="wdm-effect-head">
+                      <img class="wdm-effect-img" src="{{this.img}}" alt="" />
+                      <span class="wdm-effect-name">{{this.name}}</span>
+                      {{#if this.duration.label}}<span class="wdm-effect-duration">{{this.duration.label}}</span>{{/if}}
+                      <a data-action="toggleEffect" data-effect-id="{{this.id}}" title="{{#if this.disabled}}Enable{{else}}Disable{{/if}}">
+                        <i class="fa-solid {{#if this.disabled}}fa-toggle-off{{else}}fa-toggle-on{{/if}}"></i>
+                      </a>
+                      <a data-action="editEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Race.Tooltip.Edit'}}"><i class="fa-solid fa-pen-to-square"></i></a>
+                      <a data-action="deleteEffect" data-effect-id="{{this.id}}" title="{{localize 'WITCHER.Sheet.Race.Tooltip.Delete'}}"><i class="fa-solid fa-trash"></i></a>
+                    </div>
+                  </li>
+                {{/each}}
+              </ul>
+            {{else}}
+              <p class="wdm-empty">{{localize 'WITCHER.Sheet.Race.Text.NoEffectsConfigured'}}</p>
+            {{/if}}
+            <button type="button" class="wdm-add-effect" data-action="createEffect">
+              <i class="fa-solid fa-plus"></i> {{localize 'WITCHER.Sheet.Item.Button.AddEffect'}}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {{!-- ── Lore & Source ───────────────────────────────────────── --}}
+      <section class="wdm-cfg-panel">
+        <header class="wdm-cfg-panel-head"><span>{{localize 'WITCHER.Sheet.Race.Text.Description'}}</span></header>
+        <div class="wdm-cfg-panel-body">
+          {{> "systems/witcher-ttrpg-death-march/templates/item/partials/source-field.hbs" value=source.source}}
+          <textarea class="wdm-cfg-textarea is-tall" name="system.description"
+                    placeholder="{{localize 'WITCHER.Sheet.Race.Hint.LoreAppearanceLineage'}}">{{source.description}}</textarea>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+</div>

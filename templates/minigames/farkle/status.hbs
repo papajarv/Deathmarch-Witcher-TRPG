@@ -1,0 +1,66 @@
+{{!-- Minimalist score readouts that float over the live scene around the dice
+      tray (see position.png): the opponents' tallies stacked top-right, yours
+      bottom-left. Rendered with display:contents so each block is positioned
+      against .window-content directly (see farkle.css). Supports 2–4 seats. --}}
+<div class="wdm-fk-status-part">
+
+    {{#if connecting}}
+    <div class="wdm-fk-connecting">
+        <i class="fa-solid fa-hourglass-half fa-spin"></i>
+        <span>{{localize "WITCHER.Farkle.invite.waiting"}}</span>
+    </div>
+    {{/if}}
+
+    {{!-- Lead opponent: top-right. --}}
+    <div class="wdm-fk-opps wdm-fk-opps-right">
+        {{#each oppTopRight as |opp|}}
+        <div class="wdm-fk-score wdm-fk-score-opp {{#if opp.active}}wdm-fk-score-active{{/if}} {{#if opp.forfeited}}wdm-fk-score-forfeited{{/if}}">
+            {{#if opp.forfeited}}<span class="wdm-fk-forfeit-badge">{{localize "WITCHER.Farkle.forfeited"}}</span>{{/if}}
+            <span class="wdm-fk-score-name">{{opp.name}}{{#if opp.isAI}} <i class="fa-solid fa-robot"></i>{{/if}}</span>
+            <span class="wdm-fk-score-line">
+                <span class="wdm-fk-score-lbl">{{localize "WITCHER.Farkle.label.oppPointsThisTurn"}}</span>
+                <span class="wdm-fk-score-num">{{opp.turnPts}}</span>
+            </span>
+            <span class="wdm-fk-score-line">
+                <span class="wdm-fk-score-lbl">{{localize "WITCHER.Farkle.label.oppTotalPoints"}}</span>
+                <span class="wdm-fk-score-num">{{opp.banked}}</span>
+            </span>
+        </div>
+        {{/each}}
+    </div>
+
+    {{!-- Remaining opponents: stacked on the left, above the "you" box. --}}
+    {{#if oppLeft.length}}
+    <div class="wdm-fk-opps wdm-fk-opps-left">
+        {{#each oppLeft as |opp|}}
+        <div class="wdm-fk-score wdm-fk-score-opp {{#if opp.active}}wdm-fk-score-active{{/if}} {{#if opp.forfeited}}wdm-fk-score-forfeited{{/if}}">
+            {{#if opp.forfeited}}<span class="wdm-fk-forfeit-badge">{{localize "WITCHER.Farkle.forfeited"}}</span>{{/if}}
+            <span class="wdm-fk-score-name">{{opp.name}}{{#if opp.isAI}} <i class="fa-solid fa-robot"></i>{{/if}}</span>
+            <span class="wdm-fk-score-line">
+                <span class="wdm-fk-score-lbl">{{localize "WITCHER.Farkle.label.oppPointsThisTurn"}}</span>
+                <span class="wdm-fk-score-num">{{opp.turnPts}}</span>
+            </span>
+            <span class="wdm-fk-score-line">
+                <span class="wdm-fk-score-lbl">{{localize "WITCHER.Farkle.label.oppTotalPoints"}}</span>
+                <span class="wdm-fk-score-num">{{opp.banked}}</span>
+            </span>
+        </div>
+        {{/each}}
+    </div>
+    {{/if}}
+
+    {{!-- You: bottom-left (absent when observing a table without a seat). --}}
+    {{#if me}}
+    <div class="wdm-fk-score wdm-fk-score-you {{#if me.active}}wdm-fk-score-active{{/if}}">
+        <span class="wdm-fk-score-name">{{localize "WITCHER.Farkle.you"}}</span>
+        <span class="wdm-fk-score-line">
+            <span class="wdm-fk-score-lbl">{{localize "WITCHER.Farkle.label.pointsThisTurn"}}</span>
+            <span class="wdm-fk-score-num">{{me.turnPts}}</span>
+        </span>
+        <span class="wdm-fk-score-line">
+            <span class="wdm-fk-score-lbl">{{localize "WITCHER.Farkle.label.totalPoints"}}</span>
+            <span class="wdm-fk-score-num">{{me.banked}}</span>
+        </span>
+    </div>
+    {{/if}}
+</div>

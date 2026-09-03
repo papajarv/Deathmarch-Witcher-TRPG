@@ -1,0 +1,258 @@
+{{!-- House Rules Configuration — GM-only. Edits one Object setting
+      (`houseRulesConfig`); consumers read the LIVE setting on every check
+      so most edits take effect immediately without a world reload. --}}
+<div class="wdm-house-rules-config-body wdm-stealth-config-body wdm-stress-config-body">
+
+  <header class="wdm-se-head">
+    <h2><i class="fa-solid fa-scale-balanced"></i> {{localize 'WITCHER.App.HouseRulesConfig.Title'}}</h2>
+    <p class="wdm-se-blurb">{{localize 'WITCHER.App.HouseRulesConfig.Blurb'}}</p>
+  </header>
+
+  {{!-- ================= STRIKE RESTRICTIONS ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-hand-fist"></i> {{localize 'WITCHER.App.HouseRulesConfig.Section.Strikes'}}</summary>
+
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="bowsCannotStrongStrike" data-config-key="bowsCannotStrongStrike"
+               {{#if values.bowsCannotStrongStrike}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.HouseRulesConfig.Text.BowsNoStrongName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.HouseRulesConfig.Text.BowsNoStrongDesc'}}</small></span>
+      </label>
+    </div>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.StrongStrikePenalty'}}</span>
+        <input type="number" step="1" name="strongStrikePenalty"
+               data-config-key="strongStrikePenalty" value="{{values.strongStrikePenalty}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">{{localize 'WITCHER.App.HouseRulesConfig.Text.StrongStrikePenaltyDesc'}}</small>
+    </div>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.OffhandPenalty'}}</span>
+        <input type="number" step="1" name="offhandPenalty"
+               data-config-key="offhandPenalty" value="{{values.offhandPenalty}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">{{localize 'WITCHER.App.HouseRulesConfig.Text.OffhandPenaltyDesc'}}</small>
+    </div>
+  </details>
+
+  {{!-- ================= DICE RULES ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-dice-d20"></i> {{localize 'WITCHER.App.HouseRulesConfig.Section.DiceRules'}}</summary>
+
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="d10Explode" data-config-key="d10Explode"
+               {{#if values.d10Explode}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.HouseRulesConfig.Text.D10ExplodeName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.HouseRulesConfig.Text.D10ExplodeDesc'}}</small></span>
+      </label>
+
+      <label class="wdm-se-check">
+        <input type="checkbox" name="d10Collapse" data-config-key="d10Collapse"
+               {{#if values.d10Collapse}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.HouseRulesConfig.Text.D10CollapseName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.HouseRulesConfig.Text.D10CollapseDesc'}}</small></span>
+      </label>
+    </div>
+  </details>
+
+  {{!-- ================= CRITICAL WOUNDS ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-heart-crack"></i> {{localize 'WITCHER.App.HouseRulesConfig.Section.CritWounds'}}</summary>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritSpDowngradeMode'}}</span>
+        <select name="critSpDowngradeMode" data-config-key="critSpDowngradeMode">
+          <option value="off"              {{#if (eq values.critSpDowngradeMode "off"             )}}selected{{/if}}>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritSpModeOff'}}</option>
+          <option value="greaterToLesser"  {{#if (eq values.critSpDowngradeMode "greaterToLesser" )}}selected{{/if}}>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritSpModeGreaterToLesser'}}</option>
+          <option value="anyToSimple"      {{#if (eq values.critSpDowngradeMode "anyToSimple"     )}}selected{{/if}}>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritSpModeAnyToSimple'}}</option>
+        </select>
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">{{localize 'WITCHER.App.HouseRulesConfig.Text.CritSpDowngradeDesc'}}</small>
+    </div>
+
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="critBonusNeedsSpBreak" data-config-key="critBonusNeedsSpBreak"
+               {{#if values.critBonusNeedsSpBreak}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBonusNeedsSpBreakName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBonusNeedsSpBreakDesc'}}</small></span>
+      </label>
+    </div>
+
+    {{!-- Crit severity brackets — "beat defense by" thresholds. --}}
+    <div class="wdm-sc-inline">
+      <small class="wdm-sc-help wdm-sc-help-inline">{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBracketsBlurb'}}</small>
+    </div>
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBracketSimple'}}</span>
+        <input type="number" step="1" min="1" name="critBracketSimple"
+               data-config-key="critBracketSimple" value="{{values.critBracketSimple}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBracketComplex'}}</span>
+        <input type="number" step="1" min="1" name="critBracketComplex"
+               data-config-key="critBracketComplex" value="{{values.critBracketComplex}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBracketDifficult'}}</span>
+        <input type="number" step="1" min="1" name="critBracketDifficult"
+               data-config-key="critBracketDifficult" value="{{values.critBracketDifficult}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBracketDeadly'}}</span>
+        <input type="number" step="1" min="1" name="critBracketDeadly"
+               data-config-key="critBracketDeadly" value="{{values.critBracketDeadly}}" />
+      </label>
+    </div>
+
+    {{!-- Crit bonus damage ladders — flat bonus per severity. --}}
+    <div class="wdm-sc-inline">
+      <small class="wdm-sc-help wdm-sc-help-inline">{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBonusBlurb'}}</small>
+    </div>
+    <div class="wdm-sc-inline">
+      <small class="wdm-sc-help wdm-sc-help-inline"><b>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBonusNormalHeading'}}</b></small>
+    </div>
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBonusSimple'}}</span>
+        <input type="number" step="1" min="0" name="critBonusSimple"
+               data-config-key="critBonusSimple" value="{{values.critBonusSimple}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBonusComplex'}}</span>
+        <input type="number" step="1" min="0" name="critBonusComplex"
+               data-config-key="critBonusComplex" value="{{values.critBonusComplex}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBonusDifficult'}}</span>
+        <input type="number" step="1" min="0" name="critBonusDifficult"
+               data-config-key="critBonusDifficult" value="{{values.critBonusDifficult}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBonusDeadly'}}</span>
+        <input type="number" step="1" min="0" name="critBonusDeadly"
+               data-config-key="critBonusDeadly" value="{{values.critBonusDeadly}}" />
+      </label>
+    </div>
+    <div class="wdm-sc-inline">
+      <small class="wdm-sc-help wdm-sc-help-inline"><b>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBonusNoOrgansHeading'}}</b></small>
+    </div>
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBonusSimple'}}</span>
+        <input type="number" step="1" min="0" name="critBonusNoOrgansSimple"
+               data-config-key="critBonusNoOrgansSimple" value="{{values.critBonusNoOrgansSimple}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBonusComplex'}}</span>
+        <input type="number" step="1" min="0" name="critBonusNoOrgansComplex"
+               data-config-key="critBonusNoOrgansComplex" value="{{values.critBonusNoOrgansComplex}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBonusDifficult'}}</span>
+        <input type="number" step="1" min="0" name="critBonusNoOrgansDifficult"
+               data-config-key="critBonusNoOrgansDifficult" value="{{values.critBonusNoOrgansDifficult}}" />
+      </label>
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.CritBonusDeadly'}}</span>
+        <input type="number" step="1" min="0" name="critBonusNoOrgansDeadly"
+               data-config-key="critBonusNoOrgansDeadly" value="{{values.critBonusNoOrgansDeadly}}" />
+      </label>
+    </div>
+  </details>
+
+  {{!-- ================= MOVEMENT ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-person-running"></i> {{localize 'WITCHER.App.HouseRulesConfig.Section.Movement'}}</summary>
+
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="splitMovement" data-config-key="splitMovement"
+               {{#if values.splitMovement}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.HouseRulesConfig.Text.SplitMovementName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.HouseRulesConfig.Text.SplitMovementDesc'}}</small></span>
+      </label>
+      <label class="wdm-se-check">
+        <input type="checkbox" name="proneCrawlQuarterSpd" data-config-key="proneCrawlQuarterSpd"
+               {{#if values.proneCrawlQuarterSpd}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.HouseRulesConfig.Text.ProneCrawlName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.HouseRulesConfig.Text.ProneCrawlDesc'}}</small></span>
+      </label>
+      <label class="wdm-se-check">
+        <input type="checkbox" name="containerEquipEV" data-config-key="containerEquipEV"
+               {{#if values.containerEquipEV}}checked{{/if}} />
+        <span><b>Container carry limit (EV)</b><br>
+          <small class="wdm-sc-help">A character may equip up to 1 + ⌈BODY ÷ 3⌉ containers for free; each container equipped beyond that limit adds +1 EV.</small></span>
+      </label>
+    </div>
+  </details>
+
+  {{!-- ================= ALCHEMY & TOXICITY ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-flask"></i> {{localize 'WITCHER.App.HouseRulesConfig.Section.AlchemyToxicity'}}</summary>
+
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="rawToxicity" data-config-key="rawToxicity"
+               {{#if values.rawToxicity}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.HouseRulesConfig.Text.RawToxicityName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.HouseRulesConfig.Text.RawToxicityDesc'}}</small></span>
+      </label>
+    </div>
+  </details>
+
+  {{!-- ================= ADRENALINE ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-bolt"></i> {{localize 'WITCHER.App.HouseRulesConfig.Section.Adrenaline'}}</summary>
+
+    <div class="wdm-sc-checks">
+      <label class="wdm-se-check">
+        <input type="checkbox" name="adrenalineToTempSta" data-config-key="adrenalineToTempSta"
+               {{#if values.adrenalineToTempSta}}checked{{/if}} />
+        <span><b>{{localize 'WITCHER.App.HouseRulesConfig.Text.AdrenalineToTempStaName'}}</b><br>
+          <small class="wdm-sc-help">{{localize 'WITCHER.App.HouseRulesConfig.Text.AdrenalineToTempStaDesc'}}</small></span>
+      </label>
+    </div>
+  </details>
+
+  {{!-- ================= ACTION ECONOMY ================= --}}
+  <details class="wdm-se-group" open>
+    <summary><i class="fa-solid fa-clock-rotate-left"></i> {{localize 'WITCHER.App.HouseRulesConfig.Section.ActionEconomy'}}</summary>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.ExtraActionToHit'}}</span>
+        <input type="number" step="1" name="extraActionToHit"
+               data-config-key="extraActionToHit" value="{{values.extraActionToHit}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">{{localize 'WITCHER.App.HouseRulesConfig.Text.ExtraActionToHitDesc'}}</small>
+    </div>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.ExtraActionStaCost'}}</span>
+        <input type="number" step="1" min="0" name="extraActionStaCost"
+               data-config-key="extraActionStaCost" value="{{values.extraActionStaCost}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">{{localize 'WITCHER.App.HouseRulesConfig.Text.ExtraActionStaCostDesc'}}</small>
+    </div>
+
+    <div class="wdm-sc-inline">
+      <label class="wdm-se-mini wdm-sc-mini-labeled">
+        <span>{{localize 'WITCHER.App.HouseRulesConfig.Text.ExtraDefenseStaCost'}}</span>
+        <input type="number" step="1" min="0" name="extraDefenseStaCost"
+               data-config-key="extraDefenseStaCost" value="{{values.extraDefenseStaCost}}" />
+      </label>
+      <small class="wdm-sc-help wdm-sc-help-inline">{{localize 'WITCHER.App.HouseRulesConfig.Text.ExtraDefenseStaCostDesc'}}</small>
+    </div>
+  </details>
+
+</div>

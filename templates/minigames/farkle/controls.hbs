@@ -1,0 +1,76 @@
+{{!-- Minimalist right rail floating over the scene (see position.png): the
+      point goal, the current phase's action, and a help button. Rendered with
+      display:contents so .wdm-fk-rail is positioned against .window-content. --}}
+<div class="wdm-fk-controls">
+    <div class="wdm-fk-rail">
+
+        <div class="wdm-fk-goal">
+            <span class="wdm-fk-goal-lbl">{{localize "WITCHER.Farkle.label.pointGoal"}}</span>
+            <span class="wdm-fk-goal-num">{{target}}</span>
+        </div>
+
+        <div class="wdm-fk-actions">
+            {{#if showRoll}}
+            <span class="wdm-fk-hint">
+                <i class="fa-solid fa-dice"></i> {{localize "WITCHER.Farkle.board.rollHint"}} ({{diceInHand}})
+            </span>
+            {{/if}}
+
+            {{#if showSelect}}
+            <span class="wdm-fk-selpts {{#if selectionValid}}wdm-fk-ok{{else}}wdm-fk-bad{{/if}}">+{{selectionPoints}}</span>
+            <button type="button" class="wdm-fk-btn wdm-fk-btn-go" data-action="setAside" {{#unless selectionValid}}disabled{{/unless}}>
+                {{localize "WITCHER.Farkle.action.setAside"}}
+            </button>
+            {{/if}}
+
+            {{#if showDecide}}
+            <button type="button" class="wdm-fk-btn" data-action="rollAgain">
+                <i class="fa-solid fa-rotate"></i> {{localize "WITCHER.Farkle.action.rollAgain"}} ({{diceInHand}})
+            </button>
+            <button type="button" class="wdm-fk-btn wdm-fk-btn-go" data-action="bank">
+                <i class="fa-solid fa-sack-dollar"></i> {{localize "WITCHER.Farkle.action.bank"}} {{turnTotal}}
+            </button>
+            {{/if}}
+
+            {{#if waitOpponent}}
+            <span class="wdm-fk-wait"><i class="fa-solid fa-hourglass-half fa-spin"></i> {{localize "WITCHER.Farkle.wait.opponentTurn"}}</span>
+            {{/if}}
+
+            {{#if showResult}}
+            <div class="wdm-fk-result {{#if result.won}}wdm-fk-result-win{{else}}wdm-fk-result-lose{{/if}}">
+                {{#if me}}
+                    {{#if result.won}}{{localize "WITCHER.Farkle.result.win"}}{{else}}{{localize "WITCHER.Farkle.result.lose"}}{{/if}}
+                {{else}}
+                    {{result.winnerName}} — {{localize "WITCHER.Farkle.result.winner"}}
+                {{/if}}
+                <span class="wdm-fk-result-pot">{{localize "WITCHER.Farkle.pot"}}: {{result.pot}}</span>
+            </div>
+            {{#if canNewGame}}
+            <button type="button" class="wdm-fk-btn wdm-fk-btn-go" data-action="newGame">
+                {{localize "WITCHER.Farkle.action.newGame"}}
+            </button>
+            {{/if}}
+            {{/if}}
+        </div>
+
+        <button type="button" class="wdm-fk-help" data-action="showRules" title="{{localize "WITCHER.Farkle.rules.title"}}">
+            <i class="fa-solid fa-circle-question"></i> {{localize "WITCHER.Farkle.help"}}
+        </button>
+
+        {{#if canForfeit}}
+        <button type="button" class="wdm-fk-help wdm-fk-close" data-action="forfeit" title="{{localize "WITCHER.Farkle.forfeit"}}">
+            <i class="fa-solid fa-flag"></i> {{localize "WITCHER.Farkle.forfeit"}}
+        </button>
+        {{/if}}
+        {{#if canEndTable}}
+        <button type="button" class="wdm-fk-help wdm-fk-close" data-action="endTable" title="{{localize "WITCHER.Farkle.lobby.endTable"}}">
+            <i class="fa-solid fa-flag-checkered"></i> {{localize "WITCHER.Farkle.lobby.endTable"}}
+        </button>
+        {{/if}}
+        {{#if showClose}}
+        <button type="button" class="wdm-fk-help wdm-fk-close" data-action="close" title="{{localize "WITCHER.Farkle.close"}}">
+            <i class="fa-solid fa-xmark"></i> {{localize "WITCHER.Farkle.close"}}
+        </button>
+        {{/if}}
+    </div>
+</div>

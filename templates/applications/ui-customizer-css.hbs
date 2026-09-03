@@ -1,0 +1,11 @@
+{{!-- UI Customizer — Custom CSS tab. Raw CSS appended AFTER the token block and
+      after every shipped stylesheet, so it overrides anything. Scope your rules
+      under `body.witcher-ttrpg-death-march` to stay inside the overhaul UI. --}}
+<section class="tab wdm-cfg-tab wdm-uic-tab {{tab.cssClass}}" data-group="{{tab.group}}" data-tab="{{tab.id}}">
+
+  <p class="wdm-uic-tabnote">{{localize 'WITCHER.App.UiCustomizer.CssNote'}}</p>
+
+  <textarea name="css" class="wdm-uic-css" spellcheck="false"
+            placeholder="body.witcher-ttrpg-death-march .wou-card {{'{'}} border-color: var(--wdm-amber); {{'}'}}">{{css}}</textarea>
+
+</section>
